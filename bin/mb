@@ -1,0 +1,4 @@
+#!/bin/sh
+# POSIX shim (macOS/Linux; on Windows Git Bash resolves mb.cmd via PATHEXT-less lookup of this file)
+exec "$(dirname "$0")/../.venv/bin/python" -m singularity "$@" 2>/dev/null \
+  || exec "$(dirname "$0")/../.venv/Scripts/python.exe" -m singularity "$@"

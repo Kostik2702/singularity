@@ -1,0 +1,120 @@
+"""Warm-model search daemon: TCP 127.0.0.1, newline-delimited JSON.
+
+Commands: {"cmd":"ping"} | {"cmd":"reload"} | {"cmd":"search", ...}
+(the Genevra reload bug `command` vs `cmd` is fixed here: only `cmd`).
+
+Loopback-only bind; actual port is written to .mb/daemon.port so the client
+never guesses (config daemon_port=0 -> OS picks a free one).
+"""
+from __future__ import annotations
+
+import json
+import os
+import signal
+import socket
+import time
+from typing import Any
+
+from ..config import Config
+from .engine import SearchEngine
+
+MAX_LINE = 1_000_000
+
+
+class SearchDaemon:
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        self.engine: SearchEngine | None = None
+        self._running = True
+
+    # ------------------------------------------------------------------
+    def _handle(self, req: dict[str, Any]) -> dict[str, Any]:
+        cmd = req.get("cmd", "search")
+        if cmd == "ping":
+            return {"status": "ok", "pid": os.getpid()}
+        if cmd == "reload":
+            counts = self.engine.reload()
+            return {"status": "reloaded", **counts}
+        if cmd == "search":
+            t0 = time.perf_counter()
+            out = self.engine.search(req)
+            out["time_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+            return out
+        return {"error": f"unknown cmd: {cmd}"}
+
+    def _serve_conn(self, conn: socket.socket) -> None:
+        conn.settimeout(10.0)
+        try:
+            buf = b""
+            while b"\n" not in buf:
+                data = conn.recv(65536)
+                if not data:
+                    return
+                buf += data
+                if len(buf) > MAX_LINE:
+                    conn.sendall(b'{"error":"request too large"}\n')
+                    return
+            line = buf.split(b"\n", 1)[0]
+            try:
+                req = json.loads(line.decode("utf-8"))
+            except json.JSONDecodeError:
+                conn.sendall(b'{"error":"Invalid JSON"}\n')
+                return
+            try:
+                resp = self._handle(req)
+            except Exception as exc:  # noqa: BLE001 — daemon must not die on one request
+                resp = {"error": str(exc)}
+            conn.sendall(json.dumps(resp, ensure_ascii=False).encode("utf-8") + b"\n")
+        except socket.timeout:
+            pass
+        finally:
+            conn.close()
+
+    # ------------------------------------------------------------------
+    def run(self) -> None:
+        cfg = self.cfg
+        cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[daemon] loading model {cfg.model} ...", flush=True)
+        t0 = time.perf_counter()
+        self.engine = SearchEngine(cfg)
+        print(f"[daemon] model+index ready in {time.perf_counter()-t0:.1f}s "
+              f"(memory={len(self.engine.mem_chunks)}, code={len(self.engine.code_chunks)})",
+              flush=True)
+
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind(("127.0.0.1", int(cfg.get("daemon_port", 0))))
+        srv.listen(5)
+        srv.settimeout(1.0)  # so the shutdown flag is polled
+        port = srv.getsockname()[1]
+        cfg.daemon_port_file.write_text(str(port), encoding="utf-8")
+        cfg.daemon_pid_file.write_text(str(os.getpid()), encoding="utf-8")
+        print(f"[daemon] listening on 127.0.0.1:{port}", flush=True)
+
+        def _stop(*_a):
+            self._running = False
+
+        signal.signal(signal.SIGTERM, _stop)
+        signal.signal(signal.SIGINT, _stop)
+
+        try:
+            while self._running:
+                try:
+                    conn, _addr = srv.accept()
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+                self._serve_conn(conn)
+        finally:
+            srv.close()
+            for p in (cfg.daemon_port_file, cfg.daemon_pid_file):
+                try:
+                    p.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            print("[daemon] stopped", flush=True)
+
+
+def main(cfg: Config) -> None:
+    SearchDaemon(cfg).run()
