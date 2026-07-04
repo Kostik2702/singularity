@@ -91,6 +91,9 @@ def build_context() -> str:
 
 
 def main() -> int:
+    # Windows console defaults stdout to cp1251 → Cyrillic becomes mojibake;
+    # Claude Code reads hook stdout as UTF-8 (twin of the stdin utf-8-sig rule)
+    sys.stdout.reconfigure(encoding="utf-8")
     try:
         sys.stdin.read()  # consume the event payload (content not needed)
     except OSError:
