@@ -4,7 +4,10 @@ Vault resolution order (first hit wins):
   1. explicit --vault CLI argument
   2. env MB_HOME
   3. pointer file ~/.singularity.json  -> {"vault_path": "..."}
-  4. built-in default (Windows dev machine)
+  4. built-in dev-machine default — ONLY if that path exists on this machine
+     (github#1: on macOS the bare Windows default leaked into the error
+     message; with nothing configured resolve_vault now returns None and
+     callers show actionable guidance instead)
 
 All runtime state lives inside the vault under `.mb/` so the vault is
 self-contained and portable across machines.
@@ -117,7 +120,7 @@ class Config:
             pass
 
 
-def resolve_vault(explicit: Optional[str] = None) -> Path:
+def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:
     if explicit:
         return Path(explicit)
     env = os.environ.get("MB_HOME")
@@ -130,11 +133,20 @@ def resolve_vault(explicit: Optional[str] = None) -> Path:
                 return Path(data["vault_path"])
         except (json.JSONDecodeError, OSError):
             pass
-    return Path(DEFAULT_VAULT_WINDOWS)
+    default = Path(DEFAULT_VAULT_WINDOWS)
+    if default.exists():
+        return default
+    return None
 
 
 def load_config(vault_arg: Optional[str] = None) -> Config:
     vault = resolve_vault(vault_arg)
+    if vault is None:
+        print("[mb] no vault configured", file=sys.stderr)
+        print('[mb] pass --vault "/path/to/your/vault", set MB_HOME, or create '
+              '~/.singularity.json with {"vault_path": "/path/to/your/vault"}',
+              file=sys.stderr)
+        sys.exit(2)
     if not vault.exists():
         print(f"[mb] vault not found: {vault}", file=sys.stderr)
         print("[mb] set MB_HOME, pass --vault, or create ~/.singularity.json", file=sys.stderr)

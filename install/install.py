@@ -29,6 +29,17 @@ def main() -> int:
     ap.add_argument("--skip-schedule", action="store_true")
     args = ap.parse_args()
 
+    # Fail fast BEFORE the slow dependency phase (github#1: a fresh macOS
+    # install burned Phase 1 minutes, then died on the Windows default path).
+    # config is stdlib-only, safe to import pre-deps.
+    from singularity.config import resolve_vault
+    vault = resolve_vault(args.vault)
+    if vault is None or not vault.exists():
+        print(f"[install] vault not found: {vault or '(nothing configured)'}", file=sys.stderr)
+        print('[install] re-run with your vault path, e.g.: '
+              './install/install.sh --vault "/path/to/your/vault"', file=sys.stderr)
+        return 2
+
     if not args.skip_deps:
         phase1_deps()
 

@@ -71,7 +71,7 @@ def main() -> int:
         from singularity.config import resolve_vault
 
         vault = resolve_vault(None)
-        if not vault.exists():
+        if vault is None or not vault.exists():
             return 0
         cfg_path = vault / ".mb" / "config.json"
         if cfg_path.exists():

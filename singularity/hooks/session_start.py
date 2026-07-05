@@ -29,6 +29,10 @@ def build_context() -> str:
     vault = resolve_vault(None)
     lines: list[str] = []
     now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
+    if vault is None:
+        lines.append(f"[Singularity memory] {now}. No vault configured on this "
+                     "machine (set MB_HOME or create ~/.singularity.json).")
+        return "\n".join(lines)
     lines.append(f"[Singularity memory] {now}. Vault: {vault}")
     lines.append(
         "Semantic search over the vault: `mb search \"<query>\"` "
