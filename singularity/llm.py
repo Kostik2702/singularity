@@ -202,3 +202,57 @@ def start(cfg, model_name: str) -> int:
     else:
         print(f"OpenAI-compatible endpoint: http://{host}:{port}/v1")
     return 0
+
+
+def status(cfg, as_json: bool = False) -> int:
+    state = load_state(cfg)
+    if not state:
+        print("not running")
+        return 0
+    server_alive = proc.is_running(state.get("server_pid") or -1)
+    router_alive = (proc.is_running(state["router_pid"])
+                    if state.get("router_pid") else None)
+    if as_json:
+        print(json.dumps({**state, "server_alive": server_alive,
+                          "router_alive": router_alive},
+                         ensure_ascii=False, indent=2))
+        return 0
+    print(f"model:  {state.get('model')}")
+    print(f"server: pid {state.get('server_pid')} "
+          f"({'alive' if server_alive else 'DEAD'}) port {state.get('server_port')}")
+    if state.get("router_pid"):
+        print(f"router: pid {state['router_pid']} "
+              f"({'alive' if router_alive else 'DEAD'}) port {state.get('router_port')}")
+    print(f"since:  {state.get('started_at')}")
+    if not server_alive:
+        print("[mb] server pid is dead — run 'mb llm stop' to clear stale state")
+    return 0
+
+
+def list_models(cfg) -> int:
+    try:
+        llm = _llm_cfg(cfg)
+    except LLMConfigError as exc:
+        print(f"[mb] {exc}", file=sys.stderr)
+        return 1
+    models = llm.get("models") or {}
+    if not models:
+        print("[mb] no models in config — add to llm.models in .mb/config.json")
+        return 1
+    state = load_state(cfg)
+    active = state.get("model") if state else None
+    for name, spec in models.items():
+        mark = " (active)" if name == active else ""
+        print(f"{name}{mark}  {spec.get('gguf')}")
+    return 0
+
+
+def logs(cfg, which: str = "server", n: int = 40) -> int:
+    path = _log(cfg, which)
+    if not path.exists():
+        print(f"[mb] no log yet: {path}")
+        return 0
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    for line in lines[-n:]:
+        print(line)
+    return 0

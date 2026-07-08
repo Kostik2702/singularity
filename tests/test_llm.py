@@ -231,3 +231,55 @@ def test_start_router_missing_cmd_returns_1(tmp_path, monkeypatch, capsys):
     assert "failed to start router" in capsys.readouterr().err
     assert 5000 in killed
     assert llm.load_state(cfg) is None
+
+
+def test_stop_not_running(tmp_path, capsys):
+    cfg = Config(vault=tmp_path, data={})
+    assert llm.stop(cfg) == 0
+    assert "not running" in capsys.readouterr().out
+
+
+def test_stop_kills_router_then_server_and_clears(tmp_path, monkeypatch, capsys):
+    cfg = Config(vault=tmp_path, data={})
+    llm.write_state(cfg, {"model": "q", "server_pid": 11, "router_pid": 22})
+    order = []
+    monkeypatch.setattr(llm.proc, "kill", lambda pid: order.append(pid))
+    assert llm.stop(cfg) == 0
+    assert order == [22, 11]                        # router before server
+    assert llm.load_state(cfg) is None
+    assert "stopped" in capsys.readouterr().out
+
+
+def test_status_reports_and_flags_dead(tmp_path, monkeypatch, capsys):
+    cfg = Config(vault=tmp_path, data={})
+    llm.write_state(cfg, {"model": "q", "server_pid": 11, "server_port": 8080,
+                          "router_pid": None, "started_at": "2026-07-08T14:00:00"})
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    assert llm.status(cfg) == 0
+    out = capsys.readouterr().out
+    assert "q" in out and "DEAD" in out
+
+
+def test_status_not_running(tmp_path, capsys):
+    cfg = Config(vault=tmp_path, data={})
+    assert llm.status(cfg) == 0
+    assert "not running" in capsys.readouterr().out
+
+
+def test_list_models_marks_active(tmp_path, capsys):
+    inner, server, gguf = _llm(tmp_path)
+    cfg = Config(vault=tmp_path, data={"llm": inner})
+    llm.write_state(cfg, {"model": "qwen"})
+    assert llm.list_models(cfg) == 0
+    out = capsys.readouterr().out
+    assert "qwen" in out and "(active)" in out and "plain" in out
+
+
+def test_logs_tail(tmp_path, capsys):
+    cfg = Config(vault=tmp_path, data={})
+    log = llm._log(cfg, "server")
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text("l1\nl2\nl3\n", encoding="utf-8")
+    assert llm.logs(cfg, "server", n=2) == 0
+    out = capsys.readouterr().out
+    assert "l2" in out and "l3" in out and "l1" not in out
