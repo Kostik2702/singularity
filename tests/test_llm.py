@@ -283,3 +283,26 @@ def test_logs_tail(tmp_path, capsys):
     assert llm.logs(cfg, "server", n=2) == 0
     out = capsys.readouterr().out
     assert "l2" in out and "l3" in out and "l1" not in out
+
+
+from singularity import cli
+
+
+def test_cli_llm_status_dispatches(tmp_path, monkeypatch, capsys):
+    # point the CLI at an isolated vault and stub config loading
+    cfg = Config(vault=tmp_path, data={})
+    monkeypatch.setattr(cli, "load_config", lambda vault_arg: cfg)
+    tmp_path.joinpath(".mb").mkdir(parents=True, exist_ok=True)
+    rc = cli.main(["llm", "status"])
+    assert rc == 0
+    assert "not running" in capsys.readouterr().out
+
+
+def test_cli_llm_start_parses_model_arg(tmp_path, monkeypatch):
+    cfg = Config(vault=tmp_path, data={})
+    monkeypatch.setattr(cli, "load_config", lambda vault_arg: cfg)
+    seen = {}
+    monkeypatch.setattr("singularity.llm.start",
+                        lambda c, model: seen.update(model=model) or 0)
+    assert cli.main(["llm", "start", "qwen27b"]) == 0
+    assert seen["model"] == "qwen27b"
