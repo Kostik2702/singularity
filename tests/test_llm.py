@@ -66,3 +66,27 @@ def test_llm_cfg_missing_section_raises(tmp_path):
     cfg = Config(vault=tmp_path, data={})
     with pytest.raises(llm.LLMConfigError):
         llm._llm_cfg(cfg)
+
+
+def test_state_round_trip(tmp_path):
+    cfg = Config(vault=tmp_path, data={})
+    assert llm.load_state(cfg) is None
+    llm.write_state(cfg, {"model": "qwen", "server_pid": 111})
+    assert llm.state_path(cfg) == tmp_path / ".mb" / "llm.state.json"
+    assert llm.load_state(cfg)["server_pid"] == 111
+    llm.clear_state(cfg)
+    assert llm.load_state(cfg) is None
+    llm.clear_state(cfg)  # idempotent, no raise
+
+
+def test_load_state_corrupt_returns_none(tmp_path):
+    cfg = Config(vault=tmp_path, data={})
+    p = llm.state_path(cfg)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("{ not json", encoding="utf-8")
+    assert llm.load_state(cfg) is None
+
+
+def test_log_path(tmp_path):
+    cfg = Config(vault=tmp_path, data={})
+    assert llm._log(cfg, "server") == tmp_path / ".mb" / "llm-server.log"

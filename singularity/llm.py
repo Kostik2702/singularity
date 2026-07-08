@@ -60,3 +60,28 @@ def validate_paths(llm: dict, model_name: str) -> None:
 def has_chat_template(llm: dict, model_name: str) -> bool:
     args = llm["models"][model_name].get("args") or []
     return any(a == "--jinja" or str(a).startswith("--chat-template") for a in args)
+
+
+def state_path(cfg) -> Path:
+    return cfg.mb_dir / "llm.state.json"
+
+
+def _log(cfg, name: str) -> Path:
+    return cfg.mb_dir / f"llm-{name}.log"
+
+
+def load_state(cfg) -> dict | None:
+    try:
+        return json.loads(state_path(cfg).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def write_state(cfg, state: dict) -> None:
+    cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+    state_path(cfg).write_text(
+        json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def clear_state(cfg) -> None:
+    state_path(cfg).unlink(missing_ok=True)
