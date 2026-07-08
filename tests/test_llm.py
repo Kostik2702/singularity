@@ -132,3 +132,78 @@ def test_poll_health_false_on_persistent_503():
 def test_poll_health_false_on_connection_refused():
     # nothing listening on this port
     assert llm.poll_health("http://127.0.0.1:9/health", 0.3, interval=0.05) is False
+
+
+def _ready_llm(tmp_path, with_router=False):
+    cfg, server, gguf = _llm(tmp_path)
+    server.write_text("x"); gguf.write_text("x")   # pass validate_paths
+    if with_router:
+        cfg["router"] = {"cmd": ["ccr", "start"], "host": "127.0.0.1",
+                         "port": 3456, "ready_path": "/health"}
+    return Config(vault=tmp_path, data={"llm": cfg})
+
+
+def test_start_server_only_writes_state_and_prints_openai_url(tmp_path, monkeypatch, capsys):
+    cfg = _ready_llm(tmp_path)
+    spawned = []
+    monkeypatch.setattr(llm.proc, "spawn_detached", lambda argv, log: spawned.append(argv) or 4242)
+    monkeypatch.setattr(llm, "poll_health", lambda *a, **k: True)
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    assert llm.start(cfg, "qwen") == 0
+    state = llm.load_state(cfg)
+    assert state["model"] == "qwen" and state["server_pid"] == 4242
+    assert state["router_pid"] is None
+    out = capsys.readouterr().out
+    assert "127.0.0.1:8080" in out
+    assert len(spawned) == 1                       # server only
+
+
+def test_start_with_router_spawns_both_in_order_and_prints_base_url(tmp_path, monkeypatch, capsys):
+    cfg = _ready_llm(tmp_path, with_router=True)
+    order = []
+    monkeypatch.setattr(llm.proc, "spawn_detached",
+                        lambda argv, log: order.append(argv[0]) or (5000 + len(order)))
+    monkeypatch.setattr(llm, "poll_health", lambda *a, **k: True)
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    assert llm.start(cfg, "qwen") == 0
+    # server binary spawned before router command
+    assert order[0].endswith("llama-server") and order[1] == "ccr"
+    state = llm.load_state(cfg)
+    assert state["router_pid"] == 5002
+    assert "export ANTHROPIC_BASE_URL=http://127.0.0.1:3456" in capsys.readouterr().out
+
+
+def test_start_server_health_timeout_kills_and_clears(tmp_path, monkeypatch):
+    cfg = _ready_llm(tmp_path)
+    killed = []
+    monkeypatch.setattr(llm.proc, "spawn_detached", lambda argv, log: 7777)
+    monkeypatch.setattr(llm, "poll_health", lambda *a, **k: False)
+    monkeypatch.setattr(llm.proc, "kill", lambda pid: killed.append(pid))
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    assert llm.start(cfg, "qwen") == 1
+    assert 7777 in killed
+    assert llm.load_state(cfg) is None
+
+
+def test_start_switch_stops_existing_first(tmp_path, monkeypatch):
+    cfg = _ready_llm(tmp_path)
+    llm.write_state(cfg, {"model": "old", "server_pid": 999,
+                          "router_pid": None, "server_port": 8080})
+    calls = {"kill": [], "spawn": 0}
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: pid == 999)
+    monkeypatch.setattr(llm.proc, "kill", lambda pid: calls["kill"].append(pid))
+    def _spawn(argv, log):
+        calls["spawn"] += 1
+        return 4242
+    monkeypatch.setattr(llm.proc, "spawn_detached", _spawn)
+    monkeypatch.setattr(llm, "poll_health", lambda *a, **k: True)
+    assert llm.start(cfg, "qwen") == 0
+    assert 999 in calls["kill"]                     # old server killed before new spawn
+    assert llm.load_state(cfg)["server_pid"] == 4242
+
+
+def test_start_missing_gguf_returns_1(tmp_path, monkeypatch, capsys):
+    cfg = _ready_llm(tmp_path)
+    Path(cfg.get("llm")["models"]["qwen"]["gguf"]).unlink()   # remove gguf
+    assert llm.start(cfg, "qwen") == 1
+    assert "gguf not found" in capsys.readouterr().err

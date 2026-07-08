@@ -99,3 +99,90 @@ def poll_health(url: str, timeout_s: float, interval: float = 1.0) -> bool:
         if time.monotonic() >= deadline:
             return False
         time.sleep(interval)
+
+
+def stop(cfg) -> int:
+    """Minimal stub for Task 4's VRAM-switch path in start().
+
+    Task 5 replaces/extends this with the full `mb llm stop` implementation;
+    its version is functionally identical for this code path.
+    """
+    state = load_state(cfg)
+    if not state:
+        print("not running")
+        return 0
+    if state.get("router_pid"):
+        proc.kill(state["router_pid"])
+    if state.get("server_pid"):
+        proc.kill(state["server_pid"])
+    clear_state(cfg)
+    print("stopped")
+    return 0
+
+
+def start(cfg, model_name: str) -> int:
+    try:
+        llm = _llm_cfg(cfg)
+        argv = build_server_argv(llm, model_name)
+        validate_paths(llm, model_name)
+    except LLMConfigError as exc:
+        print(f"[mb] {exc}", file=sys.stderr)
+        return 1
+
+    if not has_chat_template(llm, model_name):
+        print("[mb] warning: model args lack --jinja/--chat-template; "
+              "tool-calling may not work", file=sys.stderr)
+
+    # switch: free VRAM by stopping any live server first
+    existing = load_state(cfg)
+    if existing and proc.is_running(existing.get("server_pid") or -1):
+        print(f"[mb] stopping active model '{existing.get('model')}' first")
+        stop(cfg)
+
+    timeout = float(llm.get("health_timeout_s", 120))
+    host = llm.get("server_host", "127.0.0.1")
+    port = int(llm.get("server_port", 8080))
+    ready = llm.get("server_ready_path", "/health")
+
+    server_pid = proc.spawn_detached(argv, _log(cfg, "server"))
+    if not poll_health(f"http://{host}:{port}{ready}", timeout):
+        proc.kill(server_pid)
+        clear_state(cfg)
+        print(f"[mb] server not healthy in {timeout:g}s — see {_log(cfg, 'server')}",
+              file=sys.stderr)
+        return 1
+
+    state = {
+        "model": model_name,
+        "server_pid": server_pid,
+        "server_port": port,
+        "router_pid": None,
+        "router_port": None,
+        "started_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+    router = llm.get("router")
+    if router:
+        r_host = router.get("host", "127.0.0.1")
+        r_port = int(router.get("port", 3456))
+        r_ready = router.get("ready_path", "/health")
+        router_pid = proc.spawn_detached([str(a) for a in router["cmd"]],
+                                         _log(cfg, "router"))
+        if not poll_health(f"http://{r_host}:{r_port}{r_ready}", timeout):
+            proc.kill(router_pid)
+            proc.kill(server_pid)
+            clear_state(cfg)
+            print(f"[mb] router not healthy in {timeout:g}s — see {_log(cfg, 'router')}",
+                  file=sys.stderr)
+            return 1
+        state["router_pid"] = router_pid
+        state["router_port"] = r_port
+
+    write_state(cfg, state)
+    print(f"[mb] started '{model_name}'")
+    if router:
+        print(f"export ANTHROPIC_BASE_URL=http://{router.get('host', '127.0.0.1')}:"
+              f"{int(router.get('port', 3456))}")
+    else:
+        print(f"OpenAI-compatible endpoint: http://{host}:{port}/v1")
+    return 0
