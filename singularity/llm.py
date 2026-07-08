@@ -87,9 +87,12 @@ def clear_state(cfg) -> None:
     state_path(cfg).unlink(missing_ok=True)
 
 
-def poll_health(url: str, timeout_s: float, interval: float = 1.0) -> bool:
+def poll_health(url: str, timeout_s: float, interval: float = 1.0,
+                 pid: int | None = None) -> bool:
     deadline = time.monotonic() + timeout_s
     while True:
+        if pid is not None and not proc.is_running(pid):
+            return False
         try:
             with urllib.request.urlopen(url, timeout=3) as resp:
                 if 200 <= resp.status < 300:
@@ -102,11 +105,7 @@ def poll_health(url: str, timeout_s: float, interval: float = 1.0) -> bool:
 
 
 def stop(cfg) -> int:
-    """Minimal stub for Task 4's VRAM-switch path in start().
-
-    Task 5 replaces/extends this with the full `mb llm stop` implementation;
-    its version is functionally identical for this code path.
-    """
+    """Stop the router (if any) then the server; clear state. Idempotent."""
     state = load_state(cfg)
     if not state:
         print("not running")
@@ -135,7 +134,8 @@ def start(cfg, model_name: str) -> int:
 
     # switch: free VRAM by stopping any live server first
     existing = load_state(cfg)
-    if existing and proc.is_running(existing.get("server_pid") or -1):
+    if existing and (proc.is_running(existing.get("server_pid") or -1)
+                      or proc.is_running(existing.get("router_pid") or -1)):
         print(f"[mb] stopping active model '{existing.get('model')}' first")
         stop(cfg)
 
@@ -151,7 +151,7 @@ def start(cfg, model_name: str) -> int:
         clear_state(cfg)
         return 1
 
-    if not poll_health(f"http://{host}:{port}{ready}", timeout):
+    if not poll_health(f"http://{host}:{port}{ready}", timeout, pid=server_pid):
         proc.kill(server_pid)
         clear_state(cfg)
         print(f"[mb] server not healthy in {timeout:g}s — see {_log(cfg, 'server')}",
@@ -184,7 +184,7 @@ def start(cfg, model_name: str) -> int:
             clear_state(cfg)
             return 1
 
-        if not poll_health(f"http://{r_host}:{r_port}{r_ready}", timeout):
+        if not poll_health(f"http://{r_host}:{r_port}{r_ready}", timeout, pid=router_pid):
             proc.kill(router_pid)
             proc.kill(server_pid)
             clear_state(cfg)

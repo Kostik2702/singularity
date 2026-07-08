@@ -134,6 +134,22 @@ def test_poll_health_false_on_connection_refused():
     assert llm.poll_health("http://127.0.0.1:9/health", 0.3, interval=0.05) is False
 
 
+def test_poll_health_returns_false_fast_when_process_dead(monkeypatch):
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    assert llm.poll_health("http://127.0.0.1:9/health", timeout_s=5,
+                           interval=0.05, pid=123) is False
+
+
+def test_poll_health_true_when_process_alive_and_server_healthy(monkeypatch):
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: True)
+    srv, port = _serve(200)
+    try:
+        assert llm.poll_health(f"http://127.0.0.1:{port}/health", 2,
+                               interval=0.05, pid=123) is True
+    finally:
+        srv.shutdown()
+
+
 def _ready_llm(tmp_path, with_router=False):
     cfg, server, gguf = _llm(tmp_path)
     server.write_text("x"); gguf.write_text("x")   # pass validate_paths
@@ -199,6 +215,20 @@ def test_start_switch_stops_existing_first(tmp_path, monkeypatch):
     kill_idx = next(i for i, e in enumerate(events) if e == ("kill", 999))
     spawn_idx = next(i for i, e in enumerate(events) if e[0] == "spawn")
     assert kill_idx < spawn_idx                      # old server killed before new spawn
+    assert llm.load_state(cfg)["server_pid"] == 4242
+
+
+def test_start_switch_reaps_live_router_when_server_dead(tmp_path, monkeypatch):
+    cfg = _ready_llm(tmp_path)
+    llm.write_state(cfg, {"model": "old", "server_pid": 999, "router_pid": 888,
+                          "server_port": 8080})
+    killed = []
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: pid == 888)
+    monkeypatch.setattr(llm.proc, "kill", lambda pid: killed.append(pid))
+    monkeypatch.setattr(llm.proc, "spawn_detached", lambda argv, log: 4242)
+    monkeypatch.setattr(llm, "poll_health", lambda *a, **k: True)
+    assert llm.start(cfg, "qwen") == 0
+    assert 888 in killed                              # old (live) router reaped via stop
     assert llm.load_state(cfg)["server_pid"] == 4242
 
 
