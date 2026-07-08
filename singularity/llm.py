@@ -85,3 +85,17 @@ def write_state(cfg, state: dict) -> None:
 
 def clear_state(cfg) -> None:
     state_path(cfg).unlink(missing_ok=True)
+
+
+def poll_health(url: str, timeout_s: float, interval: float = 1.0) -> bool:
+    deadline = time.monotonic() + timeout_s
+    while True:
+        try:
+            with urllib.request.urlopen(url, timeout=3) as resp:
+                if 200 <= resp.status < 300:
+                    return True
+        except (urllib.error.URLError, OSError):
+            pass
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(interval)

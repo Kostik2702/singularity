@@ -1,5 +1,7 @@
 """Unit tests for mb llm — no real server/binary required."""
+import http.server
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -90,3 +92,43 @@ def test_load_state_corrupt_returns_none(tmp_path):
 def test_log_path(tmp_path):
     cfg = Config(vault=tmp_path, data={})
     assert llm._log(cfg, "server") == tmp_path / ".mb" / "llm-server.log"
+
+
+class _Handler(http.server.BaseHTTPRequestHandler):
+    status = 200
+
+    def do_GET(self):
+        self.send_response(self.__class__.status)
+        self.end_headers()
+
+    def log_message(self, *a):  # silence
+        pass
+
+
+def _serve(status):
+    _Handler.status = status
+    srv = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    return srv, srv.server_address[1]
+
+
+def test_poll_health_true_on_200():
+    srv, port = _serve(200)
+    try:
+        assert llm.poll_health(f"http://127.0.0.1:{port}/health", 2, interval=0.05) is True
+    finally:
+        srv.shutdown()
+
+
+def test_poll_health_false_on_persistent_503():
+    srv, port = _serve(503)
+    try:
+        assert llm.poll_health(f"http://127.0.0.1:{port}/health", 0.3, interval=0.05) is False
+    finally:
+        srv.shutdown()
+
+
+def test_poll_health_false_on_connection_refused():
+    # nothing listening on this port
+    assert llm.poll_health("http://127.0.0.1:9/health", 0.3, interval=0.05) is False
