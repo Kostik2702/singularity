@@ -144,7 +144,13 @@ def start(cfg, model_name: str) -> int:
     port = int(llm.get("server_port", 8080))
     ready = llm.get("server_ready_path", "/health")
 
-    server_pid = proc.spawn_detached(argv, _log(cfg, "server"))
+    try:
+        server_pid = proc.spawn_detached(argv, _log(cfg, "server"))
+    except Exception as exc:
+        print(f"[mb] failed to start server: {exc}", file=sys.stderr)
+        clear_state(cfg)
+        return 1
+
     if not poll_health(f"http://{host}:{port}{ready}", timeout):
         proc.kill(server_pid)
         clear_state(cfg)
@@ -166,8 +172,18 @@ def start(cfg, model_name: str) -> int:
         r_host = router.get("host", "127.0.0.1")
         r_port = int(router.get("port", 3456))
         r_ready = router.get("ready_path", "/health")
-        router_pid = proc.spawn_detached([str(a) for a in router["cmd"]],
-                                         _log(cfg, "router"))
+        try:
+            r_cmd = router.get("cmd")
+            if not r_cmd:
+                raise LLMConfigError("router.cmd not set")
+            router_pid = proc.spawn_detached([str(a) for a in r_cmd],
+                                             _log(cfg, "router"))
+        except Exception as exc:
+            print(f"[mb] failed to start router: {exc}", file=sys.stderr)
+            proc.kill(server_pid)
+            clear_state(cfg)
+            return 1
+
         if not poll_health(f"http://{r_host}:{r_port}{r_ready}", timeout):
             proc.kill(router_pid)
             proc.kill(server_pid)

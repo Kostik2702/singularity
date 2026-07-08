@@ -189,16 +189,16 @@ def test_start_switch_stops_existing_first(tmp_path, monkeypatch):
     cfg = _ready_llm(tmp_path)
     llm.write_state(cfg, {"model": "old", "server_pid": 999,
                           "router_pid": None, "server_port": 8080})
-    calls = {"kill": [], "spawn": 0}
+    events = []
     monkeypatch.setattr(llm.proc, "is_running", lambda pid: pid == 999)
-    monkeypatch.setattr(llm.proc, "kill", lambda pid: calls["kill"].append(pid))
-    def _spawn(argv, log):
-        calls["spawn"] += 1
-        return 4242
-    monkeypatch.setattr(llm.proc, "spawn_detached", _spawn)
+    monkeypatch.setattr(llm.proc, "kill", lambda pid: events.append(("kill", pid)))
+    monkeypatch.setattr(llm.proc, "spawn_detached",
+                        lambda argv, log: events.append(("spawn", argv)) or 4242)
     monkeypatch.setattr(llm, "poll_health", lambda *a, **k: True)
     assert llm.start(cfg, "qwen") == 0
-    assert 999 in calls["kill"]                     # old server killed before new spawn
+    kill_idx = next(i for i, e in enumerate(events) if e == ("kill", 999))
+    spawn_idx = next(i for i, e in enumerate(events) if e[0] == "spawn")
+    assert kill_idx < spawn_idx                      # old server killed before new spawn
     assert llm.load_state(cfg)["server_pid"] == 4242
 
 
@@ -207,3 +207,27 @@ def test_start_missing_gguf_returns_1(tmp_path, monkeypatch, capsys):
     Path(cfg.get("llm")["models"]["qwen"]["gguf"]).unlink()   # remove gguf
     assert llm.start(cfg, "qwen") == 1
     assert "gguf not found" in capsys.readouterr().err
+
+
+def test_start_server_spawn_error_returns_1(tmp_path, monkeypatch, capsys):
+    cfg = _ready_llm(tmp_path)
+    def _raise(argv, log):
+        raise OSError("boom")
+    monkeypatch.setattr(llm.proc, "spawn_detached", _raise)
+    assert llm.start(cfg, "qwen") == 1
+    assert "failed to start server" in capsys.readouterr().err
+    assert llm.load_state(cfg) is None
+
+
+def test_start_router_missing_cmd_returns_1(tmp_path, monkeypatch, capsys):
+    cfg = _ready_llm(tmp_path, with_router=True)
+    del cfg.get("llm")["router"]["cmd"]
+    killed = []
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    monkeypatch.setattr(llm.proc, "kill", lambda pid: killed.append(pid))
+    monkeypatch.setattr(llm.proc, "spawn_detached", lambda argv, log: 5000)
+    monkeypatch.setattr(llm, "poll_health", lambda *a, **k: True)
+    assert llm.start(cfg, "qwen") == 1
+    assert "failed to start router" in capsys.readouterr().err
+    assert 5000 in killed
+    assert llm.load_state(cfg) is None
