@@ -1,5 +1,6 @@
 """Unit tests for mb llm — no real server/binary required."""
 import http.server
+import json
 import sys
 import threading
 from pathlib import Path
@@ -589,3 +590,91 @@ def test_server_bin_ok(tmp_path, monkeypatch):
     monkeypatch.setattr(llm.subprocess, "run",
                         lambda *a, **k: types.SimpleNamespace(returncode=0))
     assert llm.server_bin_ok(exe) is True
+
+
+# --- mb llm setup: orchestration --------------------------------------------
+
+def _setup_env(tmp_path, monkeypatch, *, bin_ok=True, gguf_exists=True,
+               claude=True, models=None):
+    gguf = tmp_path / "m.gguf"
+    if gguf_exists:
+        gguf.write_text("x")
+    if models is None:
+        models = {"m1": {"gguf": str(gguf), "args": ["-fa", "--jinja"]}}
+    exe = tmp_path / "bin" / "llama-server.exe"
+    exe.parent.mkdir(parents=True, exist_ok=True)
+    exe.write_text("x")
+    cfg = Config(vault=tmp_path, data={"llm": {
+        "server_bin": str(exe), "server_host": "127.0.0.1",
+        "server_port": 8080, "models": models}})
+    monkeypatch.setattr(llm, "server_bin_ok", lambda p: bin_ok)
+    monkeypatch.setattr(llm.shutil, "which",
+                        lambda name: "/bin/claude" if claude else None)
+    return cfg
+
+
+def test_setup_healthy_env_all_ok_exit_0(tmp_path, monkeypatch, capsys):
+    cfg = _setup_env(tmp_path, monkeypatch)
+    assert llm.setup(cfg) == 0
+    out = capsys.readouterr().out
+    assert "fixed" in out           # -fa repaired on first run
+    # idempotent: second run fixes nothing
+    assert llm.setup(cfg) == 0
+    assert cfg.data["llm"]["models"]["m1"]["args"] == ["-fa", "on", "--jinja"]
+
+
+def test_setup_creates_missing_llm_section(tmp_path, monkeypatch):
+    cfg = Config(vault=tmp_path, data={})
+    monkeypatch.setattr(llm, "server_bin_ok", lambda p: True)
+    monkeypatch.setattr(llm.shutil, "which", lambda name: "/bin/claude")
+    assert llm.setup(cfg, dir_override=str(tmp_path / "inst")) == 0
+    saved = json.loads(cfg.config_path.read_text(encoding="utf-8"))
+    assert saved["llm"]["server_port"] == 8080
+    assert str(tmp_path / "inst") in saved["llm"]["server_bin"]
+
+
+def test_setup_missing_gguf_warns_but_exit_0(tmp_path, monkeypatch, capsys):
+    cfg = _setup_env(tmp_path, monkeypatch, gguf_exists=False)
+    assert llm.setup(cfg) == 0
+    assert "m.gguf" in capsys.readouterr().out    # warned with the path
+
+
+def test_setup_downloads_when_binary_broken(tmp_path, monkeypatch, capsys):
+    cfg = _setup_env(tmp_path, monkeypatch, bin_ok=False)
+    monkeypatch.setattr(llm.sys, "platform", "win32")
+    release = {"assets": [
+        {"name": "llama-b9999-bin-win-cuda-12.4-x64.zip",
+         "browser_download_url": "https://gh/main.zip"},
+        {"name": "cudart-llama-bin-win-cuda-12.4-x64.zip",
+         "browser_download_url": "https://gh/cudart.zip"}]}
+    downloaded = []
+    monkeypatch.setattr(llm, "fetch_json", lambda url, ctx=None: release)
+    monkeypatch.setattr(llm, "download",
+                        lambda url, dest, ctx=None: downloaded.append(url)
+                        or dest.write_bytes(b"z"))
+    unpacked = []
+    monkeypatch.setattr(llm, "unpack_zip",
+                        lambda z, t: unpacked.append(z.name))
+    # after "unpack", the verify probe must succeed:
+    monkeypatch.setattr(llm, "server_bin_ok",
+                        lambda p: bool(unpacked))    # ok only post-unpack
+    assert llm.setup(cfg) == 0
+    assert downloaded == ["https://gh/main.zip", "https://gh/cudart.zip"]
+    assert len(unpacked) == 2
+
+
+def test_setup_posix_missing_binary_is_blocking(tmp_path, monkeypatch, capsys):
+    cfg = _setup_env(tmp_path, monkeypatch, bin_ok=False)
+    monkeypatch.setattr(llm.sys, "platform", "linux")
+    assert llm.setup(cfg) == 1
+    assert "manual" in capsys.readouterr().out.lower()
+
+
+def test_cli_llm_setup_dispatches(tmp_path, monkeypatch):
+    cfg = Config(vault=tmp_path, data={})
+    monkeypatch.setattr(cli, "load_config", lambda vault_arg: cfg)
+    seen = {}
+    monkeypatch.setattr("singularity.llm.setup",
+                        lambda c, dir_override=None: seen.update(d=dir_override) or 0)
+    assert cli.main(["llm", "setup", "--dir", "X:/lc"]) == 0
+    assert seen["d"] == "X:/lc"

@@ -438,3 +438,115 @@ def server_bin_ok(path: Path) -> bool:
                               timeout=30).returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
+
+
+# --- mb llm setup -----------------------------------------------------------
+
+DEFAULT_INSTALL_DIR = "E:/llama.cpp"       # big files never on C: (machine rule)
+LLAMA_RELEASE_API = ("https://api.github.com/repos/"
+                     "ggml-org/llama.cpp/releases/latest")
+_SERVER_EXE = "llama-server.exe"
+
+
+def _default_llm_section(install_dir: Path) -> dict:
+    return {
+        "server_bin": str(install_dir / _SERVER_EXE),
+        "server_host": "127.0.0.1",
+        "server_port": 8080,
+        "server_ready_path": "/health",
+        "health_timeout_s": 300,
+        "models": {},
+    }
+
+
+def setup(cfg, dir_override: str | None = None) -> int:
+    """Verify/repair the local-LLM environment. Idempotent. Exit 0 unless a
+    blocking item remains (binary unavailable and not auto-installable)."""
+    lines: list[tuple[str, str]] = []      # (level, message)
+
+    def report(level: str, msg: str) -> None:
+        lines.append((level, msg))
+        print(f"[{level}] {msg}")
+
+    changed = False
+    section = cfg.data.get("llm")
+    if not section:
+        install_dir = Path(dir_override or DEFAULT_INSTALL_DIR)
+        section = _default_llm_section(install_dir)
+        cfg.data["llm"] = section
+        changed = True
+        report("fixed", "created llm config section "
+                        f"(server_bin -> {section['server_bin']})")
+    else:
+        report("ok", "llm config section present")
+
+    # --- llama.cpp binary --------------------------------------------------
+    server_bin = Path(section["server_bin"])
+    target_dir = Path(dir_override) if dir_override else server_bin.parent
+    if server_bin_ok(server_bin):
+        report("ok", f"llama-server works: {server_bin}")
+    elif sys.platform == "win32":
+        try:
+            ctx = _ssl_context()
+            release = fetch_json(LLAMA_RELEASE_API, ctx)
+            main, cudart = pick_release_assets(release.get("assets") or [])
+            target_dir.mkdir(parents=True, exist_ok=True)
+            for asset in filter(None, (main, cudart)):
+                dest = target_dir / asset["name"]
+                report("fixed", f"downloading {asset['name']}")
+                download(asset["browser_download_url"], dest, ctx)
+                unpack_zip(dest, target_dir)
+                dest.unlink(missing_ok=True)
+            exes = sorted(target_dir.rglob(_SERVER_EXE))
+            new_bin = exes[0] if exes else target_dir / _SERVER_EXE
+            if not server_bin_ok(new_bin):
+                raise LLMConfigError(
+                    f"downloaded binary failed --version: {new_bin}")
+            section["server_bin"] = str(new_bin)
+            changed = True
+            report("fixed", f"installed llama-server -> {new_bin}")
+        except (LLMConfigError, OSError, urllib.error.URLError) as exc:
+            report("fail", f"llama.cpp install failed: {exc} — "
+                           f"download manually into {target_dir}")
+    else:
+        report("fail", f"llama-server missing at {server_bin} — install "
+                       "manually (auto-download is Windows-only): "
+                       "https://github.com/ggml-org/llama.cpp/releases")
+
+    # --- model args sanity + gguf presence ---------------------------------
+    models = section.get("models") or {}
+    if not models:
+        report("warn", 'model registry empty — add e.g. "models": '
+                       '{"name": {"gguf": "E:/models/x.gguf", '
+                       '"args": ["-ngl", "99", "-fa", "on", "--jinja"]}}')
+    for name, model in models.items():
+        fixed_args, fixes = fix_model_args(list(model.get("args") or []))
+        if fixes:
+            model["args"] = fixed_args
+            changed = True
+            report("fixed", f"{name}: " + "; ".join(fixes))
+        if not has_chat_template({"models": {name: model}}, name):
+            report("warn", f"{name}: args lack --jinja/--chat-template — "
+                           "tool-calling won't work")
+        gguf = Path(model.get("gguf") or "")
+        if gguf.exists():
+            report("ok", f"{name}: gguf present")
+        else:
+            report("warn", f"{name}: gguf missing: {gguf}")
+
+    # --- claude CLI ---------------------------------------------------------
+    if shutil.which("claude"):
+        report("ok", "claude CLI in PATH")
+    else:
+        report("warn", "claude CLI not found — "
+                       "npm install -g @anthropic-ai/claude-code "
+                       "(blocks 'mb llm code' only)")
+
+    if changed:
+        cfg.save()
+
+    counts = {lvl: sum(1 for l, _ in lines if l == lvl)
+              for lvl in ("ok", "fixed", "warn", "fail")}
+    print(f"[mb] setup: {counts['ok']} ok, {counts['fixed']} fixed, "
+          f"{counts['warn']} warnings, {counts['fail']} blocking")
+    return 1 if counts["fail"] else 0

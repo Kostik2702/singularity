@@ -1,7 +1,9 @@
 """Vault resolution (github#1: bare Windows default leaked onto macOS)."""
+import json
 from pathlib import Path
 
 from singularity import config
+from singularity.config import Config
 
 
 def _isolate(monkeypatch, tmp_path):
@@ -41,3 +43,12 @@ def test_default_used_only_if_it_exists(monkeypatch, tmp_path):
     existing.mkdir()
     monkeypatch.setattr(config, "DEFAULT_VAULT_WINDOWS", str(existing))
     assert config.resolve_vault(None) == existing
+
+
+def test_save_is_atomic_no_tmp_left(tmp_path):
+    cfg = Config(vault=tmp_path, data={"llm": {"server_port": 1}})
+    cfg.save()
+    assert json.loads(cfg.config_path.read_text(encoding="utf-8"))["llm"]["server_port"] == 1
+    leftovers = [p for p in cfg.config_path.parent.iterdir()
+                 if p.name.startswith("config") and p.suffix != ".json"]
+    assert leftovers == []

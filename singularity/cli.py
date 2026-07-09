@@ -79,6 +79,9 @@ def _build_parser() -> argparse.ArgumentParser:
     llc = llsub.add_parser("code", help="run Claude Code on the local model")
     llc.add_argument("claude_args", nargs=argparse.REMAINDER,
                      help="extra args passed to claude (use -- before flags)")
+    llset = llsub.add_parser("setup", help="verify/install local-LLM environment")
+    llset.add_argument("--dir", default=None,
+                       help="llama.cpp install dir (default: E:/llama.cpp)")
 
     l = sub.add_parser("learn", help="append an insight to active learnings")
     l.add_argument("insight")
@@ -231,6 +234,8 @@ def cmd_llm(cfg, args) -> int:
         return llm.logs(cfg, which=args.which, n=args.n)
     if args.llm_action == "code":
         return llm.code(cfg, args.claude_args)
+    if args.llm_action == "setup":
+        return llm.setup(cfg, dir_override=args.dir)
     return 2
 
 
