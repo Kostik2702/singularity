@@ -326,3 +326,30 @@ def fix_model_args(args: list[str]) -> tuple[list[str], list[str]]:
                 out.append("on")
                 fixes.append(f"{a} -> {a} on")
     return out, fixes
+
+
+_WIN_CUDA_ZIP = re.compile(r"bin-win-cuda.*x64\.zip$")
+_CUDA_VER = re.compile(r"cuda-?(\d+(?:\.\d+)?)")
+
+
+def pick_release_assets(assets: list[dict]) -> tuple[dict, dict | None]:
+    """Pick the Windows-CUDA-x64 server zip (highest CUDA version) and its
+    matching cudart runtime zip, if published. Naming drifts across releases —
+    on no match, raise with the available names so the pattern can be updated."""
+    def cuda_ver(name: str) -> float:
+        m = _CUDA_VER.search(name)
+        return float(m.group(1)) if m else 0.0
+
+    mains = [a for a in assets
+             if _WIN_CUDA_ZIP.search(a["name"])
+             and not a["name"].startswith("cudart-")]
+    if not mains:
+        names = ", ".join(a["name"] for a in assets) or "(no assets)"
+        raise LLMConfigError(f"no win-cuda-x64 zip in release assets: {names}")
+    main = max(mains, key=lambda a: cuda_ver(a["name"]))
+    cudarts = [a for a in assets
+               if a["name"].startswith("cudart-") and _WIN_CUDA_ZIP.search(a["name"])]
+    cudart = next((a for a in cudarts
+                   if cuda_ver(a["name"]) == cuda_ver(main["name"])),
+                  cudarts[0] if cudarts else None)
+    return main, cudart

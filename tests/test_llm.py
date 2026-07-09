@@ -457,3 +457,32 @@ def test_fix_model_args_long_form_and_no_fa():
         ["--flash-attn", "on", "--jinja"]
     args = ["-ngl", "99", "--jinja"]
     assert llm.fix_model_args(args) == (args, [])
+
+
+# --- mb llm setup: release asset selection ----------------------------------
+
+def _asset(name):
+    return {"name": name, "browser_download_url": f"https://gh/{name}"}
+
+
+def test_pick_release_assets_single_match_with_cudart():
+    assets = [_asset("llama-b9999-bin-win-cpu-x64.zip"),
+              _asset("llama-b9999-bin-win-cuda-12.4-x64.zip"),
+              _asset("cudart-llama-bin-win-cuda-12.4-x64.zip"),
+              _asset("llama-b9999-bin-macos-arm64.zip")]
+    main, cudart = llm.pick_release_assets(assets)
+    assert main["name"] == "llama-b9999-bin-win-cuda-12.4-x64.zip"
+    assert cudart["name"] == "cudart-llama-bin-win-cuda-12.4-x64.zip"
+
+
+def test_pick_release_assets_prefers_highest_cuda():
+    assets = [_asset("llama-b9999-bin-win-cuda-11.7-x64.zip"),
+              _asset("llama-b9999-bin-win-cuda-12.4-x64.zip")]
+    main, cudart = llm.pick_release_assets(assets)
+    assert "12.4" in main["name"] and cudart is None
+
+
+def test_pick_release_assets_no_match_raises_with_names():
+    with pytest.raises(llm.LLMConfigError) as exc:
+        llm.pick_release_assets([_asset("llama-b9999-bin-macos-arm64.zip")])
+    assert "macos-arm64" in str(exc.value)   # available names listed for debugging
