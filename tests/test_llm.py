@@ -416,6 +416,18 @@ def test_code_env_token_not_clobbered(tmp_path, monkeypatch):
     assert seen["env"]["ANTHROPIC_AUTH_TOKEN"] == "user-token"
 
 
+def test_code_strips_inherited_anthropic_api_key(tmp_path, monkeypatch):
+    cfg = _code_ready(tmp_path, monkeypatch)
+    monkeypatch.setattr(llm.shutil, "which", lambda name: "/bin/claude")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "should-not-reach-child")
+    seen = {}
+    monkeypatch.setattr(llm.subprocess, "run",
+                        lambda argv, env=None: seen.update(env=env)
+                        or types.SimpleNamespace(returncode=0))
+    assert llm.code(cfg) == 0
+    assert "ANTHROPIC_API_KEY" not in seen["env"]
+
+
 def test_cli_llm_code_dispatches_with_remainder(tmp_path, monkeypatch):
     cfg = Config(vault=tmp_path, data={})
     monkeypatch.setattr(cli, "load_config", lambda vault_arg: cfg)

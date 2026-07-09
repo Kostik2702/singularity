@@ -304,6 +304,7 @@ def code(cfg, extra: list[str] | None = None) -> int:
         "ANTHROPIC_MODEL": str(state.get("model")),
         "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
     })
+    env.pop("ANTHROPIC_API_KEY", None)
     args = list(extra or [])
     if args[:1] == ["--"]:                 # argparse.REMAINDER keeps the separator
         args = args[1:]
