@@ -400,11 +400,25 @@ def download(url: str, dest: Path, ctx=None) -> None:
         raise
 
 
+_DRIVE_ABS = re.compile(r"^[A-Za-z]:")
+
+
+def _unsafe_entry(name: str) -> bool:
+    """True iff an archive entry could escape `target` on extraction — POSIX
+    absolute, Windows drive-absolute, or containing a '..' segment (checked
+    after normalizing backslashes to forward slashes, since pathlib treats
+    both as separators on Windows)."""
+    norm = name.replace("\\", "/")
+    if norm.startswith("/") or _DRIVE_ABS.match(norm):
+        return True
+    return ".." in norm.split("/")
+
+
 def unpack_zip(zip_path: Path, target: Path) -> None:
     """Extract into target, stripping a single top-level directory if present."""
     with zipfile.ZipFile(zip_path) as zf:
         names = [n for n in zf.namelist() if not n.endswith("/")]
-        if any(n.startswith("/") or ".." in n.split("/") for n in names):
+        if any(_unsafe_entry(n) for n in names):
             raise LLMConfigError(f"unsafe path in archive: {zip_path.name}")
         tops = {n.split("/", 1)[0] for n in names}
         prefix = (tops.copy().pop() + "/"

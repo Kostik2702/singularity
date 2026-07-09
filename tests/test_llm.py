@@ -524,6 +524,43 @@ def test_unpack_zip_rejects_traversal(tmp_path):
         llm.unpack_zip(z, tmp_path / "out")
 
 
+def test_unpack_zip_rejects_backslash_traversal(tmp_path):
+    z = _make_zip(tmp_path, {"..\\evil.txt": b"x"})
+    with pytest.raises(llm.LLMConfigError):
+        llm.unpack_zip(z, tmp_path / "out")
+
+
+def test_unpack_zip_rejects_windows_drive_absolute(tmp_path):
+    z = _make_zip(tmp_path, {"C:\\Windows\\evil.dll": b"x"})
+    with pytest.raises(llm.LLMConfigError):
+        llm.unpack_zip(z, tmp_path / "out")
+
+
+def test_ssl_context_returns_none_without_truststore(monkeypatch):
+    import builtins
+    real_import = builtins.__import__
+
+    def fake_import(name, *a, **k):
+        if name == "truststore":
+            raise ImportError("no truststore")
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    assert llm._ssl_context() is None
+
+
+def test_fetch_json_parses_response(monkeypatch):
+    import io
+
+    class _Resp(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen",
+                        lambda req, timeout=30, context=None: _Resp(b'{"a": 1}'))
+    assert llm.fetch_json("https://x/y") == {"a": 1}
+
+
 def test_download_writes_atomically_and_cleans_partial(tmp_path, monkeypatch):
     class _Resp(io.BytesIO):
         headers = {"Content-Length": "4"}
