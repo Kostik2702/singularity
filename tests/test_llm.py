@@ -694,6 +694,18 @@ def test_setup_handles_corrupt_zip_download(tmp_path, monkeypatch, capsys):
     assert "fail" in capsys.readouterr().err.lower()
 
 
+def test_setup_handles_undecodable_release_response(tmp_path, monkeypatch, capsys):
+    cfg = _setup_env(tmp_path, monkeypatch, bin_ok=False)
+    monkeypatch.setattr(llm.sys, "platform", "win32")
+
+    def bad_fetch(url, ctx=None):
+        b"\xff\xfe".decode("utf-8")  # raises UnicodeDecodeError
+
+    monkeypatch.setattr(llm, "fetch_json", bad_fetch)
+    llm.setup(cfg)  # must not raise -- caught and reported
+    assert "fail" in capsys.readouterr().err.lower()
+
+
 def test_setup_posix_missing_binary_is_blocking(tmp_path, monkeypatch, capsys):
     cfg = _setup_env(tmp_path, monkeypatch, bin_ok=False)
     monkeypatch.setattr(llm.sys, "platform", "linux")
