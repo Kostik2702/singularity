@@ -336,3 +336,79 @@ def test_cli_llm_start_parses_model_arg(tmp_path, monkeypatch):
                         lambda c, model: seen.update(model=model) or 0)
     assert cli.main(["llm", "start", "qwen27b"]) == 0
     assert seen["model"] == "qwen27b"
+
+
+# --- mb llm code -----------------------------------------------------------
+import types
+
+
+def test_resolve_auth_token_chain(tmp_path):
+    # env wins over config; config wins over default
+    assert llm.resolve_auth_token({"auth_token": "cfg"},
+                                  {"ANTHROPIC_AUTH_TOKEN": "env"}) == "env"
+    assert llm.resolve_auth_token({"auth_token": "cfg"}, {}) == "cfg"
+    assert llm.resolve_auth_token({}, {}) == "local"
+    assert llm.resolve_auth_token({"auth_token": ""}, {}) == "local"  # empty -> default
+
+
+def _code_ready(tmp_path, monkeypatch, alive=True):
+    cfg = Config(vault=tmp_path, data={"llm": {
+        "server_bin": "x", "server_host": "127.0.0.1", "server_port": 8080,
+        "models": {}}})
+    llm.write_state(cfg, {"model": "qwythos9b", "server_pid": 111,
+                          "server_port": 8080})
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: alive)
+    return cfg
+
+
+def test_code_no_state_returns_1(tmp_path, monkeypatch, capsys):
+    cfg = Config(vault=tmp_path, data={"llm": {"server_bin": "x", "models": {}}})
+    assert llm.code(cfg) == 1
+    assert "mb llm start" in capsys.readouterr().err
+
+
+def test_code_dead_server_returns_1(tmp_path, monkeypatch, capsys):
+    cfg = _code_ready(tmp_path, monkeypatch, alive=False)
+    assert llm.code(cfg) == 1
+    assert "mb llm start" in capsys.readouterr().err
+
+
+def test_code_missing_claude_cli_returns_1(tmp_path, monkeypatch, capsys):
+    cfg = _code_ready(tmp_path, monkeypatch)
+    monkeypatch.setattr(llm.shutil, "which", lambda name: None)
+    assert llm.code(cfg) == 1
+    assert "npm install -g @anthropic-ai/claude-code" in capsys.readouterr().err
+
+
+def test_code_runs_claude_with_env_overlay_and_passthrough(tmp_path, monkeypatch):
+    cfg = _code_ready(tmp_path, monkeypatch)
+    monkeypatch.setattr(llm.shutil, "which", lambda name: "/bin/claude")
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    calls = {}
+
+    def fake_run(argv, env=None):
+        calls["argv"], calls["env"] = argv, env
+        return types.SimpleNamespace(returncode=7)
+
+    monkeypatch.setattr(llm.subprocess, "run", fake_run)
+    rc = llm.code(cfg, ["--", "--resume"])       # leading REMAINDER "--" stripped
+    assert rc == 7                               # claude's exit code propagated
+    assert calls["argv"] == ["/bin/claude", "--resume"]
+    env = calls["env"]
+    assert env["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:8080"   # bare origin
+    assert env["ANTHROPIC_AUTH_TOKEN"] == "local"
+    assert env["ANTHROPIC_MODEL"] == "qwythos9b"
+    assert env["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"
+    assert "PATH" in env                         # os.environ inherited
+
+
+def test_code_env_token_not_clobbered(tmp_path, monkeypatch):
+    cfg = _code_ready(tmp_path, monkeypatch)
+    monkeypatch.setattr(llm.shutil, "which", lambda name: "/bin/claude")
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "user-token")
+    seen = {}
+    monkeypatch.setattr(llm.subprocess, "run",
+                        lambda argv, env=None: seen.update(env=env)
+                        or types.SimpleNamespace(returncode=0))
+    assert llm.code(cfg) == 0
+    assert seen["env"]["ANTHROPIC_AUTH_TOKEN"] == "user-token"

@@ -6,6 +6,9 @@ singularity.platform.proc (cross-platform detached spawn/kill).
 from __future__ import annotations
 
 import json
+import os
+import shutil
+import subprocess
 import sys
 import time
 import urllib.error
@@ -256,3 +259,48 @@ def logs(cfg, which: str = "server", n: int = 40) -> int:
     for line in lines[-n:]:
         print(line)
     return 0
+
+
+# --- mb llm code -----------------------------------------------------------
+
+DEFAULT_AUTH_TOKEN = "local"  # dummy; local server without --api-key ignores auth
+
+
+def resolve_auth_token(llm: dict, environ) -> str:
+    """env ANTHROPIC_AUTH_TOKEN > config llm.auth_token > "local" (first non-empty)."""
+    return (environ.get("ANTHROPIC_AUTH_TOKEN")
+            or llm.get("auth_token")
+            or DEFAULT_AUTH_TOKEN)
+
+
+def code(cfg, extra: list[str] | None = None) -> int:
+    """Run Claude Code (foreground, inherits stdio) against the running local model."""
+    try:
+        llm = _llm_cfg(cfg)
+    except LLMConfigError as exc:
+        print(f"[mb] {exc}", file=sys.stderr)
+        return 1
+    state = load_state(cfg)
+    if not state or not proc.is_running(state.get("server_pid") or -1):
+        print("[mb] no local model running — run 'mb llm start <model>'",
+              file=sys.stderr)
+        return 1
+    claude = shutil.which("claude")
+    if not claude:
+        print("[mb] 'claude' CLI not found — npm install -g @anthropic-ai/claude-code",
+              file=sys.stderr)
+        return 1
+    host = llm.get("server_host", "127.0.0.1")
+    port = state.get("server_port") or int(llm.get("server_port", 8080))
+    env = dict(os.environ)
+    env.update({
+        # bare origin — Claude Code appends /v1/messages itself
+        "ANTHROPIC_BASE_URL": f"http://{host}:{port}",
+        "ANTHROPIC_AUTH_TOKEN": resolve_auth_token(llm, os.environ),
+        "ANTHROPIC_MODEL": str(state.get("model")),
+        "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+    })
+    args = list(extra or [])
+    if args[:1] == ["--"]:                 # argparse.REMAINDER keeps the separator
+        args = args[1:]
+    return subprocess.run([claude, *args], env=env).returncode
