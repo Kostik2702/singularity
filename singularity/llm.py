@@ -277,8 +277,76 @@ def resolve_auth_token(llm: dict, environ) -> str:
             or DEFAULT_AUTH_TOKEN)
 
 
+# --- isolated config profile (CLAUDE_CONFIG_DIR) ----------------------------
+# Local models with a strict jinja chat-template reject Claude Code's normal
+# session: the Singularity SessionStart hook injects its context as an extra
+# role:system message mid-list, tripping guards like "System message must be at
+# the beginning". Hooks MERGE across scopes and can't be disabled per-hook from
+# the CLI, and disableAllHooks proved unreliable on this machine. So instead of
+# --bare (which loses CLAUDE.md/skills/agents), we point CLAUDE_CONFIG_DIR at a
+# generated profile that keeps what's compatible and drops what isn't. Full
+# replacement — no merge back to ~/.claude (verified via claude-code-guide).
+_ISOLATED_DIRNAME = ".claude-local"
+_DROP_SETTINGS_KEYS = ("hooks", "enabledPlugins", "mcpServers")  # break jinja / Claude-only / MCP off by choice
+_MIRROR_SUBDIRS = ("skills", "agents")
+
+
+def _mirror_dir(src: Path, dst: Path) -> None:
+    """Mirror a config subdir into the isolated profile. Prefer a live
+    symlink/junction (auto-fresh, cheap); fall back to a copy. No-op if src is
+    absent or dst already exists (links stay live across launches)."""
+    if not src.is_dir() or dst.exists():
+        return
+    try:
+        os.symlink(src, dst, target_is_directory=True)
+        return
+    except OSError:
+        pass
+    if os.name == "nt":                       # symlinks need privilege; junctions don't
+        try:
+            import _winapi
+            _winapi.CreateJunction(str(src), str(dst))
+            return
+        except (OSError, AttributeError):
+            pass
+    shutil.copytree(src, dst, dirs_exist_ok=True)  # last resort: goes stale, but works
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def build_isolated_config(home: Path, dst: Path) -> Path:
+    """Materialize a CLAUDE_CONFIG_DIR that keeps CLAUDE.md, skills and agents
+    but strips the hooks / Claude-only plugins / MCP that break (or don't apply
+    to) a strict-jinja local model. settings.json and CLAUDE.md are rewritten
+    every launch so real config stays in sync; .claude.json is carried (MCP
+    stripped) so onboarding/auth state doesn't reset. Returns dst."""
+    dst.mkdir(parents=True, exist_ok=True)
+    src_md = home / "CLAUDE.md"
+    if src_md.is_file():
+        shutil.copyfile(src_md, dst / "CLAUDE.md")
+    settings = _read_json(home / "settings.json")
+    for k in _DROP_SETTINGS_KEYS:
+        settings.pop(k, None)
+    (dst / "settings.json").write_text(
+        json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+    dot = _read_json(home / ".claude.json")   # oauth/onboarding state; drop MCP by choice
+    if dot:
+        dot.pop("mcpServers", None)
+        (dst / ".claude.json").write_text(
+            json.dumps(dot, ensure_ascii=False), encoding="utf-8")
+    for sub in _MIRROR_SUBDIRS:
+        _mirror_dir(home / sub, dst / sub)
+    return dst
+
+
 def code(cfg, extra: list[str] | None = None) -> int:
-    """Run Claude Code (foreground, inherits stdio) against the running local model."""
+    """Run Claude Code (foreground, inherits stdio) against the running local
+    model, under an isolated CLAUDE_CONFIG_DIR profile (see build_isolated_config)."""
     try:
         llm = _llm_cfg(cfg)
     except LLMConfigError as exc:
@@ -305,6 +373,10 @@ def code(cfg, extra: list[str] | None = None) -> int:
         "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
     })
     env.pop("ANTHROPIC_API_KEY", None)
+    home = Path(llm.get("claude_home") or (Path.home() / ".claude"))
+    iso = Path(llm.get("code_config_dir") or (Path.home() / _ISOLATED_DIRNAME))
+    build_isolated_config(home, iso)
+    env["CLAUDE_CONFIG_DIR"] = str(iso)        # isolated profile: no jinja-breaking hooks / plugins
     args = list(extra or [])
     if args[:1] == ["--"]:                 # argparse.REMAINDER keeps the separator
         args = args[1:]

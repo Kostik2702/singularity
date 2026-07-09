@@ -356,7 +356,10 @@ def test_resolve_auth_token_chain(tmp_path):
 def _code_ready(tmp_path, monkeypatch, alive=True):
     cfg = Config(vault=tmp_path, data={"llm": {
         "server_bin": "x", "server_host": "127.0.0.1", "server_port": 8080,
-        "models": {}}})
+        "models": {},
+        # keep isolated-profile generation off the real ~/.claude in tests
+        "claude_home": str(tmp_path / "home"),
+        "code_config_dir": str(tmp_path / "iso")}})
     llm.write_state(cfg, {"model": "qwythos9b", "server_pid": 111,
                           "server_port": 8080})
     monkeypatch.setattr(llm.proc, "is_running", lambda pid: alive)
@@ -426,6 +429,67 @@ def test_code_strips_inherited_anthropic_api_key(tmp_path, monkeypatch):
                         or types.SimpleNamespace(returncode=0))
     assert llm.code(cfg) == 0
     assert "ANTHROPIC_API_KEY" not in seen["env"]
+
+
+# --- isolated CLAUDE_CONFIG_DIR profile -------------------------------------
+
+
+def _home_with_config(tmp_path):
+    home = tmp_path / "home"
+    (home / "skills" / "mb-search").mkdir(parents=True)
+    (home / "agents").mkdir()
+    (home / "CLAUDE.md").write_text("global instructions", encoding="utf-8")
+    (home / "settings.json").write_text(json.dumps({
+        "permissions": {"allow": ["Bash"]},
+        "theme": "dark",
+        "statusLine": {"type": "command"},
+        "hooks": {"SessionStart": [{"hooks": [{"command": "x"}]}]},
+        "enabledPlugins": {"superpowers@x": True},
+        "mcpServers": {"ctx7": {"command": "y"}},
+    }), encoding="utf-8")
+    (home / ".claude.json").write_text(json.dumps({
+        "hasCompletedOnboarding": True, "mcpServers": {"ctx7": {}}}),
+        encoding="utf-8")
+    return home
+
+
+def test_build_isolated_config_drops_breakers_keeps_rest(tmp_path):
+    home = _home_with_config(tmp_path)
+    dst = tmp_path / "iso"
+    llm.build_isolated_config(home, dst)
+    settings = json.loads((dst / "settings.json").read_text(encoding="utf-8"))
+    assert "hooks" not in settings           # the jinja breaker
+    assert "enabledPlugins" not in settings  # Claude-only
+    assert "mcpServers" not in settings      # off by user choice
+    assert settings["permissions"] == {"allow": ["Bash"]}   # carried
+    assert settings["theme"] == "dark"
+    assert settings["statusLine"] == {"type": "command"}
+    assert (dst / "CLAUDE.md").read_text(encoding="utf-8") == "global instructions"
+    assert (dst / "skills" / "mb-search").is_dir()          # mirrored for manual memory
+    assert (dst / "agents").is_dir()
+    dot = json.loads((dst / ".claude.json").read_text(encoding="utf-8"))
+    assert dot["hasCompletedOnboarding"] is True            # onboarding carried
+    assert "mcpServers" not in dot                          # but MCP stripped
+
+
+def test_build_isolated_config_tolerates_missing_home(tmp_path):
+    dst = tmp_path / "iso"
+    llm.build_isolated_config(tmp_path / "nope", dst)        # no source files
+    assert json.loads((dst / "settings.json").read_text(encoding="utf-8")) == {}
+    assert not (dst / "CLAUDE.md").exists()
+
+
+def test_code_sets_claude_config_dir(tmp_path, monkeypatch):
+    _home_with_config(tmp_path)
+    cfg = _code_ready(tmp_path, monkeypatch)
+    monkeypatch.setattr(llm.shutil, "which", lambda name: "/bin/claude")
+    seen = {}
+    monkeypatch.setattr(llm.subprocess, "run",
+                        lambda argv, env=None: seen.update(env=env)
+                        or types.SimpleNamespace(returncode=0))
+    assert llm.code(cfg) == 0
+    assert seen["env"]["CLAUDE_CONFIG_DIR"] == str(tmp_path / "iso")
+    assert (tmp_path / "iso" / "settings.json").exists()     # profile materialized
 
 
 def test_cli_llm_code_dispatches_with_remainder(tmp_path, monkeypatch):
