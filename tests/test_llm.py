@@ -412,3 +412,22 @@ def test_code_env_token_not_clobbered(tmp_path, monkeypatch):
                         or types.SimpleNamespace(returncode=0))
     assert llm.code(cfg) == 0
     assert seen["env"]["ANTHROPIC_AUTH_TOKEN"] == "user-token"
+
+
+def test_cli_llm_code_dispatches_with_remainder(tmp_path, monkeypatch):
+    cfg = Config(vault=tmp_path, data={})
+    monkeypatch.setattr(cli, "load_config", lambda vault_arg: cfg)
+    seen = {}
+    monkeypatch.setattr("singularity.llm.code",
+                        lambda c, extra: seen.update(extra=extra) or 0)
+    assert cli.main(["llm", "code", "--", "--resume"]) == 0
+    assert seen["extra"] == ["--", "--resume"]
+
+
+def test_start_prints_code_hint(tmp_path, monkeypatch, capsys):
+    cfg = _ready_llm(tmp_path)
+    monkeypatch.setattr(llm.proc, "spawn_detached", lambda argv, log: 4242)
+    monkeypatch.setattr(llm, "poll_health", lambda *a, **k: True)
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    assert llm.start(cfg, "qwen") == 0
+    assert "mb llm code" in capsys.readouterr().out

@@ -76,6 +76,9 @@ def _build_parser() -> argparse.ArgumentParser:
     lllog = llsub.add_parser("logs", help="tail server/router log")
     lllog.add_argument("which", nargs="?", choices=["server", "router"], default="server")
     lllog.add_argument("-n", type=int, default=40)
+    llc = llsub.add_parser("code", help="run Claude Code on the local model")
+    llc.add_argument("claude_args", nargs=argparse.REMAINDER,
+                     help="extra args passed to claude (use -- before flags)")
 
     l = sub.add_parser("learn", help="append an insight to active learnings")
     l.add_argument("insight")
@@ -226,6 +229,8 @@ def cmd_llm(cfg, args) -> int:
         return llm.list_models(cfg)
     if args.llm_action == "logs":
         return llm.logs(cfg, which=args.which, n=args.n)
+    if args.llm_action == "code":
+        return llm.code(cfg, args.claude_args)
     return 2
 
 

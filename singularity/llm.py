@@ -204,6 +204,7 @@ def start(cfg, model_name: str) -> int:
               f"{int(router.get('port', 3456))}")
     else:
         print(f"OpenAI-compatible endpoint: http://{host}:{port}/v1")
+        print("Run Claude Code on it: mb llm code")
     return 0
 
 
