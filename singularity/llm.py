@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -305,3 +306,23 @@ def code(cfg, extra: list[str] | None = None) -> int:
     if args[:1] == ["--"]:                 # argparse.REMAINDER keeps the separator
         args = args[1:]
     return subprocess.run([claude, *args], env=env).returncode
+
+
+# --- mb llm setup -----------------------------------------------------------
+
+_VALUED_FLASH_ATTN = ("-fa", "--flash-attn")   # llama-server >= b9xxx: needs on|off|auto
+
+
+def fix_model_args(args: list[str]) -> tuple[list[str], list[str]]:
+    """Repair known argv pitfalls; returns (new_args, fixes). Currently: a bare
+    -fa/--flash-attn swallows the next flag as its value — insert 'on'."""
+    out: list[str] = []
+    fixes: list[str] = []
+    for i, a in enumerate(args):
+        out.append(a)
+        if a in _VALUED_FLASH_ATTN:
+            nxt = args[i + 1] if i + 1 < len(args) else None
+            if nxt is None or str(nxt).startswith("-"):
+                out.append("on")
+                fixes.append(f"{a} -> {a} on")
+    return out, fixes

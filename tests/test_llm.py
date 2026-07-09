@@ -431,3 +431,29 @@ def test_start_prints_code_hint(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
     assert llm.start(cfg, "qwen") == 0
     assert "mb llm code" in capsys.readouterr().out
+
+
+# --- mb llm setup: args sanity ---------------------------------------------
+
+def test_fix_model_args_bare_fa_before_flag():
+    fixed, fixes = llm.fix_model_args(["-ngl", "99", "-fa", "--jinja"])
+    assert fixed == ["-ngl", "99", "-fa", "on", "--jinja"]
+    assert fixes == ["-fa -> -fa on"]
+
+
+def test_fix_model_args_bare_fa_last():
+    fixed, fixes = llm.fix_model_args(["-fa"])
+    assert fixed == ["-fa", "on"] and len(fixes) == 1
+
+
+def test_fix_model_args_valued_fa_untouched():
+    for val in ("on", "off", "auto"):
+        fixed, fixes = llm.fix_model_args(["-fa", val, "--jinja"])
+        assert fixed == ["-fa", val, "--jinja"] and fixes == []
+
+
+def test_fix_model_args_long_form_and_no_fa():
+    assert llm.fix_model_args(["--flash-attn", "--jinja"])[0] == \
+        ["--flash-attn", "on", "--jinja"]
+    args = ["-ngl", "99", "--jinja"]
+    assert llm.fix_model_args(args) == (args, [])
