@@ -506,7 +506,8 @@ def setup(cfg, dir_override: str | None = None) -> int:
             section["server_bin"] = str(new_bin)
             changed = True
             report("fixed", f"installed llama-server -> {new_bin}")
-        except (LLMConfigError, OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        except (LLMConfigError, OSError, urllib.error.URLError, json.JSONDecodeError,
+                zipfile.BadZipFile) as exc:
             report("fail", f"llama.cpp install failed: {exc} — "
                            f"download manually into {target_dir}")
     else:

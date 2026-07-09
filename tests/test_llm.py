@@ -6,6 +6,7 @@ import threading
 from pathlib import Path
 
 import pytest
+import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -673,6 +674,23 @@ def test_setup_handles_malformed_release_json(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(llm, "fetch_json", bad_fetch)
     # should not raise -- caught and reported, not crash the process
     llm.setup(cfg)  # no assertion on return value needed beyond "did not raise"
+    assert "fail" in capsys.readouterr().err.lower()
+
+
+def test_setup_handles_corrupt_zip_download(tmp_path, monkeypatch, capsys):
+    cfg = _setup_env(tmp_path, monkeypatch, bin_ok=False)
+    monkeypatch.setattr(llm.sys, "platform", "win32")
+    release = {"assets": [
+        {"name": "llama-b9999-bin-win-cuda-12.4-x64.zip",
+         "browser_download_url": "https://gh/main.zip"}]}
+    monkeypatch.setattr(llm, "fetch_json", lambda url, ctx=None: release)
+    monkeypatch.setattr(llm, "download", lambda url, dest, ctx=None: dest.write_bytes(b"not a zip"))
+
+    def bad_unzip(z, t):
+        raise zipfile.BadZipFile("File is not a zip file")
+
+    monkeypatch.setattr(llm, "unpack_zip", bad_unzip)
+    llm.setup(cfg)  # must not raise -- caught and reported
     assert "fail" in capsys.readouterr().err.lower()
 
 
