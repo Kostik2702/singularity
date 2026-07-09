@@ -466,7 +466,8 @@ def setup(cfg, dir_override: str | None = None) -> int:
 
     def report(level: str, msg: str) -> None:
         lines.append((level, msg))
-        print(f"[{level}] {msg}")
+        out = sys.stderr if level == "fail" else sys.stdout
+        print(f"[{level}] {msg}", file=out)
 
     changed = False
     section = cfg.data.get("llm")
@@ -505,7 +506,7 @@ def setup(cfg, dir_override: str | None = None) -> int:
             section["server_bin"] = str(new_bin)
             changed = True
             report("fixed", f"installed llama-server -> {new_bin}")
-        except (LLMConfigError, OSError, urllib.error.URLError) as exc:
+        except (LLMConfigError, OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
             report("fail", f"llama.cpp install failed: {exc} — "
                            f"download manually into {target_dir}")
     else:
@@ -547,6 +548,7 @@ def setup(cfg, dir_override: str | None = None) -> int:
 
     counts = {lvl: sum(1 for l, _ in lines if l == lvl)
               for lvl in ("ok", "fixed", "warn", "fail")}
-    print(f"[mb] setup: {counts['ok']} ok, {counts['fixed']} fixed, "
-          f"{counts['warn']} warnings, {counts['fail']} blocking")
+    summary = (f"[mb] setup: {counts['ok']} ok, {counts['fixed']} fixed, "
+               f"{counts['warn']} warnings, {counts['fail']} blocking")
+    print(summary, file=sys.stderr if counts["fail"] else sys.stdout)
     return 1 if counts["fail"] else 0

@@ -663,11 +663,24 @@ def test_setup_downloads_when_binary_broken(tmp_path, monkeypatch, capsys):
     assert len(unpacked) == 2
 
 
+def test_setup_handles_malformed_release_json(tmp_path, monkeypatch, capsys):
+    cfg = _setup_env(tmp_path, monkeypatch, bin_ok=False)
+    monkeypatch.setattr(llm.sys, "platform", "win32")
+
+    def bad_fetch(url, ctx=None):
+        raise json.JSONDecodeError("bad", "not json", 0)
+
+    monkeypatch.setattr(llm, "fetch_json", bad_fetch)
+    # should not raise -- caught and reported, not crash the process
+    llm.setup(cfg)  # no assertion on return value needed beyond "did not raise"
+    assert "fail" in capsys.readouterr().err.lower()
+
+
 def test_setup_posix_missing_binary_is_blocking(tmp_path, monkeypatch, capsys):
     cfg = _setup_env(tmp_path, monkeypatch, bin_ok=False)
     monkeypatch.setattr(llm.sys, "platform", "linux")
     assert llm.setup(cfg) == 1
-    assert "manual" in capsys.readouterr().out.lower()
+    assert "manual" in capsys.readouterr().err.lower()
 
 
 def test_cli_llm_setup_dispatches(tmp_path, monkeypatch):
