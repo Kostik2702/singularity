@@ -486,3 +486,69 @@ def test_pick_release_assets_no_match_raises_with_names():
     with pytest.raises(llm.LLMConfigError) as exc:
         llm.pick_release_assets([_asset("llama-b9999-bin-macos-arm64.zip")])
     assert "macos-arm64" in str(exc.value)   # available names listed for debugging
+
+
+# --- mb llm setup: net/zip helpers ------------------------------------------
+import io
+import zipfile as _zipfile
+
+
+def _make_zip(tmp_path, entries, name="a.zip"):
+    """entries: {archive_name: content_bytes}"""
+    p = tmp_path / name
+    with _zipfile.ZipFile(p, "w") as zf:
+        for n, data in entries.items():
+            zf.writestr(n, data)
+    return p
+
+
+def test_unpack_zip_flattens_single_top_dir(tmp_path):
+    z = _make_zip(tmp_path, {"llama-b9999/llama-server.exe": b"exe",
+                             "llama-b9999/lib/ggml.dll": b"dll"})
+    target = tmp_path / "out"
+    llm.unpack_zip(z, target)
+    assert (target / "llama-server.exe").read_bytes() == b"exe"
+    assert (target / "lib" / "ggml.dll").read_bytes() == b"dll"
+
+
+def test_unpack_zip_root_files_kept_as_is(tmp_path):
+    z = _make_zip(tmp_path, {"llama-server.exe": b"exe", "ggml.dll": b"dll"})
+    target = tmp_path / "out"
+    llm.unpack_zip(z, target)
+    assert (target / "llama-server.exe").exists() and (target / "ggml.dll").exists()
+
+
+def test_unpack_zip_rejects_traversal(tmp_path):
+    z = _make_zip(tmp_path, {"../evil.txt": b"x"})
+    with pytest.raises(llm.LLMConfigError):
+        llm.unpack_zip(z, tmp_path / "out")
+
+
+def test_download_writes_atomically_and_cleans_partial(tmp_path, monkeypatch):
+    class _Resp(io.BytesIO):
+        headers = {"Content-Length": "4"}
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    dest = tmp_path / "f.zip"
+    monkeypatch.setattr(llm.urllib.request, "urlopen",
+                        lambda *a, **k: _Resp(b"data"))
+    llm.download("https://x/f.zip", dest)
+    assert dest.read_bytes() == b"data"
+    assert not dest.with_suffix(".zip.part").exists()
+
+    def boom(*a, **k):
+        raise OSError("net down")
+    monkeypatch.setattr(llm.urllib.request, "urlopen", boom)
+    with pytest.raises(OSError):
+        llm.download("https://x/g.zip", tmp_path / "g.zip")
+    assert not (tmp_path / "g.zip.part").exists()   # partial cleaned
+
+
+def test_server_bin_ok(tmp_path, monkeypatch):
+    exe = tmp_path / "llama-server.exe"
+    assert llm.server_bin_ok(exe) is False          # missing -> OSError -> False
+    exe.write_text("x")
+    monkeypatch.setattr(llm.subprocess, "run",
+                        lambda *a, **k: types.SimpleNamespace(returncode=0))
+    assert llm.server_bin_ok(exe) is True

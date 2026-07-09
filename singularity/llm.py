@@ -9,11 +9,13 @@ import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
@@ -353,3 +355,72 @@ def pick_release_assets(assets: list[dict]) -> tuple[dict, dict | None]:
                    if cuda_ver(a["name"]) == cuda_ver(main["name"])),
                   cudarts[0] if cudarts else None)
     return main, cudart
+
+
+def _ssl_context():
+    """truststore (OS cert store) if available — this machine sits behind a
+    TLS-intercepting proxy; plain certifi bundles fail on GitHub downloads."""
+    try:
+        import truststore
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    except ImportError:
+        return None
+
+
+def fetch_json(url: str, ctx=None) -> dict:
+    req = urllib.request.Request(url, headers={
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "singularity-mb"})
+    with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def download(url: str, dest: Path, ctx=None) -> None:
+    """Stream url to dest via a .part file (atomic finish, partial cleanup)."""
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    try:
+        with urllib.request.urlopen(url, timeout=60, context=ctx) as resp, \
+                open(tmp, "wb") as out:
+            total = int(resp.headers.get("Content-Length") or 0)
+            done = 0
+            while True:
+                chunk = resp.read(1 << 20)
+                if not chunk:
+                    break
+                out.write(chunk)
+                done += len(chunk)
+                if total:
+                    print(f"\r[mb] {dest.name}: {done >> 20}/{total >> 20} MiB",
+                          end="", flush=True)
+            if total:
+                print()
+        tmp.replace(dest)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def unpack_zip(zip_path: Path, target: Path) -> None:
+    """Extract into target, stripping a single top-level directory if present."""
+    with zipfile.ZipFile(zip_path) as zf:
+        names = [n for n in zf.namelist() if not n.endswith("/")]
+        if any(n.startswith("/") or ".." in n.split("/") for n in names):
+            raise LLMConfigError(f"unsafe path in archive: {zip_path.name}")
+        tops = {n.split("/", 1)[0] for n in names}
+        prefix = (tops.copy().pop() + "/"
+                  if len(tops) == 1 and all("/" in n for n in names) else "")
+        for name in names:
+            rel = name[len(prefix):] if name.startswith(prefix) else name
+            dest = target / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(name) as src, open(dest, "wb") as out:
+                shutil.copyfileobj(src, out)
+
+
+def server_bin_ok(path: Path) -> bool:
+    """True iff the binary exists and `--version` exits 0 (sanity, not health)."""
+    try:
+        return subprocess.run([str(path), "--version"], capture_output=True,
+                              timeout=30).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
