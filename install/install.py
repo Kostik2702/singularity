@@ -22,12 +22,12 @@ def phase1_deps() -> None:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", str(ENGINE)])
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--vault", help="vault path")
     ap.add_argument("--skip-deps", action="store_true")
     ap.add_argument("--skip-schedule", action="store_true")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     # Fail fast BEFORE the slow dependency phase (github#1: a fresh macOS
     # install burned Phase 1 minutes, then died on the Windows default path).
@@ -62,14 +62,21 @@ def main() -> int:
     print("daemon:", "up" if ok else "FAILED (see .mb/daemon.log)")
 
     print("== Phase 4: Claude Code hooks + skills ==")
+    failures: list[str] = []
     import register_hooks
-    register_hooks.main()
+    if register_hooks.main() != 0:
+        failures.append("register_hooks")
     import register_skills
-    register_skills.main()
+    if register_skills.main() != 0:
+        failures.append("register_skills")
 
     print("== Phase 4b: Codex profile + skills ==")
     import register_codex
-    register_codex.main()
+    # register_codex.main() itself already returns 0 for the legitimate "Codex
+    # not installed on this machine" skip — a nonzero here means Codex IS
+    # present and registration genuinely failed, so it's a real failure too.
+    if register_codex.main() != 0:
+        failures.append("register_codex")
 
     if not args.skip_schedule:
         print("== Phase 5: scheduler ==")
@@ -85,7 +92,13 @@ def main() -> int:
 
     print("== Verify: mb doctor ==")
     from singularity import doctor
-    return doctor.run(cfg, fix=True)
+    doctor_rc = doctor.run(cfg, fix=True)
+
+    if failures:
+        print(f"[install] REQUIRED phase(s) failed: {', '.join(failures)} — "
+              "installation incomplete, see errors above", file=sys.stderr)
+        return 1
+    return doctor_rc
 
 
 if __name__ == "__main__":
