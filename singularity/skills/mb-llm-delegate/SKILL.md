@@ -45,8 +45,13 @@ python "$SK" --infile D:/path/app.html \
 ```
 
 Флаги: `--system` (своя системка; дефолт — «output ONLY complete file, no fences»),
-`--max-tokens` (дефолт 6000; при `stop=max_tokens` подними), `--print` (эхо в stdout),
-без `--outfile` вывод идёт в stdout.
+`--max-tokens` (дефолт 6000), `--print` (эхо в stdout), `--keep-partial` (при обрезке
+сохранить partial в `<outfile>.partial` вместо отбрасывания), без `--outfile` вывод
+идёт в stdout.
+
+`--outfile` пишется ТОЛЬКО атомарно и ТОЛЬКО при полном непустом ответе (exit 0).
+При `stop_reason=max_tokens` (exit 2) или пустом выводе (exit 1) существующий
+`--outfile` НЕ трогается — подними `--max-tokens` и повтори.
 
 ## Контроль качества (обязателен на каждой итерации)
 

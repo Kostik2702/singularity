@@ -11,11 +11,17 @@ Usage:
         [--outfile <path>]  write the model's returned text (md fences stripped)
         [--max-tokens N]    default 6000
         [--print]           also echo the returned text to stdout
+        [--keep-partial]    on max_tokens truncation, save partial text to
+                            <outfile>.partial instead of discarding it
 
-Exit non-zero on transport/HTTP error or empty output.
+Exit codes: 0 success; 1 empty output; 2 truncated at max_tokens; other
+non-zero on transport/HTTP error (via sys.exit(str)). --outfile is only ever
+written on success, via atomic replace — it is never left partially written
+or overwritten with truncated/empty content.
 """
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -76,6 +82,36 @@ def clean_output(text):
     return text
 
 
+def atomic_write(path, content):
+    """Write `content` to `path` without ever leaving a partial/corrupt file:
+    write to a sibling temp file, flush+fsync, then atomically replace."""
+    body = content if content.endswith("\n") else content + "\n"
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+        f.write(body)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
+def decide_output(text, stop, outfile, keep_partial=False):
+    """Decide what to do with the model's raw response before touching
+    `outfile`. Returns (exit_code, message-or-None). Never mutates an
+    existing outfile on empty output or max_tokens truncation."""
+    if not text.strip():
+        return 1, f"[delegate] empty output (stop_reason={stop}) — outfile left untouched"
+    if stop == "max_tokens":
+        msg = "[delegate] ERROR: truncated at max_tokens — raise --max-tokens; outfile left untouched"
+        if outfile and keep_partial:
+            partial = f"{outfile}.partial"
+            atomic_write(partial, clean_output(text))
+            msg += f" (partial saved to {partial})"
+        return 2, msg
+    if outfile:
+        atomic_write(outfile, clean_output(text))
+    return 0, None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", required=True)
@@ -84,6 +120,9 @@ def main():
     ap.add_argument("--outfile")
     ap.add_argument("--max-tokens", type=int, default=6000)
     ap.add_argument("--print", action="store_true")
+    ap.add_argument("--keep-partial", action="store_true",
+                     help="on max_tokens truncation, save the partial text to "
+                          "<outfile>.partial instead of discarding it")
     a = ap.parse_args()
 
     task = a.task
@@ -96,22 +135,19 @@ def main():
 
     host, port, model = endpoint()
     text, stop, usage = call_model(host, port, model, a.system, task, a.max_tokens)
-    if not text.strip():
-        sys.exit(f"[delegate] empty output (stop_reason={stop})")
 
-    print(f"[delegate] model={model} stop={stop} out_tokens={usage.get('output_tokens')}",
-          file=sys.stderr)
-    if stop == "max_tokens":
-        print("[delegate] WARN: truncated at max_tokens — raise --max-tokens",
+    code, msg = decide_output(text, stop, a.outfile, keep_partial=a.keep_partial)
+
+    if text.strip():
+        print(f"[delegate] model={model} stop={stop} out_tokens={usage.get('output_tokens')}",
               file=sys.stderr)
-
-    out = clean_output(text) if a.outfile else text
-    if a.outfile:
-        with open(a.outfile, "w", encoding="utf-8", newline="\n") as f:
-            f.write(out if out.endswith("\n") else out + "\n")
-        print(f"[delegate] wrote {a.outfile} ({len(out)} bytes)", file=sys.stderr)
+    if msg:
+        print(msg, file=sys.stderr)
+    if code == 0 and a.outfile:
+        print(f"[delegate] wrote {a.outfile} ({len(clean_output(text))} bytes)", file=sys.stderr)
     if a.print or not a.outfile:
         sys.stdout.write(text)
+    sys.exit(code)
 
 
 if __name__ == "__main__":
