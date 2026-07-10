@@ -126,17 +126,21 @@ def main() -> int:
 
     dest_root = Path.home() / ".codex" / "skills"
     dest_root.mkdir(parents=True, exist_ok=True)
-    counts = {"ok": 0, "linked": 0, "copied": 0, "missing": 0}
+    counts = {"ok": 0, "linked": 0, "copied": 0, "backed-up": 0, "missing": 0}
     for name in CODEX_SKILLS:
         src = SKILLS_SRC / name
         if not src.is_dir():
             print(f"[codex] MISSING in repo: {name}", file=sys.stderr)
             counts["missing"] += 1
             continue
-        counts[register_skills._link_dir(src, dest_root / name)] += 1
+        status = register_skills._link_dir(src, dest_root / name)
+        counts[status] += 1
+        if status == "backed-up":
+            print(f"[codex] {name}: differing local copy preserved as backup, "
+                  f"now linked to repo source", file=sys.stderr)
     print(f"[codex] {len(CODEX_SKILLS)} skills: {counts['linked']} linked, "
           f"{counts['ok']} already ok, {counts['copied']} copied, "
-          f"{counts['missing']} missing")
+          f"{counts['backed-up']} backed up, {counts['missing']} missing")
     return 1 if counts["missing"] else 0
 
 
