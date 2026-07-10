@@ -67,6 +67,10 @@ def main() -> int:
     import register_skills
     register_skills.main()
 
+    print("== Phase 4b: Codex profile + skills ==")
+    import register_codex
+    register_codex.main()
+
     if not args.skip_schedule:
         print("== Phase 5: scheduler ==")
         from singularity.platform import scheduler
