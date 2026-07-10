@@ -1,8 +1,10 @@
 """Unit tests for mb llm — no real server/binary required."""
 import http.server
 import json
+import os
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -829,3 +831,122 @@ def test_cli_llm_setup_dispatches(tmp_path, monkeypatch):
                         lambda c, dir_override=None: seen.update(d=dir_override) or 0)
     assert cli.main(["llm", "setup", "--dir", "X:/lc"]) == 0
     assert seen["d"] == "X:/lc"
+
+
+# --- REV-3: start() lifecycle — intermediate state, interrupt cleanup, lock ---
+
+def test_start_writes_starting_state_with_pid_before_health_check(tmp_path, monkeypatch):
+    cfg = _ready_llm(tmp_path)
+    monkeypatch.setattr(llm.proc, "spawn_detached", lambda argv, log: 4242)
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    seen = {}
+
+    def _poll(*a, **k):
+        # the PID must already be on disk while health is still being polled —
+        # otherwise an interrupt right here would orphan an untracked process
+        seen["state_during_poll"] = llm.load_state(cfg)
+        return True
+
+    monkeypatch.setattr(llm, "poll_health", _poll)
+    assert llm.start(cfg, "qwen") == 0
+    assert seen["state_during_poll"] == {
+        "status": "starting", "model": "qwen", "server_pid": 4242,
+        "server_port": 8080, "router_pid": None, "router_port": None,
+        "started_at": seen["state_during_poll"]["started_at"],
+    }
+    assert llm.load_state(cfg)["status"] == "running"      # final state supersedes it
+
+
+def test_start_interrupt_during_server_health_kills_pid_and_clears_state(tmp_path, monkeypatch, capsys):
+    cfg = _ready_llm(tmp_path)
+    killed = []
+    monkeypatch.setattr(llm.proc, "spawn_detached", lambda argv, log: 4242)
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    monkeypatch.setattr(llm.proc, "kill", lambda pid: killed.append(pid))
+    monkeypatch.setattr(llm, "poll_health",
+                        lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt()))
+
+    assert llm.start(cfg, "qwen") == 130
+    assert killed == [4242]
+    assert llm.load_state(cfg) is None
+    assert "interrupted" in capsys.readouterr().err
+    assert not llm._start_lock_dir(cfg).exists()            # lock always released
+
+
+def test_start_interrupt_during_router_health_kills_both_pids_and_clears_state(tmp_path, monkeypatch):
+    cfg = _ready_llm(tmp_path, with_router=True)
+    killed = []
+    order = []
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    monkeypatch.setattr(llm.proc, "kill", lambda pid: killed.append(pid))
+    monkeypatch.setattr(llm.proc, "spawn_detached",
+                        lambda argv, log: order.append(argv[0]) or (5000 + len(order)))
+
+    calls = {"n": 0}
+    def _poll(*a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return True                       # server healthy
+        raise KeyboardInterrupt()              # interrupted while polling router
+
+    monkeypatch.setattr(llm, "poll_health", _poll)
+    assert llm.start(cfg, "qwen") == 130
+    assert set(killed) == {5001, 5002}          # both this-run PIDs killed, none left orphaned
+    assert llm.load_state(cfg) is None
+    assert not llm._start_lock_dir(cfg).exists()
+
+
+def test_start_crash_during_health_kills_pid_state_and_reraises(tmp_path, monkeypatch):
+    cfg = _ready_llm(tmp_path)
+    killed = []
+    monkeypatch.setattr(llm.proc, "spawn_detached", lambda argv, log: 4242)
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    monkeypatch.setattr(llm.proc, "kill", lambda pid: killed.append(pid))
+    monkeypatch.setattr(llm, "poll_health",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    with pytest.raises(RuntimeError, match="boom"):
+        llm.start(cfg, "qwen")
+    assert killed == [4242]
+    assert llm.load_state(cfg) is None
+    assert not llm._start_lock_dir(cfg).exists()
+
+
+def test_start_refuses_when_lock_held_by_concurrent_start(tmp_path, monkeypatch):
+    cfg = _ready_llm(tmp_path)
+    spawned = []
+    monkeypatch.setattr(llm.proc, "spawn_detached", lambda argv, log: spawned.append(argv) or 4242)
+    monkeypatch.setattr(llm, "poll_health", lambda *a, **k: True)
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+
+    lock = llm._start_lock_dir(cfg)
+    lock.mkdir(parents=True)                    # simulate a start already in progress
+
+    assert llm.start(cfg, "qwen") == 1
+    assert spawned == []                        # never even tried to spawn
+    assert lock.exists()                        # the OTHER run's lock — must not be touched
+
+
+def test_start_takes_over_stale_lock_and_still_releases_it(tmp_path, monkeypatch):
+    cfg = _ready_llm(tmp_path)
+    monkeypatch.setattr(llm.proc, "spawn_detached", lambda argv, log: 4242)
+    monkeypatch.setattr(llm, "poll_health", lambda *a, **k: True)
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+
+    lock = llm._start_lock_dir(cfg)
+    lock.mkdir(parents=True)
+    old = time.time() - 10_000                  # far older than any staleness window
+    os.utime(lock, (old, old))
+
+    assert llm.start(cfg, "qwen") == 0
+    assert not lock.exists()                    # released after a successful takeover
+
+
+def test_start_lock_released_on_ordinary_health_timeout(tmp_path, monkeypatch):
+    cfg = _ready_llm(tmp_path)
+    monkeypatch.setattr(llm.proc, "spawn_detached", lambda argv, log: 7777)
+    monkeypatch.setattr(llm, "poll_health", lambda *a, **k: False)
+    monkeypatch.setattr(llm.proc, "kill", lambda pid: None)
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    assert llm.start(cfg, "qwen") == 1
+    assert not llm._start_lock_dir(cfg).exists()

@@ -125,6 +125,25 @@ def stop(cfg) -> int:
     return 0
 
 
+def _start_lock_dir(cfg) -> Path:
+    return cfg.mb_dir / "llm-start.lock"
+
+
+def _acquire_start_lock(cfg, stale_after_s: float) -> bool:
+    """Atomic mkdir-based lock (same pattern as cfg.lock_dir for index rebuild).
+    Returns True if acquired (fresh or stale takeover), False if another start
+    is genuinely in progress — caller must refuse to run."""
+    lock = _start_lock_dir(cfg)
+    try:
+        lock.mkdir(parents=True, exist_ok=False)
+        return True
+    except FileExistsError:
+        if time.time() - lock.stat().st_mtime < stale_after_s:
+            return False
+        print(f"[mb] stale start-lock ({lock}) — taking over", file=sys.stderr)
+        return True
+
+
 def start(cfg, model_name: str) -> int:
     try:
         llm = _llm_cfg(cfg)
@@ -138,77 +157,113 @@ def start(cfg, model_name: str) -> int:
         print("[mb] warning: model args lack --jinja/--chat-template; "
               "tool-calling may not work", file=sys.stderr)
 
-    # switch: free VRAM by stopping any live server first
-    existing = load_state(cfg)
-    if existing and (proc.is_running(existing.get("server_pid") or -1)
-                      or proc.is_running(existing.get("router_pid") or -1)):
-        print(f"[mb] stopping active model '{existing.get('model')}' first")
-        stop(cfg)
-
     timeout = float(llm.get("health_timeout_s", 120))
     host = llm.get("server_host", "127.0.0.1")
     port = int(llm.get("server_port", 8080))
     ready = llm.get("server_ready_path", "/health")
 
+    # serialize concurrent `mb llm start` — two racing starts would both spawn
+    # onto the same port/VRAM. Stale window covers the worst case: two
+    # sequential health-timeouts (server + router) plus margin.
+    if not _acquire_start_lock(cfg, stale_after_s=2 * timeout + 60):
+        print("[mb] another 'mb llm start' is already in progress — wait for it "
+              "or 'mb llm stop' if it's stuck", file=sys.stderr)
+        return 1
+
+    spawned: list[int] = []      # PIDs *this run* created; cleanup scope on interrupt/crash
     try:
-        server_pid = proc.spawn_detached(argv, _log(cfg, "server"))
-    except Exception as exc:
-        print(f"[mb] failed to start server: {exc}", file=sys.stderr)
-        clear_state(cfg)
-        return 1
+        # switch: free VRAM by stopping any live server first
+        existing = load_state(cfg)
+        if existing and (proc.is_running(existing.get("server_pid") or -1)
+                          or proc.is_running(existing.get("router_pid") or -1)):
+            print(f"[mb] stopping active model '{existing.get('model')}' first")
+            stop(cfg)
 
-    if not poll_health(f"http://{host}:{port}{ready}", timeout, pid=server_pid):
-        proc.kill(server_pid)
-        clear_state(cfg)
-        print(f"[mb] server not healthy in {timeout:g}s — see {_log(cfg, 'server')}",
-              file=sys.stderr)
-        return 1
-
-    state = {
-        "model": model_name,
-        "server_pid": server_pid,
-        "server_port": port,
-        "router_pid": None,
-        "router_port": None,
-        "started_at": datetime.now().isoformat(timespec="seconds"),
-    }
-
-    router = llm.get("router")
-    if router:
-        r_host = router.get("host", "127.0.0.1")
-        r_port = int(router.get("port", 3456))
-        r_ready = router.get("ready_path", "/health")
         try:
-            r_cmd = router.get("cmd")
-            if not r_cmd:
-                raise LLMConfigError("router.cmd not set")
-            router_pid = proc.spawn_detached([str(a) for a in r_cmd],
-                                             _log(cfg, "router"))
+            server_pid = proc.spawn_detached(argv, _log(cfg, "server"))
         except Exception as exc:
-            print(f"[mb] failed to start router: {exc}", file=sys.stderr)
-            proc.kill(server_pid)
+            print(f"[mb] failed to start server: {exc}", file=sys.stderr)
             clear_state(cfg)
             return 1
+        spawned.append(server_pid)
+        # fix the state the instant a PID exists, before waiting on health —
+        # so an interrupt/crash during the health poll still leaves a
+        # findable PID (for 'mb llm stop'/doctor) instead of a silent orphan.
+        write_state(cfg, {"status": "starting", "model": model_name,
+                          "server_pid": server_pid, "server_port": port,
+                          "router_pid": None, "router_port": None,
+                          "started_at": datetime.now().isoformat(timespec="seconds")})
 
-        if not poll_health(f"http://{r_host}:{r_port}{r_ready}", timeout, pid=router_pid):
-            proc.kill(router_pid)
+        if not poll_health(f"http://{host}:{port}{ready}", timeout, pid=server_pid):
             proc.kill(server_pid)
             clear_state(cfg)
-            print(f"[mb] router not healthy in {timeout:g}s — see {_log(cfg, 'router')}",
+            print(f"[mb] server not healthy in {timeout:g}s — see {_log(cfg, 'server')}",
                   file=sys.stderr)
             return 1
-        state["router_pid"] = router_pid
-        state["router_port"] = r_port
 
-    write_state(cfg, state)
-    print(f"[mb] started '{model_name}'")
-    if router:
-        print(f"export ANTHROPIC_BASE_URL=http://{router.get('host', '127.0.0.1')}:"
-              f"{int(router.get('port', 3456))}")
-    else:
-        print(f"OpenAI-compatible endpoint: http://{host}:{port}/v1")
-        print("Run Claude Code on it: mb llm code")
-    return 0
+        state = {
+            "model": model_name,
+            "server_pid": server_pid,
+            "server_port": port,
+            "router_pid": None,
+            "router_port": None,
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+        }
+
+        router = llm.get("router")
+        if router:
+            r_host = router.get("host", "127.0.0.1")
+            r_port = int(router.get("port", 3456))
+            r_ready = router.get("ready_path", "/health")
+            try:
+                r_cmd = router.get("cmd")
+                if not r_cmd:
+                    raise LLMConfigError("router.cmd not set")
+                router_pid = proc.spawn_detached([str(a) for a in r_cmd],
+                                                 _log(cfg, "router"))
+            except Exception as exc:
+                print(f"[mb] failed to start router: {exc}", file=sys.stderr)
+                proc.kill(server_pid)
+                clear_state(cfg)
+                return 1
+            spawned.append(router_pid)
+            write_state(cfg, {**state, "status": "starting",
+                              "router_pid": router_pid, "router_port": r_port})
+
+            if not poll_health(f"http://{r_host}:{r_port}{r_ready}", timeout, pid=router_pid):
+                proc.kill(router_pid)
+                proc.kill(server_pid)
+                clear_state(cfg)
+                print(f"[mb] router not healthy in {timeout:g}s — see {_log(cfg, 'router')}",
+                      file=sys.stderr)
+                return 1
+            state["router_pid"] = router_pid
+            state["router_port"] = r_port
+
+        write_state(cfg, {**state, "status": "running"})
+        print(f"[mb] started '{model_name}'")
+        if router:
+            print(f"export ANTHROPIC_BASE_URL=http://{router.get('host', '127.0.0.1')}:"
+                  f"{int(router.get('port', 3456))}")
+        else:
+            print(f"OpenAI-compatible endpoint: http://{host}:{port}/v1")
+            print("Run Claude Code on it: mb llm code")
+        return 0
+    except BaseException as exc:
+        # interrupted (Ctrl+C) or crashed anywhere after a spawn: kill only the
+        # PID(s) *this run* created — never touch state/processes belonging to
+        # some other instance — and never leave a half-written state file.
+        for pid in spawned:
+            proc.kill(pid)
+        if spawned:
+            clear_state(cfg)
+        if isinstance(exc, KeyboardInterrupt):
+            print("[mb] start interrupted — cleaned up spawned process(es)",
+                  file=sys.stderr)
+            return 130
+        raise
+    finally:
+        shutil.rmtree(_start_lock_dir(cfg), ignore_errors=True)
 
 
 def status(cfg, as_json: bool = False) -> int:
