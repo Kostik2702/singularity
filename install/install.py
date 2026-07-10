@@ -61,9 +61,11 @@ def main() -> int:
     ok = client.start_daemon(cfg)
     print("daemon:", "up" if ok else "FAILED (see .mb/daemon.log)")
 
-    print("== Phase 4: Claude Code hooks + PATH shim ==")
+    print("== Phase 4: Claude Code hooks + skills ==")
     import register_hooks
     register_hooks.main()
+    import register_skills
+    register_skills.main()
 
     if not args.skip_schedule:
         print("== Phase 5: scheduler ==")
