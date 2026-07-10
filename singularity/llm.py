@@ -23,16 +23,88 @@ from .platform import proc
 
 
 class LLMConfigError(Exception):
-    """Missing/invalid [llm] config section or a referenced path is absent."""
+    """Missing/invalid [llm] config section, a malformed field, or a
+    referenced path is absent. The one error type every llm.py entry point
+    converts user-facing config problems into — never a bare traceback."""
+
+
+def _coerce_port(value, field: str) -> int:
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        raise LLMConfigError(f"llm.{field} must be an integer port, got {value!r}") from None
+    if not (0 < port < 65536):
+        raise LLMConfigError(f"llm.{field} must be between 1 and 65535, got {port}")
+    return port
+
+
+def _coerce_positive_number(value, field: str):
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        raise LLMConfigError(f"llm.{field} must be a number of seconds, got {value!r}") from None
+    if n <= 0:
+        raise LLMConfigError(f"llm.{field} must be > 0, got {n}")
+    return n
+
+
+def _require_object(value, what: str) -> dict:
+    if not isinstance(value, dict):
+        raise LLMConfigError(f"{what} must be an object, got {type(value).__name__}")
+    return value
+
+
+def _validate_llm(data: dict) -> dict:
+    """Type/shape-check the llm config section. Returns a shallow-copied,
+    normalized dict (server_port/health_timeout_s/router.port coerced to
+    numbers) — never mutates the caller's cfg.data in place. The single
+    boundary every consumer (start/list/code/status) goes through, so a
+    malformed .mb/config.json always surfaces as one actionable
+    LLMConfigError, never a KeyError/TypeError/ValueError traceback."""
+    data = _require_object(data, "llm config section")
+    data = dict(data)
+
+    if "server_bin" in data and data["server_bin"] is not None \
+            and not isinstance(data["server_bin"], str):
+        raise LLMConfigError(f"llm.server_bin must be a string path, got {data['server_bin']!r}")
+    if "server_host" in data and not isinstance(data["server_host"], str):
+        raise LLMConfigError(f"llm.server_host must be a string, got {data['server_host']!r}")
+    if "server_port" in data:
+        data["server_port"] = _coerce_port(data["server_port"], "server_port")
+    if "health_timeout_s" in data:
+        data["health_timeout_s"] = _coerce_positive_number(data["health_timeout_s"], "health_timeout_s")
+
+    models = data.get("models")
+    if models is not None:
+        models = _require_object(models, "llm.models")
+        for name, spec in models.items():
+            spec = _require_object(spec, f"llm.models.{name}")
+            if "gguf" in spec and spec["gguf"] is not None and not isinstance(spec["gguf"], str):
+                raise LLMConfigError(f"llm.models.{name}.gguf must be a string path, got {spec['gguf']!r}")
+            args = spec.get("args")
+            if args is not None and not isinstance(args, list):
+                raise LLMConfigError(f"llm.models.{name}.args must be a list, got {type(args).__name__}")
+
+    router = data.get("router")
+    if router is not None:
+        router = dict(_require_object(router, "llm.router"))
+        cmd = router.get("cmd")
+        if cmd is not None and not isinstance(cmd, list):
+            raise LLMConfigError(f"llm.router.cmd must be a list, got {type(cmd).__name__}")
+        if "port" in router:
+            router["port"] = _coerce_port(router["port"], "router.port")
+        data["router"] = router
+
+    return data
 
 
 def _llm_cfg(cfg) -> dict:
-    data = cfg.get("llm") or {}
+    data = cfg.get("llm")
     if not data:
         raise LLMConfigError(
             'no [llm] config — add an "llm" section to .mb/config.json '
             "(server_bin + models)")
-    return data
+    return _validate_llm(data)
 
 
 def build_server_argv(llm: dict, model_name: str) -> list[str]:
@@ -48,23 +120,35 @@ def build_server_argv(llm: dict, model_name: str) -> list[str]:
     if not gguf:
         raise LLMConfigError(f"model '{model_name}' has no gguf path")
     host = llm.get("server_host", "127.0.0.1")
-    port = int(llm.get("server_port", 8080))
+    port = _coerce_port(llm.get("server_port", 8080), "server_port")
     args = model.get("args") or []
     return [str(server_bin), "-m", str(gguf),
             "--host", str(host), "--port", str(port), *[str(a) for a in args]]
 
 
 def validate_paths(llm: dict, model_name: str) -> None:
-    server_bin = Path(llm["server_bin"])
+    server_bin_raw = llm.get("server_bin")
+    if not server_bin_raw:
+        raise LLMConfigError("llm.server_bin not set in config")
+    server_bin = Path(server_bin_raw)
     if not server_bin.exists():
         raise LLMConfigError(f"server_bin not found: {server_bin}")
-    gguf = Path(llm["models"][model_name]["gguf"])
+    models = llm.get("models") or {}
+    model = models.get(model_name)
+    if model is None:
+        raise LLMConfigError(f"unknown model '{model_name}'")
+    gguf_raw = model.get("gguf")
+    if not gguf_raw:
+        raise LLMConfigError(f"model '{model_name}' has no gguf path")
+    gguf = Path(gguf_raw)
     if not gguf.exists():
         raise LLMConfigError(f"gguf not found: {gguf}")
 
 
 def has_chat_template(llm: dict, model_name: str) -> bool:
-    args = llm["models"][model_name].get("args") or []
+    models = llm.get("models") or {}
+    model = models.get(model_name) or {}
+    args = model.get("args") or []
     return any(a == "--jinja" or str(a).startswith("--chat-template") for a in args)
 
 
@@ -627,50 +711,76 @@ def setup(cfg, dir_override: str | None = None) -> int:
         changed = True
         report("fixed", "created llm config section "
                         f"(server_bin -> {section['server_bin']})")
+    elif not isinstance(section, dict):
+        report("fail", f'llm config section must be an object, got '
+                       f"{type(section).__name__} — fix .mb/config.json")
+        return 1
     else:
         report("ok", "llm config section present")
 
     # --- llama.cpp binary --------------------------------------------------
-    server_bin = Path(section["server_bin"])
-    target_dir = Path(dir_override) if dir_override else server_bin.parent
-    if server_bin_ok(server_bin):
-        report("ok", f"llama-server works: {server_bin}")
-    elif sys.platform == "win32":
-        try:
-            ctx = _ssl_context()
-            release = fetch_json(LLAMA_RELEASE_API, ctx)
-            main, cudart = pick_release_assets(release.get("assets") or [])
-            target_dir.mkdir(parents=True, exist_ok=True)
-            for asset in filter(None, (main, cudart)):
-                dest = target_dir / asset["name"]
-                report("fixed", f"downloading {asset['name']}")
-                download(asset["browser_download_url"], dest, ctx)
-                unpack_zip(dest, target_dir)
-                dest.unlink(missing_ok=True)
-            exes = sorted(target_dir.rglob(_SERVER_EXE))
-            new_bin = exes[0] if exes else target_dir / _SERVER_EXE
-            if not server_bin_ok(new_bin):
-                raise LLMConfigError(
-                    f"downloaded binary failed --version: {new_bin}")
-            section["server_bin"] = str(new_bin)
-            changed = True
-            report("fixed", f"installed llama-server -> {new_bin}")
-        except Exception as exc:
-            report("fail", f"llama.cpp install failed: {exc} — "
-                           f"download manually into {target_dir}")
+    server_bin_raw = section.get("server_bin")
+    server_bin = None
+    if not server_bin_raw or not isinstance(server_bin_raw, str):
+        report("fail", 'llm.server_bin not set — add e.g. "server_bin": '
+                       '"E:/llama.cpp/llama-server.exe" to .mb/config.json')
     else:
-        report("fail", f"llama-server missing at {server_bin} — install "
-                       "manually (auto-download is Windows-only): "
-                       "https://github.com/ggml-org/llama.cpp/releases")
+        server_bin = Path(server_bin_raw)
+        target_dir = Path(dir_override) if dir_override else server_bin.parent
+        if server_bin_ok(server_bin):
+            report("ok", f"llama-server works: {server_bin}")
+        elif sys.platform == "win32":
+            try:
+                ctx = _ssl_context()
+                release = fetch_json(LLAMA_RELEASE_API, ctx)
+                main, cudart = pick_release_assets(release.get("assets") or [])
+                target_dir.mkdir(parents=True, exist_ok=True)
+                for asset in filter(None, (main, cudart)):
+                    dest = target_dir / asset["name"]
+                    report("fixed", f"downloading {asset['name']}")
+                    download(asset["browser_download_url"], dest, ctx)
+                    unpack_zip(dest, target_dir)
+                    dest.unlink(missing_ok=True)
+                exes = sorted(target_dir.rglob(_SERVER_EXE))
+                new_bin = exes[0] if exes else target_dir / _SERVER_EXE
+                if not server_bin_ok(new_bin):
+                    raise LLMConfigError(
+                        f"downloaded binary failed --version: {new_bin}")
+                section["server_bin"] = str(new_bin)
+                changed = True
+                report("fixed", f"installed llama-server -> {new_bin}")
+            except Exception as exc:
+                report("fail", f"llama.cpp install failed: {exc} — "
+                               f"download manually into {target_dir}")
+        else:
+            report("fail", f"llama-server missing at {server_bin} — install "
+                           "manually (auto-download is Windows-only): "
+                           "https://github.com/ggml-org/llama.cpp/releases")
 
     # --- model args sanity + gguf presence ---------------------------------
-    models = section.get("models") or {}
+    models = section.get("models")
+    if models is not None and not isinstance(models, dict):
+        report("fail", f"llm.models must be an object, got {type(models).__name__}")
+        models = {}
+    models = models or {}
     if not models:
         report("warn", 'model registry empty — add e.g. "models": '
                        '{"name": {"gguf": "E:/models/x.gguf", '
                        '"args": ["-ngl", "99", "-fa", "on", "--jinja"]}}')
     for name, model in models.items():
-        fixed_args, fixes = fix_model_args(list(model.get("args") or []))
+        if not isinstance(model, dict):
+            report("fail", f"llm.models.{name} must be an object, got {type(model).__name__}")
+            continue
+        args_raw = model.get("args")
+        if args_raw is not None and not isinstance(args_raw, list):
+            report("fail", f"llm.models.{name}.args must be a list, got {type(args_raw).__name__}")
+            continue
+        gguf_raw = model.get("gguf")
+        if gguf_raw is not None and not isinstance(gguf_raw, str):
+            report("fail", f"llm.models.{name}.gguf must be a string, got {type(gguf_raw).__name__}")
+            continue
+
+        fixed_args, fixes = fix_model_args(list(args_raw or []))
         if fixes:
             model["args"] = fixed_args
             changed = True
@@ -678,7 +788,7 @@ def setup(cfg, dir_override: str | None = None) -> int:
         if not has_chat_template({"models": {name: model}}, name):
             report("warn", f"{name}: args lack --jinja/--chat-template — "
                            "tool-calling won't work")
-        gguf = Path(model.get("gguf") or "")
+        gguf = Path(gguf_raw or "")
         if gguf.exists():
             report("ok", f"{name}: gguf present")
         else:

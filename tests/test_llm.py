@@ -950,3 +950,88 @@ def test_start_lock_released_on_ordinary_health_timeout(tmp_path, monkeypatch):
     monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
     assert llm.start(cfg, "qwen") == 1
     assert not llm._start_lock_dir(cfg).exists()
+
+
+# --- REV-4: centralized config validation — never a traceback ---------------
+
+MALFORMED_LLM_SECTIONS = [
+    ("section_not_object", ["oops"]),
+    ("server_bin_not_string", {"server_bin": 123, "models": {}}),
+    ("server_port_not_numeric", {"server_bin": "x", "server_port": "eighty",
+                                 "models": {}}),
+    ("server_port_out_of_range", {"server_bin": "x", "server_port": 99999,
+                                  "models": {}}),
+    ("health_timeout_not_numeric", {"server_bin": "x", "health_timeout_s": "soon",
+                                    "models": {}}),
+    ("health_timeout_negative", {"server_bin": "x", "health_timeout_s": -5,
+                                 "models": {}}),
+    ("models_not_object", {"server_bin": "x", "models": ["qwen"]}),
+    ("model_spec_not_object", {"server_bin": "x", "models": {"qwen": "oops"}}),
+    ("model_gguf_not_string", {"server_bin": "x",
+                               "models": {"qwen": {"gguf": 5}}}),
+    ("model_args_not_list", {"server_bin": "x",
+                             "models": {"qwen": {"gguf": "g", "args": "bad"}}}),
+    ("router_not_object", {"server_bin": "x", "models": {}, "router": ["ccr"]}),
+    ("router_cmd_not_list", {"server_bin": "x", "models": {},
+                             "router": {"cmd": "ccr start"}}),
+    ("router_port_not_numeric", {"server_bin": "x", "models": {},
+                                 "router": {"cmd": ["ccr"], "port": "many"}}),
+]
+
+
+@pytest.mark.parametrize("case_id,section", MALFORMED_LLM_SECTIONS,
+                         ids=[c[0] for c in MALFORMED_LLM_SECTIONS])
+def test_start_malformed_config_never_tracebacks(tmp_path, case_id, section, capsys):
+    cfg = Config(vault=tmp_path, data={"llm": section})
+    assert llm.start(cfg, "qwen") == 1
+    err = capsys.readouterr().err
+    assert err.startswith("[mb] ")                  # actionable message, not a traceback
+
+
+@pytest.mark.parametrize("case_id,section", MALFORMED_LLM_SECTIONS,
+                         ids=[c[0] for c in MALFORMED_LLM_SECTIONS])
+def test_list_models_malformed_config_never_tracebacks(tmp_path, case_id, section, capsys):
+    cfg = Config(vault=tmp_path, data={"llm": section})
+    assert llm.list_models(cfg) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("[mb] ")
+
+
+@pytest.mark.parametrize("case_id,section", MALFORMED_LLM_SECTIONS,
+                         ids=[c[0] for c in MALFORMED_LLM_SECTIONS])
+def test_code_malformed_config_never_tracebacks(tmp_path, case_id, section, capsys):
+    cfg = Config(vault=tmp_path, data={"llm": section})
+    assert llm.code(cfg) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("[mb] ")
+
+
+MALFORMED_SETUP_SECTIONS = [
+    ("section_not_object", "oops"),
+    ("server_bin_missing", {"models": {}}),
+    ("server_bin_not_string", {"server_bin": 123, "models": {}}),
+    ("models_not_object", {"server_bin": "x", "models": "oops"}),
+    ("model_spec_not_object", {"server_bin": "x", "models": {"qwen": "oops"}}),
+    ("model_args_not_list", {"server_bin": "x",
+                             "models": {"qwen": {"gguf": "g", "args": 5}}}),
+    ("model_gguf_not_string", {"server_bin": "x",
+                               "models": {"qwen": {"gguf": ["a", "b"]}}}),
+]
+
+
+@pytest.mark.parametrize("case_id,section", MALFORMED_SETUP_SECTIONS,
+                         ids=[c[0] for c in MALFORMED_SETUP_SECTIONS])
+def test_setup_malformed_config_never_tracebacks_reports_fail(tmp_path, monkeypatch,
+                                                               case_id, section, capsys):
+    cfg = Config(vault=tmp_path, data={"llm": section})
+    monkeypatch.setattr(llm, "server_bin_ok", lambda p: False)
+    monkeypatch.setattr(llm.shutil, "which", lambda name: None)
+    monkeypatch.setattr(llm.sys, "platform", "linux")  # skip the Windows auto-download path
+    # isolated-profile build is unrelated to config validation — stub it so a
+    # malformed-config case can never touch the real ~/.claude on this machine
+    monkeypatch.setattr(llm, "build_isolated_config", lambda *a, **k: tmp_path / "iso")
+    # must not raise — setup()'s job is to REPORT malformed config, not crash on it
+    rc = llm.setup(cfg)
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "fail" in err.lower()
