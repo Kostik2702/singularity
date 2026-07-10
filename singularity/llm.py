@@ -278,17 +278,35 @@ def resolve_auth_token(llm: dict, environ) -> str:
 
 
 # --- isolated config profile (CLAUDE_CONFIG_DIR) ----------------------------
-# Local models with a strict jinja chat-template reject Claude Code's normal
-# session: the Singularity SessionStart hook injects its context as an extra
-# role:system message mid-list, tripping guards like "System message must be at
-# the beginning". Hooks MERGE across scopes and can't be disabled per-hook from
-# the CLI, and disableAllHooks proved unreliable on this machine. So instead of
-# --bare (which loses CLAUDE.md/skills/agents), we point CLAUDE_CONFIG_DIR at a
-# generated profile that keeps what's compatible and drops what isn't. Full
-# replacement — no merge back to ~/.claude (verified via claude-code-guide).
+# A local model runs Claude Code far worse than Claude does. Instead of --bare
+# (which drops skills/agents too), we point CLAUDE_CONFIG_DIR at a generated
+# profile — a FULL replacement of ~/.claude, no merge back (verified via
+# claude-code-guide) — that keeps skills/agents but strips what breaks a small
+# model:
+#   - hooks: the Singularity SessionStart hook injects context as an extra
+#     role:system message, and Claude Code's own requests already carry a
+#     non-first system message that trips strict jinja guards. (Hooks MERGE
+#     across scopes and can't be disabled per-hook from the CLI; disableAllHooks
+#     proved unreliable here.)
+#   - enabledPlugins / mcpServers: Claude-only, and MCP tool-use overloads 9B.
+#   - the full user CLAUDE.md: its "MANDATORY invoke skill X" / shortcut
+#     directives send a small model into tool-call loops (observed an endless
+#     TaskOutput(mb-search)/workflow-helper loop). We ship a minimal instruction
+#     file instead, or a user-supplied one via llm.code_claude_md.
 _ISOLATED_DIRNAME = ".claude-local"
 _DROP_SETTINGS_KEYS = ("hooks", "enabledPlugins", "mcpServers")  # break jinja / Claude-only / MCP off by choice
 _MIRROR_SUBDIRS = ("skills", "agents")
+MINIMAL_CLAUDE_MD = """\
+# Local model session
+
+You are a local model backing Claude Code. Keep responses direct and focused on
+the user's explicit request.
+
+- Do NOT invoke skills, slash-commands, background tasks or memory tooling on
+  your own initiative — the user drives those when needed.
+- When asked to produce or edit a file, output the complete file.
+- Prefer doing the requested work over describing process.
+"""
 
 
 def _mirror_dir(src: Path, dst: Path) -> None:
@@ -319,16 +337,19 @@ def _read_json(path: Path) -> dict:
         return {}
 
 
-def build_isolated_config(home: Path, dst: Path) -> Path:
-    """Materialize a CLAUDE_CONFIG_DIR that keeps CLAUDE.md, skills and agents
-    but strips the hooks / Claude-only plugins / MCP that break (or don't apply
-    to) a strict-jinja local model. settings.json and CLAUDE.md are rewritten
-    every launch so real config stays in sync; .claude.json is carried (MCP
-    stripped) so onboarding/auth state doesn't reset. Returns dst."""
+def build_isolated_config(home: Path, dst: Path, claude_md_src=None) -> Path:
+    """Materialize a CLAUDE_CONFIG_DIR that keeps skills and agents but strips the
+    hooks / Claude-only plugins / MCP and the full user CLAUDE.md that break (or
+    overload) a small local model. CLAUDE.md is a minimal stub — or, if
+    claude_md_src points to an existing file, that file. settings.json/CLAUDE.md
+    are rewritten every launch so real config stays in sync; .claude.json is
+    carried (MCP stripped) so onboarding/auth state doesn't reset. Returns dst."""
     dst.mkdir(parents=True, exist_ok=True)
-    src_md = home / "CLAUDE.md"
-    if src_md.is_file():
-        shutil.copyfile(src_md, dst / "CLAUDE.md")
+    override = Path(claude_md_src) if claude_md_src else None
+    if override and override.is_file():
+        shutil.copyfile(override, dst / "CLAUDE.md")
+    else:
+        (dst / "CLAUDE.md").write_text(MINIMAL_CLAUDE_MD, encoding="utf-8")
     settings = _read_json(home / "settings.json")
     for k in _DROP_SETTINGS_KEYS:
         settings.pop(k, None)
@@ -375,8 +396,8 @@ def code(cfg, extra: list[str] | None = None) -> int:
     env.pop("ANTHROPIC_API_KEY", None)
     home = Path(llm.get("claude_home") or (Path.home() / ".claude"))
     iso = Path(llm.get("code_config_dir") or (Path.home() / _ISOLATED_DIRNAME))
-    build_isolated_config(home, iso)
-    env["CLAUDE_CONFIG_DIR"] = str(iso)        # isolated profile: no jinja-breaking hooks / plugins
+    build_isolated_config(home, iso, llm.get("code_claude_md"))
+    env["CLAUDE_CONFIG_DIR"] = str(iso)        # isolated profile: minimal CLAUDE.md, no hooks / plugins
     args = list(extra or [])
     if args[:1] == ["--"]:                 # argparse.REMAINDER keeps the separator
         args = args[1:]
@@ -615,6 +636,17 @@ def setup(cfg, dir_override: str | None = None) -> int:
         report("warn", "claude CLI not found — "
                        "npm install -g @anthropic-ai/claude-code "
                        "(blocks 'mb llm code' only)")
+
+    # --- isolated Claude Code profile for the local model ------------------
+    # Prebuild the CLAUDE_CONFIG_DIR now so 'mb llm code' starts clean instead
+    # of materializing it on first run. Idempotent (build_isolated_config).
+    try:
+        home = Path(section.get("claude_home") or (Path.home() / ".claude"))
+        iso = Path(section.get("code_config_dir") or (Path.home() / _ISOLATED_DIRNAME))
+        build_isolated_config(home, iso, section.get("code_claude_md"))
+        report("ok", f"local Claude profile ready: {iso}")
+    except Exception as exc:
+        report("warn", f"local Claude profile not built: {exc}")
 
     if changed:
         cfg.save()

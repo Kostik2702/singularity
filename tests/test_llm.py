@@ -464,7 +464,10 @@ def test_build_isolated_config_drops_breakers_keeps_rest(tmp_path):
     assert settings["permissions"] == {"allow": ["Bash"]}   # carried
     assert settings["theme"] == "dark"
     assert settings["statusLine"] == {"type": "command"}
-    assert (dst / "CLAUDE.md").read_text(encoding="utf-8") == "global instructions"
+    md = (dst / "CLAUDE.md").read_text(encoding="utf-8")
+    assert md == llm.MINIMAL_CLAUDE_MD                       # minimal stub, NOT the full home CLAUDE.md
+    assert "global instructions" not in md                  # full home CLAUDE.md not carried
+    assert "MANDATORY" not in md                             # no imperative that loops a small model
     assert (dst / "skills" / "mb-search").is_dir()          # mirrored for manual memory
     assert (dst / "agents").is_dir()
     dot = json.loads((dst / ".claude.json").read_text(encoding="utf-8"))
@@ -476,7 +479,22 @@ def test_build_isolated_config_tolerates_missing_home(tmp_path):
     dst = tmp_path / "iso"
     llm.build_isolated_config(tmp_path / "nope", dst)        # no source files
     assert json.loads((dst / "settings.json").read_text(encoding="utf-8")) == {}
-    assert not (dst / "CLAUDE.md").exists()
+    assert (dst / "CLAUDE.md").read_text(encoding="utf-8") == llm.MINIMAL_CLAUDE_MD
+
+
+def test_build_isolated_config_uses_claude_md_override(tmp_path):
+    home = _home_with_config(tmp_path)
+    override = tmp_path / "my_local_CLAUDE.md"
+    override.write_text("custom local instructions", encoding="utf-8")
+    dst = tmp_path / "iso"
+    llm.build_isolated_config(home, dst, str(override))
+    assert (dst / "CLAUDE.md").read_text(encoding="utf-8") == "custom local instructions"
+
+
+def test_build_isolated_config_ignores_missing_override(tmp_path):
+    dst = tmp_path / "iso"
+    llm.build_isolated_config(tmp_path / "nope", dst, str(tmp_path / "absent.md"))
+    assert (dst / "CLAUDE.md").read_text(encoding="utf-8") == llm.MINIMAL_CLAUDE_MD
 
 
 def test_code_sets_claude_config_dir(tmp_path, monkeypatch):
@@ -683,7 +701,11 @@ def _setup_env(tmp_path, monkeypatch, *, bin_ok=True, gguf_exists=True,
     exe.write_text("x")
     cfg = Config(vault=tmp_path, data={"llm": {
         "server_bin": str(exe), "server_host": "127.0.0.1",
-        "server_port": 8080, "models": models}})
+        "server_port": 8080, "models": models,
+        # keep setup()'s profile build off the real ~/.claude (home dir absent
+        # → skills/agents mirror no-ops, CLAUDE.md is the minimal stub)
+        "claude_home": str(tmp_path / "home"),
+        "code_config_dir": str(tmp_path / "iso")}})
     monkeypatch.setattr(llm, "server_bin_ok", lambda p: bin_ok)
     monkeypatch.setattr(llm.shutil, "which",
                         lambda name: "/bin/claude" if claude else None)
@@ -704,10 +726,20 @@ def test_setup_creates_missing_llm_section(tmp_path, monkeypatch):
     cfg = Config(vault=tmp_path, data={})
     monkeypatch.setattr(llm, "server_bin_ok", lambda p: True)
     monkeypatch.setattr(llm.shutil, "which", lambda name: "/bin/claude")
+    monkeypatch.setattr(llm, "build_isolated_config", lambda *a, **k: None)  # section test, not profile
     assert llm.setup(cfg, dir_override=str(tmp_path / "inst")) == 0
     saved = json.loads(cfg.config_path.read_text(encoding="utf-8"))
     assert saved["llm"]["server_port"] == 8080
     assert str(tmp_path / "inst") in saved["llm"]["server_bin"]
+
+
+def test_setup_builds_local_profile(tmp_path, monkeypatch, capsys):
+    cfg = _setup_env(tmp_path, monkeypatch)              # claude_home/code_config_dir → tmp
+    assert llm.setup(cfg) == 0
+    iso = tmp_path / "iso"
+    assert (iso / "settings.json").exists()              # profile prebuilt by setup()
+    assert (iso / "CLAUDE.md").read_text(encoding="utf-8") == llm.MINIMAL_CLAUDE_MD
+    assert "local Claude profile ready" in capsys.readouterr().out
 
 
 def test_setup_missing_gguf_warns_but_exit_0(tmp_path, monkeypatch, capsys):
