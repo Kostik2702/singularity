@@ -247,6 +247,11 @@ Config lives in `<vault>/.mb/config.json` under an `"llm"` key:
       "qwen3-30b": {
         "gguf": "C:/models/qwen3-30b-a3b-q4.gguf",
         "args": ["-ngl", "99", "-c", "16384", "--jinja"]
+      },
+      "qwen27b": {                     // large-context example (validated on an RTX 5090, 32 GB)
+        "gguf": "E:/models/ThinkingCap-Qwen3.6-27B-Q4_K_M.gguf",
+        "args": ["-ngl", "99", "-c", "131072", "-fa", "on", "--jinja",
+                 "-ctk", "q8_0", "-ctv", "q8_0"]
       }
     }
   }
@@ -254,6 +259,8 @@ Config lives in `<vault>/.mb/config.json` under an `"llm"` key:
 ```
 
 `--jinja` (or `--chat-template ...`) in a model's `args` is required for tool-calling; `mb llm start` prints a non-fatal warning if neither is present.
+
+**Large context on limited VRAM.** To fit a big `-c` window, quantize the KV cache with `-ctk q8_0 -ctv q8_0` (roughly halves KV memory; requires flash-attention `-fa on`). Measured on the 27B Q4_K_M above (native 256K context): ~20 GB VRAM at `-c 16384`, ~24 GB at `-c 131072` with q8_0 KV — so 128K is the practical ceiling on a 32 GB GPU; a full 256K fp16 cache does not fit.
 
 **Cross-machine:** only the paths inside `llm` change (`server_bin`, each model's `gguf`, maybe ports) — the commands above are identical on every machine, since all runtime state (`llm.state.json`, `llm-server.log`, `llm-router.log`) lives under the vault's `.mb/`.
 
