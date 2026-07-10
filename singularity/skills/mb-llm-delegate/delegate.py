@@ -34,18 +34,31 @@ DEFAULT_SYSTEM = (
 
 
 def endpoint():
-    """(host, port, model) from `mb llm status --json`; fall back to 127.0.0.1:8080."""
+    """(host, port, model) from `mb llm status --json`; fall back to 127.0.0.1:8080.
+
+    Three distinct outcomes are NOT conflated: (1) 'mb status' itself is
+    unavailable/unreadable (not on PATH, timeout, empty/malformed output) —
+    fall back to the default and try it anyway, since we genuinely don't
+    know; (2) status is a confirmed, parseable "server_alive": false — the
+    local model is definitively NOT running, so exit immediately instead of
+    wasting a connection attempt against whatever happens to be listening on
+    the fallback port; (3) a healthy status — use its port/model."""
     host, port, model = "127.0.0.1", 8080, "local"
     try:
         out = subprocess.run(["mb", "llm", "status", "--json"],
                              capture_output=True, text=True, timeout=20)
-        d = json.loads(out.stdout or "{}")
+        stdout = (out.stdout or "").strip()
+        if not stdout:
+            print(f"[delegate] warn: 'mb llm status --json' produced no output "
+                  f"(exit {out.returncode}); using {host}:{port}", file=sys.stderr)
+            return host, port, model
+        d = json.loads(stdout)
         if d.get("server_alive") is False:
             sys.exit("[delegate] local model is not running — 'mb llm start <model>'")
         port = d.get("server_port") or port
         model = d.get("model") or model
     except FileNotFoundError:
-        pass                       # mb not on PATH — use defaults
+        pass                       # mb not on PATH — use defaults, try anyway
     except (json.JSONDecodeError, subprocess.SubprocessError) as exc:
         print(f"[delegate] warn: could not read mb status ({exc}); using {host}:{port}",
               file=sys.stderr)

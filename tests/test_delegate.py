@@ -108,3 +108,73 @@ def test_atomic_write_replace_is_atomic_swap_not_in_place_truncate(tmp_path):
 
     assert target.read_text(encoding="utf-8") == "new\n"
     assert not tmp_marker.exists()
+
+
+# --- REV-5: endpoint() resolution — distinct outcomes, no false fallback ----
+
+class _FakeCompleted:
+    def __init__(self, stdout="", returncode=0):
+        self.stdout = stdout
+        self.returncode = returncode
+
+
+def test_endpoint_uses_status_json_port_and_model(monkeypatch):
+    body = '{"running": true, "server_alive": true, "server_port": 9090, "model": "qwen27b"}'
+    monkeypatch.setattr(delegate.subprocess, "run",
+                        lambda *a, **k: _FakeCompleted(stdout=body))
+    host, port, model = delegate.endpoint()
+    assert (host, port, model) == ("127.0.0.1", 9090, "qwen27b")
+
+
+def test_endpoint_exits_when_status_confirms_not_running_no_state(monkeypatch):
+    # mirrors llm.py's REV-5 "no state" contract: {"running": false, "server_alive": false, ...}
+    body = '{"running": false, "server_alive": false, "router_alive": null, "model": null}'
+    monkeypatch.setattr(delegate.subprocess, "run",
+                        lambda *a, **k: _FakeCompleted(stdout=body))
+    import pytest
+    with pytest.raises(SystemExit):
+        delegate.endpoint()
+
+
+def test_endpoint_exits_when_status_confirms_not_running_stale_state(monkeypatch):
+    body = '{"running": false, "server_alive": false, "server_pid": 111, "model": "qwen27b"}'
+    monkeypatch.setattr(delegate.subprocess, "run",
+                        lambda *a, **k: _FakeCompleted(stdout=body))
+    import pytest
+    with pytest.raises(SystemExit):
+        delegate.endpoint()
+
+
+def test_endpoint_falls_back_with_warning_on_empty_stdout(monkeypatch, capsys):
+    monkeypatch.setattr(delegate.subprocess, "run",
+                        lambda *a, **k: _FakeCompleted(stdout="", returncode=1))
+    host, port, model = delegate.endpoint()
+    assert (host, port, model) == ("127.0.0.1", 8080, "local")   # tries the default anyway
+    assert "no output" in capsys.readouterr().err
+
+
+def test_endpoint_falls_back_with_warning_on_malformed_json(monkeypatch, capsys):
+    monkeypatch.setattr(delegate.subprocess, "run",
+                        lambda *a, **k: _FakeCompleted(stdout="not json at all"))
+    host, port, model = delegate.endpoint()
+    assert (host, port, model) == ("127.0.0.1", 8080, "local")
+    assert "could not read mb status" in capsys.readouterr().err
+
+
+def test_endpoint_falls_back_silently_when_mb_not_on_path(monkeypatch, capsys):
+    def _raise(*a, **k):
+        raise FileNotFoundError("mb")
+    monkeypatch.setattr(delegate.subprocess, "run", _raise)
+    host, port, model = delegate.endpoint()
+    assert (host, port, model) == ("127.0.0.1", 8080, "local")
+    assert capsys.readouterr().err == ""                        # no scary warning — just unavailable
+
+
+def test_endpoint_falls_back_with_warning_on_subprocess_timeout(monkeypatch, capsys):
+    import subprocess as _sp
+    def _raise(*a, **k):
+        raise _sp.TimeoutExpired(cmd="mb", timeout=20)
+    monkeypatch.setattr(delegate.subprocess, "run", _raise)
+    host, port, model = delegate.endpoint()
+    assert (host, port, model) == ("127.0.0.1", 8080, "local")
+    assert "could not read mb status" in capsys.readouterr().err

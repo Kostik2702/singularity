@@ -351,16 +351,26 @@ def start(cfg, model_name: str) -> int:
 
 
 def status(cfg, as_json: bool = False) -> int:
+    """--json is a stable machine contract: ALWAYS valid, parseable JSON, in
+    both branches — including "no state at all", which used to print the
+    plain string "not running" and break any consumer's json.loads(). Callers
+    should key off "running" (== the server process is actually alive, not
+    just "a state file exists")."""
     state = load_state(cfg)
     if not state:
+        if as_json:
+            print(json.dumps({"running": False, "server_alive": False,
+                              "router_alive": None, "model": None},
+                             ensure_ascii=False))
+            return 0
         print("not running")
         return 0
     server_alive = proc.is_running(state.get("server_pid") or -1)
     router_alive = (proc.is_running(state["router_pid"])
                     if state.get("router_pid") else None)
     if as_json:
-        print(json.dumps({**state, "server_alive": server_alive,
-                          "router_alive": router_alive},
+        print(json.dumps({**state, "running": server_alive,
+                          "server_alive": server_alive, "router_alive": router_alive},
                          ensure_ascii=False, indent=2))
         return 0
     print(f"model:  {state.get('model')}")

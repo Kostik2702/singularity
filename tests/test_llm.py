@@ -300,6 +300,40 @@ def test_status_not_running(tmp_path, capsys):
     assert "not running" in capsys.readouterr().out
 
 
+# --- REV-5: status --json is ALWAYS valid, parseable JSON -------------------
+
+def test_status_json_no_state_is_valid_json_not_plain_text(tmp_path, capsys):
+    cfg = Config(vault=tmp_path, data={})
+    assert llm.status(cfg, as_json=True) == 0
+    out = capsys.readouterr().out
+    d = json.loads(out)                       # must not raise
+    assert d == {"running": False, "server_alive": False,
+                "router_alive": None, "model": None}
+
+
+def test_status_json_dead_server_reports_running_false(tmp_path, monkeypatch, capsys):
+    cfg = Config(vault=tmp_path, data={})
+    llm.write_state(cfg, {"model": "q", "server_pid": 11, "server_port": 8080,
+                          "router_pid": None, "started_at": "2026-07-08T14:00:00"})
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: False)
+    assert llm.status(cfg, as_json=True) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["running"] is False
+    assert d["server_alive"] is False
+
+
+def test_status_json_live_server_reports_running_true(tmp_path, monkeypatch, capsys):
+    cfg = Config(vault=tmp_path, data={})
+    llm.write_state(cfg, {"model": "q", "server_pid": 11, "server_port": 8080,
+                          "router_pid": None, "started_at": "2026-07-08T14:00:00"})
+    monkeypatch.setattr(llm.proc, "is_running", lambda pid: True)
+    assert llm.status(cfg, as_json=True) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert d["running"] is True
+    assert d["server_alive"] is True
+    assert d["model"] == "q"
+
+
 def test_list_models_marks_active(tmp_path, capsys):
     inner, server, gguf = _llm(tmp_path)
     cfg = Config(vault=tmp_path, data={"llm": inner})
