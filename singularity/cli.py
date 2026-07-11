@@ -41,23 +41,58 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("--memory-only", action="store_true")
     s.add_argument("--code-only", action="store_true")
     s.add_argument("--full", action="store_true", help="full content, no excerpt cut")
+    s.add_argument("--explain", action="store_true", help="include component scores")
+    s.add_argument("--max-per-file", type=int, default=2,
+                   help="cap results per file (0 = unlimited)")
     s.add_argument("--json", action="store_true")
 
     d = sub.add_parser("daemon", help="daemon control")
     d.add_argument("action", choices=["start", "stop", "status", "reload", "run"])
 
     i = sub.add_parser("index", help="index management")
-    i.add_argument("action", choices=["rebuild", "update"])
+    i.add_argument("action", choices=["rebuild", "update", "inspect"])
     i.add_argument("--files", nargs="*", help="update only these vault-relative files")
+    i.add_argument("path", nargs="?", help="file to inspect (index inspect <path>)")
 
     sub.add_parser("watch", help="on-save incremental index watcher")
 
     doc = sub.add_parser("doctor", help="installation verification")
     doc.add_argument("--fix", action="store_true")
     doc.add_argument("--heavy", action="store_true")
+    doc.add_argument("--json", action="store_true",
+                     help="emit a single JSON report, no human output")
 
     cur = sub.add_parser("curator", help="vault health: validation, orphans, link suggestions")
     cur.add_argument("--json", action="store_true")
+
+    st = sub.add_parser("selftest", help="end-to-end pipeline check (create/index/find/delete)")
+    st.add_argument("--json", action="store_true")
+
+    stat = sub.add_parser("status", help="unified health snapshot (index/daemon/watcher/scheduler)")
+    stat.add_argument("--json", action="store_true")
+
+    stt = sub.add_parser("stats", help="memory analytics (notes/chunks/types/coverage)")
+    stt.add_argument("--json", action="store_true")
+
+    bk = sub.add_parser("backup", help="backup/restore config + index pointer")
+    bksub = bk.add_subparsers(dest="backup_action", required=True)
+    bksub.add_parser("create", help="create a checksummed backup")
+    bkl = bksub.add_parser("list", help="list backups")
+    bkl.add_argument("--json", action="store_true")
+    bkv = bksub.add_parser("verify", help="verify a backup's checksums")
+    bkv.add_argument("id")
+    bkr = bksub.add_parser("restore", help="restore config + index pointer from a backup")
+    bkr.add_argument("id")
+
+    cfgp = sub.add_parser("config", help="inspect/validate .mb/config.json")
+    cfgsub = cfgp.add_subparsers(dest="config_action", required=True)
+    cfgv = cfgsub.add_parser("validate", help="check schema (types/ranges/unknown keys)")
+    cfgv.add_argument("--json", action="store_true")
+    cfgg = cfgsub.add_parser("get", help="print a config value")
+    cfgg.add_argument("key")
+    cfgs = cfgsub.add_parser("set", help="set a config value (validated, atomic save)")
+    cfgs.add_argument("key")
+    cfgs.add_argument("value", help="JSON value; falls back to a string literal")
 
     n = sub.add_parser("note", help="notes")
     nsub = n.add_subparsers(dest="note_action", required=True)
@@ -108,6 +143,8 @@ def cmd_search(cfg, args) -> int:
         "filter_wikilinks": args.filter_wikilinks,
         "path_prefix": args.path_prefix,
         "full_content": args.full,
+        "explain": args.explain,
+        "max_per_file": args.max_per_file,
         "format": "json" if args.json else "compact",
     }
     resp = client.search(cfg, payload)
@@ -152,26 +189,96 @@ def cmd_daemon(cfg, args) -> int:
 def cmd_index(cfg, args) -> int:
     from .search import client, indexer
 
-    lock = cfg.lock_dir
-    try:
-        lock.mkdir(parents=True, exist_ok=False)
-    except FileExistsError:
-        import time
-        if time.time() - lock.stat().st_mtime < 6 * 3600:
-            print("[mb] another rebuild in progress (lock present)", file=sys.stderr)
+    if args.action == "inspect":
+        target = args.path or (args.files[0] if args.files else None)
+        if not target:
+            print("[mb] usage: mb index inspect <vault-relative-file>", file=sys.stderr)
             return 1
-        # stale lock -> take over (Genevra 6h rule)
+        rows = indexer.inspect(cfg, target)
+        print(json.dumps({"file": target, "chunks": rows}, ensure_ascii=False, indent=1))
+        return 0
+
+    # The indexer owns the writer lock now (so watcher/nightly are serialized
+    # too, not just the CLI). Reload happens only after a successful commit.
     try:
         if args.action == "rebuild":
             stats = indexer.rebuild(cfg)
         else:
             stats = indexer.update(cfg, only_files=args.files or None)
-        print(json.dumps(stats, ensure_ascii=False))
-        client.reload_daemon(cfg)
+    except indexer.IndexLockedError:
+        print("[mb] another index writer in progress (lock present)", file=sys.stderr)
+        return 1
+    print(json.dumps(stats, ensure_ascii=False))
+    client.reload_daemon(cfg)
+    return 0
+
+
+def cmd_backup(cfg, args) -> int:
+    from . import backup
+
+    if args.backup_action == "create":
+        mf = backup.create(cfg)
+        print(json.dumps(mf, ensure_ascii=False, indent=1))
         return 0
-    finally:
-        import shutil
-        shutil.rmtree(lock, ignore_errors=True)
+    if args.backup_action == "list":
+        items = backup.list_backups(cfg)
+        if args.json:
+            print(json.dumps(items, ensure_ascii=False))
+        else:
+            for it in items:
+                print(f"{it['id']}  machine={it.get('machine_id')}  "
+                      f"gen={it.get('index_generation')}")
+            if not items:
+                print("(no backups)")
+        return 0
+    if args.backup_action == "verify":
+        res = backup.verify(cfg, args.id)
+        print(json.dumps(res, ensure_ascii=False))
+        return 0 if res["ok"] else 1
+    if args.backup_action == "restore":
+        res = backup.restore(cfg, args.id)
+        print(json.dumps(res, ensure_ascii=False))
+        return 0 if res["ok"] else 1
+    return 1
+
+
+def cmd_config(cfg, args) -> int:
+    from .config import validate_config
+
+    if args.config_action == "validate":
+        res = validate_config(cfg.data)
+        if args.json:
+            print(json.dumps({"ok": not res["errors"], **res,
+                              "schema_version": cfg.get("schema_version")},
+                             ensure_ascii=False))
+        else:
+            for e in res["errors"]:
+                print(f"[error] {e}")
+            for w in res["warnings"]:
+                print(f"[warn] {w}")
+            print("config OK" if not res["errors"] else "config has errors")
+        return 1 if res["errors"] else 0
+
+    if args.config_action == "get":
+        print(json.dumps(cfg.get(args.key), ensure_ascii=False))
+        return 0
+
+    if args.config_action == "set":
+        try:
+            value = json.loads(args.value)     # parse as JSON (int/bool/list/...)
+        except json.JSONDecodeError:
+            value = args.value                 # fall back to a plain string
+        candidate = {**cfg.data, args.key: value}
+        res = validate_config(candidate)
+        if res["errors"]:
+            for e in res["errors"]:
+                print(f"[mb] {e}", file=sys.stderr)
+            return 1
+        cfg.data = candidate
+        cfg.save()                             # atomic (tmp + replace)
+        print(f"{args.key} = {json.dumps(value, ensure_ascii=False)}")
+        return 0
+    return 1
 
 
 def cmd_note(cfg, args) -> int:
@@ -306,10 +413,23 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "doctor":
         from . import doctor
-        return doctor.run(cfg, fix=args.fix, heavy=args.heavy)
+        return doctor.run(cfg, fix=args.fix, heavy=args.heavy, as_json=args.json)
     if args.command == "curator":
         from . import curator
         return curator.run(cfg, as_json=args.json)
+    if args.command == "selftest":
+        from . import selftest
+        return selftest.run(cfg, as_json=args.json)
+    if args.command == "status":
+        from . import status as status_mod
+        return status_mod.run(cfg, as_json=args.json)
+    if args.command == "stats":
+        from . import stats as stats_mod
+        return stats_mod.run(cfg, as_json=args.json)
+    if args.command == "backup":
+        return cmd_backup(cfg, args)
+    if args.command == "config":
+        return cmd_config(cfg, args)
     if args.command == "note":
         return cmd_note(cfg, args)
     if args.command == "learn":

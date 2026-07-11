@@ -16,15 +16,27 @@ from __future__ import annotations
 
 import json
 import os
+import platform
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+
+def machine_id() -> str:
+    """Stable per-machine identifier (hostname-derived) so machine-local runtime
+    state does not collide across machines that sync the same vault (AUD-19)."""
+    node = platform.node() or "unknown"
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", node)[:64] or "unknown"
+
 DEFAULT_VAULT_WINDOWS = r"D:\obsidian\memory brain"
 POINTER_FILE = Path.home() / ".singularity.json"
 
+SCHEMA_VERSION = 1
+
 DEFAULT_CONFIG: dict[str, Any] = {
+    "schema_version": SCHEMA_VERSION,
     "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     "min_score": 0.30,
     "daemon_port": 0,          # 0 = OS picks a free port; actual port -> .mb/daemon.port
@@ -36,6 +48,69 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
 }
+
+# keys that carry machine-specific absolute paths (validated as strings only —
+# their existence is a per-machine concern, not a config-schema error)
+_PATH_KEYS = {"code_repos_dir", "hf_cache"}
+
+
+def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
+    """Validate a root config dict WITHOUT side effects. Returns
+    {"errors": [...], "warnings": [...]}: type/range violations are errors,
+    unknown keys are warnings (ignored at runtime, never fatal)."""
+    errors: list[str] = []
+
+    def _num(key: str, lo: float, hi: float) -> None:
+        if key not in data:
+            return
+        v = data[key]
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            errors.append(f"{key}: expected a number, got {type(v).__name__}")
+        elif not (lo <= v <= hi):
+            errors.append(f"{key}: {v!r} out of range [{lo}, {hi}]")
+
+    def _int(key: str, lo: int, hi: int) -> None:
+        if key not in data:
+            return
+        v = data[key]
+        if isinstance(v, bool) or not isinstance(v, int):
+            errors.append(f"{key}: expected an integer, got {type(v).__name__}")
+        elif not (lo <= v <= hi):
+            errors.append(f"{key}: {v!r} out of range [{lo}, {hi}]")
+
+    if "model" in data and (not isinstance(data["model"], str) or not data["model"].strip()):
+        errors.append("model: must be a non-empty string")
+    _num("min_score", 0.0, 1.0)
+    _int("daemon_port", 0, 65535)
+    _int("excerpt_chars", 1, 1_000_000)
+    _int("batch_size", 1, 1_000_000)
+    for key in ("skip_dirs", "skip_path_parts"):
+        if key in data and (not isinstance(data[key], list)
+                            or not all(isinstance(x, str) for x in data[key])):
+            errors.append(f"{key}: must be a list of strings")
+    if "auto_capture" in data and not isinstance(data["auto_capture"], bool):
+        errors.append("auto_capture: must be a boolean")
+    if "connectors" in data and not isinstance(data["connectors"], dict):
+        errors.append("connectors: must be an object")
+    for key in _PATH_KEYS:
+        if key in data and data[key] is not None and not isinstance(data[key], str):
+            errors.append(f"{key}: must be a path string or null")
+
+    known = set(DEFAULT_CONFIG) | _PATH_KEYS | {"llm"}
+    warnings = [f"{k}: unknown config key (ignored)" for k in data if k not in known]
+    return {"errors": errors, "warnings": warnings}
+
+
+def migrate_config(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """Upgrade an older config in-memory to the current schema. Returns
+    (data, changed). Backward-compatible: unknown/extra keys are preserved."""
+    changed = False
+    data = dict(data)
+    if data.get("schema_version") != SCHEMA_VERSION:
+        data["schema_version"] = SCHEMA_VERSION
+        changed = True
+    # future version-keyed migrations go here
+    return data, changed
 
 
 @dataclass
@@ -65,16 +140,37 @@ class Config:
         return Path(self.data.get("hf_cache") or (self.mb_dir / "hf-cache"))
 
     @property
+    def machine_dir(self) -> Path:
+        # machine-local runtime state (daemon pid/port/log, heartbeat) — kept
+        # OUT of the shared .mb root so two machines syncing this vault don't
+        # clobber each other's runtime (AUD-19). Portable config/index stay in .mb.
+        return self.mb_dir / "machines" / machine_id()
+
+    @property
     def daemon_port_file(self) -> Path:
-        return self.mb_dir / "daemon.port"
+        return self.machine_dir / "daemon.port"
 
     @property
     def daemon_pid_file(self) -> Path:
-        return self.mb_dir / "daemon.pid"
+        return self.machine_dir / "daemon.pid"
 
     @property
     def daemon_log_file(self) -> Path:
-        return self.mb_dir / "daemon.log"
+        return self.machine_dir / "daemon.log"
+
+    @property
+    def daemon_state_file(self) -> Path:
+        # atomic single-file daemon identity: {instance_id, pid, port,
+        # create_time, python, started_at, machine_id}
+        return self.machine_dir / "daemon.json"
+
+    @property
+    def daemon_start_lock(self) -> Path:
+        return self.machine_dir / "daemon.start.lock"
+
+    @property
+    def watch_heartbeat_file(self) -> Path:
+        return self.machine_dir / "watch.heartbeat"
 
     @property
     def markers_dir(self) -> Path:
@@ -82,6 +178,7 @@ class Config:
 
     @property
     def lock_dir(self) -> Path:
+        # rebuild lock guards the SHARED index -> stays in .mb (not per-machine)
         return self.mb_dir / "rebuild.lock"
 
     # --- config values --------------------------------------------------
@@ -160,10 +257,46 @@ def load_config(vault_arg: Optional[str] = None) -> Config:
         except json.JSONDecodeError as exc:
             print(f"[mb] broken config {cfg.config_path}: {exc}", file=sys.stderr)
             sys.exit(2)
+        if not isinstance(cfg.data, dict):
+            print(f"[mb] config must be a JSON object: {cfg.config_path}", file=sys.stderr)
+            sys.exit(2)
+        result = validate_config(cfg.data)
+        if result["errors"]:
+            print(f"[mb] invalid config {cfg.config_path}:", file=sys.stderr)
+            for e in result["errors"]:
+                print(f"[mb]   - {e}", file=sys.stderr)
+            print("[mb] fix the values above or run 'mb config validate'", file=sys.stderr)
+            sys.exit(2)
+        migrated, changed = migrate_config(cfg.data)
+        if changed:
+            _backup_config(cfg.config_path)   # keep a copy before rewriting
+            cfg.data = migrated
+            cfg.save()
+        else:
+            cfg.data = migrated
     else:
         cfg.save()
     cfg.apply_env()
     return cfg
+
+
+def _backup_config(config_path: Path) -> Optional[Path]:
+    """Copy config aside before a migration rewrites it (never overwrite an
+    existing backup)."""
+    import datetime
+    import shutil
+
+    ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup = config_path.with_name(f"{config_path.name}.bak-{ts}")
+    suffix = 1
+    while backup.exists():
+        backup = config_path.with_name(f"{config_path.name}.bak-{ts}-{suffix}")
+        suffix += 1
+    try:
+        shutil.copy2(config_path, backup)
+        return backup
+    except OSError:
+        return None
 
 
 def write_pointer(vault: Path) -> None:

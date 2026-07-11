@@ -48,7 +48,11 @@ def _wire_happy_dependencies(monkeypatch, tmp_path, *, doctor_rc=0):
     monkeypatch.setattr(cli_mod, "cmd_init", lambda cfg, _args: 0)
     monkeypatch.setattr(indexer_mod, "rebuild", lambda cfg: {"notes": 0})
     monkeypatch.setattr(client_mod, "start_daemon", lambda cfg: True)
-    monkeypatch.setattr(doctor_mod, "run", lambda cfg, fix=False, heavy=False: doctor_rc)
+    monkeypatch.setattr(doctor_mod, "run",
+                        lambda cfg, fix=False, heavy=False, as_json=False: doctor_rc)
+    # register_agents is a required phase like hooks/skills; default it to
+    # passing so tests that don't specifically exercise it don't ImportError.
+    monkeypatch.setitem(sys.modules, "register_agents", _fake_module("register_agents", 0))
 
 
 def test_install_succeeds_when_all_phases_pass(tmp_path, monkeypatch):
@@ -61,10 +65,12 @@ def test_install_succeeds_when_all_phases_pass(tmp_path, monkeypatch):
     assert rc == 0
 
 
-@pytest.mark.parametrize("failing", ["register_hooks", "register_skills", "register_codex"])
+@pytest.mark.parametrize("failing",
+                         ["register_hooks", "register_skills", "register_codex", "register_agents"])
 def test_install_fails_when_a_required_phase_fails(tmp_path, monkeypatch, capsys, failing):
     _wire_happy_dependencies(monkeypatch, tmp_path)
-    rcs = {"register_hooks": 0, "register_skills": 0, "register_codex": 0, failing: 1}
+    rcs = {"register_hooks": 0, "register_skills": 0, "register_codex": 0,
+           "register_agents": 0, failing: 1}
     for name, rc in rcs.items():
         monkeypatch.setitem(sys.modules, name, _fake_module(name, rc))
 

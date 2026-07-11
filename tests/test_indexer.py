@@ -44,7 +44,8 @@ def test_rebuild_and_incremental(tmp_path, monkeypatch):
 
     stats = indexer_mod.rebuild(cfg, progress=False)
     assert stats["files"] == 2 and stats["chunks"] == 2
-    embs = np.load(cfg.memory_index_dir / "embeddings.npy", allow_pickle=False)
+    emb_path, _ = indexer_mod.index_files(cfg.memory_index_dir)
+    embs = np.load(emb_path, allow_pickle=False)
     assert embs.shape == (2, 8)
 
     # no changes -> no-op
@@ -66,7 +67,8 @@ def test_rebuild_and_incremental(tmp_path, monkeypatch):
     stats = indexer_mod.update(cfg)
     assert stats["deleted"] == 1 and stats["chunks"] == 2
 
-    embs = np.load(cfg.memory_index_dir / "embeddings.npy", allow_pickle=False)
+    emb_path, _ = indexer_mod.index_files(cfg.memory_index_dir)
+    embs = np.load(emb_path, allow_pickle=False)
     assert embs.shape[0] == 2
 
 

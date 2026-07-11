@@ -10,10 +10,15 @@ schedulers run with a minimal PATH).
 """
 from __future__ import annotations
 
+import os
 import plistlib
+import re
+import shlex
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from xml.sax.saxutils import escape as _xml_escape, unescape as _xml_unescape
 
 from . import current_os
 from .proc import python_executable
@@ -32,7 +37,91 @@ class Job:
 
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True)
+    # errors="replace": schtasks/launchctl emit bytes in the console/OEM codepage
+    # (e.g. cp866/cp1251 localized text) that the locale text decoder chokes on —
+    # a raw decode crashes the subprocess reader thread. Never let scheduler I/O
+    # raise on undecodable status output.
+    return subprocess.run(cmd, capture_output=True, text=True, errors="replace")
+
+
+# --------------------------------------------------------------------------
+# argv serialization — one correct quoting per backend (AUD-01)
+#
+# The bug: `" ".join(args)` split any argv element containing a space (a vault
+# path like `D:\obsidian\memory brain`) into two tokens, so the scheduled job
+# received a broken --vault and failed with LastTaskResult=1. Each OS parses
+# the stored action differently, so each needs its own quoter.
+# --------------------------------------------------------------------------
+
+def _win_arguments(args: list[str]) -> str:
+    """argv -> a single Windows Arguments string that CommandLineToArgvW (used
+    by the launched program) splits back into the exact same argv."""
+    return subprocess.list2cmdline(list(args))
+
+
+def _win_task_xml(exe: str, args: list[str], *,
+                  daily_at: str | None = None, at_login: bool = False) -> str:
+    """Task Scheduler definition XML. Command and Arguments are separate fields
+    (no schtasks /TR quote-mangling), StartWhenAvailable is set inline (no extra
+    PowerShell round-trip)."""
+    if daily_at:
+        hh, mm = daily_at.split(":")
+        trigger = (
+            "    <CalendarTrigger>\n"
+            f"      <StartBoundary>2020-01-01T{int(hh):02d}:{int(mm):02d}:00</StartBoundary>\n"
+            "      <Enabled>true</Enabled>\n"
+            "      <ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>\n"
+            "    </CalendarTrigger>\n"
+        )
+    elif at_login:
+        trigger = "    <LogonTrigger><Enabled>true</Enabled></LogonTrigger>\n"
+    else:
+        raise ValueError("job needs daily_at or at_login")
+    arguments = _win_arguments(args)
+    return (
+        '<?xml version="1.0" encoding="UTF-16"?>\n'
+        '<Task version="1.2" '
+        'xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">\n'
+        "  <Triggers>\n" + trigger + "  </Triggers>\n"
+        "  <Settings>\n"
+        "    <StartWhenAvailable>true</StartWhenAvailable>\n"
+        "    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\n"
+        "    <Enabled>true</Enabled>\n"
+        "  </Settings>\n"
+        "  <Actions>\n"
+        "    <Exec>\n"
+        f"      <Command>{_xml_escape(exe)}</Command>\n"
+        f"      <Arguments>{_xml_escape(arguments)}</Arguments>\n"
+        "    </Exec>\n"
+        "  </Actions>\n"
+        "</Task>\n"
+    )
+
+
+def _systemd_quote(arg: str) -> str:
+    """Quote one arg for a systemd ExecStart= line: double-quote, escape
+    backslash and quote, double literal percent (systemd specifier char)."""
+    s = arg.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%")
+    return f'"{s}"'
+
+
+def _systemd_execstart(exe: str, args: list[str]) -> str:
+    return " ".join(_systemd_quote(a) for a in [exe, *args])
+
+
+def _cron_command(exe: str, args: list[str]) -> str:
+    """Quote for a crontab line (executed via /bin/sh)."""
+    return " ".join(shlex.quote(a) for a in [exe, *args])
+
+
+def expected_arguments(job: Job) -> str | None:
+    """The Arguments string verify() should read back for this job, so a caller
+    (mb doctor, AUD-02) can detect a stale/broken stored action. Windows only —
+    schtasks stores Arguments as a separate field; None on other OSes where
+    verify() does not expose a comparable read-back."""
+    if current_os() == "windows":
+        return _win_arguments(job.args)
+    return None
 
 
 # --------------------------------------------------------------------------
@@ -40,36 +129,45 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess:
 # --------------------------------------------------------------------------
 
 def _win_register(job: Job) -> str:
+    # Register from an XML definition (schtasks /Create /XML). This keeps
+    # Command/Arguments as separate, un-mangled fields — /TR string quoting
+    # cannot survive an argument that contains a space — and sets
+    # StartWhenAvailable in the same step. Overwrites any prior (possibly
+    # broken) registration idempotently via /F.
     exe = python_executable(windowed=True)
-    action = f'"{exe}" ' + " ".join(job.args)
-    if job.daily_at:
-        cmd = ["schtasks", "/Create", "/F", "/TN", job.task_id,
-               "/TR", action, "/SC", "DAILY", "/ST", job.daily_at]
-    elif job.at_login:
-        cmd = ["schtasks", "/Create", "/F", "/TN", job.task_id,
-               "/TR", action, "/SC", "ONLOGON"]
-    else:
-        raise ValueError("job needs daily_at or at_login")
-    res = _run(cmd)
+    xml = _win_task_xml(exe, job.args, daily_at=job.daily_at, at_login=job.at_login)
+    fd, path = tempfile.mkstemp(suffix=".xml", prefix="mb-task-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-16") as f:   # schtasks wants UTF-16
+            f.write(xml)
+        res = _run(["schtasks", "/Create", "/F", "/TN", job.task_id, "/XML", path])
+    finally:
+        os.unlink(path)
     if res.returncode != 0:
         return f"FAIL: {res.stderr.strip() or res.stdout.strip()}"
-    # StartWhenAvailable (coalescing) is not exposed by schtasks flags; set via PowerShell.
-    ps = (f"$s = New-ScheduledTaskSettingsSet -StartWhenAvailable; "
-          f"Set-ScheduledTask -TaskName '{job.task_id}' -Settings $s")
-    res2 = _run(["powershell", "-NoProfile", "-Command", ps])
-    if res2.returncode != 0:
-        return "WARN: registered, but StartWhenAvailable not set"
     return "OK"
 
 
+def _xml_first(text: str, tag: str) -> str | None:
+    # Task Scheduler may emit quotes either literally or as &quot; — unescape both.
+    m = re.search(rf"<{tag}>(.*?)</{tag}>", text, re.S)
+    return _xml_unescape(m.group(1), {"&quot;": '"', "&apos;": "'"}) if m else None
+
+
 def _win_verify(job: Job) -> dict:
-    res = _run(["schtasks", "/Query", "/TN", job.task_id])
+    # Read the task back as XML and report the ACTUAL stored command/arguments
+    # so callers (mb doctor, AUD-02) can compare against what was intended.
+    res = _run(["schtasks", "/Query", "/TN", job.task_id, "/XML"])
     if res.returncode != 0:
         return {"registered": False}
-    ps = (f"(Get-ScheduledTask -TaskName '{job.task_id}').Settings.StartWhenAvailable")
-    res2 = _run(["powershell", "-NoProfile", "-Command", ps])
-    coalescing = "true" in res2.stdout.strip().lower()
-    return {"registered": True, "coalescing": coalescing}
+    xml = res.stdout
+    compact = re.sub(r"\s+", "", xml)
+    return {
+        "registered": True,
+        "coalescing": "<StartWhenAvailable>true</StartWhenAvailable>" in compact,
+        "command": _xml_first(xml, "Command"),
+        "arguments": _xml_first(xml, "Arguments"),
+    }
 
 
 def _win_unregister(job: Job) -> None:
@@ -138,8 +236,8 @@ def _linux_register(job: Job) -> str:
         d = _systemd_dir()
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{unit}.service").write_text(
-            "[Unit]\nDescription=Singularity %s\n\n[Service]\nType=oneshot\nExecStart=%s %s\n"
-            % (job.name, exe, " ".join(job.args)),
+            "[Unit]\nDescription=Singularity %s\n\n[Service]\nType=oneshot\nExecStart=%s\n"
+            % (job.name, _systemd_execstart(exe, job.args)),
             encoding="utf-8",
         )
         if job.daily_at:
@@ -154,8 +252,8 @@ def _linux_register(job: Job) -> str:
             return "OK" if res.returncode == 0 else f"FAIL: {res.stderr.strip()}"
         if job.at_login:
             (d / f"{unit}.service").write_text(
-                "[Unit]\nDescription=Singularity %s\n\n[Service]\nExecStart=%s %s\nRestart=on-failure\n\n"
-                "[Install]\nWantedBy=default.target\n" % (job.name, exe, " ".join(job.args)),
+                "[Unit]\nDescription=Singularity %s\n\n[Service]\nExecStart=%s\nRestart=on-failure\n\n"
+                "[Install]\nWantedBy=default.target\n" % (job.name, _systemd_execstart(exe, job.args)),
                 encoding="utf-8",
             )
             _run(["systemctl", "--user", "daemon-reload"])
@@ -164,7 +262,7 @@ def _linux_register(job: Job) -> str:
     # cron fallback (idempotent append, ported from Genevra)
     if job.daily_at:
         hh, mm = job.daily_at.split(":")
-        line = f"{int(mm)} {int(hh)} * * * {exe} {' '.join(job.args)}  # {job.task_id}"
+        line = f"{int(mm)} {int(hh)} * * * {_cron_command(exe, job.args)}  # {job.task_id}"
         current = _run(["crontab", "-l"]).stdout
         if job.task_id not in current:
             new = current.rstrip() + "\n" + line + "\n"

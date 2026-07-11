@@ -12,10 +12,14 @@ import json
 import os
 import signal
 import socket
+import sys
 import time
+import uuid
+from datetime import datetime
 from typing import Any
 
 from ..config import Config
+from ..platform import proc
 from .engine import SearchEngine
 
 MAX_LINE = 1_000_000
@@ -26,12 +30,13 @@ class SearchDaemon:
         self.cfg = cfg
         self.engine: SearchEngine | None = None
         self._running = True
+        self.instance_id = uuid.uuid4().hex
 
     # ------------------------------------------------------------------
     def _handle(self, req: dict[str, Any]) -> dict[str, Any]:
         cmd = req.get("cmd", "search")
         if cmd == "ping":
-            return {"status": "ok", "pid": os.getpid()}
+            return {"status": "ok", "pid": os.getpid(), "instance_id": self.instance_id}
         if cmd == "reload":
             counts = self.engine.reload()
             return {"status": "reloaded", **counts}
@@ -87,8 +92,22 @@ class SearchDaemon:
         srv.listen(5)
         srv.settimeout(1.0)  # so the shutdown flag is polled
         port = srv.getsockname()[1]
+        # Atomic identity state written AFTER bind, so a reader never sees a
+        # port without the identity that owns it. Legacy port/pid files are
+        # kept for backward compatibility.
+        pid = os.getpid()
+        from ..config import machine_id
+        proc.write_json_atomic(cfg.daemon_state_file, {
+            "instance_id": self.instance_id,
+            "pid": pid,
+            "port": port,
+            "create_time": proc.pid_create_time(pid),
+            "python": sys.executable,
+            "machine_id": machine_id(),
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+        })
         cfg.daemon_port_file.write_text(str(port), encoding="utf-8")
-        cfg.daemon_pid_file.write_text(str(os.getpid()), encoding="utf-8")
+        cfg.daemon_pid_file.write_text(str(pid), encoding="utf-8")
         print(f"[daemon] listening on 127.0.0.1:{port}", flush=True)
 
         def _stop(*_a):
@@ -108,7 +127,7 @@ class SearchDaemon:
                 self._serve_conn(conn)
         finally:
             srv.close()
-            for p in (cfg.daemon_port_file, cfg.daemon_pid_file):
+            for p in (cfg.daemon_state_file, cfg.daemon_port_file, cfg.daemon_pid_file):
                 try:
                     p.unlink(missing_ok=True)
                 except OSError:
