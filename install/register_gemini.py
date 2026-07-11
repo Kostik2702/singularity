@@ -148,10 +148,18 @@ def _deploy_skills() -> dict:
 
 def _hook_entry(script_name: str, name: str) -> dict:
     script = ENGINE / "singularity" / "hooks" / script_name
+    # Gemini executes command hooks through the platform shell.  A quoted
+    # executable path is directly invokable by POSIX shells, but PowerShell
+    # parses it as a string expression; a second quoted path then becomes an
+    # UnexpectedToken.  The call operator is therefore required on Windows:
+    #   & "C:\\...\\python.exe" "D:\\...\\hook.py"
+    command = f'"{PYTHON}" "{script}"'
+    if sys.platform.startswith("win"):
+        command = f"& {command}"
     return {
         "hooks": [{
             "type": "command",
-            "command": f'"{PYTHON}" "{script}"',
+            "command": command,
             "name": name,
             "timeout": 15000,
         }]

@@ -4,7 +4,13 @@ and paths with spaces / Unicode. These run on the existing 3-OS × 3-Py CI matri
 so this file pins the specific quoting/encoding invariants that platform drift
 would break."""
 import importlib.util
+import os
+import shutil
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 ENGINE = Path(__file__).resolve().parents[1]
 
@@ -28,8 +34,31 @@ def test_hook_command_quotes_paths_with_spaces(monkeypatch):
     entry = register_gemini._hook_entry("gemini_session_start.py", "x")
     cmd = entry["hooks"][0]["command"]
     assert cmd.count('"') == 4                       # two quoted path segments
-    assert cmd.startswith('"') and cmd.endswith('.py"')
+    expected_start = '& "' if sys.platform.startswith("win") else '"'
+    assert cmd.startswith(expected_start) and cmd.endswith('.py"')
     assert "Program Files" in cmd and "My Vault" in cmd
+
+
+@pytest.mark.skipif(os.name != "nt", reason="PowerShell command execution is Windows-only")
+def test_hook_command_is_executable_by_powershell(tmp_path, monkeypatch):
+    """Regression: quoted-path adjacency without PowerShell's call operator
+    parses as UnexpectedToken, which broke both Gemini hooks at startup."""
+    shell = shutil.which("powershell.exe") or shutil.which("pwsh.exe")
+    if shell is None:
+        pytest.skip("PowerShell not available")
+    hooks = tmp_path / "singularity" / "hooks"
+    hooks.mkdir(parents=True)
+    (hooks / "probe.py").write_text('print("hook-ok")\n', encoding="utf-8")
+    monkeypatch.setattr(register_gemini, "PYTHON", Path(sys.executable))
+    monkeypatch.setattr(register_gemini, "ENGINE", tmp_path)
+    command = register_gemini._hook_entry("probe.py", "probe")["hooks"][0]["command"]
+
+    result = subprocess.run(
+        [shell, "-NoProfile", "-NonInteractive", "-Command", command],
+        capture_output=True, text=True, timeout=15, check=False)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "hook-ok"
 
 
 def test_profile_body_preserves_unicode_and_space_vault():
