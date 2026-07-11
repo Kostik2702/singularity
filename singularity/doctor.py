@@ -50,6 +50,17 @@ def _guard(rep: Report, check_id: str, fn) -> None:
         rep.add(check_id, "FAIL", f"check crashed: {exc}")
 
 
+def _load_install(name: str):
+    """Load a module from install/ (not an importable package) for its constants
+    and safe helpers — the single source, so doctor can't drift from the registrar."""
+    import importlib.util
+    engine = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(name, engine / "install" / f"{name}.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def _action_matches(state: dict, expected_args: str | None) -> bool:
     """Does the scheduler's ACTUAL stored action match the argv we intended?
     Returns True when uncomparable (non-Windows read-back) so we never raise a
@@ -63,6 +74,87 @@ def _action_matches(state: dict, expected_args: str | None) -> bool:
 
 # Watcher is considered alive if its heartbeat file was touched this recently.
 WATCH_HEARTBEAT_MAX_AGE_S = 15 * 60
+
+
+def gemini_block(rep: Report, fix: bool) -> None:
+    """Block E: verify the Gemini integration on a WORKING path (version, managed
+    profile, portable skill targets, settings parse, named hook), not mere file
+    presence. `--fix` runs ONLY the safe registrar (no network/auth). Absent client
+    is a single SKIP. Module-level (not a run() closure) so it is unit-testable."""
+    rg = _load_install("register_gemini")
+    home_g = Path.home() / ".gemini"
+    if not (home_g.exists() or shutil.which("gemini") is not None):
+        rep.add("E1-gemini", "SKIP", "Gemini CLI not installed on this machine")
+        return
+    version = rg._gemini_version()
+
+    def profile_ok() -> bool:
+        p = home_g / "GEMINI.md"
+        return p.exists() and rg.BEGIN in p.read_text(encoding="utf-8", errors="ignore")
+
+    def missing_skills() -> list[str]:
+        d = home_g / "skills"
+        return [n for n in rg.GEMINI_SKILLS if not (d / n).exists()]
+
+    def hook_state():
+        s = home_g / "settings.json"
+        if not s.exists():
+            return False
+        try:
+            data = json.loads(s.read_text(encoding="utf-8-sig"))   # BOM-tolerant
+        except json.JSONDecodeError:
+            return "malformed"
+        names = [h.get("name")
+                 for dfn in data.get("hooks", {}).get("SessionStart", [])
+                 for h in dfn.get("hooks", [])]
+        return rg.SESSION_START_HOOK_NAME in names
+
+    supported = version is not None and version >= rg.MIN_HOOKS_VERSION
+
+    # --fix runs ONLY the safe registrar (no network/auth) once, then re-checks.
+    fixed = False
+    if fix and (not profile_ok() or missing_skills()
+                or (supported and hook_state() is not True)):
+        rg.main()
+        fixed = True
+
+    if version is None:
+        rep.add("E1-gemini", "WARN", "installed, but `gemini --version` unreadable")
+    elif not supported:
+        rep.add("E1-gemini", "WARN",
+                f"gemini {'.'.join(map(str, version))} < "
+                f"{'.'.join(map(str, rg.MIN_HOOKS_VERSION))} (skills/hooks may be ignored)")
+    else:
+        rep.add("E1-gemini", "PASS", f"gemini {'.'.join(map(str, version))}")
+
+    if profile_ok():
+        rep.add("E2-gemini-profile", "FIXED" if fixed else "PASS",
+                "managed GEMINI.md block present")
+    else:
+        rep.add("E2-gemini-profile", "WARN", "managed GEMINI.md block missing",
+                fix="python install/register_gemini.py")
+
+    miss = missing_skills()
+    if not miss:
+        rep.add("E3-gemini-skills", "FIXED" if fixed else "PASS",
+                f"{len(rg.GEMINI_SKILLS)} portable skills deployed")
+    else:
+        rep.add("E3-gemini-skills", "WARN", f"skills not deployed: {', '.join(miss)}",
+                fix="python install/register_gemini.py")
+
+    h = hook_state()
+    if h == "malformed":
+        rep.add("E4-gemini-hooks", "FAIL", "~/.gemini/settings.json unparseable",
+                fix="repair or remove the file, then mb doctor --fix")
+    elif not supported:
+        rep.add("E4-gemini-hooks", "SKIP",
+                f"SessionStart hook requires gemini >= {'.'.join(map(str, rg.MIN_HOOKS_VERSION))}")
+    elif h is True:
+        rep.add("E4-gemini-hooks", "FIXED" if fixed else "PASS",
+                "SessionStart hook registered")
+    else:
+        rep.add("E4-gemini-hooks", "WARN", "SessionStart hook not registered",
+                fix="python install/register_gemini.py")
 
 
 def run(cfg: Config, fix: bool = False, heavy: bool = False,
@@ -308,6 +400,9 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
     _guard(rep, "D4", d4)
     _guard(rep, "D2", d2)
     _guard(rep, "D1", d1)
+
+    # ---- Block E: Gemini CLI integration (GCLI-05) --------------------
+    _guard(rep, "E-gemini", lambda: gemini_block(rep, fix))
 
     # ---- summary -------------------------------------------------------
     counts = rep.counts()

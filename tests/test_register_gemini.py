@@ -254,3 +254,80 @@ def test_settings_backed_up_before_mutation(home):
     register_gemini.main()
     backups = list((home / ".gemini").glob("settings.json.bak-*"))
     assert backups, "existing settings.json must be backed up before mutation"
+
+
+# --- GCLI-05: uninstall (owned-only removal) -----------------------------------
+
+def test_uninstall_removes_profile_keeps_user_text(home):
+    _profile(home).write_text("# user top note\nkeep me\n", encoding="utf-8")
+    register_gemini.main()                        # appends our block after user text
+    res = register_gemini.uninstall()
+    assert res["profile"] == "removed"
+    text = _profile(home).read_text(encoding="utf-8")
+    assert "keep me" in text                      # user text survives
+    assert register_gemini.BEGIN not in text      # our block gone
+
+
+def test_uninstall_removes_owned_hook_keeps_foreign(home):
+    _settings(home).write_text(json.dumps({
+        "theme": "dark",
+        "hooks": {"SessionStart": [
+            {"hooks": [{"type": "command", "command": "x", "name": "user-hook"}]}]},
+    }), encoding="utf-8")
+    register_gemini.main()                        # adds our hook alongside foreign
+    res = register_gemini.uninstall()
+    assert res["hooks"] == 1
+    data = json.loads(_settings(home).read_text(encoding="utf-8"))
+    assert data["theme"] == "dark"                # foreign key kept
+    names = [h["name"] for d in data["hooks"]["SessionStart"] for h in d["hooks"]]
+    assert names == ["user-hook"]                 # only foreign remains
+    assert list((home / ".gemini").glob("settings.json.bak-*")), "settings backed up"
+
+
+def test_uninstall_removes_owned_skill_links_keeps_foreign(home):
+    register_gemini.main()                        # 10 owned links
+    foreign = home / ".gemini" / "skills" / "user-custom"
+    foreign.mkdir()
+    (foreign / "SKILL.md").write_text("mine", encoding="utf-8")
+    res = register_gemini.uninstall()
+    assert res["skills_removed"] == len(register_gemini.GEMINI_SKILLS)
+    assert (foreign / "SKILL.md").read_text(encoding="utf-8") == "mine"  # foreign untouched
+
+
+def test_uninstall_keeps_foreign_dir_at_owned_name(home):
+    register_gemini.main()
+    # user replaced one owned link with their own real directory
+    name = register_gemini.GEMINI_SKILLS[0]
+    link = home / ".gemini" / "skills" / name
+    register_gemini._remove_link(link)
+    link.mkdir()
+    (link / "user.txt").write_text("do not delete", encoding="utf-8")
+    res = register_gemini.uninstall()
+    assert res["skills_kept"] >= 1
+    assert (link / "user.txt").read_text(encoding="utf-8") == "do not delete"
+    assert res["skills_removed"] == len(register_gemini.GEMINI_SKILLS) - 1
+
+
+def test_uninstall_malformed_settings_untouched(home, capsys):
+    broken = "{ not valid json"
+    _settings(home).write_text(broken, encoding="utf-8")
+    register_gemini.uninstall()
+    assert _settings(home).read_text(encoding="utf-8") == broken
+    assert "malformed" in capsys.readouterr().err
+
+
+def test_uninstall_safe_when_absent(tmp_path, monkeypatch):
+    monkeypatch.setattr(register_gemini.Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setattr(register_gemini.register_skills.Path, "home",
+                        classmethod(lambda cls: tmp_path))
+    res = register_gemini.uninstall()             # no ~/.gemini at all
+    assert res["profile"] == "absent" and res["hooks"] == 0
+
+
+def test_install_uninstall_roundtrip_preserves_user_bytes(home):
+    _profile(home).write_text("# user GEMINI\nprecious\n", encoding="utf-8")
+    _settings(home).write_text('{"theme":"solarized"}', encoding="utf-8")
+    register_gemini.main()
+    register_gemini.uninstall()
+    assert "precious" in _profile(home).read_text(encoding="utf-8")
+    assert json.loads(_settings(home).read_text(encoding="utf-8"))["theme"] == "solarized"

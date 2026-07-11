@@ -132,6 +132,13 @@ def test_read_json_malformed_raises(tmp_path):
         cr.read_json_or_raise(p)
 
 
+def test_read_json_tolerates_utf8_bom(tmp_path):
+    """A UTF-8 BOM (Notepad/PowerShell on Windows) must not read as malformed."""
+    p = tmp_path / "s.json"
+    p.write_text('{"theme": "dark"}', encoding="utf-8-sig")   # writes BOM
+    assert cr.read_json_or_raise(p) == {"theme": "dark"}
+
+
 # --- merge_named_hooks / remove_named_hooks ------------------------------------
 
 def _owned(name):

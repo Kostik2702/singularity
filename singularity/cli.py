@@ -367,6 +367,18 @@ def cmd_uninstall(cfg, _args) -> int:
         settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
                                  encoding="utf-8")
         print(f"hooks removed: {removed}")
+
+    # Gemini artifacts (owned managed block, named hook, engine-pointing skill links)
+    import importlib.util
+    _eng = _P(__file__).resolve().parents[1]
+    _spec = importlib.util.spec_from_file_location(
+        "register_gemini", _eng / "install" / "register_gemini.py")
+    _rg = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_rg)
+    g = _rg.uninstall()
+    print(f"gemini: profile {g['profile']}, {g['hooks']} hook(s) removed, "
+          f"{g['skills_removed']} skill link(s) removed, {g['skills_kept']} kept (foreign)")
+
     for job in (scheduler.Job("nightly-index", [], daily_at="03:00"),
                 scheduler.Job("watch", [], at_login=True)):
         scheduler.unregister(job)

@@ -26,6 +26,7 @@ Return codes: 0 = skipped (absent) or success; 1 = a real partial failure
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -67,20 +68,24 @@ def _gemini_present() -> bool:
 def _gemini_version() -> tuple[int, ...] | None:
     """Return the CLI version as an int tuple (e.g. (0, 50, 0)), or None if the
     binary is absent, times out, errors, or prints an unparseable version. Never
-    raises — a probe failure must not crash the installer."""
+    raises — a probe failure must not crash the installer.
+
+    Retries once: the first `gemini --version` on a machine is a cold Node start
+    (the CLI bundle is tens of MB and Windows Defender may scan it on first spawn),
+    which can exceed the timeout; a warm second attempt is ~2s."""
     exe = shutil.which("gemini")
     if not exe:
         return None
-    try:
-        out = subprocess.run([exe, "--version"], capture_output=True, text=True,
-                             timeout=20, check=False)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    blob = (out.stdout or "") + (out.stderr or "")
-    m = re.search(r"(\d+)\.(\d+)\.(\d+)", blob)
-    if not m:
-        return None
-    return tuple(int(g) for g in m.groups())
+    for attempt in range(2):
+        try:
+            out = subprocess.run([exe, "--version"], capture_output=True, text=True,
+                                 timeout=30, check=False)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        m = re.search(r"(\d+)\.(\d+)\.(\d+)", (out.stdout or "") + (out.stderr or ""))
+        if m:
+            return tuple(int(g) for g in m.groups())
+    return None
 
 
 def _profile_body(vault: Path) -> str:
@@ -174,6 +179,57 @@ def _register_session_start_hook() -> str:
     settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
                              encoding="utf-8")
     return "registered"
+
+
+def _remove_link(link: Path) -> None:
+    """Delete a symlink/junction without touching its target."""
+    if link.is_symlink():
+        link.unlink()
+    elif os.name == "nt" and link.is_dir():
+        link.rmdir()                     # junction reparse point, not the target
+    else:
+        link.unlink()
+
+
+def uninstall() -> dict:
+    """Remove ONLY Singularity-owned Gemini artifacts and nothing else:
+      - the managed block in ~/.gemini/GEMINI.md (user text outside it preserved);
+      - the named `singularity-session-start` hook in ~/.gemini/settings.json
+        (backed up first; foreign hooks/keys kept; malformed file left untouched);
+      - skill links in ~/.gemini/skills that resolve EXACTLY to our engine source.
+    Foreign skills, backup dirs, credentials, Node/Gemini CLI and the vault are
+    never touched. Returns a summary dict. Safe to run when Gemini is absent."""
+    home_gemini = Path.home() / ".gemini"
+    result = {"profile": "absent", "hooks": 0, "skills_removed": 0, "skills_kept": 0}
+
+    if client_registration.remove_managed_block(home_gemini / "GEMINI.md", BEGIN, END):
+        result["profile"] = "removed"
+
+    settings_path = home_gemini / "settings.json"
+    try:
+        data = client_registration.read_json_or_raise(settings_path)
+    except json.JSONDecodeError:
+        print("[gemini] WARN: ~/.gemini/settings.json malformed — hooks left untouched",
+              file=sys.stderr)
+        data = None
+    if isinstance(data, dict) and isinstance(data.get("hooks"), dict):
+        client_registration.backup_file(settings_path)
+        result["hooks"] = client_registration.remove_named_hooks(
+            data["hooks"], {SESSION_START_HOOK_NAME})
+        if not data["hooks"]:
+            data.pop("hooks")
+        settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+                                 encoding="utf-8")
+
+    skills_dir = home_gemini / "skills"
+    for name in GEMINI_SKILLS:
+        link = skills_dir / name
+        if register_skills._points_to(link, SKILLS_SRC / name):
+            _remove_link(link)
+            result["skills_removed"] += 1
+        elif link.is_symlink() or link.exists():
+            result["skills_kept"] += 1     # foreign / copied — never auto-deleted
+    return result
 
 
 def main() -> int:

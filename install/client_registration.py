@@ -109,10 +109,14 @@ def backup_file(path: Path) -> Path | None:
 def read_json_or_raise(path: Path) -> dict:
     """Parse a JSON settings file. Missing file -> {} (fresh install). A malformed
     file raises json.JSONDecodeError so the caller can abort registration WITHOUT
-    overwriting the user's (recoverable) file."""
+    overwriting the user's (recoverable) file.
+
+    Read as utf-8-sig: a UTF-8 BOM (written by Notepad/PowerShell on Windows) is
+    stripped instead of poisoning json.loads — the same robustness rule the engine
+    applies to hook stdin."""
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 # --- owned hooks inside a settings `hooks` object ------------------------------

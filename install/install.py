@@ -81,6 +81,13 @@ def main(argv: list[str] | None = None) -> int:
     if register_codex.main() != 0:
         failures.append("register_codex")
 
+    print("== Phase 4c: Gemini profile + skills + SessionStart ==")
+    import register_gemini
+    # Same contract as Codex: absent client -> rc 0 (skip); a nonzero here means
+    # Gemini IS present and registration genuinely failed.
+    if register_gemini.main() != 0:
+        failures.append("register_gemini")
+
     if not args.skip_schedule:
         print("== Phase 5: scheduler ==")
         from singularity.platform import scheduler
