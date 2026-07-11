@@ -24,12 +24,13 @@ MEMORY_FOLDERS = ["learnings/active", "learnings/archive", "decisions", "howto",
 @dataclass
 class Report:
     checks: list[dict] = field(default_factory=list)
+    quiet: bool = False   # suppress human lines (used by --json)
 
     def add(self, check_id: str, status: str, detail: str = "", fix: str = "") -> None:
         self.checks.append({"id": check_id, "status": status,
                             "detail": detail, "fix": fix})
-        line = f"[{status}] {check_id}: {detail}"
-        print(line)
+        if not self.quiet:
+            print(f"[{status}] {check_id}: {detail}")
 
     def counts(self) -> dict[str, int]:
         out: dict[str, int] = {}
@@ -49,8 +50,24 @@ def _guard(rep: Report, check_id: str, fn) -> None:
         rep.add(check_id, "FAIL", f"check crashed: {exc}")
 
 
-def run(cfg: Config, fix: bool = False, heavy: bool = False) -> int:
-    rep = Report()
+def _action_matches(state: dict, expected_args: str | None) -> bool:
+    """Does the scheduler's ACTUAL stored action match the argv we intended?
+    Returns True when uncomparable (non-Windows read-back) so we never raise a
+    false alarm; False only on a concrete mismatch (e.g. a vault path that lost
+    its quoting and was split — the exact pre-AUD-01 breakage)."""
+    actual = state.get("arguments")
+    if expected_args is None or actual is None:
+        return True
+    return actual.strip() == expected_args.strip()
+
+
+# Watcher is considered alive if its heartbeat file was touched this recently.
+WATCH_HEARTBEAT_MAX_AGE_S = 15 * 60
+
+
+def run(cfg: Config, fix: bool = False, heavy: bool = False,
+        as_json: bool = False) -> int:
+    rep = Report(quiet=as_json)
 
     # ---- Block A: structure + config ---------------------------------
     def a1():
@@ -161,16 +178,49 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False) -> int:
                              "index", "update"],
                             daily_at="03:00")
         state = scheduler.verify(job)
-        if state.get("registered"):
-            status = "PASS" if state.get("coalescing") else "WARN"
-            rep.add("C1-nightly", status,
-                    f"registered ({current_os()}), coalescing={state.get('coalescing')}")
-        elif fix:
-            res = scheduler.register(job)
-            rep.add("C1-nightly", "FIXED" if res.startswith("OK") else "FAIL", res)
+        if not state.get("registered"):
+            if fix:
+                res = scheduler.register(job)
+                rep.add("C1-nightly", "FIXED" if res.startswith("OK") else "FAIL", res)
+            else:
+                rep.add("C1-nightly", "WARN", "nightly job not registered",
+                        fix="mb doctor --fix")
+            return
+        # Registered — but is the STORED action the argv we intended? A task
+        # whose --vault path was split apart still shows "registered"; that must
+        # not read as healthy.
+        if not _action_matches(state, scheduler.expected_arguments(job)):
+            if fix:
+                res = scheduler.register(job)
+                rep.add("C1-nightly", "FIXED" if res.startswith("OK") else "FAIL",
+                        f"stale/broken action re-registered: {res}")
+            else:
+                rep.add("C1-nightly", "FAIL",
+                        f"registered action != expected argv (stored: {state.get('arguments')!r})",
+                        fix="mb doctor --fix")
+            return
+        status = "PASS" if state.get("coalescing") else "WARN"
+        rep.add("C1-nightly", status,
+                f"registered + action verified ({current_os()}), "
+                f"coalescing={state.get('coalescing')}")
+
+    def c2():
+        from .watch import HEARTBEAT_FILE
+        hb = cfg.mb_dir / HEARTBEAT_FILE
+        if not hb.exists():
+            rep.add("C2-watcher", "WARN", "no watcher heartbeat (watcher not running?)",
+                    fix="mb watch  (or check login task)")
+            return
+        try:
+            age = time.time() - float(hb.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            rep.add("C2-watcher", "WARN", "unreadable watcher heartbeat")
+            return
+        if age <= WATCH_HEARTBEAT_MAX_AGE_S:
+            rep.add("C2-watcher", "PASS", f"watcher heartbeat {age:.0f}s ago")
         else:
-            rep.add("C1-nightly", "WARN", "nightly job not registered",
-                    fix="mb doctor --fix")
+            rep.add("C2-watcher", "WARN",
+                    f"watcher heartbeat stale ({age/60:.0f}min)", fix="restart mb watch")
 
     def c5():
         if cfg.lock_dir.exists():
@@ -187,6 +237,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False) -> int:
             rep.add("C5-lock", "PASS", "no stale lock")
 
     _guard(rep, "C1", c1)
+    _guard(rep, "C2", c2)
     _guard(rep, "C5", c5)
 
     # ---- Block D: host tools ------------------------------------------
@@ -216,13 +267,20 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False) -> int:
 
     # ---- summary -------------------------------------------------------
     counts = rep.counts()
+    payload = {"counts": counts, "checks": rep.checks, "ok": not rep.has_fail}
+    cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.mb_dir / "doctor-last.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    if as_json:
+        # exactly one machine-readable document on stdout, nothing else
+        print(json.dumps(payload, ensure_ascii=False))
+        return 1 if rep.has_fail else 0
+
     print("\n================ mb doctor summary ================")
     print(" | ".join(f"{k} {v}" for k, v in sorted(counts.items())))
     fails = [c for c in rep.checks if c["status"] == "FAIL"]
     for c in fails:
         print(f"  FAIL {c['id']}: {c['detail']}" + (f"  fix: {c['fix']}" if c["fix"] else ""))
     print("===================================================")
-    (cfg.mb_dir / "doctor-last.json").write_text(
-        json.dumps({"counts": counts, "checks": rep.checks}, ensure_ascii=False, indent=1),
-        encoding="utf-8")
     return 1 if rep.has_fail else 0

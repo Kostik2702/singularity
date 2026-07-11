@@ -11,6 +11,18 @@ from pathlib import Path
 from .config import Config
 
 DEBOUNCE_SECONDS = 3.0
+HEARTBEAT_FILE = "watch.heartbeat"
+
+
+def _write_heartbeat(cfg: Config) -> None:
+    """Touch a heartbeat file so `mb doctor` can tell the watcher is alive
+    (freshness of this file = liveness). Never let a heartbeat failure kill
+    the watcher loop."""
+    try:
+        cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+        (cfg.mb_dir / HEARTBEAT_FILE).write_text(str(time.time()), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def run(cfg: Config) -> None:
@@ -53,10 +65,12 @@ def run(cfg: Config) -> None:
     observer = Observer()
     observer.schedule(Handler(), str(cfg.vault), recursive=True)
     observer.start()
+    _write_heartbeat(cfg)
     print(f"[watch] watching {cfg.vault} (debounce {DEBOUNCE_SECONDS}s)", flush=True)
     try:
         while True:
             time.sleep(1.0)
+            _write_heartbeat(cfg)
             if not pending:
                 continue
             newest = max(pending.values())

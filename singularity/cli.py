@@ -55,6 +55,8 @@ def _build_parser() -> argparse.ArgumentParser:
     doc = sub.add_parser("doctor", help="installation verification")
     doc.add_argument("--fix", action="store_true")
     doc.add_argument("--heavy", action="store_true")
+    doc.add_argument("--json", action="store_true",
+                     help="emit a single JSON report, no human output")
 
     cur = sub.add_parser("curator", help="vault health: validation, orphans, link suggestions")
     cur.add_argument("--json", action="store_true")
@@ -306,7 +308,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "doctor":
         from . import doctor
-        return doctor.run(cfg, fix=args.fix, heavy=args.heavy)
+        return doctor.run(cfg, fix=args.fix, heavy=args.heavy, as_json=args.json)
     if args.command == "curator":
         from . import curator
         return curator.run(cfg, as_json=args.json)

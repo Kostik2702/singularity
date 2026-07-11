@@ -114,6 +114,16 @@ def _cron_command(exe: str, args: list[str]) -> str:
     return " ".join(shlex.quote(a) for a in [exe, *args])
 
 
+def expected_arguments(job: Job) -> str | None:
+    """The Arguments string verify() should read back for this job, so a caller
+    (mb doctor, AUD-02) can detect a stale/broken stored action. Windows only —
+    schtasks stores Arguments as a separate field; None on other OSes where
+    verify() does not expose a comparable read-back."""
+    if current_os() == "windows":
+        return _win_arguments(job.args)
+    return None
+
+
 # --------------------------------------------------------------------------
 # Windows — Task Scheduler
 # --------------------------------------------------------------------------
