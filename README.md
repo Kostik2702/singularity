@@ -203,6 +203,67 @@ Small tasks legally skip phases (marked, not silent). The final phase asks one q
 - `.mb/` (indexes, daemon state, config) is excluded from Obsidian's own indexing.
 - Templates for every note type live in `templates/` — usable via Templater or `mb note new`.
 
+### 8. Local LLM backend (`mb llm`)
+
+One command brings up a local `llama-server` (OpenAI-compatible) plus an optional router that translates Anthropic's wire format ↔ OpenAI, so a locally-hosted GGUF model can back Claude Code — or any OpenAI-compatible client — instead of a hosted API.
+
+```bash
+mb llm start <model>                  # stop any running server, spawn server, health-poll,
+                                       # spawn router if configured, health-poll
+mb llm stop                           # stop router, then server
+mb llm status [--json]                # running model, pids, ports, liveness, started-at
+mb llm list                           # models from config registry, active one marked (active)
+mb llm logs [server|router] [-n N]    # tail a log (default: server, N=40)
+```
+
+`mb llm start` always stops any currently-running server first — one GPU, one model at a time. Once healthy it prints exactly one line, depending on whether a router is configured:
+
+```
+export ANTHROPIC_BASE_URL=http://<router-host>:<router-port>   # router configured
+OpenAI-compatible endpoint: http://<host>:<port>/v1              # no router
+```
+
+Run that `export ANTHROPIC_BASE_URL=...` in the shell where you launch Claude Code — that's the step that actually points it at your local model.
+
+**Two-process model.** `llama-server` speaks the OpenAI API; Claude Code speaks Anthropic's wire format, so a router sits between them and translates. The router is config-swappable — the example below runs [claude-code-router](https://github.com/musistudio/claude-code-router) (`ccr`, Node); LiteLLM (`pip`, no Node) is a drop-in alternative, just change `router.cmd`. Skip `router` entirely for a server-only setup — `mb llm start` then hands you the raw OpenAI endpoint instead. Either way, `mb` doesn't install or download anything for you: you provide `server_bin`, the `.gguf`, and (if used) the router yourself.
+
+Config lives in `<vault>/.mb/config.json` under an `"llm"` key:
+
+```jsonc
+{
+  "llm": {
+    "server_bin": "C:/llama.cpp/llama-server.exe",
+    "server_host": "127.0.0.1",       // default
+    "server_port": 8080,               // default
+    "server_ready_path": "/health",    // default
+    "health_timeout_s": 120,           // default; deadline for server AND router health-poll
+    "router": {                        // optional — omit for a server-only / raw OpenAI setup
+      "cmd": ["ccr", "start"],         // or e.g. ["litellm", "--config", "litellm.yaml"]
+      "host": "127.0.0.1",
+      "port": 3456,
+      "ready_path": "/health"
+    },
+    "models": {
+      "qwen3-30b": {
+        "gguf": "C:/models/qwen3-30b-a3b-q4.gguf",
+        "args": ["-ngl", "99", "-c", "16384", "--jinja"]
+      },
+      "qwen27b": {                     // large-context example (validated on an RTX 5090, 32 GB)
+        "gguf": "E:/models/ThinkingCap-Qwen3.6-27B-Q4_K_M.gguf",
+        "args": ["-ngl", "99", "-c", "131072", "-fa", "on", "--jinja",
+                 "-ctk", "q8_0", "-ctv", "q8_0"]
+      }
+    }
+  }
+}
+```
+
+`--jinja` (or `--chat-template ...`) in a model's `args` is required for tool-calling; `mb llm start` prints a non-fatal warning if neither is present.
+
+**Large context on limited VRAM.** To fit a big `-c` window, quantize the KV cache with `-ctk q8_0 -ctv q8_0` (roughly halves KV memory; requires flash-attention `-fa on`). Measured on the 27B Q4_K_M above (native 256K context): ~20 GB VRAM at `-c 16384`, ~24 GB at `-c 131072` with q8_0 KV — so 128K is the practical ceiling on a 32 GB GPU; a full 256K fp16 cache does not fit.
+
+**Cross-machine:** only the paths inside `llm` change (`server_bin`, each model's `gguf`, maybe ports) — the commands above are identical on every machine, since all runtime state (`llm.state.json`, `llm-server.log`, `llm-router.log`) lives under the vault's `.mb/`.
+
 ---
 
 ## Configuration

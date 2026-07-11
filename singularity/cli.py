@@ -65,6 +65,24 @@ def _build_parser() -> argparse.ArgumentParser:
     nn.add_argument("type")
     nn.add_argument("title")
 
+    ll = sub.add_parser("llm", help="local inference server (llama-server + router)")
+    llsub = ll.add_subparsers(dest="llm_action", required=True)
+    lls = llsub.add_parser("start", help="start server (+router) for a model")
+    lls.add_argument("model")
+    llsub.add_parser("stop", help="stop server + router")
+    llst = llsub.add_parser("status", help="running model, pids, health")
+    llst.add_argument("--json", action="store_true")
+    llsub.add_parser("list", help="models from config registry")
+    lllog = llsub.add_parser("logs", help="tail server/router log")
+    lllog.add_argument("which", nargs="?", choices=["server", "router"], default="server")
+    lllog.add_argument("-n", type=int, default=40)
+    llc = llsub.add_parser("code", help="run Claude Code on the local model")
+    llc.add_argument("claude_args", nargs=argparse.REMAINDER,
+                     help="extra args passed to claude (use -- before flags)")
+    llset = llsub.add_parser("setup", help="verify/install local-LLM environment")
+    llset.add_argument("--dir", default=None,
+                       help="llama.cpp install dir (default: E:/llama.cpp)")
+
     l = sub.add_parser("learn", help="append an insight to active learnings")
     l.add_argument("insight")
     l.add_argument("--task", default="GENERAL")
@@ -201,6 +219,26 @@ def cmd_learn(cfg, args) -> int:
     return 0
 
 
+def cmd_llm(cfg, args) -> int:
+    from . import llm
+
+    if args.llm_action == "start":
+        return llm.start(cfg, args.model)
+    if args.llm_action == "stop":
+        return llm.stop(cfg)
+    if args.llm_action == "status":
+        return llm.status(cfg, as_json=args.json)
+    if args.llm_action == "list":
+        return llm.list_models(cfg)
+    if args.llm_action == "logs":
+        return llm.logs(cfg, which=args.which, n=args.n)
+    if args.llm_action == "code":
+        return llm.code(cfg, args.claude_args)
+    if args.llm_action == "setup":
+        return llm.setup(cfg, dir_override=args.dir)
+    return 2
+
+
 def cmd_uninstall(cfg, _args) -> int:
     """Remove hooks (_mb-marked), scheduler jobs and the daemon. Vault untouched."""
     from pathlib import Path as _P
@@ -276,6 +314,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_note(cfg, args)
     if args.command == "learn":
         return cmd_learn(cfg, args)
+    if args.command == "llm":
+        return cmd_llm(cfg, args)
     if args.command == "init":
         return cmd_init(cfg, args)
     if args.command == "uninstall":

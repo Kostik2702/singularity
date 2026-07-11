@@ -103,9 +103,11 @@ class Config:
     def save(self) -> None:
         self.mb_dir.mkdir(parents=True, exist_ok=True)
         merged = {**DEFAULT_CONFIG, **self.data}
-        self.config_path.write_text(
+        tmp = self.config_path.with_suffix(".json.tmp")
+        tmp.write_text(
             json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
+        tmp.replace(self.config_path)
 
     def apply_env(self) -> None:
         """Point HuggingFace cache at the configured location (keep C: clean)
