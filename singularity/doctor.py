@@ -104,10 +104,13 @@ def gemini_block(rep: Report, fix: bool) -> None:
             data = json.loads(s.read_text(encoding="utf-8-sig"))   # BOM-tolerant
         except json.JSONDecodeError:
             return "malformed"
-        names = [h.get("name")
-                 for dfn in data.get("hooks", {}).get("SessionStart", [])
-                 for h in dfn.get("hooks", [])]
-        return rg.SESSION_START_HOOK_NAME in names
+        hooks = data.get("hooks", {})
+
+        def _names(event):
+            return [h.get("name") for dfn in hooks.get(event, []) for h in dfn.get("hooks", [])]
+
+        return (rg.SESSION_START_HOOK_NAME in _names("SessionStart")
+                and rg.AFTER_AGENT_HOOK_NAME in _names("AfterAgent"))
 
     supported = version is not None and version >= rg.MIN_HOOKS_VERSION
 
@@ -151,9 +154,9 @@ def gemini_block(rep: Report, fix: bool) -> None:
                 f"SessionStart hook requires gemini >= {'.'.join(map(str, rg.MIN_HOOKS_VERSION))}")
     elif h is True:
         rep.add("E4-gemini-hooks", "FIXED" if fixed else "PASS",
-                "SessionStart hook registered")
+                "SessionStart + AfterAgent hooks registered")
     else:
-        rep.add("E4-gemini-hooks", "WARN", "SessionStart hook not registered",
+        rep.add("E4-gemini-hooks", "WARN", "SessionStart/AfterAgent hooks not registered",
                 fix="python install/register_gemini.py")
 
 

@@ -22,7 +22,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-MIN_TOOL_USES = 8
+from singularity.hooks.capture_decision import (  # noqa: E402
+    MIN_TOOL_USES, auto_capture_enabled, session_marker, should_remind)
 
 REASON = (
     "[Singularity auto-capture] Перед завершением зафиксируй знания сессии в vault: "
@@ -73,23 +74,18 @@ def main() -> int:
         vault = resolve_vault(None)
         if vault is None or not vault.exists():
             return 0
-        cfg_path = vault / ".mb" / "config.json"
-        if cfg_path.exists():
-            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
-            if not cfg.get("auto_capture", True):
-                return 0
+        if not auto_capture_enabled(vault):
+            return 0
 
         session_id = str(event.get("session_id", "unknown"))
-        markers = vault / ".mb" / "markers"
-        markers.mkdir(parents=True, exist_ok=True)
-        marker = markers / f"capture-{session_id}"
+        marker = session_marker(vault, session_id)
         if marker.exists():
             return 0
 
         transcript = event.get("transcript_path", "")
         vault_json_fragment = json.dumps(str(vault))[1:-1]  # escaped like in transcript
         tool_uses, captured = _transcript_stats(transcript, vault_json_fragment)
-        if tool_uses < MIN_TOOL_USES or captured:
+        if not should_remind(tool_uses, captured):
             return 0
 
         marker.write_text("blocked-once", encoding="utf-8")

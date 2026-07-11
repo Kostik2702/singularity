@@ -200,10 +200,13 @@ def _owned_hook_names(home):
 def test_session_start_hook_registered_at_supported_version(home):
     register_gemini.main()
     assert register_gemini.SESSION_START_HOOK_NAME in _owned_hook_names(home)
-    # command points at the gemini adapter, not the Claude one
     data = json.loads(_settings(home).read_text(encoding="utf-8"))
-    cmd = data["hooks"]["SessionStart"][0]["hooks"][0]["command"]
-    assert "gemini_session_start.py" in cmd
+    # SessionStart command points at the gemini adapter, not the Claude one
+    assert "gemini_session_start.py" in data["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+    # AfterAgent capture hook is registered too
+    aa = [h["name"] for d in data["hooks"]["AfterAgent"] for h in d["hooks"]]
+    assert register_gemini.AFTER_AGENT_HOOK_NAME in aa
+    assert "gemini_after_agent.py" in data["hooks"]["AfterAgent"][0]["hooks"][0]["command"]
 
 
 def test_hook_skipped_on_old_version(home, monkeypatch):
@@ -274,13 +277,14 @@ def test_uninstall_removes_owned_hook_keeps_foreign(home):
         "hooks": {"SessionStart": [
             {"hooks": [{"type": "command", "command": "x", "name": "user-hook"}]}]},
     }), encoding="utf-8")
-    register_gemini.main()                        # adds our hook alongside foreign
+    register_gemini.main()                        # adds our SessionStart+AfterAgent hooks
     res = register_gemini.uninstall()
-    assert res["hooks"] == 1
+    assert res["hooks"] == 2                       # SessionStart + AfterAgent owned
     data = json.loads(_settings(home).read_text(encoding="utf-8"))
     assert data["theme"] == "dark"                # foreign key kept
     names = [h["name"] for d in data["hooks"]["SessionStart"] for h in d["hooks"]]
     assert names == ["user-hook"]                 # only foreign remains
+    assert "AfterAgent" not in data["hooks"]      # our-only event cleaned up
     assert list((home / ".gemini").glob("settings.json.bak-*")), "settings backed up"
 
 

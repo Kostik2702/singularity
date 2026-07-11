@@ -53,9 +53,11 @@ PYTHON = ENGINE / ".venv" / ("Scripts/python.exe" if sys.platform.startswith("wi
 MIN_SKILLS_VERSION = (0, 26, 0)
 MIN_HOOKS_VERSION = (0, 26, 0)
 
-# Stable owner name for our nested hook — uninstall finds it by exact name, never by
-# a command substring (GCLI-00: Gemini has no "_mb"-style marker field).
+# Stable owner names for our nested hooks — uninstall finds them by exact name,
+# never by a command substring (GCLI-00: Gemini has no "_mb"-style marker field).
 SESSION_START_HOOK_NAME = "singularity-session-start"
+AFTER_AGENT_HOOK_NAME = "singularity-after-agent"
+OWNED_HOOK_NAMES = {SESSION_START_HOOK_NAME, AFTER_AGENT_HOOK_NAME}
 
 BEGIN = "<!-- SINGULARITY:BEGIN (managed by install/register_gemini.py — edits below are overwritten) -->"
 END = "<!-- SINGULARITY:END -->"
@@ -144,37 +146,42 @@ def _deploy_skills() -> dict:
     return counts
 
 
-def _session_start_entry() -> dict:
-    script = ENGINE / "singularity" / "hooks" / "gemini_session_start.py"
+def _hook_entry(script_name: str, name: str) -> dict:
+    script = ENGINE / "singularity" / "hooks" / script_name
     return {
         "hooks": [{
             "type": "command",
             "command": f'"{PYTHON}" "{script}"',
-            "name": SESSION_START_HOOK_NAME,
+            "name": name,
             "timeout": 15000,
         }]
     }
 
 
-def _register_session_start_hook() -> str:
-    """Merge our named SessionStart hook into ~/.gemini/settings.json, preserving
-    every foreign key/hook. A malformed settings file is left UNTOUCHED (recoverable)
-    and the hook is skipped. Returns a short status word."""
+def _register_hooks() -> str:
+    """Merge our named SessionStart + AfterAgent hooks into ~/.gemini/settings.json,
+    preserving every foreign key/hook. AfterAgent uses a passive systemMessage nudge
+    (GCLI-00: deny-retry is headless-unsafe). A malformed settings file is left
+    UNTOUCHED (recoverable) and hooks are skipped. Returns a short status word."""
     settings_path = Path.home() / ".gemini" / "settings.json"
     try:
         data = client_registration.read_json_or_raise(settings_path)
     except json.JSONDecodeError:
         print("[gemini] WARN: ~/.gemini/settings.json is malformed — left untouched, "
-              "SessionStart hook NOT registered", file=sys.stderr)
+              "hooks NOT registered", file=sys.stderr)
         return "skipped-malformed"
     if not isinstance(data, dict):
         print("[gemini] WARN: ~/.gemini/settings.json is not a JSON object — left "
-              "untouched, SessionStart hook NOT registered", file=sys.stderr)
+              "untouched, hooks NOT registered", file=sys.stderr)
         return "skipped-malformed"
     client_registration.backup_file(settings_path)     # timestamped, no-op if absent
     hooks = data.setdefault("hooks", {})
     client_registration.merge_named_hooks(
-        hooks, "SessionStart", [_session_start_entry()], {SESSION_START_HOOK_NAME})
+        hooks, "SessionStart",
+        [_hook_entry("gemini_session_start.py", SESSION_START_HOOK_NAME)], OWNED_HOOK_NAMES)
+    client_registration.merge_named_hooks(
+        hooks, "AfterAgent",
+        [_hook_entry("gemini_after_agent.py", AFTER_AGENT_HOOK_NAME)], OWNED_HOOK_NAMES)
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
                              encoding="utf-8")
@@ -215,7 +222,7 @@ def uninstall() -> dict:
     if isinstance(data, dict) and isinstance(data.get("hooks"), dict):
         client_registration.backup_file(settings_path)
         result["hooks"] = client_registration.remove_named_hooks(
-            data["hooks"], {SESSION_START_HOOK_NAME})
+            data["hooks"], OWNED_HOOK_NAMES)
         if not data["hooks"]:
             data.pop("hooks")
         settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
@@ -261,11 +268,12 @@ def main() -> int:
           f"{counts['ok']} already ok, {counts['copied']} copied, "
           f"{counts['backed-up']} backed up, {counts['missing']} missing")
 
-    # SessionStart recall — only when the version is known to support hooks.
+    # SessionStart recall + AfterAgent capture nudge — only when the version is
+    # known to support hooks.
     if version is not None and version >= MIN_HOOKS_VERSION:
-        print(f"[gemini] SessionStart hook: {_register_session_start_hook()}")
+        print(f"[gemini] hooks (SessionStart + AfterAgent): {_register_hooks()}")
     else:
-        print("[gemini] SessionStart hook: skipped (version unknown or < "
+        print("[gemini] hooks: skipped (version unknown or < "
               f"{'.'.join(map(str, MIN_HOOKS_VERSION))} — hook support unproven)",
               file=sys.stderr)
 
