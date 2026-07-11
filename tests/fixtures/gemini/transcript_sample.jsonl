@@ -1,0 +1,6 @@
+{"sessionId":"00000000-0000-0000-0000-000000000000","projectHash":"<HASH>","startTime":"2026-01-01T00:00:00.000Z","lastUpdated":"2026-01-01T00:00:00.000Z","kind":"main"}
+{"$set":{"messages":[{"id":"<id>","timestamp":"2026-01-01T00:00:00.000Z","type":"user","content":[{"text":"<session_context> ... injected synthetic first turn: date, OS, workspace dirs, directory tree ... </session_context>"}]}],"lastUpdated":"2026-01-01T00:00:00.000Z"}}
+{"id":"<id>","timestamp":"2026-01-01T00:00:00.000Z","type":"user","content":[{"text":"Say hello in one short sentence."}]}
+{"$set":{"lastUpdated":"2026-01-01T00:00:00.000Z"}}
+{"id":"<id>","timestamp":"2026-01-01T00:00:00.000Z","type":"gemini","content":"Hello from the fake model. This is a diagnostic reply.","thoughts":[],"tokens":{"input":5,"output":10,"cached":0,"thoughts":0,"tool":0,"total":15},"model":"gemini-3.1-pro-preview"}
+{"$set":{"lastUpdated":"2026-01-01T00:00:00.000Z"}}

@@ -1,0 +1,11 @@
+{
+  "_note": "Shape of ~/.gemini/settings.json `hooks` block that register_gemini must safely merge. Ownership = exact nested `name` (e.g. 'singularity-session-start'), NOT a substring of `command`. Each event is an array of hook-definitions; each definition has a `hooks` array of {type:'command', command, name, timeout?}.",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "python -m singularity.hooks.gemini_session_start", "name": "singularity-session-start", "timeout": 15000 } ] }
+    ],
+    "AfterAgent": [
+      { "hooks": [ { "type": "command", "command": "python -m singularity.hooks.gemini_after_agent", "name": "singularity-after-agent", "timeout": 15000 } ] }
+    ]
+  }
+}

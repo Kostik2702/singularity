@@ -1,0 +1,15 @@
+{
+  "_note": "Headless `-o json` output when AfterAgent returned decision:deny on the first pass. PROOF that deny mutates automation output: `response` is the CONCATENATION of both turns, and a top-level `warnings[]` array appears. This is why deny-based auto-capture is NO-GO for default-on.",
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "response": "First turn reply from fake model.Retry turn reply after deny.",
+  "stats": {
+    "models": {
+      "gemini-3.5-flash": { "api": { "totalRequests": 2, "totalErrors": 0 }, "roles": { "main": { "totalRequests": 2 } } }
+    },
+    "tools": { "totalCalls": 0 },
+    "files": { "totalLinesAdded": 0, "totalLinesRemoved": 0 }
+  },
+  "warnings": [
+    "Agent execution blocked: <hook reason text>"
+  ]
+}
