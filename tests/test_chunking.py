@@ -75,3 +75,66 @@ def test_should_skip():
     assert should_skip(".mb/config.md", skip_dirs, skip_parts)
     assert should_skip("learnings/archive/old.md", skip_dirs, skip_parts)
     assert not should_skip("learnings/active/T-1.md", skip_dirs, skip_parts)
+
+
+# --- AUD-03: windowed chunking, no text loss --------------------------------
+
+def _long_note(unique_tail):
+    # a section whose content runs well past the old 500-char truncation point
+    filler = ("Первое предложение секции с достаточным объёмом текста. " * 40)
+    return (f"# Заголовок\n\n## Длинная секция\n\n{filler}\n\n{unique_tail}\n")
+
+
+def test_long_section_windowed_not_truncated(tmp_path):
+    p = tmp_path / "long.md"
+    p.write_text(_long_note("УникальныйХвостовойМаркер42 в самом конце секции."),
+                 encoding="utf-8")
+    chunks = extract_chunks(p, "reference/long.md")
+    joined = " ".join(c["content"] for c in chunks)
+    assert "УникальныйХвостовойМаркер42" in joined      # tail survived (was dropped)
+    assert not any(c["content"].endswith("...") for c in chunks)  # no truncation marker
+    assert sum(1 for c in chunks if c["section"] == "Длинная секция") > 1  # multiple windows
+
+
+def test_windows_overlap_preserves_context(tmp_path):
+    p = tmp_path / "long.md"
+    p.write_text(_long_note("Хвост."), encoding="utf-8")
+    win = [c["content"] for c in extract_chunks(p, "reference/long.md")
+           if c["section"] == "Длинная секция"]
+    assert len(win) >= 2
+    # end of window i shares text with start of window i+1
+    tail = win[0][-80:]
+    assert any(word in win[1] for word in tail.split()[:5])
+
+
+def test_window_metadata_present_and_ordered(tmp_path):
+    p = tmp_path / "long.md"
+    p.write_text(_long_note("Хвост."), encoding="utf-8")
+    win = [c for c in extract_chunks(p, "reference/long.md")
+           if c["section"] == "Длинная секция"]
+    assert [c["chunk_index"] for c in win] == list(range(len(win)))
+    ids = [c["chunk_id"] for c in win]
+    assert len(set(ids)) == len(ids)                    # stable + unique
+    for c in win:
+        assert c["line_start"] >= 1 and c["line_end"] >= c["line_start"]
+
+
+def test_short_section_single_window(tmp_path):
+    p = tmp_path / "note.md"
+    p.write_text(SAMPLE, encoding="utf-8")
+    ctx = [c for c in extract_chunks(p, "decisions/note.md")
+           if c["section"] == "Контекст задачи"]
+    assert len(ctx) == 1                                 # no regression for short sections
+    assert ctx[0]["chunk_index"] == 0
+
+
+def test_line_offsets_map_into_file(tmp_path):
+    p = tmp_path / "note.md"
+    p.write_text(SAMPLE, encoding="utf-8")
+    total_lines = SAMPLE.count("\n") + 1
+    rus = next(c for c in extract_chunks(p, "decisions/note.md")
+               if c["section"] == "Русская секция про поиск")
+    # the "## Русская секция про поиск" header is near the end of the file
+    assert rus["line_start"] <= total_lines
+    src_line = SAMPLE.splitlines().index("## Русская секция про поиск") + 1
+    assert rus["line_start"] <= src_line <= rus["line_end"]

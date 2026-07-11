@@ -18,6 +18,7 @@ from typing import Any
 import numpy as np
 
 from ..config import Config
+from . import chunking
 from .chunking import extract_chunks, should_skip
 from .encoder import shared_encoder
 
@@ -60,6 +61,7 @@ def _save_index(index_dir: Path, embs: np.ndarray, meta: dict[str, Any]) -> None
     np.save(index_dir / "embeddings.npy", embs.astype(np.float32), allow_pickle=False)
     meta["indexed_at"] = datetime.now().isoformat(timespec="seconds")
     meta["chunk_count"] = len(meta["chunks"])
+    meta["chunk_schema"] = chunking.CHUNK_SCHEMA_VERSION
     (index_dir / "metadata.json").write_text(
         json.dumps(meta, ensure_ascii=False), encoding="utf-8"
     )
@@ -97,6 +99,8 @@ def update(cfg: Config, only_files: list[str] | None = None) -> dict[str, int]:
     embs, meta = loaded
     if meta.get("model") != cfg.model:
         return rebuild(cfg, progress=False)
+    if meta.get("chunk_schema") != chunking.CHUNK_SCHEMA_VERSION:
+        return rebuild(cfg, progress=False)   # old chunk format -> full rebuild
 
     files = _scan_vault(cfg)
     old_meta: dict[str, list[int]] = meta.get("file_meta", {})

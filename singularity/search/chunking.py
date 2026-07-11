@@ -16,9 +16,16 @@ from pathlib import Path
 from typing import Any, Optional
 
 MIN_CHUNK_CHARS = 50
-MAX_CHUNK_CHARS = 500
+# A long section is split into overlapping windows instead of being truncated
+# (AUD-03: content past MAX_CHUNK_CHARS used to be silently dropped from the
+# index). Window ~1000 chars, ~150 overlap so context spans the seam.
+WINDOW_CHARS = 1000
+WINDOW_OVERLAP = 150
+# Bumped whenever the chunk shape changes so an old-format index auto-rebuilds.
+CHUNK_SCHEMA_VERSION = 2
 
 _H1_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
+_SENT_END_RE = re.compile(r"[.!?…](?:\s|$)")
 _SECTION_SPLIT_RE = re.compile(r"\n(?=##\s)")
 _CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 _WIKILINK_RE = re.compile(r"\[\[([^\]\|#]+)(?:#[^\]\|]*)?(?:\|([^\]]+))?\]\]")
@@ -100,6 +107,43 @@ def _clean_section(text: str) -> tuple[str, list[str], list[str]]:
     return text, wikilinks, tags
 
 
+def _best_break(content: str, start: int, end: int) -> int:
+    """Pick a cut point in (start, end] that lands on a sentence boundary, else
+    a word boundary, else the hard limit — searching only the window's tail so
+    windows stay near the target size."""
+    floor = start + int((end - start) * 0.6)
+    last = -1
+    for m in _SENT_END_RE.finditer(content, floor, end):
+        last = m.end()
+    if last != -1:
+        return last
+    sp = content.rfind(" ", floor, end)
+    return sp + 1 if sp != -1 else end
+
+
+def _window_text(content: str,
+                 size: int = WINDOW_CHARS, overlap: int = WINDOW_OVERLAP) -> list[str]:
+    """Split content into overlapping windows covering 100% of it. Content that
+    already fits returns a single window unchanged (short sections don't
+    regress). Every non-empty window is kept — including a small trailing one —
+    so no text is lost."""
+    if len(content) <= size:
+        return [content]
+    windows: list[str] = []
+    start, n = 0, len(content)
+    while start < n:
+        end = min(start + size, n)
+        if end < n:
+            end = _best_break(content, start, end)
+        piece = content[start:end].strip()
+        if piece:
+            windows.append(piece)
+        if end >= n:
+            break
+        start = max(end - overlap, start + 1)
+    return windows
+
+
 def extract_chunks(path: Path, rel_path: str) -> list[dict[str, Any]]:
     """Chunk one markdown file. rel_path uses forward slashes."""
     try:
@@ -117,9 +161,18 @@ def extract_chunks(path: Path, rel_path: str) -> list[dict[str, Any]]:
 
     title_part = title if not aliases else f"{title} / {', '.join(aliases)}"
 
+    # File line where the body (post-frontmatter) begins, so chunk line offsets
+    # are 1-based line numbers in the actual file.
+    body_line_offset = raw.count("\n") - body.count("\n")
+
     chunks: list[dict[str, Any]] = []
-    for section_block in _SECTION_SPLIT_RE.split(body):
-        section_block = section_block.strip("\n")
+    cur_line = body_line_offset
+    for section_ord, block in enumerate(_SECTION_SPLIT_RE.split(body)):
+        line_start = cur_line + 1                 # 1-based, inclusive
+        line_end = cur_line + block.count("\n") + 1
+        cur_line = line_end                       # +1 separator "\n" consumed by split
+
+        section_block = block.strip("\n")
         if section_block.startswith("## "):
             header, _, rest = section_block.partition("\n")
             section = header[3:].strip()
@@ -129,25 +182,29 @@ def extract_chunks(path: Path, rel_path: str) -> list[dict[str, Any]]:
         content, wikilinks, inline_tags = _clean_section(rest)
         if len(content) < MIN_CHUNK_CHARS:
             continue
-        if len(content) > MAX_CHUNK_CHARS:
-            content = content[:MAX_CHUNK_CHARS] + "..."
         all_tags = sorted({*fm_tags, *inline_tags})
-        chunk: dict[str, Any] = {
-            "file": rel_path,
-            "title": title,
-            "section": section,
-            "content": content,
-            "text": f"{title_part} - {section}: {content}",
-            "type": note_type,
-            "tags": ",".join(all_tags),
-        }
-        if wikilinks:
-            chunk["wikilinks"] = sorted(set(wikilinks))
-        if aliases:
-            chunk["aliases"] = aliases
-        if priority:
-            chunk["priority"] = priority
-        chunks.append(chunk)
+        windows = _window_text(content)
+        for wi, wtext in enumerate(windows):
+            chunk: dict[str, Any] = {
+                "file": rel_path,
+                "title": title,
+                "section": section,
+                "content": wtext,
+                "text": f"{title_part} - {section}: {wtext}",
+                "type": note_type,
+                "tags": ",".join(all_tags),
+                "chunk_index": wi,          # window ordinal within the section
+                "line_start": line_start,   # section line span in the file
+                "line_end": line_end,
+                "chunk_id": f"{rel_path}#{section_ord}.{wi}",
+            }
+            if wikilinks:
+                chunk["wikilinks"] = sorted(set(wikilinks))
+            if aliases:
+                chunk["aliases"] = aliases
+            if priority:
+                chunk["priority"] = priority
+            chunks.append(chunk)
     return chunks
 
 
