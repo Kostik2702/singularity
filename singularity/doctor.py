@@ -99,10 +99,21 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
             cfg.mb_dir.mkdir(parents=True, exist_ok=True)
             rep.add("A4-mb-dir", "FIXED", "created .mb/")
 
+    def a5():
+        from .platform import secrets
+        be = secrets.backend()
+        if be == "keyring":
+            rep.add("A5-secrets", "PASS", "secure keyring backend")
+        else:
+            rep.add("A5-secrets", "WARN",
+                    "no OS keyring — secrets require explicit plaintext opt-in",
+                    fix="install a keyring backend for secure secret storage")
+
     _guard(rep, "A1", a1)
     _guard(rep, "A2", a2)
     _guard(rep, "A3", a3)
     _guard(rep, "A4", a4)
+    _guard(rep, "A5", a5)
 
     # ---- Block B: semantic search core --------------------------------
     def b2():
