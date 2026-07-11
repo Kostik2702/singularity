@@ -82,6 +82,34 @@ def test_crash_before_pointer_swap_keeps_last_good(cfg, monkeypatch):
     assert np.load(emb_path).shape[0] == 1               # last-good intact, not the 9-row
 
 
+def test_same_millisecond_commits_do_not_collide(cfg, monkeypatch):
+    """Regression: two commits within the SAME millisecond in one process used to
+    mint an identical gen token and collapse onto one directory, silently
+    overwriting the immutable last-good generation. This deterministically forces
+    that timing (it was a flaky POSIX-only CI failure before the sequence counter).
+    """
+    from unittest import mock
+    d = cfg.memory_index_dir
+    with mock.patch.object(indexer.time, "time", return_value=1000.0):
+        indexer._commit_generation(d, _emb(1), _meta(1))     # last-good = 1 row
+
+        real_replace = indexer.os.replace
+
+        def boom(src, dst):
+            if str(dst).endswith("CURRENT"):
+                raise KeyboardInterrupt("crash during commit")
+            return real_replace(src, dst)
+
+        monkeypatch.setattr(indexer.os, "replace", boom)
+        with pytest.raises(KeyboardInterrupt):
+            indexer._commit_generation(d, _emb(9), _meta(9))  # same ms, must NOT collide
+        monkeypatch.undo()
+
+    assert len(list(d.glob("gen_*"))) == 2               # two distinct generations
+    emb_path, _ = indexer.index_files(d)
+    assert np.load(emb_path).shape[0] == 1               # last-good survived the crash
+
+
 def test_reader_ignores_half_written_current_falls_back(cfg):
     d = cfg.memory_index_dir
     indexer._commit_generation(d, _emb(4), _meta(4))
