@@ -101,7 +101,7 @@ The wrappers are ~20 lines each; all logic lives in `install/install.py`, which 
 1. **Python env** — creates `.venv`, installs dependencies, warms up the embedding model (~470 MB, cached locally — configurable off the system drive).
 2. **Vault** — asks for your vault path, creates the memory folder tree (`learnings/`, `decisions/`, `howto/`, `incidents/`, `rules/`, `reference/`, `changelog/`, `templates/`, `_moc/`), binds it via `~/.singularity.json`.
 3. **First index + daemon** — builds the semantic index over your vault, starts the warm daemon, runs an EN+RU smoke search.
-4. **Claude Code wiring** — registers the two hooks in `~/.claude/settings.json` (careful merge: your existing settings are backed up and preserved; every entry we own is marked `"_mb": true` for clean uninstall).
+4. **Client wiring** — registers the two hooks in `~/.claude/settings.json` (careful merge: your existing settings are backed up and preserved; every entry we own is marked `"_mb": true` for clean uninstall), then, **if they are installed**, wires OpenAI Codex and Google Gemini to the same memory (see [Other CLI clients](#other-cli-clients--codex--gemini)).
 5. **Scheduler + verify** — registers the nightly index rebuild and the on-save watcher with your OS scheduler (Task Scheduler / launchd / systemd — all with missed-run catch-up), then finishes with `mb doctor`.
 
 Re-running the installer is safe — it refreshes and re-verifies instead of breaking things. To remove everything (hooks, scheduled jobs, daemon) **without touching your vault**: `mb uninstall`.
@@ -113,6 +113,37 @@ mb doctor
 ```
 
 You want a summary like `PASS 12`. Anything broken gets a status (`FAIL`/`WARN`/`AUTH`/`SKIP`), a reason, and a fix hint; `mb doctor --fix` repairs the light stuff, `--fix --heavy` reinstalls deps and rebuilds indexes.
+
+### Other CLI clients — Codex & Gemini
+
+Singularity is native to Claude Code, but the installer also wires **OpenAI Codex CLI** and **Google Gemini CLI** to the same memory with outcome parity — the same vault, `mb` CLI, SEM-FIRST rule, portable skills, session recall and capture discipline. Each client is detected and configured **only if it is already installed**; Singularity never installs a third-party CLI for you.
+
+**Gemini prerequisites (you install these yourself):**
+
+- **Node.js ≥ 20** and the official CLI: `npm install -g @google/gemini-cli@latest` (minimum tested **0.50.0**; hooks/skills need ≥ 0.26).
+- **Auth** is Gemini's own — Google OAuth, `GEMINI_API_KEY`, or Vertex AI. Singularity never reads, copies, or stores your credentials.
+
+**What the installer does for Gemini** (idempotent; re-running refreshes):
+
+- A managed block in `~/.gemini/GEMINI.md` (engine + vault paths, SEM-FIRST, capture rule, shortcuts) — delimited by `SINGULARITY:BEGIN/END`; your own text outside it is never touched.
+- The portable skills junctioned into `~/.gemini/skills/` (the CLI/self-contained ones — council skills stay Claude-only). Foreign skills you added are left alone.
+- Two named hooks in `~/.gemini/settings.json` (backed up as `settings.json.bak-<ts>` before every change; foreign hooks/keys preserved): `singularity-session-start` injects the same live memory context Claude gets, and `singularity-after-agent` nudges you once per substantial session to capture insights — a passive `systemMessage`, so it never disturbs `--output-format json` automation.
+
+An absent client is a clean skip; an old version keeps the profile but warns that skills/hooks may be ignored.
+
+**Onboarding:**
+
+```bash
+gemini                        # start a session — SessionStart injects your memory context
+/memory show                  # see the managed GEMINI.md block
+/skills list                  # your Singularity skills, discovered and Enabled
+mb search "what do we know about the daemon"   # SEM-FIRST works from inside Gemini
+gemini -p "summarise the vault" --output-format json   # headless: clean JSON, hooks don't leak
+```
+
+**Good to know:** activating a skill may ask for one-time consent, and Gemini may prompt to trust the workspace — both are Gemini's own security, not something Singularity bypasses. The capture nudge is a reminder only (no retry, no extra model turn); opt out with `"auto_capture": false` in `<vault>/.mb/config.json`. Gemini's own experimental *Auto Memory* is separate and does not replace vault capture.
+
+**Lifecycle:** re-run the installer (or `mb doctor --fix`) any time to refresh; `mb doctor` reports Gemini health under the `E*-gemini` checks; `mb uninstall` removes **only** Singularity-owned artifacts (the managed block, our two named hooks, and skill links that resolve back into the engine) — foreign content, credentials, Node, the Gemini CLI and your vault are untouched, and every settings mutation leaves a timestamped backup.
 
 ---
 
