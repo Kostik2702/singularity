@@ -61,6 +61,9 @@ def _build_parser() -> argparse.ArgumentParser:
     cur = sub.add_parser("curator", help="vault health: validation, orphans, link suggestions")
     cur.add_argument("--json", action="store_true")
 
+    st = sub.add_parser("selftest", help="end-to-end pipeline check (create/index/find/delete)")
+    st.add_argument("--json", action="store_true")
+
     cfgp = sub.add_parser("config", help="inspect/validate .mb/config.json")
     cfgsub = cfgp.add_subparsers(dest="config_action", required=True)
     cfgv = cfgsub.add_parser("validate", help="check schema (types/ranges/unknown keys)")
@@ -354,6 +357,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "curator":
         from . import curator
         return curator.run(cfg, as_json=args.json)
+    if args.command == "selftest":
+        from . import selftest
+        return selftest.run(cfg, as_json=args.json)
     if args.command == "config":
         return cmd_config(cfg, args)
     if args.command == "note":
