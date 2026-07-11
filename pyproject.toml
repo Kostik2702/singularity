@@ -27,4 +27,5 @@ include = ["singularity*"]
 [tool.pytest.ini_options]
 markers = [
     "ml_smoke: heavy end-to-end test needing the real ML stack (opt-in, CI workflow_dispatch only)",
+    "gemini_e2e: end-to-end test needing a real @google/gemini-cli on PATH (opt-in; auto-skips when absent)",
 ]
