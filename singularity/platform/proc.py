@@ -6,11 +6,12 @@ POSIX:   start_new_session=True (setsid) — the double-fork of the Genevra
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from . import current_os
 
@@ -96,3 +97,28 @@ def read_pid(pid_file: Path) -> Optional[int]:
         return int(pid_file.read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
         return None
+
+
+def pid_create_time(pid: int) -> Optional[float]:
+    """Process creation time (epoch seconds) — a PID-reuse guard. None when the
+    process is gone or psutil is unavailable (caller falls back to a best-effort
+    liveness check)."""
+    try:
+        import psutil
+
+        return psutil.Process(pid).create_time()
+    except ImportError:
+        return None
+    except Exception:   # NoSuchProcess / AccessDenied / ZombieProcess
+        return None
+
+
+def write_json_atomic(path: Path, obj: Any) -> None:
+    """Write JSON without ever leaving a torn file: temp sibling + os.replace."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(json.dumps(obj, ensure_ascii=False))
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)

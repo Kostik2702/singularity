@@ -166,10 +166,27 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
         rep.add("B8-smoke", "PASS" if n else "WARN",
                 f"'memory brain' -> {n} hits, {resp.get('time_ms','?')}ms")
 
+    def b9():
+        from .search import client
+        st = client.status(cfg)
+        if st.get("orphan"):
+            if fix:
+                client._clear_state(cfg)
+                rep.add("B9-daemon-identity", "FIXED",
+                        "orphan daemon state (process gone) cleaned")
+            else:
+                rep.add("B9-daemon-identity", "WARN",
+                        f"orphan daemon state: pid {st.get('pid')} not alive",
+                        fix="mb doctor --fix")
+        else:
+            rep.add("B9-daemon-identity", "PASS",
+                    f"no orphan (instance={str(st.get('instance_id'))[:8] or '-'})")
+
     _guard(rep, "B2", b2)
     _guard(rep, "B4", b4)
     _guard(rep, "B7", b7)
     _guard(rep, "B8", b8)
+    _guard(rep, "B9", b9)
 
     # ---- Block C: scheduler -------------------------------------------
     def c1():

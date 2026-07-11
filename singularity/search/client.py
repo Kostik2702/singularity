@@ -8,6 +8,7 @@ is answered in-process with a one-off model load and a warning.
 from __future__ import annotations
 
 import json
+import shutil
 import socket
 import sys
 import time
@@ -20,7 +21,17 @@ START_TIMEOUT_TRIES = 30   # x1s: model load can take ~10-20s on first run
 CONNECT_TIMEOUT = 5.0
 
 
+def _read_state(cfg: Config) -> Optional[dict[str, Any]]:
+    try:
+        return json.loads(cfg.daemon_state_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def _read_port(cfg: Config) -> Optional[int]:
+    state = _read_state(cfg)
+    if state and isinstance(state.get("port"), int):
+        return state["port"]
     try:
         return int(cfg.daemon_port_file.read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
@@ -51,30 +62,74 @@ def ping(cfg: Config) -> Optional[dict[str, Any]]:
     return _request(port, {"cmd": "ping"}, timeout=2.0)
 
 
+def _clear_state(cfg: Config) -> None:
+    for p in (cfg.daemon_state_file, cfg.daemon_pid_file, cfg.daemon_port_file):
+        p.unlink(missing_ok=True)
+
+
 def start_daemon(cfg: Config, wait: bool = True) -> bool:
-    """Spawn the daemon detached; return True when it answers ping."""
+    """Spawn the daemon detached (singleton — serialized by a start lock so two
+    concurrent starts cannot both spawn); return True when it answers ping."""
     if ping(cfg):
         return True
-    args = [proc.python_executable(windowed=True), "-m", "singularity",
-            "--vault", str(cfg.vault), "daemon", "run"]
-    proc.spawn_detached(args, cfg.daemon_log_file)
-    if not wait:
-        return True
-    for _ in range(START_TIMEOUT_TRIES):
-        time.sleep(1.0)
-        if ping(cfg):
+    lock = cfg.daemon_start_lock
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        lock.mkdir(exist_ok=False)
+        owns_lock = True
+    except FileExistsError:
+        # another starter is mid-spawn — don't spawn a second; wait for its ping
+        owns_lock = False
+        if time.time() - lock.stat().st_mtime > 120:
+            _reap_lock(lock)                 # abandoned start lock -> take over
+            try:
+                lock.mkdir(exist_ok=False)
+                owns_lock = True
+            except FileExistsError:
+                owns_lock = False
+    try:
+        if owns_lock:
+            if ping(cfg):                    # someone won the race before us
+                return True
+            args = [proc.python_executable(windowed=True), "-m", "singularity",
+                    "--vault", str(cfg.vault), "daemon", "run"]
+            proc.spawn_detached(args, cfg.daemon_log_file)
+        if not wait:
             return True
-    return False
+        for _ in range(START_TIMEOUT_TRIES):
+            time.sleep(1.0)
+            if ping(cfg):
+                return True
+        return False
+    finally:
+        if owns_lock:
+            _reap_lock(lock)
+
+
+def _reap_lock(lock) -> None:
+    shutil.rmtree(lock, ignore_errors=True)
 
 
 def stop_daemon(cfg: Config) -> bool:
-    pid = proc.read_pid(cfg.daemon_pid_file)
+    """Stop the daemon, refusing to kill a PID that has been reused by an
+    unrelated process (identity = recorded process creation time)."""
+    state = _read_state(cfg)
+    pid = state.get("pid") if state else proc.read_pid(cfg.daemon_pid_file)
     if pid is None or not proc.is_running(pid):
-        for p in (cfg.daemon_pid_file, cfg.daemon_port_file):
-            p.unlink(missing_ok=True)
+        _clear_state(cfg)
         return False
+    # PID-reuse guard: if we recorded a creation time, the live process must
+    # match it; otherwise this PID now belongs to something else — never kill it.
+    recorded = (state or {}).get("create_time")
+    if recorded is not None:
+        live = proc.pid_create_time(pid)
+        if live is not None and live != recorded:
+            _clear_state(cfg)                # stale identity, not our daemon
+            return False
     ok = proc.kill(pid)
     time.sleep(0.5)
+    if ok:
+        _clear_state(cfg)
     return ok
 
 
@@ -86,12 +141,18 @@ def reload_daemon(cfg: Config) -> Optional[dict[str, Any]]:
 
 
 def status(cfg: Config) -> dict[str, Any]:
-    pid = proc.read_pid(cfg.daemon_pid_file)
+    state = _read_state(cfg)
+    pid = state.get("pid") if state else proc.read_pid(cfg.daemon_pid_file)
     pong = ping(cfg)
+    pid_alive = bool(pid and proc.is_running(pid))
+    # orphan = we have recorded state but the process is gone (crashed daemon)
+    orphan = bool(state and not pid_alive)
     return {
         "pid": pid,
-        "pid_alive": bool(pid and proc.is_running(pid)),
+        "pid_alive": pid_alive,
         "port": _read_port(cfg),
+        "instance_id": (state or {}).get("instance_id"),
+        "orphan": orphan,
         "ping": pong,
     }
 

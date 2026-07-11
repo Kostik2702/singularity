@@ -77,6 +77,16 @@ class Config:
         return self.mb_dir / "daemon.log"
 
     @property
+    def daemon_state_file(self) -> Path:
+        # atomic single-file daemon identity: {instance_id, pid, port,
+        # create_time, python, started_at}
+        return self.mb_dir / "daemon.json"
+
+    @property
+    def daemon_start_lock(self) -> Path:
+        return self.mb_dir / "daemon.start.lock"
+
+    @property
     def markers_dir(self) -> Path:
         return self.mb_dir / "markers"
 
