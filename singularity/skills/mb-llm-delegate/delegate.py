@@ -6,7 +6,10 @@ pure text/code generator reached over its Anthropic-compatible /v1/messages
 endpoint. No tool-use is sent, so the small model can't loop or mis-call tools.
 
 Usage:
-    python delegate.py --task "<instruction>" [--system "<sys>"]
+    python delegate.py (--task "<instruction>" | --taskfile <path>) [--system "<sys>"]
+        [--taskfile <path>] read the instruction from a UTF-8 file instead of
+                            --task (avoids shell quoting/encoding pitfalls, e.g.
+                            double-quotes inside a PowerShell here-string)
         [--infile <path>]   embed a file's current content into the prompt
         [--outfile <path>]  write the model's returned text (md fences stripped)
         [--max-tokens N]    default 6000
@@ -127,7 +130,11 @@ def decide_output(text, stop, outfile, keep_partial=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--task", required=True)
+    task_src = ap.add_mutually_exclusive_group(required=True)
+    task_src.add_argument("--task", help="instruction text (inline)")
+    task_src.add_argument("--taskfile",
+                          help="read the instruction from a UTF-8 file instead of "
+                               "--task; avoids shell quoting/encoding pitfalls")
     ap.add_argument("--system", default=DEFAULT_SYSTEM)
     ap.add_argument("--infile")
     ap.add_argument("--outfile")
@@ -138,12 +145,18 @@ def main():
                           "<outfile>.partial instead of discarding it")
     a = ap.parse_args()
 
-    task = a.task
+    if a.taskfile:
+        with open(a.taskfile, encoding="utf-8") as f:
+            instruction = f.read().strip()
+    else:
+        instruction = a.task
+
+    task = instruction
     if a.infile:
         with open(a.infile, encoding="utf-8") as f:
             current = clean_output(f.read())      # tolerate an already-polluted file
         task = (f"Current contents of {a.infile}:\n\n<file>\n{current}\n</file>\n\n"
-                f"{a.task}\n\nReturn ONLY the raw file starting with its first real "
+                f"{instruction}\n\nReturn ONLY the raw file starting with its first real "
                 f"line. Do NOT wrap the output in <file> tags or markdown fences.")
 
     host, port, model = endpoint()
