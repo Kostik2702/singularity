@@ -23,3 +23,8 @@ mb = "singularity.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["singularity*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "ml_smoke: heavy end-to-end test needing the real ML stack (opt-in, CI workflow_dispatch only)",
+]
