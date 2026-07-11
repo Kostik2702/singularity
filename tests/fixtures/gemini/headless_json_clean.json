@@ -1,0 +1,13 @@
+{
+  "_note": "Baseline headless `-o json` output. AfterAgent returned allow ({}) OR systemMessage-only. Clean: no warnings, response is the single final turn. stats trimmed for brevity.",
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "response": "First turn reply from fake model.",
+  "stats": {
+    "models": {
+      "gemini-3.1-flash-lite": { "api": { "totalRequests": 1, "totalErrors": 0, "totalLatencyMs": 2 }, "roles": { "utility_router": {} } },
+      "gemini-3.5-flash": { "api": { "totalRequests": 1, "totalErrors": 0, "totalLatencyMs": 3 }, "roles": { "main": {} } }
+    },
+    "tools": { "totalCalls": 0 },
+    "files": { "totalLinesAdded": 0, "totalLinesRemoved": 0 }
+  }
+}

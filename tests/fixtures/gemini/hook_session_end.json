@@ -1,0 +1,8 @@
+{
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "transcript_path": "<HOME>/.gemini/tmp/<project>/chats/session-REDACTED.jsonl",
+  "cwd": "<CWD>",
+  "hook_event_name": "SessionEnd",
+  "timestamp": "2026-01-01T00:00:00.000Z",
+  "reason": "exit"
+}

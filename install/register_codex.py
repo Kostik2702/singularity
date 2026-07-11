@@ -27,25 +27,15 @@ ENGINE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ENGINE))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # import register_skills
 
+import client_registration  # noqa: E402  (shared safe-registration primitives)
 import register_skills  # noqa: E402  (reuse the junction helpers, single source)
 from singularity.config import resolve_vault  # noqa: E402  (stdlib-only, pre-deps safe)
 
 SKILLS_SRC = ENGINE / "singularity" / "skills"
 
-# CLI/self-contained skills that work identically outside Claude Code. Excludes
-# council / planning-council / observation-council (Claude-subagent driven).
-CODEX_SKILLS = [
-    "mb-search",
-    "mb-memory",
-    "mb-llm-delegate",
-    "workflow-helper",
-    "grill",
-    "confidence-calibration",
-    "memory-curator",
-    "error-reports",
-    "report",
-    "compaction-plan",
-]
+# CLI/self-contained skills that work identically outside Claude Code, from the
+# single shared registry (council skills are Claude-only and excluded there).
+CODEX_SKILLS = client_registration.PORTABLE_SKILLS
 
 BEGIN = "<!-- SINGULARITY:BEGIN (managed by install/register_codex.py — edits below are overwritten) -->"
 END = "<!-- SINGULARITY:END -->"
@@ -93,22 +83,10 @@ Dedup with `mb search` before writing. Maintenance: `mb doctor --fix`.
 
 
 def _write_profile(vault: Path) -> str:
+    # Managed-block merge lives in the shared primitive so Codex and Gemini can't
+    # drift apart; the Codex golden tests pin byte-for-byte equivalence.
     path = Path.home() / ".codex" / "AGENTS.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    block = _profile_body(vault)
-    if not path.exists():
-        path.write_text(block + "\n", encoding="utf-8")
-        return "created"
-    text = path.read_text(encoding="utf-8")
-    if BEGIN in text and END in text:
-        pre = text.split(BEGIN, 1)[0].rstrip("\n")
-        post = text.split(END, 1)[1].lstrip("\n")
-        merged = "\n\n".join(p for p in (pre, block, post) if p).rstrip() + "\n"
-        path.write_text(merged, encoding="utf-8")
-        return "refreshed"
-    # user file without our block: append, leave their content untouched
-    path.write_text(text.rstrip() + "\n\n" + block + "\n", encoding="utf-8")
-    return "appended"
+    return client_registration.merge_managed_block(path, _profile_body(vault), BEGIN, END)
 
 
 def main() -> int:
