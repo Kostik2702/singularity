@@ -57,7 +57,7 @@ def test_action_matches_true_when_uncomparable():
 
 def test_watch_heartbeat_written(cfg):
     watch._write_heartbeat(cfg)
-    hb = cfg.mb_dir / "watch.heartbeat"
+    hb = cfg.watch_heartbeat_file          # machine-local path (AUD-19)
     assert hb.exists()
     assert float(hb.read_text(encoding="utf-8")) > 0
 

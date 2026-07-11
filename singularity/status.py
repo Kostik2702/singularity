@@ -36,8 +36,7 @@ def _index(cfg: Config) -> dict[str, Any]:
 
 
 def _watcher(cfg: Config) -> dict[str, Any]:
-    from .watch import HEARTBEAT_FILE
-    hb = cfg.mb_dir / HEARTBEAT_FILE
+    hb = cfg.watch_heartbeat_file
     if not hb.exists():
         return {"alive": False}
     age = time.time() - float(hb.read_text(encoding="utf-8"))
@@ -72,8 +71,10 @@ def _disk(cfg: Config) -> dict[str, Any]:
 
 def snapshot(cfg: Config) -> dict[str, Any]:
     from .search import client
+    from .config import machine_id
     return {
         "vault": str(cfg.vault),
+        "machine_id": machine_id(),
         "index": _guard(lambda: _index(cfg)),
         "daemon": _guard(lambda: client.status(cfg)),
         "watcher": _guard(lambda: _watcher(cfg)),

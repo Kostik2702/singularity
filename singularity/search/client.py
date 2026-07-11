@@ -114,6 +114,13 @@ def stop_daemon(cfg: Config) -> bool:
     """Stop the daemon, refusing to kill a PID that has been reused by an
     unrelated process (identity = recorded process creation time)."""
     state = _read_state(cfg)
+    # foreign-machine guard: never touch a daemon recorded by another machine
+    # that syncs this vault (AUD-19). With per-machine state dirs this is belt-
+    # and-suspenders, but a legacy shared state file could still be foreign.
+    if state and state.get("machine_id"):
+        from ..config import machine_id
+        if state["machine_id"] != machine_id():
+            return False
     pid = state.get("pid") if state else proc.read_pid(cfg.daemon_pid_file)
     if pid is None or not proc.is_running(pid):
         _clear_state(cfg)

@@ -233,8 +233,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                 f"coalescing={state.get('coalescing')}")
 
     def c2():
-        from .watch import HEARTBEAT_FILE
-        hb = cfg.mb_dir / HEARTBEAT_FILE
+        hb = cfg.watch_heartbeat_file
         if not hb.exists():
             rep.add("C2-watcher", "WARN", "no watcher heartbeat (watcher not running?)",
                     fix="mb watch  (or check login task)")

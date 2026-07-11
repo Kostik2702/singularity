@@ -19,8 +19,9 @@ def _write_heartbeat(cfg: Config) -> None:
     (freshness of this file = liveness). Never let a heartbeat failure kill
     the watcher loop."""
     try:
-        cfg.mb_dir.mkdir(parents=True, exist_ok=True)
-        (cfg.mb_dir / HEARTBEAT_FILE).write_text(str(time.time()), encoding="utf-8")
+        hb = cfg.watch_heartbeat_file
+        hb.parent.mkdir(parents=True, exist_ok=True)
+        hb.write_text(str(time.time()), encoding="utf-8")
     except OSError:
         pass
 

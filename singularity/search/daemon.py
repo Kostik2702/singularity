@@ -96,12 +96,14 @@ class SearchDaemon:
         # port without the identity that owns it. Legacy port/pid files are
         # kept for backward compatibility.
         pid = os.getpid()
+        from ..config import machine_id
         proc.write_json_atomic(cfg.daemon_state_file, {
             "instance_id": self.instance_id,
             "pid": pid,
             "port": port,
             "create_time": proc.pid_create_time(pid),
             "python": sys.executable,
+            "machine_id": machine_id(),
             "started_at": datetime.now().isoformat(timespec="seconds"),
         })
         cfg.daemon_port_file.write_text(str(port), encoding="utf-8")

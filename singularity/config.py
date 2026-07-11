@@ -16,10 +16,19 @@ from __future__ import annotations
 
 import json
 import os
+import platform
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
+
+
+def machine_id() -> str:
+    """Stable per-machine identifier (hostname-derived) so machine-local runtime
+    state does not collide across machines that sync the same vault (AUD-19)."""
+    node = platform.node() or "unknown"
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", node)[:64] or "unknown"
 
 DEFAULT_VAULT_WINDOWS = r"D:\obsidian\memory brain"
 POINTER_FILE = Path.home() / ".singularity.json"
@@ -131,26 +140,37 @@ class Config:
         return Path(self.data.get("hf_cache") or (self.mb_dir / "hf-cache"))
 
     @property
+    def machine_dir(self) -> Path:
+        # machine-local runtime state (daemon pid/port/log, heartbeat) — kept
+        # OUT of the shared .mb root so two machines syncing this vault don't
+        # clobber each other's runtime (AUD-19). Portable config/index stay in .mb.
+        return self.mb_dir / "machines" / machine_id()
+
+    @property
     def daemon_port_file(self) -> Path:
-        return self.mb_dir / "daemon.port"
+        return self.machine_dir / "daemon.port"
 
     @property
     def daemon_pid_file(self) -> Path:
-        return self.mb_dir / "daemon.pid"
+        return self.machine_dir / "daemon.pid"
 
     @property
     def daemon_log_file(self) -> Path:
-        return self.mb_dir / "daemon.log"
+        return self.machine_dir / "daemon.log"
 
     @property
     def daemon_state_file(self) -> Path:
         # atomic single-file daemon identity: {instance_id, pid, port,
-        # create_time, python, started_at}
-        return self.mb_dir / "daemon.json"
+        # create_time, python, started_at, machine_id}
+        return self.machine_dir / "daemon.json"
 
     @property
     def daemon_start_lock(self) -> Path:
-        return self.mb_dir / "daemon.start.lock"
+        return self.machine_dir / "daemon.start.lock"
+
+    @property
+    def watch_heartbeat_file(self) -> Path:
+        return self.machine_dir / "watch.heartbeat"
 
     @property
     def markers_dir(self) -> Path:
@@ -158,6 +178,7 @@ class Config:
 
     @property
     def lock_dir(self) -> Path:
+        # rebuild lock guards the SHARED index -> stays in .mb (not per-machine)
         return self.mb_dir / "rebuild.lock"
 
     # --- config values --------------------------------------------------
