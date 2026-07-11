@@ -71,6 +71,9 @@ def _build_parser() -> argparse.ArgumentParser:
     stat = sub.add_parser("status", help="unified health snapshot (index/daemon/watcher/scheduler)")
     stat.add_argument("--json", action="store_true")
 
+    stt = sub.add_parser("stats", help="memory analytics (notes/chunks/types/coverage)")
+    stt.add_argument("--json", action="store_true")
+
     bk = sub.add_parser("backup", help="backup/restore config + index pointer")
     bksub = bk.add_subparsers(dest="backup_action", required=True)
     bksub.add_parser("create", help="create a checksummed backup")
@@ -420,6 +423,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "status":
         from . import status as status_mod
         return status_mod.run(cfg, as_json=args.json)
+    if args.command == "stats":
+        from . import stats as stats_mod
+        return stats_mod.run(cfg, as_json=args.json)
     if args.command == "backup":
         return cmd_backup(cfg, args)
     if args.command == "config":
