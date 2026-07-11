@@ -11,6 +11,7 @@ JSON round-trip (Genevra), size guards against cloud-sync mtime jitter (ours).
 from __future__ import annotations
 
 import contextlib
+import itertools
 import json
 import os
 import shutil
@@ -27,6 +28,12 @@ from .chunking import extract_chunks, should_skip
 from .encoder import shared_encoder
 
 CURRENT_FILE = "CURRENT"          # names the committed generation dir
+# Monotonic per-process sequence: two commits within the same millisecond (fast
+# CI, back-to-back rebuilds) would otherwise mint an identical gen token and
+# collide onto ONE directory — silently overwriting the "immutable" last-good
+# generation and defeating crash safety. The zero-padded counter disambiguates
+# them while preserving lexical (chronological) sort order.
+_COMMIT_SEQ = itertools.count()
 STALE_LOCK_SECONDS = 6 * 3600     # Genevra 6h rule: take over an abandoned lock
 
 
@@ -101,7 +108,7 @@ def _commit_generation(index_dir: Path, embs: np.ndarray, meta: dict[str, Any]) 
             f"{len(meta['chunks'])} chunks")
 
     index_dir.mkdir(parents=True, exist_ok=True)
-    token = f"{int(time.time() * 1000):013d}_{os.getpid()}"
+    token = f"{int(time.time() * 1000):013d}_{os.getpid()}_{next(_COMMIT_SEQ):06d}"
     gen = f"gen_{token}"
     gen_dir = index_dir / gen
     gen_dir.mkdir(parents=True, exist_ok=True)
