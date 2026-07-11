@@ -44,10 +44,21 @@ python "$SK" --infile D:/path/app.html \
   --outfile D:/path/app.html
 ```
 
-Флаги: `--system` (своя системка; дефолт — «output ONLY complete file, no fences»),
+Флаги: `--task` **или** `--taskfile <path>` (взаимоисключающие, один обязателен),
+`--system` (своя системка; дефолт — «output ONLY complete file, no fences»),
 `--max-tokens` (дефолт 6000), `--print` (эхо в stdout), `--keep-partial` (при обрезке
 сохранить partial в `<outfile>.partial` вместо отбрасывания), без `--outfile` вывод
 идёт в stdout.
+
+⚠️ **PowerShell:** двойные кавычки внутри текста задачи, переданного инлайн через
+`--task` (даже в here-string `@'...'@`), рвут разбор аргументов python (`exit 2
+unrecognized arguments`) + дают cp1251-mojibake. Для задач с кавычками/скобками —
+пиши текст в UTF-8 файл и передавай `--taskfile`:
+
+```powershell
+Set-Content -Path task.txt -Encoding utf8 -Value '...текст с "кавычками" и (скобками)...'
+python $SK --taskfile task.txt --infile D:/path/app.html --outfile D:/path/app.html --max-tokens 12000
+```
 
 `--outfile` пишется ТОЛЬКО атомарно и ТОЛЬКО при полном непустом ответе (exit 0).
 При `stop_reason=max_tokens` (exit 2) или пустом выводе (exit 1) существующий
