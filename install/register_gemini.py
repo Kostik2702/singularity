@@ -25,6 +25,7 @@ Return codes: 0 = skipped (absent) or success; 1 = a real partial failure
 """
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -42,9 +43,18 @@ from singularity.config import resolve_vault  # noqa: E402  (stdlib-only, pre-de
 SKILLS_SRC = ENGINE / "singularity" / "skills"
 GEMINI_SKILLS = client_registration.PORTABLE_SKILLS
 
-# Documented lower bound for Agent Skills + Hooks (GCLI-00). Below this, skills may
-# be ignored by the client — a WARN, not a hard failure for the profile.
+PYTHON = ENGINE / ".venv" / ("Scripts/python.exe" if sys.platform.startswith("win")
+                             else "bin/python")
+
+# Documented lower bound for Agent Skills + Hooks (GCLI-00). Below this (or when the
+# version cannot be probed), skills may be ignored — a WARN, not a hard failure for
+# the profile — and hooks are NOT registered (conservative: we can't prove support).
 MIN_SKILLS_VERSION = (0, 26, 0)
+MIN_HOOKS_VERSION = (0, 26, 0)
+
+# Stable owner name for our nested hook — uninstall finds it by exact name, never by
+# a command substring (GCLI-00: Gemini has no "_mb"-style marker field).
+SESSION_START_HOOK_NAME = "singularity-session-start"
 
 BEGIN = "<!-- SINGULARITY:BEGIN (managed by install/register_gemini.py — edits below are overwritten) -->"
 END = "<!-- SINGULARITY:END -->"
@@ -129,6 +139,43 @@ def _deploy_skills() -> dict:
     return counts
 
 
+def _session_start_entry() -> dict:
+    script = ENGINE / "singularity" / "hooks" / "gemini_session_start.py"
+    return {
+        "hooks": [{
+            "type": "command",
+            "command": f'"{PYTHON}" "{script}"',
+            "name": SESSION_START_HOOK_NAME,
+            "timeout": 15000,
+        }]
+    }
+
+
+def _register_session_start_hook() -> str:
+    """Merge our named SessionStart hook into ~/.gemini/settings.json, preserving
+    every foreign key/hook. A malformed settings file is left UNTOUCHED (recoverable)
+    and the hook is skipped. Returns a short status word."""
+    settings_path = Path.home() / ".gemini" / "settings.json"
+    try:
+        data = client_registration.read_json_or_raise(settings_path)
+    except json.JSONDecodeError:
+        print("[gemini] WARN: ~/.gemini/settings.json is malformed — left untouched, "
+              "SessionStart hook NOT registered", file=sys.stderr)
+        return "skipped-malformed"
+    if not isinstance(data, dict):
+        print("[gemini] WARN: ~/.gemini/settings.json is not a JSON object — left "
+              "untouched, SessionStart hook NOT registered", file=sys.stderr)
+        return "skipped-malformed"
+    client_registration.backup_file(settings_path)     # timestamped, no-op if absent
+    hooks = data.setdefault("hooks", {})
+    client_registration.merge_named_hooks(
+        hooks, "SessionStart", [_session_start_entry()], {SESSION_START_HOOK_NAME})
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+                             encoding="utf-8")
+    return "registered"
+
+
 def main() -> int:
     if not _gemini_present():
         print("[gemini] not installed (~/.gemini absent, `gemini` not on PATH) — skipping")
@@ -157,6 +204,15 @@ def main() -> int:
     print(f"[gemini] {len(GEMINI_SKILLS)} skills: {counts['linked']} linked, "
           f"{counts['ok']} already ok, {counts['copied']} copied, "
           f"{counts['backed-up']} backed up, {counts['missing']} missing")
+
+    # SessionStart recall — only when the version is known to support hooks.
+    if version is not None and version >= MIN_HOOKS_VERSION:
+        print(f"[gemini] SessionStart hook: {_register_session_start_hook()}")
+    else:
+        print("[gemini] SessionStart hook: skipped (version unknown or < "
+              f"{'.'.join(map(str, MIN_HOOKS_VERSION))} — hook support unproven)",
+              file=sys.stderr)
+
     return 1 if counts["missing"] else 0
 
 

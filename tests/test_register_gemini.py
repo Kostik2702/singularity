@@ -6,6 +6,7 @@ client, old/unparseable version WARN (non-fatal), idempotency, the version parse
 and the missing-repo-skill failure code.
 """
 import importlib.util
+import json
 import subprocess
 from pathlib import Path
 
@@ -181,3 +182,75 @@ def test_version_parser_none_on_unparseable(monkeypatch):
     monkeypatch.setattr(register_gemini.subprocess, "run",
                         lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="dev-build", stderr=""))
     assert register_gemini._gemini_version() is None
+
+
+# --- GCLI-03: SessionStart hook registration -----------------------------------
+
+def _settings(home):
+    return home / ".gemini" / "settings.json"
+
+
+def _owned_hook_names(home):
+    data = json.loads(_settings(home).read_text(encoding="utf-8"))
+    return [h.get("name")
+            for d in data.get("hooks", {}).get("SessionStart", [])
+            for h in d.get("hooks", [])]
+
+
+def test_session_start_hook_registered_at_supported_version(home):
+    register_gemini.main()
+    assert register_gemini.SESSION_START_HOOK_NAME in _owned_hook_names(home)
+    # command points at the gemini adapter, not the Claude one
+    data = json.loads(_settings(home).read_text(encoding="utf-8"))
+    cmd = data["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+    assert "gemini_session_start.py" in cmd
+
+
+def test_hook_skipped_on_old_version(home, monkeypatch):
+    monkeypatch.setattr(register_gemini, "_gemini_version", lambda: (0, 10, 0))
+    register_gemini.main()
+    assert not _settings(home).exists()          # no hook write on unproven support
+
+
+def test_hook_skipped_on_unknown_version(home, monkeypatch):
+    monkeypatch.setattr(register_gemini, "_gemini_version", lambda: None)
+    register_gemini.main()
+    assert not _settings(home).exists()
+
+
+def test_foreign_settings_and_hooks_preserved(home):
+    _settings(home).write_text(json.dumps({
+        "theme": "dark",
+        "hooks": {
+            "SessionStart": [{"hooks": [{"type": "command", "command": "x", "name": "user-hook"}]}],
+            "BeforeTool": [{"hooks": [{"type": "command", "command": "y", "name": "user-bt"}]}],
+        },
+    }), encoding="utf-8")
+    register_gemini.main()
+    data = json.loads(_settings(home).read_text(encoding="utf-8"))
+    assert data["theme"] == "dark"                                  # foreign key kept
+    assert "user-hook" in _owned_hook_names(home)                   # foreign SessionStart kept
+    assert register_gemini.SESSION_START_HOOK_NAME in _owned_hook_names(home)
+    assert data["hooks"]["BeforeTool"][0]["hooks"][0]["name"] == "user-bt"  # untouched
+
+
+def test_malformed_settings_left_untouched(home, capsys):
+    broken = "{ this is not valid json"
+    _settings(home).write_text(broken, encoding="utf-8")
+    register_gemini.main()
+    assert _settings(home).read_text(encoding="utf-8") == broken    # not overwritten
+    assert "malformed" in capsys.readouterr().err
+
+
+def test_hook_registration_idempotent(home):
+    register_gemini.main()
+    register_gemini.main()
+    names = _owned_hook_names(home)
+    assert names.count(register_gemini.SESSION_START_HOOK_NAME) == 1   # no duplicate
+
+
+def test_settings_backed_up_before_mutation(home):
+    _settings(home).write_text('{"theme":"light"}', encoding="utf-8")
+    register_gemini.main()
+    backups = list((home / ".gemini").glob("settings.json.bak-*"))
+    assert backups, "existing settings.json must be backed up before mutation"
