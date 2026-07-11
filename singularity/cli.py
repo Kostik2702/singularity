@@ -71,6 +71,16 @@ def _build_parser() -> argparse.ArgumentParser:
     stat = sub.add_parser("status", help="unified health snapshot (index/daemon/watcher/scheduler)")
     stat.add_argument("--json", action="store_true")
 
+    bk = sub.add_parser("backup", help="backup/restore config + index pointer")
+    bksub = bk.add_subparsers(dest="backup_action", required=True)
+    bksub.add_parser("create", help="create a checksummed backup")
+    bkl = bksub.add_parser("list", help="list backups")
+    bkl.add_argument("--json", action="store_true")
+    bkv = bksub.add_parser("verify", help="verify a backup's checksums")
+    bkv.add_argument("id")
+    bkr = bksub.add_parser("restore", help="restore config + index pointer from a backup")
+    bkr.add_argument("id")
+
     cfgp = sub.add_parser("config", help="inspect/validate .mb/config.json")
     cfgsub = cfgp.add_subparsers(dest="config_action", required=True)
     cfgv = cfgsub.add_parser("validate", help="check schema (types/ranges/unknown keys)")
@@ -198,6 +208,35 @@ def cmd_index(cfg, args) -> int:
     print(json.dumps(stats, ensure_ascii=False))
     client.reload_daemon(cfg)
     return 0
+
+
+def cmd_backup(cfg, args) -> int:
+    from . import backup
+
+    if args.backup_action == "create":
+        mf = backup.create(cfg)
+        print(json.dumps(mf, ensure_ascii=False, indent=1))
+        return 0
+    if args.backup_action == "list":
+        items = backup.list_backups(cfg)
+        if args.json:
+            print(json.dumps(items, ensure_ascii=False))
+        else:
+            for it in items:
+                print(f"{it['id']}  machine={it.get('machine_id')}  "
+                      f"gen={it.get('index_generation')}")
+            if not items:
+                print("(no backups)")
+        return 0
+    if args.backup_action == "verify":
+        res = backup.verify(cfg, args.id)
+        print(json.dumps(res, ensure_ascii=False))
+        return 0 if res["ok"] else 1
+    if args.backup_action == "restore":
+        res = backup.restore(cfg, args.id)
+        print(json.dumps(res, ensure_ascii=False))
+        return 0 if res["ok"] else 1
+    return 1
 
 
 def cmd_config(cfg, args) -> int:
@@ -381,6 +420,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "status":
         from . import status as status_mod
         return status_mod.run(cfg, as_json=args.json)
+    if args.command == "backup":
+        return cmd_backup(cfg, args)
     if args.command == "config":
         return cmd_config(cfg, args)
     if args.command == "note":
