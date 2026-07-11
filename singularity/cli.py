@@ -61,6 +61,16 @@ def _build_parser() -> argparse.ArgumentParser:
     cur = sub.add_parser("curator", help="vault health: validation, orphans, link suggestions")
     cur.add_argument("--json", action="store_true")
 
+    cfgp = sub.add_parser("config", help="inspect/validate .mb/config.json")
+    cfgsub = cfgp.add_subparsers(dest="config_action", required=True)
+    cfgv = cfgsub.add_parser("validate", help="check schema (types/ranges/unknown keys)")
+    cfgv.add_argument("--json", action="store_true")
+    cfgg = cfgsub.add_parser("get", help="print a config value")
+    cfgg.add_argument("key")
+    cfgs = cfgsub.add_parser("set", help="set a config value (validated, atomic save)")
+    cfgs.add_argument("key")
+    cfgs.add_argument("value", help="JSON value; falls back to a string literal")
+
     n = sub.add_parser("note", help="notes")
     nsub = n.add_subparsers(dest="note_action", required=True)
     nn = nsub.add_parser("new")
@@ -167,6 +177,45 @@ def cmd_index(cfg, args) -> int:
     print(json.dumps(stats, ensure_ascii=False))
     client.reload_daemon(cfg)
     return 0
+
+
+def cmd_config(cfg, args) -> int:
+    from .config import validate_config
+
+    if args.config_action == "validate":
+        res = validate_config(cfg.data)
+        if args.json:
+            print(json.dumps({"ok": not res["errors"], **res,
+                              "schema_version": cfg.get("schema_version")},
+                             ensure_ascii=False))
+        else:
+            for e in res["errors"]:
+                print(f"[error] {e}")
+            for w in res["warnings"]:
+                print(f"[warn] {w}")
+            print("config OK" if not res["errors"] else "config has errors")
+        return 1 if res["errors"] else 0
+
+    if args.config_action == "get":
+        print(json.dumps(cfg.get(args.key), ensure_ascii=False))
+        return 0
+
+    if args.config_action == "set":
+        try:
+            value = json.loads(args.value)     # parse as JSON (int/bool/list/...)
+        except json.JSONDecodeError:
+            value = args.value                 # fall back to a plain string
+        candidate = {**cfg.data, args.key: value}
+        res = validate_config(candidate)
+        if res["errors"]:
+            for e in res["errors"]:
+                print(f"[mb] {e}", file=sys.stderr)
+            return 1
+        cfg.data = candidate
+        cfg.save()                             # atomic (tmp + replace)
+        print(f"{args.key} = {json.dumps(value, ensure_ascii=False)}")
+        return 0
+    return 1
 
 
 def cmd_note(cfg, args) -> int:
@@ -305,6 +354,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "curator":
         from . import curator
         return curator.run(cfg, as_json=args.json)
+    if args.command == "config":
+        return cmd_config(cfg, args)
     if args.command == "note":
         return cmd_note(cfg, args)
     if args.command == "learn":
