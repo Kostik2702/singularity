@@ -61,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     ok = client.start_daemon(cfg)
     print("daemon:", "up" if ok else "FAILED (see .mb/daemon.log)")
 
-    print("== Phase 4: Claude Code hooks + skills ==")
+    print("== Phase 4: Claude Code hooks + skills + agents ==")
     failures: list[str] = []
     import register_hooks
     if register_hooks.main() != 0:
@@ -69,6 +69,9 @@ def main(argv: list[str] | None = None) -> int:
     import register_skills
     if register_skills.main() != 0:
         failures.append("register_skills")
+    import register_agents
+    if register_agents.main() != 0:
+        failures.append("register_agents")
 
     print("== Phase 4b: Codex profile + skills ==")
     import register_codex

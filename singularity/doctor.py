@@ -265,6 +265,22 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
         else:
             rep.add("D4-cli", "PASS", "git on PATH")
 
+    def d2():
+        # every engine-owned agent (singularity/agents/*.md) must be registered
+        # in ~/.claude/agents so councils can spawn them by portable name.
+        src_dir = Path(__file__).resolve().parent / "agents"
+        owned = sorted(p.stem for p in src_dir.glob("*.md")) if src_dir.is_dir() else []
+        if not owned:
+            rep.add("D2-agents", "SKIP", "no engine agents/ dir")
+            return
+        dest = Path.home() / ".claude" / "agents"
+        missing = [n for n in owned if not (dest / f"{n}.md").exists()]
+        if not missing:
+            rep.add("D2-agents", "PASS", f"{len(owned)} engine agents registered")
+        else:
+            rep.add("D2-agents", "WARN", f"agents not registered: {', '.join(missing)}",
+                    fix="python install/register_agents.py")
+
     def d1():
         settings = Path.home() / ".claude" / "settings.json"
         if not settings.exists():
@@ -280,6 +296,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                 "singularity hooks registered" if ours else "hooks not registered (M3)")
 
     _guard(rep, "D4", d4)
+    _guard(rep, "D2", d2)
     _guard(rep, "D1", d1)
 
     # ---- summary -------------------------------------------------------
