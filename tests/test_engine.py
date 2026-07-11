@@ -68,3 +68,40 @@ def test_search_source_empty_index(tmp_path):
     eng = _engine(tmp_path, [], None)
     q = np.array([1, 0], dtype=np.float32)
     assert eng._search_source(q, None, [], "memory", {"top_k": 5}) == []
+
+
+# --- AUD-17: diversity, strict top, explain ---------------------------------
+
+def test_per_file_diversity_caps_chunks_per_file(tmp_path):
+    # 3 chunks from the same file (AUD-03 windows) must not flood results
+    chunks = [{"file": "big.md", "content": f"w{i}"} for i in range(3)] + \
+             [{"file": "other.md", "content": "o"}]
+    embs = np.array([[1, 0], [0.99, 0.14], [0.98, 0.2], [0.9, 0.44]], dtype=np.float32)
+    eng = _engine(tmp_path, chunks, embs)
+    eng.encoder = type("E", (), {"encode": staticmethod(
+        lambda q: np.array([[1, 0]], dtype=np.float32))})()
+    out = eng.search({"query": "x", "top_k": 5, "max_per_file": 2, "format": "json"})
+    files = [r["meta"]["file"] for r in out["results"]]
+    assert files.count("big.md") == 2          # capped at 2, not 3
+
+
+def test_strict_global_top_k(tmp_path):
+    chunks = [{"file": f"{i}.md", "content": "c"} for i in range(6)]
+    embs = np.eye(6, dtype=np.float32)[:, :2]
+    embs = np.array([[1, 0]] * 6, dtype=np.float32)
+    eng = _engine(tmp_path, chunks, embs)
+    eng.encoder = type("E", (), {"encode": staticmethod(
+        lambda q: np.array([[1, 0]], dtype=np.float32))})()
+    out = eng.search({"query": "x", "top_k": 3, "max_per_file": 0, "format": "json"})
+    assert len(out["results"]) == 3            # exactly top_k, not top_k*sources
+
+
+def test_explain_adds_component_scores(tmp_path):
+    chunks = [{"file": "a.md", "content": "c"}]
+    embs = np.array([[1, 0]], dtype=np.float32)
+    eng = _engine(tmp_path, chunks, embs)
+    eng.encoder = type("E", (), {"encode": staticmethod(
+        lambda q: np.array([[1, 0]], dtype=np.float32))})()
+    out = eng.search({"query": "x", "top_k": 5, "explain": True, "format": "json"})
+    assert "explain" in out["results"][0]
+    assert "semantic" in out["results"][0]["explain"]

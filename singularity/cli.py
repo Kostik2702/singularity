@@ -41,14 +41,18 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("--memory-only", action="store_true")
     s.add_argument("--code-only", action="store_true")
     s.add_argument("--full", action="store_true", help="full content, no excerpt cut")
+    s.add_argument("--explain", action="store_true", help="include component scores")
+    s.add_argument("--max-per-file", type=int, default=2,
+                   help="cap results per file (0 = unlimited)")
     s.add_argument("--json", action="store_true")
 
     d = sub.add_parser("daemon", help="daemon control")
     d.add_argument("action", choices=["start", "stop", "status", "reload", "run"])
 
     i = sub.add_parser("index", help="index management")
-    i.add_argument("action", choices=["rebuild", "update"])
+    i.add_argument("action", choices=["rebuild", "update", "inspect"])
     i.add_argument("--files", nargs="*", help="update only these vault-relative files")
+    i.add_argument("path", nargs="?", help="file to inspect (index inspect <path>)")
 
     sub.add_parser("watch", help="on-save incremental index watcher")
 
@@ -123,6 +127,8 @@ def cmd_search(cfg, args) -> int:
         "filter_wikilinks": args.filter_wikilinks,
         "path_prefix": args.path_prefix,
         "full_content": args.full,
+        "explain": args.explain,
+        "max_per_file": args.max_per_file,
         "format": "json" if args.json else "compact",
     }
     resp = client.search(cfg, payload)
@@ -166,6 +172,15 @@ def cmd_daemon(cfg, args) -> int:
 
 def cmd_index(cfg, args) -> int:
     from .search import client, indexer
+
+    if args.action == "inspect":
+        target = args.path or (args.files[0] if args.files else None)
+        if not target:
+            print("[mb] usage: mb index inspect <vault-relative-file>", file=sys.stderr)
+            return 1
+        rows = indexer.inspect(cfg, target)
+        print(json.dumps({"file": target, "chunks": rows}, ensure_ascii=False, indent=1))
+        return 0
 
     # The indexer owns the writer lock now (so watcher/nightly are serialized
     # too, not just the CLI). Reload happens only after a successful commit.

@@ -202,6 +202,20 @@ def _rebuild(cfg: Config, progress: bool = True) -> dict[str, int]:
     return {"files": len(files), "chunks": len(chunks), "size_mb": round(size_mb, 1)}
 
 
+def inspect(cfg: Config, rel: str) -> list[dict[str, Any]]:
+    """Chunk-level view of one file in the current index (no content), for
+    `mb index inspect` and search debugging (AUD-17)."""
+    loaded = _load_index(cfg.memory_index_dir)
+    if loaded is None:
+        return []
+    _, meta = loaded
+    return [{"chunk_id": c.get("chunk_id"), "section": c.get("section"),
+             "chunk_index": c.get("chunk_index"),
+             "line_start": c.get("line_start"), "line_end": c.get("line_end"),
+             "chars": len(c.get("content", ""))}
+            for c in meta.get("chunks", []) if c.get("file") == rel]
+
+
 def update(cfg: Config, only_files: list[str] | None = None) -> dict[str, int]:
     """Incremental update by (mtime, size) diff (serialized against other
     writers). Falls back to rebuild when the index is missing/corrupted or was

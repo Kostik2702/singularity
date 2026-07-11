@@ -168,11 +168,34 @@ class SearchEngine:
                                            "code", req)
             sources += 1
         results.sort(key=lambda r: r["score"], reverse=True)
-        results = results[: top_k * max(sources, 1)]
 
-        trimmed = [{"meta": self._trim_meta(r["meta"], req),
-                    "score": round(r["score"], 4),
-                    "source": r["source"]} for r in results]
+        # Per-file diversity: cap chunks per file so one long note's many windows
+        # (AUD-03) can't flood the results; order within is unchanged.
+        max_per_file = int(req.get("max_per_file", 2))
+        if max_per_file > 0:
+            seen: dict[str, int] = {}
+            diverse = []
+            for r in results:
+                f = str(r["meta"].get("file", ""))
+                if seen.get(f, 0) >= max_per_file:
+                    continue
+                seen[f] = seen.get(f, 0) + 1
+                diverse.append(r)
+            results = diverse
+
+        results = results[:top_k]          # strict global top-k
+
+        explain = bool(req.get("explain"))
+
+        def _one(r):
+            out = {"meta": self._trim_meta(r["meta"], req),
+                   "score": round(r["score"], 4),
+                   "source": r["source"]}
+            if explain:
+                out["explain"] = {"semantic": round(r["score"], 4)}
+            return out
+
+        trimmed = [_one(r) for r in results]
         if req.get("format", "compact") == "json":
             return {"results": trimmed}
         return {"lines": [self._compact_line(r) for r in trimmed]}
