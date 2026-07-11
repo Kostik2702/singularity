@@ -26,9 +26,29 @@ def python_executable(windowed: bool = False) -> str:
     return exe
 
 
+def rotate_log(log_file: Path, max_bytes: int = 5_000_000, keep: int = 3) -> None:
+    """Size-based log rotation with bounded retention (AUD-18): when log_file
+    exceeds max_bytes, shift .N->.N+1 and start fresh; keep at most `keep`
+    old files. Best-effort — never raises."""
+    try:
+        if not log_file.exists() or log_file.stat().st_size < max_bytes:
+            return
+        oldest = log_file.with_name(f"{log_file.name}.{keep}")
+        if oldest.exists():
+            oldest.unlink()
+        for n in range(keep - 1, 0, -1):
+            src = log_file.with_name(f"{log_file.name}.{n}")
+            if src.exists():
+                src.replace(log_file.with_name(f"{log_file.name}.{n + 1}"))
+        log_file.replace(log_file.with_name(f"{log_file.name}.1"))
+    except OSError:
+        pass
+
+
 def spawn_detached(args: list[str], log_file: Path) -> int:
     """Start a long-lived background process, return its PID."""
     log_file.parent.mkdir(parents=True, exist_ok=True)
+    rotate_log(log_file)                       # bound daemon log growth (AUD-18)
     log = open(log_file, "ab")
     if current_os() == "windows":
         DETACHED_PROCESS = 0x00000008

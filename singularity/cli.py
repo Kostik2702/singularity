@@ -68,6 +68,9 @@ def _build_parser() -> argparse.ArgumentParser:
     st = sub.add_parser("selftest", help="end-to-end pipeline check (create/index/find/delete)")
     st.add_argument("--json", action="store_true")
 
+    stat = sub.add_parser("status", help="unified health snapshot (index/daemon/watcher/scheduler)")
+    stat.add_argument("--json", action="store_true")
+
     cfgp = sub.add_parser("config", help="inspect/validate .mb/config.json")
     cfgsub = cfgp.add_subparsers(dest="config_action", required=True)
     cfgv = cfgsub.add_parser("validate", help="check schema (types/ranges/unknown keys)")
@@ -375,6 +378,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "selftest":
         from . import selftest
         return selftest.run(cfg, as_json=args.json)
+    if args.command == "status":
+        from . import status as status_mod
+        return status_mod.run(cfg, as_json=args.json)
     if args.command == "config":
         return cmd_config(cfg, args)
     if args.command == "note":
