@@ -32,10 +32,11 @@ class SearchEngine:
 
     # ------------------------------------------------------------------
     def _load_one(self, index_dir: Path) -> tuple[Optional[np.ndarray], list[dict]]:
-        emb_path = index_dir / "embeddings.npy"
-        meta_path = index_dir / "metadata.json"
-        if not emb_path.exists() or not meta_path.exists():
+        from . import indexer
+        files = indexer.index_files(index_dir)   # committed generation or legacy flat
+        if files is None:
             return None, []
+        emb_path, meta_path = files
         try:
             embs = np.load(emb_path, allow_pickle=False).astype(np.float32)
             meta = json.loads(meta_path.read_text(encoding="utf-8"))

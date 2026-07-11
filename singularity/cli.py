@@ -154,26 +154,19 @@ def cmd_daemon(cfg, args) -> int:
 def cmd_index(cfg, args) -> int:
     from .search import client, indexer
 
-    lock = cfg.lock_dir
-    try:
-        lock.mkdir(parents=True, exist_ok=False)
-    except FileExistsError:
-        import time
-        if time.time() - lock.stat().st_mtime < 6 * 3600:
-            print("[mb] another rebuild in progress (lock present)", file=sys.stderr)
-            return 1
-        # stale lock -> take over (Genevra 6h rule)
+    # The indexer owns the writer lock now (so watcher/nightly are serialized
+    # too, not just the CLI). Reload happens only after a successful commit.
     try:
         if args.action == "rebuild":
             stats = indexer.rebuild(cfg)
         else:
             stats = indexer.update(cfg, only_files=args.files or None)
-        print(json.dumps(stats, ensure_ascii=False))
-        client.reload_daemon(cfg)
-        return 0
-    finally:
-        import shutil
-        shutil.rmtree(lock, ignore_errors=True)
+    except indexer.IndexLockedError:
+        print("[mb] another index writer in progress (lock present)", file=sys.stderr)
+        return 1
+    print(json.dumps(stats, ensure_ascii=False))
+    client.reload_daemon(cfg)
+    return 0
 
 
 def cmd_note(cfg, args) -> int:

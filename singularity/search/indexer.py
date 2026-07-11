@@ -10,7 +10,11 @@ JSON round-trip (Genevra), size guards against cloud-sync mtime jitter (ours).
 """
 from __future__ import annotations
 
+import contextlib
 import json
+import os
+import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,6 +25,116 @@ from ..config import Config
 from . import chunking
 from .chunking import extract_chunks, should_skip
 from .encoder import shared_encoder
+
+CURRENT_FILE = "CURRENT"          # names the committed generation dir
+STALE_LOCK_SECONDS = 6 * 3600     # Genevra 6h rule: take over an abandoned lock
+
+
+class IndexLockedError(RuntimeError):
+    """Raised when another writer already holds the index lock."""
+
+
+# --------------------------------------------------------------------------
+# Transactional index storage (AUD-04)
+#
+# The index lives as immutable generations `memory_index/gen_<token>/` each
+# holding a whole {embeddings.npy, metadata.json} pair. A single-file atomic
+# rename of `CURRENT` is the commit point, so a reader only ever sees a fully
+# written generation and a crash mid-commit leaves the previous generation as
+# last-good. A legacy flat layout is still read until the next rebuild migrates.
+# --------------------------------------------------------------------------
+
+def _gen_is_whole(gen_dir: Path) -> bool:
+    return (gen_dir / "embeddings.npy").exists() and (gen_dir / "metadata.json").exists()
+
+
+def _current_gen_dir(index_dir: Path) -> Path | None:
+    cur = index_dir / CURRENT_FILE
+    if cur.exists():
+        name = cur.read_text(encoding="utf-8").strip()
+        gd = index_dir / name
+        if name and _gen_is_whole(gd):
+            return gd
+    # CURRENT missing/torn -> newest whole generation is the last-good
+    for gd in sorted(index_dir.glob("gen_*"), reverse=True):
+        if _gen_is_whole(gd):
+            return gd
+    return None
+
+
+def index_files(index_dir: Path) -> tuple[Path, Path] | None:
+    """(embeddings.npy, metadata.json) of the committed generation, else the
+    legacy flat layout, else None. Used by every index reader."""
+    gd = _current_gen_dir(index_dir)
+    if gd is not None:
+        return gd / "embeddings.npy", gd / "metadata.json"
+    flat_emb, flat_meta = index_dir / "embeddings.npy", index_dir / "metadata.json"
+    if flat_emb.exists() and flat_meta.exists():
+        return flat_emb, flat_meta
+    return None
+
+
+def _prune_generations(index_dir: Path, keep_current: str) -> None:
+    """Keep the current generation and the single most-recent previous one
+    (last-good); remove older generations."""
+    gens = sorted((p for p in index_dir.glob("gen_*") if p.is_dir()),
+                  key=lambda p: p.name, reverse=True)
+    keep = {keep_current}
+    for gd in gens:
+        if gd.name in keep:
+            continue
+        if len(keep) < 2:
+            keep.add(gd.name)
+            continue
+        shutil.rmtree(gd, ignore_errors=True)
+
+
+def _commit_generation(index_dir: Path, embs: np.ndarray, meta: dict[str, Any]) -> None:
+    """Write a new generation and atomically make it current. Refuses to commit
+    a torn pair (embeddings rows != chunk count)."""
+    meta["indexed_at"] = datetime.now().isoformat(timespec="seconds")
+    meta["chunk_count"] = len(meta["chunks"])
+    meta["chunk_schema"] = chunking.CHUNK_SCHEMA_VERSION
+    if embs.shape[0] != len(meta["chunks"]):
+        raise ValueError(
+            f"refusing to commit torn index: {embs.shape[0]} embeddings vs "
+            f"{len(meta['chunks'])} chunks")
+
+    index_dir.mkdir(parents=True, exist_ok=True)
+    token = f"{int(time.time() * 1000):013d}_{os.getpid()}"
+    gen = f"gen_{token}"
+    gen_dir = index_dir / gen
+    gen_dir.mkdir(parents=True, exist_ok=True)
+    np.save(gen_dir / "embeddings.npy", embs.astype(np.float32), allow_pickle=False)
+    (gen_dir / "metadata.json").write_text(
+        json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+
+    # commit: atomic single-file pointer swap
+    tmp = index_dir / (CURRENT_FILE + ".tmp")
+    tmp.write_text(gen, encoding="utf-8")
+    os.replace(tmp, index_dir / CURRENT_FILE)
+    _prune_generations(index_dir, keep_current=gen)
+
+
+@contextlib.contextmanager
+def _writer_lock(cfg: Config):
+    """Serialize every index writer (rebuild/update/watcher/nightly) with one
+    cross-process mkdir lock. Takes over a lock older than STALE_LOCK_SECONDS."""
+    lock = cfg.lock_dir
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    acquired_new = False
+    try:
+        try:
+            lock.mkdir(exist_ok=False)
+            acquired_new = True
+        except FileExistsError:
+            age = time.time() - lock.stat().st_mtime
+            if age < STALE_LOCK_SECONDS:
+                raise IndexLockedError("another index writer holds the lock")
+            # stale -> take over the existing lock dir
+        yield
+    finally:
+        shutil.rmtree(lock, ignore_errors=True)
 
 
 def _file_stat(path: Path) -> list[int]:
@@ -42,10 +156,10 @@ def _scan_vault(cfg: Config) -> dict[str, Path]:
 
 
 def _load_index(index_dir: Path) -> tuple[np.ndarray, dict[str, Any]] | None:
-    emb_path = index_dir / "embeddings.npy"
-    meta_path = index_dir / "metadata.json"
-    if not emb_path.exists() or not meta_path.exists():
+    files = index_files(index_dir)
+    if files is None:
         return None
+    emb_path, meta_path = files
     try:
         embs = np.load(emb_path, allow_pickle=False)
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -57,18 +171,16 @@ def _load_index(index_dir: Path) -> tuple[np.ndarray, dict[str, Any]] | None:
 
 
 def _save_index(index_dir: Path, embs: np.ndarray, meta: dict[str, Any]) -> None:
-    index_dir.mkdir(parents=True, exist_ok=True)
-    np.save(index_dir / "embeddings.npy", embs.astype(np.float32), allow_pickle=False)
-    meta["indexed_at"] = datetime.now().isoformat(timespec="seconds")
-    meta["chunk_count"] = len(meta["chunks"])
-    meta["chunk_schema"] = chunking.CHUNK_SCHEMA_VERSION
-    (index_dir / "metadata.json").write_text(
-        json.dumps(meta, ensure_ascii=False), encoding="utf-8"
-    )
+    _commit_generation(index_dir, embs, meta)
 
 
 def rebuild(cfg: Config, progress: bool = True) -> dict[str, int]:
-    """Full rebuild of the vault index."""
+    """Full rebuild of the vault index (serialized against other writers)."""
+    with _writer_lock(cfg):
+        return _rebuild(cfg, progress)
+
+
+def _rebuild(cfg: Config, progress: bool = True) -> dict[str, int]:
     files = _scan_vault(cfg)
     chunks: list[dict[str, Any]] = []
     file_meta: dict[str, list[int]] = {}
@@ -91,16 +203,22 @@ def rebuild(cfg: Config, progress: bool = True) -> dict[str, int]:
 
 
 def update(cfg: Config, only_files: list[str] | None = None) -> dict[str, int]:
-    """Incremental update by (mtime, size) diff. Falls back to rebuild when
-    the index is missing/corrupted or was built with another model."""
+    """Incremental update by (mtime, size) diff (serialized against other
+    writers). Falls back to rebuild when the index is missing/corrupted or was
+    built with another model/chunk schema."""
+    with _writer_lock(cfg):
+        return _update(cfg, only_files)
+
+
+def _update(cfg: Config, only_files: list[str] | None = None) -> dict[str, int]:
     loaded = _load_index(cfg.memory_index_dir)
     if loaded is None:
-        return rebuild(cfg, progress=False)
+        return _rebuild(cfg, progress=False)
     embs, meta = loaded
     if meta.get("model") != cfg.model:
-        return rebuild(cfg, progress=False)
+        return _rebuild(cfg, progress=False)
     if meta.get("chunk_schema") != chunking.CHUNK_SCHEMA_VERSION:
-        return rebuild(cfg, progress=False)   # old chunk format -> full rebuild
+        return _rebuild(cfg, progress=False)   # old chunk format -> full rebuild
 
     files = _scan_vault(cfg)
     old_meta: dict[str, list[int]] = meta.get("file_meta", {})
