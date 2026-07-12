@@ -51,6 +51,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "vault_guard_enabled": False,      # T08: PreToolUse guard installed but no-op until true
     "vault_guard_mode": "audit",       # T08: "audit" (warn only) or "deny" (block)
     "personal_roots": [],              # T08: vault-relative roots classified as personal
+    "digest_score_threshold": 0.45,    # T11: min cosine to surface a merge candidate
+    "digest_top_k": 3,                 # T11: max candidate targets per learning section
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -115,6 +117,8 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     _int("brain_max_lines", 1, 10_000)
     _int("session_context_max_lines", 1, 10_000)
     _int("module_note_max_lines", 1, 10_000)
+    _num("digest_score_threshold", 0.0, 1.0)
+    _int("digest_top_k", 1, 50)
     for key in ("skip_dirs", "skip_path_parts"):
         if key in data and (not isinstance(data[key], list)
                             or not all(isinstance(x, str) for x in data[key])):

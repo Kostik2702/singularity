@@ -9,6 +9,8 @@ mb note new <type> <title>
 mb learn "<insight>" [--task ID]
 mb hooks status|enable|disable [--json]
 mb project list|add|remove|detect
+mb digest plan [--project X] [--json]
+mb digest mark <file> <section> | --all [--json]
 mb init            # write ~/.singularity.json pointer + folder tree
 """
 from __future__ import annotations
@@ -120,6 +122,18 @@ def _build_parser() -> argparse.ArgumentParser:
     hkst.add_argument("--json", action="store_true")
     hksub.add_parser("enable", help="enable capture hooks (auto_capture=true)")
     hksub.add_parser("disable", help="disable capture hooks (auto_capture=false)")
+
+    dg = sub.add_parser("digest", help="digest planner: learnings -> reference/rule/howto/decision merge candidates")
+    dgsub = dg.add_subparsers(dest="digest_action", required=True)
+    dgp = dgsub.add_parser("plan", help="propose merge candidates for un-marked active learning sections")
+    dgp.add_argument("--project", dest="filter_project",
+                     help="comma-separated ids/groups/general (T04 resolver, FR-1)")
+    dgp.add_argument("--json", action="store_true")
+    dgm = dgsub.add_parser("mark", help="record learning section(s) as processed (won't reappear in plan)")
+    dgm.add_argument("file", nargs="?", help="vault-relative source file (learnings/active/...)")
+    dgm.add_argument("section", nargs="?", help="section heading, used together with <file>")
+    dgm.add_argument("--all", action="store_true", help="mark every entry in the current plan")
+    dgm.add_argument("--json", action="store_true")
 
     n = sub.add_parser("note", help="notes")
     nsub = n.add_subparsers(dest="note_action", required=True)
@@ -424,6 +438,62 @@ def cmd_hooks(cfg, args) -> int:
     return 0
 
 
+def cmd_digest(cfg, args) -> int:
+    from . import digest
+    from . import projects as projects_mod
+
+    if args.digest_action == "plan":
+        project_filter = None
+        if getattr(args, "filter_project", None):
+            registry = cfg.get("projects", {}) or {}
+            expanded: set[str] = set()
+            for token in args.filter_project.split(","):
+                token = token.strip()
+                if not token:
+                    continue
+                try:
+                    expanded.update(projects_mod.resolve_selector(registry, token))
+                except KeyError as exc:
+                    print(f"[mb] {exc}", file=sys.stderr)
+                    return 1
+            project_filter = expanded
+
+        result = digest.plan(cfg, project_filter=project_filter)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        else:
+            print(f"== mb digest plan -- index:{result['index_status']} "
+                  f"sources:{result['source_count']} targets:{result['target_count']} ==")
+            if not result["entries"]:
+                print("(no candidates)")
+            for e in result["entries"]:
+                tag = f" @{e['project']}" if e["project"] else ""
+                print(f"\n{e['file']} / {e['section']}{tag}")
+                if not e["candidates"]:
+                    print("   (no target match >= threshold)")
+                for c in e["candidates"]:
+                    ctag = f"@{c['project']}" if c["project"] else ""
+                    print(f"   {c['score']:.2f}  {c['file']}  [{c['type']}{ctag}]")
+        return 0
+
+    if args.digest_action == "mark":
+        if args.all:
+            result = digest.plan(cfg)
+            identities = [(e["file"], e["section"]) for e in result["entries"]]
+        elif args.file and args.section:
+            identities = [(args.file, args.section)]
+        else:
+            print("[mb] usage: mb digest mark <file> <section> | --all", file=sys.stderr)
+            return 1
+        count = digest.mark(cfg, identities)
+        if args.json:
+            print(json.dumps({"marked": count}, ensure_ascii=False))
+        else:
+            print(f"marked: {count}")
+        return 0
+    return 1
+
+
 def cmd_note(cfg, args) -> int:
     from . import capture
 
@@ -634,6 +704,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_hooks(cfg, args)
     if args.command == "project":
         return cmd_project(cfg, args)
+    if args.command == "digest":
+        return cmd_digest(cfg, args)
     if args.command == "note":
         return cmd_note(cfg, args)
     if args.command == "learn":
