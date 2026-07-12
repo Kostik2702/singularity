@@ -219,7 +219,8 @@ def inspect(cfg: Config, rel: str) -> list[dict[str, Any]]:
     return [{"chunk_id": c.get("chunk_id"), "section": c.get("section"),
              "chunk_index": c.get("chunk_index"),
              "line_start": c.get("line_start"), "line_end": c.get("line_end"),
-             "chars": len(c.get("content", ""))}
+             "chars": len(c.get("content", "")),
+             "project": c.get("project")}
             for c in meta.get("chunks", []) if c.get("file") == rel]
 
 

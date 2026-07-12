@@ -72,6 +72,53 @@ def test_rebuild_and_incremental(tmp_path, monkeypatch):
     assert embs.shape[0] == 2
 
 
+# --- T04: project metadata + chunk-schema rebuild policy --------------------
+
+def test_rebuild_stamps_project_from_frontmatter(tmp_path, monkeypatch):
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
+    vault = tmp_path / "vault"
+    (vault / "reference").mkdir(parents=True)
+    (vault / "reference" / "tagged.md").write_text(
+        "---\nproject: singularity\n---\n\n# T\n\n## S\n" + "content here " * 5,
+        encoding="utf-8")
+    (vault / "reference" / "untagged.md").write_text(
+        "# U\n\n## S\n" + "other content here " * 5, encoding="utf-8")
+    cfg = Config(vault=vault, data={"model": "fake"})
+    cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+    indexer_mod.rebuild(cfg, progress=False)
+
+    import json
+    _, meta_path = indexer_mod.index_files(cfg.memory_index_dir)
+    chunks = json.loads(meta_path.read_text(encoding="utf-8"))["chunks"]
+    by_file = {c["file"]: c for c in chunks}
+    assert by_file["reference/tagged.md"]["project"] == "singularity"
+    assert "project" not in by_file["reference/untagged.md"]
+
+
+def test_update_falls_back_to_rebuild_on_chunk_schema_mismatch(tmp_path, monkeypatch):
+    """A pre-T04 index (chunk_schema=2, no `project` key) must never be mixed
+    incrementally with post-T04 chunks — update() must detect the version bump
+    and do a full rebuild instead (indexer.py's existing model-mismatch path,
+    now exercised for chunk_schema specifically)."""
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
+    cfg = make_vault(tmp_path)
+    indexer_mod.rebuild(cfg, progress=False)
+
+    import json
+
+    from singularity.search import chunking
+    _, meta_path = indexer_mod.index_files(cfg.memory_index_dir)
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["chunk_schema"] = chunking.CHUNK_SCHEMA_VERSION - 1     # simulate stale index
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    stats = indexer_mod.update(cfg)
+    assert "files" in stats and "added" not in stats   # took _rebuild()'s shape, not _update()'s diff
+    _, meta_path2 = indexer_mod.index_files(cfg.memory_index_dir)
+    assert json.loads(meta_path2.read_text(encoding="utf-8"))["chunk_schema"] == \
+        chunking.CHUNK_SCHEMA_VERSION
+
+
 def test_only_files_scope(tmp_path, monkeypatch):
     monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
     cfg = make_vault(tmp_path)

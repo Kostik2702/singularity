@@ -30,6 +30,54 @@ def test_match_filters_path_prefix_and_wikilinks():
     assert SearchEngine._match_filters(m, {"filter_wikilinks": ["self"]})  # self-link by title
 
 
+# --- T04: project filter ------------------------------------------------------
+
+def test_match_filters_project_exact_and_general_default():
+    tagged = {"file": "a.md", "project": "singularity"}
+    untagged = {"file": "b.md"}
+    assert SearchEngine._match_filters(tagged, {"filter_project": "singularity"})
+    assert not SearchEngine._match_filters(tagged, {"filter_project": "other"})
+    assert SearchEngine._match_filters(untagged, {"filter_project": "general"})
+    assert not SearchEngine._match_filters(untagged, {"filter_project": "singularity"})
+
+
+def test_match_filters_project_accepts_list_or_comma_string():
+    m = {"file": "a.md", "project": "b"}
+    assert SearchEngine._match_filters(m, {"filter_project": ["a", "b"]})
+    assert SearchEngine._match_filters(m, {"filter_project": "a,b"})
+    assert not SearchEngine._match_filters(m, {"filter_project": "a,c"})
+
+
+def test_search_source_project_filter_widens_candidate_pool(tmp_path):
+    # has_filters must include filter_project so a project-only filter doesn't
+    # silently starve valid top-k results. "mine.md" deliberately ranks LAST by
+    # raw score (29 "other" chunks score 1.0, "mine" scores ~0.31, just above
+    # min_score) — reachable only through the wide (has_filters) pool of 100,
+    # never the narrow unfiltered pool of top_k*3=15.
+    chunks = [{"file": "mine.md", "project": "mine"}] + \
+             [{"file": f"other{i}.md", "project": "other"} for i in range(29)]
+    embs = np.vstack([[0.31, 0.95]] + [[1.0, 0.0]] * 29).astype(np.float32)
+    eng = _engine(tmp_path, chunks, embs)
+    q = np.array([1, 0], dtype=np.float32)
+    res = eng._search_source(q, embs, chunks, "memory",
+                             {"top_k": 5, "filter_project": "mine"})
+    assert [r["meta"]["file"] for r in res] == ["mine.md"]
+
+
+def test_compact_line_appends_project_when_present():
+    line = SearchEngine._compact_line(
+        {"meta": {"file": "a.md", "type": "howto", "project": "singularity",
+                 "content": "c"}, "score": 0.9, "source": "memory"})
+    assert "[howto@singularity]" in line
+
+
+def test_compact_line_omits_project_when_absent():
+    line = SearchEngine._compact_line(
+        {"meta": {"file": "a.md", "type": "howto", "content": "c"},
+         "score": 0.9, "source": "memory"})
+    assert "[howto]" in line and "@" not in line
+
+
 def test_search_source_orders_by_score_and_applies_top_k(tmp_path):
     chunks = [{"file": "a.md", "type": "reference", "content": "one"},
               {"file": "b.md", "type": "reference", "content": "two"},

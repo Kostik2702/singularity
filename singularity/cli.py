@@ -39,6 +39,8 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("--tags", dest="filter_tags")
     s.add_argument("--links", dest="filter_wikilinks",
                    help="only notes linked to [[X]]")
+    s.add_argument("--project", dest="filter_project",
+                   help="comma-separated ids/groups/general/personal (T04)")
     s.add_argument("--path-prefix")
     s.add_argument("--memory-only", action="store_true")
     s.add_argument("--code-only", action="store_true")
@@ -155,7 +157,23 @@ def _build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 def cmd_search(cfg, args) -> int:
+    from . import projects as projects_mod
     from .search import client
+
+    filter_project = None
+    if args.filter_project:
+        registry = cfg.get("projects", {}) or {}
+        expanded: set[str] = set()
+        for token in args.filter_project.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            try:
+                expanded.update(projects_mod.resolve_selector(registry, token))
+            except KeyError as exc:
+                print(f"[mb] {exc}", file=sys.stderr)
+                return 1
+        filter_project = sorted(expanded)
 
     payload = {
         "cmd": "search",
@@ -166,6 +184,7 @@ def cmd_search(cfg, args) -> int:
         "filter_type": args.filter_type,
         "filter_tags": args.filter_tags,
         "filter_wikilinks": args.filter_wikilinks,
+        "filter_project": filter_project,
         "path_prefix": args.path_prefix,
         "full_content": args.full,
         "explain": args.explain,

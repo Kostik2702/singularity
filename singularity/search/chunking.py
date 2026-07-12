@@ -22,7 +22,7 @@ MIN_CHUNK_CHARS = 50
 WINDOW_CHARS = 1000
 WINDOW_OVERLAP = 150
 # Bumped whenever the chunk shape changes so an old-format index auto-rebuilds.
-CHUNK_SCHEMA_VERSION = 2
+CHUNK_SCHEMA_VERSION = 3
 
 _H1_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 _SENT_END_RE = re.compile(r"[.!?…](?:\s|$)")
@@ -92,6 +92,20 @@ def infer_type(rel_path: str, frontmatter: dict[str, Any]) -> str:
     return _TYPE_BY_FOLDER.get(first, "reference")
 
 
+def infer_project(frontmatter: dict[str, Any]) -> Optional[str]:
+    """T04 §8.2: explicit `frontmatter.project` only — a note's location in the
+    vault tree carries no project meaning (unlike `type`, which folder-infers).
+    A literal "general" is normalized to None (absent), matching the classify-as-
+    general default so the compact label can omit `@general` unconditionally."""
+    value = frontmatter.get("project")
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value or value.lower() == "general":
+        return None
+    return value
+
+
 def _clean_section(text: str) -> tuple[str, list[str], list[str]]:
     """Clean markdown noise; return (clean_text, wikilinks, inline_tags)."""
     text = _CODE_BLOCK_RE.sub(" ", text)
@@ -158,6 +172,7 @@ def extract_chunks(path: Path, rel_path: str) -> list[dict[str, Any]]:
     fm_tags = _as_list(fm.get("tags"))
     note_type = infer_type(rel_path, fm)
     priority = fm.get("priority")
+    project = infer_project(fm)
 
     title_part = title if not aliases else f"{title} / {', '.join(aliases)}"
 
@@ -204,6 +219,8 @@ def extract_chunks(path: Path, rel_path: str) -> list[dict[str, Any]]:
                 chunk["aliases"] = aliases
             if priority:
                 chunk["priority"] = priority
+            if project:
+                chunk["project"] = project
             chunks.append(chunk)
     return chunks
 
