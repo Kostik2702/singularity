@@ -77,10 +77,14 @@ commit diff, or measured outcome (e.g. the fork's claimed `110 passed`) can be c
 2. The fork's own test results and exact edge-case behavior cannot be independently
    verified and **must never be cited as evidence** in T01–T16; only this document's
    §2 (code-verified) and §3 (documentary-only, explicitly labeled) may be cited.
-3. Row "session-scoped stop capture" in §3 is a direct behavioral contradiction between
-   current upstream (tool-count) and the fork's documented replacement (code-edit count).
-   T09 must treat the current tool-count criterion as the thing being replaced, not as
-   something to preserve.
+3. **RESOLVED 2026-07-12 (T09/T10).** Row "session-scoped stop capture" in §3 was a
+   direct behavioral contradiction between current upstream (tool-count) and the fork's
+   documented replacement (code-edit count). `singularity/session_activity.py` (T09)
+   replaced the tool-count/substring model with normalized `SessionActivity` +
+   `decide()`; `singularity/hooks/stop_capture.py` and `gemini_after_agent.py` (T10)
+   were rewired to parse the REAL transcript JSONL shape (verified against a live
+   Claude Code transcript, not assumed) and share the same decision core. The old
+   `MIN_TOOL_USES`/`should_remind` tool-count criterion no longer exists in code.
 4. `compaction-plan` skill is pre-existing prior art adjacent to fork's `mb-handoff`;
    T15 must reconcile rather than duplicate (spec §6.6 already assumes this but it is
    restated here as a concrete gap for the implementing task).

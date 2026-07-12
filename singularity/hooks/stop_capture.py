@@ -1,18 +1,33 @@
-"""Stop hook: auto-capture gate (MB-09, port of Genevra rule C5a as a hook).
+"""Stop hook: auto-capture gate (T10, replaces the MB-09 tool-count version).
 
-When Claude finishes responding, this hook decides whether the session did
-substantial work whose insights were never captured into the vault. If so,
-it BLOCKS the stop exactly once with a capture instruction — the model then
-appends insights via `mb learn` / note edits (or proceeds when there is
-nothing worth capturing). Deterministic discipline, LLM does the writing.
+Decides whether the session did real, uncaptured code-editing work using
+singularity.session_activity's normalized SessionActivity + decide() core
+(T09) instead of a raw tool-use count and a substring search on an escaped
+transcript line. Parses the REAL Claude Code transcript JSONL shape
+(verified against a live transcript, 2026-07-12 — Anthropic documents this
+format as internal and version-unstable, so this parser is deliberately
+conservative: anything it cannot confidently classify is skipped, never
+guessed):
 
-Guards against loops / noise:
-  * stop_hook_active=true (we already blocked once)  -> allow
-  * per-session marker exists                        -> allow
-  * auto_capture=false in config                     -> allow
-  * fewer than MIN_TOOL_USES tool calls in transcript-> allow (trivial chat)
-  * session already captured (mb learn / vault write seen in transcript)
-                                                     -> allow
+  {"type": "assistant", "message": {"content": [
+      {"type": "tool_use", "id": "toolu_...", "name": "Edit",
+       "input": {"file_path": "...", ...}}]}}
+  {"type": "user", "message": {"content": [
+      {"type": "tool_result", "tool_use_id": "toolu_...", "content": "...",
+       "is_error": true}]}}   # is_error key is ABSENT (not false) on success
+
+A code edit is a successful Edit/Write/MultiEdit whose file_path resolves
+inside the session's cwd and outside the vault; a vault write is the same
+but inside the vault; a sanctioned capture is a successful shell-tool call
+whose command matches `mb learn`/`mb note new` via a parsed-string match,
+never a raw-JSON substring search.
+
+Real-machine verification (2026-07-12, this session's own live transcript)
+found that Windows Claude Code offers BOTH "Bash" (git-bash) and
+"PowerShell" as distinct tool names for shell commands — every `mb learn`
+call this session actually went through "PowerShell", not "Bash". A
+Bash-only check would silently miss all of them (confirmed: it did, in the
+first cut of this parser, before this fix).
 """
 from __future__ import annotations
 
@@ -22,8 +37,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from singularity.hooks.capture_decision import (  # noqa: E402
-    MIN_TOOL_USES, auto_capture_enabled, session_marker, should_remind)
+from singularity import session_activity as sa  # noqa: E402
+from singularity.hooks.capture_decision import session_marker  # noqa: E402
 
 REASON = (
     "[Singularity auto-capture] Перед завершением зафиксируй знания сессии в vault: "
@@ -33,24 +48,70 @@ REASON = (
     "Если фиксировать нечего — просто заверши ответ, ничего не записывая."
 )
 
+_WRITE_TOOLS = {"Edit", "Write", "MultiEdit"}
+_SHELL_TOOLS = {"Bash", "PowerShell"}
 
-def _transcript_stats(transcript_path: str, vault_str: str) -> tuple[int, bool]:
-    """Return (tool_use_count, capture_already_happened). Cheap line scan."""
-    tool_uses = 0
-    captured = False
+
+def parse_transcript(transcript_path: str, session_id: str, cwd: str,
+                     vault: Path) -> sa.SessionActivity:
+    activity = sa.SessionActivity(client="claude", session_id=session_id)
+    cwd_path = Path(cwd) if cwd else None
+    pending: dict[str, tuple[str, dict]] = {}   # tool_use_id -> (name, input)
+
     try:
         with open(transcript_path, encoding="utf-8", errors="ignore") as f:
             for line in f:
-                if '"tool_use"' in line:
-                    tool_uses += 1
-                    if "mb learn" in line or "singularity" in line and "learn" in line:
-                        captured = True
-                    elif vault_str and vault_str in line and (
-                            '"Write"' in line or '"Edit"' in line):
-                        captured = True
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue   # a single bad line is not worth a warning; transcripts are large
+                content = obj.get("message", {}).get("content") if isinstance(obj, dict) else None
+                if not isinstance(content, list):
+                    continue
+                for block in content:
+                    if not isinstance(block, dict):
+                        continue
+                    btype = block.get("type")
+                    if btype == "tool_use":
+                        name = block.get("name")
+                        tid = block.get("id")
+                        tool_input = block.get("input")
+                        if (isinstance(tid, str) and name in (_WRITE_TOOLS | _SHELL_TOOLS)
+                                and isinstance(tool_input, dict)):
+                            pending[tid] = (name, tool_input)
+                    elif btype == "tool_result":
+                        tid = block.get("tool_use_id")
+                        if not isinstance(tid, str) or tid not in pending:
+                            continue
+                        name, tool_input = pending.pop(tid)
+                        if block.get("is_error"):
+                            continue   # failed call never counts, T09 acceptance
+                        if name in _WRITE_TOOLS:
+                            file_path = tool_input.get("file_path")
+                            if not isinstance(file_path, str) or not file_path.strip():
+                                activity.parse_warnings.append(
+                                    f"{name} tool_use missing file_path, id={tid}")
+                                continue
+                            try:
+                                fp = Path(file_path)
+                                abs_path = fp if fp.is_absolute() else (cwd_path or Path.cwd()) / fp
+                            except (OSError, ValueError):
+                                activity.parse_warnings.append(f"unresolvable file_path: {file_path!r}")
+                                continue
+                            if sa.is_vault_write_path(abs_path, vault):
+                                activity.vault_writes += 1
+                            elif cwd_path is not None and sa.is_code_edit_path(abs_path, cwd_path, vault):
+                                activity.code_edits += 1
+                        elif name in _SHELL_TOOLS:
+                            command = tool_input.get("command")
+                            if isinstance(command, str) and sa.is_sanctioned_capture_command(command):
+                                activity.sanctioned_captures += 1
     except OSError:
-        pass
-    return tool_uses, captured
+        activity.parse_warnings.append("transcript unreadable")
+    return activity
 
 
 def main() -> int:
@@ -65,27 +126,24 @@ def main() -> int:
         return 0
 
     # never re-block: Claude Code sets this when continuing after our block
-    if event.get("stop_hook_active"):
-        return 0
+    stop_hook_active = bool(event.get("stop_hook_active"))
 
     try:
         from singularity.config import resolve_vault
+        from singularity.hooks_state import capture_config_state
 
         vault = resolve_vault(None)
         if vault is None or not vault.exists():
             return 0
-        if not auto_capture_enabled(vault):
-            return 0
 
         session_id = str(event.get("session_id", "unknown"))
         marker = session_marker(vault, session_id)
-        if marker.exists():
-            return 0
 
-        transcript = event.get("transcript_path", "")
-        vault_json_fragment = json.dumps(str(vault))[1:-1]  # escaped like in transcript
-        tool_uses, captured = _transcript_stats(transcript, vault_json_fragment)
-        if not should_remind(tool_uses, captured):
+        state = capture_config_state(vault)
+        activity = parse_transcript(str(event.get("transcript_path", "")), session_id,
+                                    str(event.get("cwd", "")), vault)
+        decision = sa.decide(state["configured"], activity, stop_hook_active, marker.exists())
+        if decision.action != "nudge":
             return 0
 
         marker.write_text("blocked-once", encoding="utf-8")
