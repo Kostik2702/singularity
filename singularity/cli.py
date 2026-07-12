@@ -126,6 +126,7 @@ def _build_parser() -> argparse.ArgumentParser:
     nn = nsub.add_parser("new")
     nn.add_argument("type")
     nn.add_argument("title")
+    nn.add_argument("--project", help="explicit project id/general/personal (else cwd-detected)")
 
     ll = sub.add_parser("llm", help="local inference server (llama-server + router)")
     llsub = ll.add_subparsers(dest="llm_action", required=True)
@@ -148,6 +149,9 @@ def _build_parser() -> argparse.ArgumentParser:
     l = sub.add_parser("learn", help="append an insight to active learnings")
     l.add_argument("insight")
     l.add_argument("--task", default="GENERAL")
+    l.add_argument("--project", help="explicit project id/general/personal (else cwd-detected)")
+    l.add_argument("--head", help="semantic heading appended after the timestamp")
+    l.add_argument("--force", action="store_true", help="bypass dedup and always append")
 
     sub.add_parser("init", help="bind this vault (pointer file) + create folder tree")
     sub.add_parser("uninstall", help="remove hooks/scheduler jobs/daemon (vault untouched)")
@@ -421,6 +425,8 @@ def cmd_hooks(cfg, args) -> int:
 
 
 def cmd_note(cfg, args) -> int:
+    from . import capture
+
     folder_by_type = {"learning": "learnings/active", "decision": "decisions",
                       "howto": "howto", "incident": "incidents", "rule": "rules",
                       "reference": "reference", "daily": "daily"}
@@ -434,6 +440,12 @@ def cmd_note(cfg, args) -> int:
     if path.exists():
         print(f"[mb] already exists: {path}", file=sys.stderr)
         return 1
+
+    project, err = capture.resolve_capture_project(cfg, args.project)
+    if err:
+        print(f"[mb] {err}", file=sys.stderr)
+        return 1
+
     today = datetime.now().strftime("%Y-%m-%d")
     template = cfg.vault / "templates" / f"{args.type}.md"
     if template.exists():
@@ -444,6 +456,7 @@ def cmd_note(cfg, args) -> int:
         body = (f"---\ntype: {args.type}\ntitle: \"{args.title}\"\ntags: []\n"
                 f"created: {today}\nstatus: active\nsource: \"\"\nowner: user\n---\n\n"
                 f"# {args.title}\n\n## Контекст\n\n\n## Суть\n\n")
+    body = capture.with_project_frontmatter(body, project)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body, encoding="utf-8")
     print(str(path))
@@ -451,16 +464,42 @@ def cmd_note(cfg, args) -> int:
 
 
 def cmd_learn(cfg, args) -> int:
+    from .search.chunking import parse_frontmatter
+    from . import capture
+
     path = cfg.vault / "learnings" / "active" / f"{args.task}.md"
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    project, err = capture.resolve_capture_project(cfg, args.project)
+    if err:
+        print(f"[mb] {err}", file=sys.stderr)
+        return 1
+
+    existing_text = path.read_text(encoding="utf-8") if path.exists() else ""
+
+    if not args.force and existing_text:
+        dup = capture.find_duplicate(existing_text, args.insight)
+        if dup:
+            print(f"[mb] duplicate skipped (matches '{dup.heading}'): {path}")
+            return 0
+
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            f"---\ntype: learning\ntitle: \"{args.task}\"\ntags: []\n"
-            f"created: {datetime.now().strftime('%Y-%m-%d')}\nstatus: active\n---\n\n"
-            f"# {args.task}\n", encoding="utf-8")
+        body = (f"---\ntype: learning\ntitle: \"{args.task}\"\ntags: []\n"
+                f"created: {datetime.now().strftime('%Y-%m-%d')}\nstatus: active\n---\n\n"
+                f"# {args.task}\n")
+        body = capture.with_project_frontmatter(body, project)
+        path.write_text(body, encoding="utf-8")
+    elif project:
+        existing_fm, _ = parse_frontmatter(existing_text)
+        existing_project = existing_fm.get("project")
+        if existing_project and existing_project != project:
+            print(f"[mb] WARNING: appending to {path.name} (project={existing_project}) "
+                  f"from a different project '{project}' — not changed", file=sys.stderr)
+
+    heading = f"{stamp} — {args.head}" if args.head else stamp
     with open(path, "a", encoding="utf-8") as f:
-        f.write(f"\n## {stamp}\n{args.insight}\n")
+        f.write(f"\n## {heading}\n{args.insight}\n")
     print(str(path))
     return 0
 
