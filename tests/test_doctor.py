@@ -176,3 +176,65 @@ def test_d1_hooks_warns_on_malformed_config(cfg, monkeypatch):
     d1 = _check(cfg, "D1-hooks")
     assert d1["status"] == "WARN"
     assert "unreadable" in d1["detail"]
+
+
+# --- T07: D3-module-context ----------------------------------------------------
+
+def _home(monkeypatch, cfg, home=None):
+    monkeypatch.setattr(doctor.Path, "home", classmethod(lambda cls: home or cfg.vault))
+    import singularity.hooks_state as hooks_state
+    monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: home or cfg.vault))
+
+
+def test_d3_skips_when_no_claude_settings(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D3-module-context")["status"] == "SKIP"
+
+
+def test_d3_warns_when_not_registered(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    settings = cfg.vault / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"hooks": {"Stop": []}}), encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    d3 = _check(cfg, "D3-module-context")
+    assert d3["status"] == "WARN"
+    assert "not registered" in d3["detail"]
+
+
+def test_d3_pass_when_marked_entry_present(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    settings = cfg.vault / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"hooks": {"PreToolUse": [
+        {"_mb": True, "matcher": "Edit|Write|MultiEdit",
+         "hooks": [{"type": "command", "command": "x"}]}]}}), encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D3-module-context")["status"] == "PASS"
+
+
+def test_d3_pass_via_command_path_match_without_marker(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    settings = cfg.vault / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"hooks": {"PreToolUse": [
+        {"hooks": [{"type": "command",
+                    "command": '"...python.exe" ".../singularity/hooks/module_context.py"'}]}]}}),
+        encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D3-module-context")["status"] == "PASS"
+
+
+def test_d3_warns_on_malformed_settings(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    settings = cfg.vault / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text("{not json", encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D3-module-context")["status"] == "WARN"

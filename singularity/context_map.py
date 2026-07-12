@@ -52,6 +52,37 @@ def _resolve_within_vault(vault: Path, rel: str) -> Optional[Path]:
     return candidate
 
 
+def read_note_excerpt(vault: Path, rel_path: Any, max_lines: int, label: str,
+                      default_max_lines: int = DEFAULT_BRAIN_MAX_LINES) -> Optional[str]:
+    """Shared budgeted-excerpt builder: resolve `rel_path` safely within
+    `vault`, strip frontmatter, truncate to `max_lines`, and format with a
+    real absolute "Read <path>" hint — never a fabricated line range or
+    command. Used by both project_brain_block (T06) and module_context's
+    per-module note (T07) so the two budgets/formats can't drift apart. None
+    on any failure (missing/non-string path, traversal, missing/unreadable
+    file) — every reason fails open silently."""
+    if not isinstance(rel_path, str):
+        return None
+    note_path = _resolve_within_vault(vault, rel_path)
+    if note_path is None or not note_path.is_file():
+        return None
+    try:
+        raw = note_path.read_text(encoding="utf-8-sig")
+    except OSError:
+        return None
+
+    _, body = parse_frontmatter(raw)
+    lines = body.strip("\n").splitlines()
+    if not isinstance(max_lines, int) or max_lines <= 0:
+        max_lines = default_max_lines
+    shown = lines[:max_lines]
+    more = len(lines) - len(shown)
+    header = f"{label} — Read {note_path} for full content:"
+    suffix = (f"\n... ({more} more line{'s' if more != 1 else ''} truncated, "
+             f"max_lines={max_lines})") if more > 0 else ""
+    return "\n".join([header, *shown]) + suffix
+
+
 def project_brain_block(vault: Path, project: Optional[str],
                         max_lines: int = DEFAULT_BRAIN_MAX_LINES) -> Optional[str]:
     """Compact, line-budgeted project-brain text for SessionStart, or None
@@ -65,25 +96,5 @@ def project_brain_block(vault: Path, project: Optional[str],
     entry = load_context_map(vault).get(project)
     if not isinstance(entry, dict):
         return None
-    brain_note = entry.get("brain_note")
-    if not isinstance(brain_note, str):
-        return None
-    note_path = _resolve_within_vault(vault, brain_note)
-    if note_path is None or not note_path.is_file():
-        return None
-    try:
-        raw = note_path.read_text(encoding="utf-8-sig")
-    except OSError:
-        return None
-
-    _, body = parse_frontmatter(raw)
-    lines = body.strip("\n").splitlines()
-    if not isinstance(max_lines, int) or max_lines <= 0:
-        max_lines = DEFAULT_BRAIN_MAX_LINES
-    shown = lines[:max_lines]
-    more = len(lines) - len(shown)
-    # A real, absolute Read hint — never a fabricated line range or command.
-    header = f"Project brain ({project}) — Read {note_path} for full content:"
-    suffix = (f"\n... ({more} more line{'s' if more != 1 else ''} truncated, "
-             f"brain_max_lines={max_lines})") if more > 0 else ""
-    return "\n".join([header, *shown]) + suffix
+    return read_note_excerpt(vault, entry.get("brain_note"), max_lines,
+                             f"Project brain ({project})")

@@ -33,6 +33,16 @@ HOOKS = {
             }],
         }
     ],
+    "PreToolUse": [
+        {
+            "_mb": True,
+            "matcher": "Edit|Write|MultiEdit",
+            "hooks": [{
+                "type": "command",
+                "command": f'"{PYTHON}" "{ENGINE / "singularity" / "hooks" / "module_context.py"}"',
+            }],
+        }
+    ],
 }
 
 
@@ -50,6 +60,7 @@ def main() -> int:
         existing = [e for e in hooks.get(event, []) if not e.get("_mb")]
         hooks[event] = existing + entries
 
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
                              encoding="utf-8")
     print(f"registered {sum(len(v) for v in HOOKS.values())} hook entr(y/ies); "

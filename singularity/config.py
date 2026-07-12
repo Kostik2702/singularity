@@ -46,6 +46,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "auto_capture": True,
     "brain_max_lines": 40,             # T06: per-project brain note truncation
     "session_context_max_lines": 200,  # T06: total SessionStart injection budget
+    "module_note_max_lines": 60,       # T07: per-module context note truncation
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -88,6 +89,7 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     _int("batch_size", 1, 1_000_000)
     _int("brain_max_lines", 1, 10_000)
     _int("session_context_max_lines", 1, 10_000)
+    _int("module_note_max_lines", 1, 10_000)
     for key in ("skip_dirs", "skip_path_parts"):
         if key in data and (not isinstance(data[key], list)
                             or not all(isinstance(x, str) for x in data[key])):
@@ -226,6 +228,24 @@ class Config:
             truststore.inject_into_ssl()
         except ImportError:
             pass
+
+
+def read_config_tolerant(vault: Path) -> dict[str, Any]:
+    """Dependency-free, never-raising read of vault/.mb/config.json — for hook
+    hot paths (SessionStart, PreToolUse, ...) that must NOT go through the
+    full load_config() gate: that path sys.exit(2)s on a malformed config,
+    which is correct CLI behavior but would kill a hook mid-session. Missing/
+    malformed/non-object -> {}; every caller already treats absence as "use
+    the default". See [[Rule - hooks must never use the full validated Config
+    load path]]."""
+    cfg_path = vault / ".mb" / "config.json"
+    if not cfg_path.exists():
+        return {}
+    try:
+        data = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:

@@ -30,23 +30,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
-def _light_config(vault: Path) -> dict:
-    """Tolerant, dependency-free read of .mb/config.json — NOT the full
-    validated Config/load_config() path (too slow and it can sys.exit on a
-    malformed config, which a hook must never do). Missing/malformed -> {};
-    every caller already treats absence as "use the default"."""
-    cfg_path = vault / ".mb" / "config.json"
-    if not cfg_path.exists():
-        return {}
-    try:
-        data = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
 def build_context(event_cwd: str | None = None) -> str:
-    from singularity.config import resolve_vault
+    from singularity.config import read_config_tolerant, resolve_vault
 
     vault = resolve_vault(None)
     lines: list[str] = []
@@ -69,7 +54,7 @@ def build_context(event_cwd: str | None = None) -> str:
         lines.append("WARNING: vault path does not exist on this machine.")
         return "\n".join(lines)
 
-    light_cfg = _light_config(vault)
+    light_cfg = read_config_tolerant(vault)
 
     # T06: project brain — independent fail-open block. Project detection
     # never touches SessionStart's own operation even if it errors.
