@@ -525,20 +525,33 @@ def cmd_llm(cfg, args) -> int:
 
 
 def cmd_uninstall(cfg, _args) -> int:
-    """Remove hooks (_mb-marked), scheduler jobs and the daemon. Vault untouched."""
+    """Remove hooks (_mb-marked, plus pre-marker legacy entries recognized by
+    their own command — [[Rule - hook ownership detection must tolerate
+    pre-marker installs]]), scheduler jobs and the daemon. Vault untouched."""
     from pathlib import Path as _P
+
+    import importlib.util
 
     from .platform import scheduler
     from .search import client
 
+    _eng = _P(__file__).resolve().parents[1]
+
+    def _load(name: str):
+        spec = importlib.util.spec_from_file_location(name, _eng / "install" / f"{name}.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
     settings_path = _P.home() / ".claude" / "settings.json"
     if settings_path.exists():
+        _rh = _load("register_hooks")
         data = json.loads(settings_path.read_text(encoding="utf-8"))
         hooks = data.get("hooks", {})
         removed = 0
         for event in list(hooks):
             before = len(hooks[event])
-            hooks[event] = [e for e in hooks[event] if not e.get("_mb")]
+            hooks[event] = [e for e in hooks[event] if not _rh._is_owned(e, event)]
             removed += before - len(hooks[event])
             if not hooks[event]:
                 del hooks[event]
@@ -547,12 +560,7 @@ def cmd_uninstall(cfg, _args) -> int:
         print(f"hooks removed: {removed}")
 
     # Gemini artifacts (owned managed block, named hook, engine-pointing skill links)
-    import importlib.util
-    _eng = _P(__file__).resolve().parents[1]
-    _spec = importlib.util.spec_from_file_location(
-        "register_gemini", _eng / "install" / "register_gemini.py")
-    _rg = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(_rg)
+    _rg = _load("register_gemini")
     g = _rg.uninstall()
     print(f"gemini: profile {g['profile']}, {g['hooks']} hook(s) removed, "
           f"{g['skills_removed']} skill link(s) removed, {g['skills_kept']} kept (foreign)")

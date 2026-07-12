@@ -1,7 +1,15 @@
 """Register Singularity hooks in ~/.claude/settings.json (idempotent merge).
 
 Every entry we own carries "_mb": true so re-register and uninstall can
-find them without touching anything else in the user's settings.
+find them without touching anything else in the user's settings. Ownership
+detection also falls back to matching our own script filename in the
+command — see [[Rule - hook ownership detection must tolerate pre-marker
+installs]]: a machine can have SessionStart/Stop entries that predate the
+`_mb` marker (this repo's own dev machine did). Without the fallback, a
+re-register would treat that legacy entry as "foreign" and ADD a second,
+duplicate entry alongside it instead of replacing it — confirmed live on
+2026-07-12 (T07): running the then-current merge produced two SessionStart
+and two Stop entries pointing at the identical command.
 """
 from __future__ import annotations
 
@@ -46,6 +54,25 @@ HOOKS = {
 }
 
 
+# Fallback ownership signal (script filename) per event, for entries that
+# predate the `_mb` marker — must stay in sync with the script names used in
+# HOOKS above.
+_OWNED_SCRIPTS = {
+    "SessionStart": "session_start.py",
+    "Stop": "stop_capture.py",
+    "PreToolUse": "module_context.py",
+}
+
+
+def _is_owned(entry: dict, event: str) -> bool:
+    if entry.get("_mb"):
+        return True
+    script = _OWNED_SCRIPTS.get(event)
+    if not script:
+        return False
+    return any(script in str(h.get("command", "")) for h in entry.get("hooks", []))
+
+
 def main() -> int:
     settings_path = Path.home() / ".claude" / "settings.json"
     data = {}
@@ -57,7 +84,7 @@ def main() -> int:
 
     hooks = data.setdefault("hooks", {})
     for event, entries in HOOKS.items():
-        existing = [e for e in hooks.get(event, []) if not e.get("_mb")]
+        existing = [e for e in hooks.get(event, []) if not _is_owned(e, event)]
         hooks[event] = existing + entries
 
     settings_path.parent.mkdir(parents=True, exist_ok=True)

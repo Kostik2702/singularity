@@ -73,6 +73,24 @@ def test_rerun_replaces_owned_entries_not_duplicates(home):
     assert len(data["hooks"]["SessionStart"]) == 1
 
 
+def test_legacy_unmarked_entry_is_replaced_not_duplicated(home):
+    """The actual bug found 2026-07-12 running this against a real machine:
+    a pre-marker SessionStart entry (no `_mb`, but running our own script)
+    was treated as foreign and a second, duplicate entry got ADDED instead
+    of the legacy one being replaced. Fixed via _is_owned's command-name
+    fallback — [[Rule - hook ownership detection must tolerate pre-marker
+    installs]]."""
+    _settings(home).parent.mkdir(parents=True)
+    _settings(home).write_text(json.dumps({"hooks": {"SessionStart": [
+        {"hooks": [{"type": "command",
+                    "command": '"...python.exe" ".../hooks/session_start.py"'}]}]}}),
+        encoding="utf-8")
+    register_hooks.main()
+    data = json.loads(_settings(home).read_text(encoding="utf-8"))
+    assert len(data["hooks"]["SessionStart"]) == 1
+    assert data["hooks"]["SessionStart"][0]["_mb"] is True
+
+
 def test_foreign_pretooluse_entries_preserved(home):
     _settings(home).parent.mkdir(parents=True)
     _settings(home).write_text(json.dumps({"hooks": {"PreToolUse": [
