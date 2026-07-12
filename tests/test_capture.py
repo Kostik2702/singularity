@@ -148,6 +148,38 @@ def test_no_explicit_and_no_match_is_none_never_personal(tmp_path, monkeypatch):
     assert project is None and err is None    # never auto-resolves to "personal"
 
 
+# --- T08: personal_roots retrofit ---------------------------------------------
+
+def test_dest_under_personal_root_resolves_to_personal(tmp_path, monkeypatch):
+    cfg = Config(vault=tmp_path, data={"personal_roots": ["journal/private"]})
+    monkeypatch.setattr(capture.Path, "cwd", classmethod(lambda cls: tmp_path / "elsewhere"))
+    project, err = capture.resolve_capture_project(cfg, None, "journal/private/note.md")
+    assert project == "personal" and err is None
+
+
+def test_dest_outside_personal_root_falls_back_to_cwd_detection(tmp_path, monkeypatch):
+    proj_dir = tmp_path / "proj"; proj_dir.mkdir()
+    cfg = Config(vault=tmp_path, data={"personal_roots": ["journal/private"],
+                                       "projects": {"p": {"path": str(proj_dir)}}})
+    monkeypatch.setattr(capture.Path, "cwd", classmethod(lambda cls: proj_dir))
+    project, err = capture.resolve_capture_project(cfg, None, "howto/note.md")
+    assert project == "p" and err is None
+
+
+def test_explicit_project_wins_over_personal_roots(tmp_path):
+    cfg = Config(vault=tmp_path, data={"personal_roots": ["journal/private"],
+                                       "projects": {"p": {"path": "D:/p"}}})
+    project, err = capture.resolve_capture_project(cfg, "p", "journal/private/note.md")
+    assert project == "p" and err is None
+
+
+def test_no_dest_rel_path_skips_personal_roots_check(tmp_path, monkeypatch):
+    cfg = Config(vault=tmp_path, data={"personal_roots": ["journal/private"]})
+    monkeypatch.setattr(capture.Path, "cwd", classmethod(lambda cls: tmp_path / "elsewhere"))
+    project, err = capture.resolve_capture_project(cfg, None)      # no dest_rel_path at all
+    assert project is None and err is None
+
+
 # --- with_project_frontmatter -------------------------------------------------------
 
 def test_inserts_project_into_frontmatter():

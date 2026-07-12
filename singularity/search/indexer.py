@@ -191,8 +191,9 @@ def _rebuild(cfg: Config, progress: bool = True) -> dict[str, int]:
     files = _scan_vault(cfg)
     chunks: list[dict[str, Any]] = []
     file_meta: dict[str, list[int]] = {}
+    personal_roots = cfg.get("personal_roots") or []
     for rel, path in sorted(files.items()):
-        file_chunks = extract_chunks(path, rel)
+        file_chunks = extract_chunks(path, rel, personal_roots)
         if file_chunks:
             chunks.extend(file_chunks)
         file_meta[rel] = _file_stat(path)
@@ -272,9 +273,10 @@ def _update(cfg: Config, only_files: list[str] | None = None) -> dict[str, int]:
         old_meta.pop(rel, None)
 
     # re-chunk changed/new files, vstack
+    personal_roots = cfg.get("personal_roots") or []
     new_chunks: list[dict[str, Any]] = []
     for rel in sorted(added_or_changed):
-        new_chunks.extend(extract_chunks(files[rel], rel))
+        new_chunks.extend(extract_chunks(files[rel], rel, personal_roots))
         old_meta[rel] = _file_stat(files[rel])
     if new_chunks:
         encoder = shared_encoder(cfg.model, cfg.get("batch_size"))

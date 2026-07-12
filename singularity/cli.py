@@ -441,7 +441,8 @@ def cmd_note(cfg, args) -> int:
         print(f"[mb] already exists: {path}", file=sys.stderr)
         return 1
 
-    project, err = capture.resolve_capture_project(cfg, args.project)
+    dest_rel = str(path.relative_to(cfg.vault)).replace("\\", "/")
+    project, err = capture.resolve_capture_project(cfg, args.project, dest_rel)
     if err:
         print(f"[mb] {err}", file=sys.stderr)
         return 1
@@ -470,7 +471,8 @@ def cmd_learn(cfg, args) -> int:
     path = cfg.vault / "learnings" / "active" / f"{args.task}.md"
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    project, err = capture.resolve_capture_project(cfg, args.project)
+    dest_rel = str(path.relative_to(cfg.vault)).replace("\\", "/")
+    project, err = capture.resolve_capture_project(cfg, args.project, dest_rel)
     if err:
         print(f"[mb] {err}", file=sys.stderr)
         return 1

@@ -175,6 +175,55 @@ def test_extract_chunks_omits_project_key_for_literal_general(tmp_path):
     assert "project" not in chunks[0]
 
 
+# --- T08: personal_roots retrofit ---------------------------------------------
+
+def test_infer_project_personal_roots_match():
+    assert infer_project({}, "journal/private/note.md", ["journal/private"]) == "personal"
+
+
+def test_infer_project_personal_roots_exact_file_match():
+    assert infer_project({}, "journal/one-file.md", ["journal/one-file.md"]) == "personal"
+
+
+def test_infer_project_personal_roots_no_match():
+    assert infer_project({}, "howto/x.md", ["journal/private"]) is None
+
+
+def test_infer_project_frontmatter_wins_over_personal_roots():
+    assert infer_project({"project": "singularity"}, "journal/private/note.md",
+                         ["journal/private"]) == "singularity"
+
+
+def test_infer_project_personal_roots_sibling_prefix_not_matched():
+    # "journal/private" must not match "journal/privateish/x.md"
+    assert infer_project({}, "journal/privateish/x.md", ["journal/private"]) is None
+
+
+def test_infer_project_backslash_rel_path_normalized():
+    assert infer_project({}, "journal\\private\\note.md", ["journal/private"]) == "personal"
+
+
+def test_infer_project_empty_personal_roots_no_effect():
+    assert infer_project({}, "journal/private/note.md", []) is None
+    assert infer_project({}, "journal/private/note.md", None) is None
+
+
+def test_extract_chunks_personal_roots_stamps_personal(tmp_path):
+    d = tmp_path / "journal" / "private"; d.mkdir(parents=True)
+    p = d / "note.md"
+    p.write_text("# T\n\n## S\n" + "x" * 60, encoding="utf-8")
+    chunks = extract_chunks(p, "journal/private/note.md", personal_roots=["journal/private"])
+    assert chunks[0]["project"] == "personal"
+
+
+def test_extract_chunks_without_personal_roots_arg_unaffected(tmp_path):
+    d = tmp_path / "journal" / "private"; d.mkdir(parents=True)
+    p = d / "note.md"
+    p.write_text("# T\n\n## S\n" + "x" * 60, encoding="utf-8")
+    chunks = extract_chunks(p, "journal/private/note.md")     # no personal_roots arg at all
+    assert "project" not in chunks[0]
+
+
 def test_line_offsets_map_into_file(tmp_path):
     p = tmp_path / "note.md"
     p.write_text(SAMPLE, encoding="utf-8")

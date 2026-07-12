@@ -68,18 +68,42 @@ def find_duplicate(existing_text: str, new_content: str,
     return None
 
 
-def resolve_capture_project(cfg: Any, explicit: Optional[str]
+def _under_root(rel_path: str, root: str) -> bool:
+    rel_norm = rel_path.replace("\\", "/").strip("/")
+    root_norm = str(root).replace("\\", "/").strip("/")
+    if not root_norm:
+        return False
+    return rel_norm == root_norm or rel_norm.startswith(root_norm + "/")
+
+
+def resolve_capture_project(cfg: Any, explicit: Optional[str],
+                            dest_rel_path: Optional[str] = None
                             ) -> tuple[Optional[str], Optional[str]]:
     """(project_or_None, error_or_None). `project=None` means general (the
     frontmatter key should be omitted, matching chunking.infer_project's
-    convention). Explicit `--project` is resolved through projects.
-    resolve_selector — the SAME resolver `mb search --project` uses (FR-1) —
-    but capture needs exactly one concrete target, so a token that expands to
-    a group is rejected rather than silently picking one member. Without an
-    explicit value, falls back to cwd-based projects.detect_project, which by
-    construction can never resolve to "personal" (a reserved id, never a
-    registrable path) — the only way to write `project: personal` is to ask
-    for it explicitly, which is the whole point of that acceptance criterion."""
+    convention).
+
+    Priority: explicit --project > dest_rel_path under a configured
+    personal_roots entry (T08 retrofit — Open Decision, 2026-07-12: personal
+    = frontmatter OR configured personal_roots) > cwd-based detection.
+
+    Explicit `--project` is resolved through projects.resolve_selector — the
+    SAME resolver `mb search --project` uses (FR-1) — but capture needs
+    exactly one concrete target, so a token that expands to a group is
+    rejected rather than silently picking one member.
+
+    `dest_rel_path` is the note's OWN vault-relative destination (e.g.
+    `learnings/active/T1.md`), passed by the caller (cmd_learn/cmd_note)
+    which already computed it — this mirrors chunking.infer_project's
+    personal_roots check on the read side, so a note captured under a
+    configured personal root is classified "personal" without needing
+    `--project personal` spelled out every time.
+
+    Without an explicit value AND no personal_roots match, falls back to
+    cwd-based projects.detect_project, which by construction can never
+    resolve to "personal" (a reserved id, never a registrable path) — so
+    the only way to land on "personal" is an explicit flag or a configured
+    root, never an accidental cwd match."""
     from . import projects
 
     registry = cfg.get("projects", {}) or {}
@@ -93,6 +117,13 @@ def resolve_capture_project(cfg: Any, explicit: Optional[str]
                           f"(a group); capture needs exactly one id, or general/personal")
         chosen = ids[0]
         return (None if chosen == "general" else chosen), None
+
+    personal_roots = cfg.get("personal_roots") or []
+    if dest_rel_path and personal_roots:
+        for root in personal_roots:
+            if isinstance(root, str) and _under_root(dest_rel_path, root):
+                return "personal", None
+
     detected = projects.detect_project(registry, str(Path.cwd()))
     return detected, None
 

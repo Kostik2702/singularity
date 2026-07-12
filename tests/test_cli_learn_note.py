@@ -114,6 +114,24 @@ def test_learn_personal_requires_explicit_choice(wired, cfg, monkeypatch):
     assert fm2["project"] == "personal"
 
 
+# --- T08: personal_roots retrofit end-to-end ---------------------------------------
+
+def test_note_new_under_personal_root_auto_classified(wired, cfg):
+    cfg.data["personal_roots"] = ["howto"]     # anything under howto/ is personal here
+    cli.main(["note", "new", "howto", "Diary Entry"])
+    path = cfg.vault / "howto" / "Diary Entry.md"
+    fm, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+    assert fm["project"] == "personal"
+
+
+def test_note_new_outside_personal_root_unaffected(wired, cfg):
+    cfg.data["personal_roots"] = ["howto"]
+    cli.main(["note", "new", "reference", "Some Note"])
+    path = cfg.vault / "reference" / "Some Note.md"
+    fm, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+    assert "project" not in fm
+
+
 def test_learn_unknown_project_token_errors(wired, capsys):
     rc = cli.main(["learn", "x", "--task", "T1", "--project", "nope"])
     assert rc == 1

@@ -92,18 +92,37 @@ def infer_type(rel_path: str, frontmatter: dict[str, Any]) -> str:
     return _TYPE_BY_FOLDER.get(first, "reference")
 
 
-def infer_project(frontmatter: dict[str, Any]) -> Optional[str]:
-    """T04 §8.2: explicit `frontmatter.project` only — a note's location in the
-    vault tree carries no project meaning (unlike `type`, which folder-infers).
-    A literal "general" is normalized to None (absent), matching the classify-as-
-    general default so the compact label can omit `@general` unconditionally."""
+def _under_root(rel_path: str, root: str) -> bool:
+    rel_norm = rel_path.replace("\\", "/").strip("/")
+    root_norm = str(root).replace("\\", "/").strip("/")
+    if not root_norm:
+        return False
+    return rel_norm == root_norm or rel_norm.startswith(root_norm + "/")
+
+
+def infer_project(frontmatter: dict[str, Any], rel_path: str = "",
+                  personal_roots: Optional[list[str]] = None) -> Optional[str]:
+    """T04 §8.2 classification, extended by T08's personal_roots retrofit
+    (Open Decision, 2026-07-12: personal = frontmatter OR configured
+    personal_roots — broader than T04's original frontmatter-only cut):
+
+    1. Explicit `frontmatter.project` wins. A literal "general" normalizes to
+       None (absent), matching the classify-as-general default so the compact
+       label can omit `@general` unconditionally.
+    2. Else, if `rel_path` falls under a configured `personal_roots` entry
+       (vault-relative, forward-slash normalized) -> "personal".
+    3. Else None (general) — a note's location otherwise carries no project
+       meaning (unlike `type`, which folder-infers)."""
     value = frontmatter.get("project")
-    if not isinstance(value, str):
-        return None
-    value = value.strip()
-    if not value or value.lower() == "general":
-        return None
-    return value
+    if isinstance(value, str):
+        value = value.strip()
+        if value and value.lower() != "general":
+            return value
+    if rel_path and personal_roots:
+        for root in personal_roots:
+            if isinstance(root, str) and _under_root(rel_path, root):
+                return "personal"
+    return None
 
 
 def _clean_section(text: str) -> tuple[str, list[str], list[str]]:
@@ -158,8 +177,10 @@ def _window_text(content: str,
     return windows
 
 
-def extract_chunks(path: Path, rel_path: str) -> list[dict[str, Any]]:
-    """Chunk one markdown file. rel_path uses forward slashes."""
+def extract_chunks(path: Path, rel_path: str,
+                   personal_roots: Optional[list[str]] = None) -> list[dict[str, Any]]:
+    """Chunk one markdown file. rel_path uses forward slashes. personal_roots
+    (T08 retrofit) is optional/default-None for callers indifferent to it."""
     try:
         raw = path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
@@ -172,7 +193,7 @@ def extract_chunks(path: Path, rel_path: str) -> list[dict[str, Any]]:
     fm_tags = _as_list(fm.get("tags"))
     note_type = infer_type(rel_path, fm)
     priority = fm.get("priority")
-    project = infer_project(fm)
+    project = infer_project(fm, rel_path, personal_roots)
 
     title_part = title if not aliases else f"{title} / {', '.join(aliases)}"
 
