@@ -28,13 +28,22 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     except (AttributeError, OSError):
         pass
-    # Consume the payload; tolerate invalid/empty stdin (content not required).
+    # T06: extract event cwd for project detection; tolerate invalid/empty/
+    # missing stdin (content is otherwise not required — Gemini's SessionStart
+    # payload shape is documented in tests/fixtures/gemini/hook_session_start.json).
+    event_cwd = None
     try:
-        sys.stdin.read()
-    except OSError:
+        raw = sys.stdin.buffer.read().decode("utf-8-sig", errors="ignore").strip()
+        if raw:
+            event = json.loads(raw)
+            if isinstance(event, dict):
+                cwd = event.get("cwd")
+                if isinstance(cwd, str) and cwd.strip():
+                    event_cwd = cwd
+    except (OSError, json.JSONDecodeError, AttributeError):
         pass
     try:
-        context = build_context()
+        context = build_context(event_cwd)
     except Exception as exc:  # noqa: BLE001 — a broken hook must never block startup
         context = f"[Singularity memory] hook error: {exc}"
     print(json.dumps({

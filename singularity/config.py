@@ -44,6 +44,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "batch_size": 64,
     "code_repos_dir": None,     # optional code index root
     "auto_capture": True,
+    "brain_max_lines": 40,             # T06: per-project brain note truncation
+    "session_context_max_lines": 200,  # T06: total SessionStart injection budget
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -84,6 +86,8 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     _int("daemon_port", 0, 65535)
     _int("excerpt_chars", 1, 1_000_000)
     _int("batch_size", 1, 1_000_000)
+    _int("brain_max_lines", 1, 10_000)
+    _int("session_context_max_lines", 1, 10_000)
     for key in ("skip_dirs", "skip_path_parts"):
         if key in data and (not isinstance(data[key], list)
                             or not all(isinstance(x, str) for x in data[key])):

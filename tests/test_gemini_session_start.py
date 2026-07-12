@@ -14,6 +14,10 @@ from singularity.hooks import gemini_session_start as gsm
 
 def _run(monkeypatch, capsys, stdin_text):
     monkeypatch.setattr("sys.stdin", io.StringIO(stdin_text))
+    # gemini_session_start reads sys.stdin.buffer (T06: BOM-tolerant event cwd
+    # extraction); provide a buffer shim, same pattern as test_stop_capture.py.
+    monkeypatch.setattr(gsm.sys.stdin, "buffer",
+                        io.BytesIO(stdin_text.encode("utf-8")), raising=False)
     rc = gsm.main()
     out = capsys.readouterr().out
     return rc, json.loads(out)
@@ -21,7 +25,7 @@ def _run(monkeypatch, capsys, stdin_text):
 
 @pytest.mark.parametrize("source", ["startup", "resume", "clear"])
 def test_emits_valid_json_for_each_source(monkeypatch, capsys, source):
-    monkeypatch.setattr(gsm, "build_context", lambda: "CTX body")
+    monkeypatch.setattr(gsm, "build_context", lambda cwd=None: "CTX body")
     rc, obj = _run(monkeypatch, capsys, json.dumps(
         {"hook_event_name": "SessionStart", "source": source}))
     assert rc == 0
@@ -30,27 +34,41 @@ def test_emits_valid_json_for_each_source(monkeypatch, capsys, source):
 
 
 def test_cyrillic_context_not_escaped(monkeypatch, capsys):
-    monkeypatch.setattr(gsm, "build_context", lambda: "Активные задачи: GEMINI-CLI")
+    monkeypatch.setattr(gsm, "build_context", lambda cwd=None: "Активные задачи: GEMINI-CLI")
     _, obj = _run(monkeypatch, capsys, '{"source":"startup"}')
     assert "Активные задачи" in obj["hookSpecificOutput"]["additionalContext"]
 
 
 def test_invalid_stdin_still_valid_json(monkeypatch, capsys):
-    monkeypatch.setattr(gsm, "build_context", lambda: "ok")
+    monkeypatch.setattr(gsm, "build_context", lambda cwd=None: "ok")
     rc, obj = _run(monkeypatch, capsys, "this is not json {{{")
     assert rc == 0
     assert obj["hookSpecificOutput"]["additionalContext"] == "ok"
 
 
 def test_empty_stdin_still_valid_json(monkeypatch, capsys):
-    monkeypatch.setattr(gsm, "build_context", lambda: "ok")
+    monkeypatch.setattr(gsm, "build_context", lambda cwd=None: "ok")
     rc, obj = _run(monkeypatch, capsys, "")
     assert rc == 0
     assert "additionalContext" in obj["hookSpecificOutput"]
 
 
+def test_event_cwd_is_passed_through_to_build_context(monkeypatch, capsys):
+    seen = {}
+    monkeypatch.setattr(gsm, "build_context", lambda cwd=None: seen.update(cwd=cwd) or "ok")
+    _run(monkeypatch, capsys, json.dumps({"source": "startup", "cwd": "D:/some/project"}))
+    assert seen["cwd"] == "D:/some/project"
+
+
+def test_missing_event_cwd_passes_none(monkeypatch, capsys):
+    seen = {}
+    monkeypatch.setattr(gsm, "build_context", lambda cwd=None: seen.update(cwd=cwd) or "ok")
+    _run(monkeypatch, capsys, json.dumps({"source": "startup"}))
+    assert seen["cwd"] is None
+
+
 def test_builder_exception_is_isolated(monkeypatch, capsys):
-    def boom():
+    def boom(cwd=None):
         raise RuntimeError("vault exploded")
     monkeypatch.setattr(gsm, "build_context", boom)
     rc, obj = _run(monkeypatch, capsys, '{"source":"startup"}')
