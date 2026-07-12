@@ -7,6 +7,7 @@ mb watch
 mb doctor [--fix] [--heavy] [--json]
 mb note new <type> <title>
 mb learn "<insight>" [--task ID]
+mb hooks status|enable|disable [--json]
 mb init            # write ~/.singularity.json pointer + folder tree
 """
 from __future__ import annotations
@@ -93,6 +94,13 @@ def _build_parser() -> argparse.ArgumentParser:
     cfgs = cfgsub.add_parser("set", help="set a config value (validated, atomic save)")
     cfgs.add_argument("key")
     cfgs.add_argument("value", help="JSON value; falls back to a string literal")
+
+    hk = sub.add_parser("hooks", help="capture/stop hooks control (desired/installed/effective)")
+    hksub = hk.add_subparsers(dest="hooks_action", required=True)
+    hkst = hksub.add_parser("status", help="show capture hooks desired/installed/effective state")
+    hkst.add_argument("--json", action="store_true")
+    hksub.add_parser("enable", help="enable capture hooks (auto_capture=true)")
+    hksub.add_parser("disable", help="disable capture hooks (auto_capture=false)")
 
     n = sub.add_parser("note", help="notes")
     nsub = n.add_subparsers(dest="note_action", required=True)
@@ -281,6 +289,34 @@ def cmd_config(cfg, args) -> int:
     return 1
 
 
+def cmd_hooks(cfg, args) -> int:
+    from . import hooks_state
+
+    if args.hooks_action == "status":
+        data = hooks_state.status(cfg.vault)
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False))
+        else:
+            desired = "enabled" if data["configured"] else "disabled"
+            default = "enabled" if data["default"] else "disabled"
+            print(f"capture hooks: {desired} (default: {default}, source: {data['source']})")
+            for name, c in data["clients"].items():
+                print(f"{name}: installed={'yes' if c['installed'] else 'no'}, "
+                      f"mode={c['mode']}, effective={'yes' if c['effective'] else 'no'}")
+            for w in data["warnings"]:
+                print(f"[warn] {w}")
+        return 0
+
+    enabled = args.hooks_action == "enable"
+    try:
+        hooks_state.set_capture_enabled(cfg, enabled)
+    except ValueError as exc:
+        print(f"[mb] {exc}", file=sys.stderr)
+        return 1
+    print(f"capture hooks {'enabled' if enabled else 'disabled'}")
+    return 0
+
+
 def cmd_note(cfg, args) -> int:
     folder_by_type = {"learning": "learnings/active", "decision": "decisions",
                       "howto": "howto", "incident": "incidents", "rule": "rules",
@@ -442,6 +478,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_backup(cfg, args)
     if args.command == "config":
         return cmd_config(cfg, args)
+    if args.command == "hooks":
+        return cmd_hooks(cfg, args)
     if args.command == "note":
         return cmd_note(cfg, args)
     if args.command == "learn":
