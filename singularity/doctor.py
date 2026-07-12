@@ -439,10 +439,13 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                     if isinstance(h, dict) and "module_context.py" in str(h.get("command", "")):
                         installed = True
                         break
+        from .config import read_config_tolerant
+        enabled = bool(read_config_tolerant(cfg.vault).get("module_context_enabled", False))
+        state = "enabled" if enabled else "disabled (default, opt-in via module_context_enabled)"
         if installed:
-            rep.add("D3-module-context", "PASS", "PreToolUse module-context hook registered")
+            rep.add("D3-module-context", "PASS", f"PreToolUse hook registered, {state}")
         else:
-            rep.add("D3-module-context", "WARN", "module-context hook not registered",
+            rep.add("D3-module-context", "WARN", f"module-context hook not registered, {state}",
                     fix="python install/register_hooks.py")
 
     _guard(rep, "D4", d4)

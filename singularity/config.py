@@ -47,6 +47,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "brain_max_lines": 40,             # T06: per-project brain note truncation
     "session_context_max_lines": 200,  # T06: total SessionStart injection budget
     "module_note_max_lines": 60,       # T07: per-module context note truncation
+    "module_context_enabled": False,   # T07: PreToolUse hook installed but no-op until true
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -96,6 +97,8 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
             errors.append(f"{key}: must be a list of strings")
     if "auto_capture" in data and not isinstance(data["auto_capture"], bool):
         errors.append("auto_capture: must be a boolean")
+    if "module_context_enabled" in data and not isinstance(data["module_context_enabled"], bool):
+        errors.append("module_context_enabled: must be a boolean")
     if "connectors" in data and not isinstance(data["connectors"], dict):
         errors.append("connectors: must be an object")
     for key in _PATH_KEYS:

@@ -23,12 +23,13 @@ def _resolve_to(monkeypatch, value):
     monkeypatch.setattr(config_mod, "resolve_vault", lambda explicit=None: value)
 
 
-def _setup_project(vault, project_id="p", project_dirname="proj"):
+def _setup_project(vault, project_id="p", project_dirname="proj", enabled=True):
     proj_dir = vault / "code" / project_dirname
     proj_dir.mkdir(parents=True)
     mb = vault / ".mb"; mb.mkdir(parents=True, exist_ok=True)
     (mb / "config.json").write_text(json.dumps(
-        {"projects": {project_id: {"path": str(proj_dir)}}}), encoding="utf-8")
+        {"projects": {project_id: {"path": str(proj_dir)}},
+         "module_context_enabled": enabled}), encoding="utf-8")
     return proj_dir
 
 
@@ -65,6 +66,41 @@ def test_no_vault_is_noop(monkeypatch):
     _resolve_to(monkeypatch, None)
     ctx = mc.build_additional_context({"tool_name": "Edit", "tool_input": {"file_path": "x"}})
     assert ctx is None
+
+
+# --- T07: module_context_enabled opt-in (installed but no-op by default) --------
+
+def test_disabled_by_default_even_with_full_match(monkeypatch, vault):
+    proj = _setup_project(vault, enabled=False)
+    _set_module_map(vault, "p", {"hooks": {"globs": ["hooks"], "note": "reference/Hooks.md"}})
+    _write_note(vault, "reference/Hooks.md", "Hook facts.")
+    _resolve_to(monkeypatch, vault)
+    event = {"tool_name": "Edit", "cwd": str(proj), "session_id": "s1",
+            "tool_input": {"file_path": str(proj / "hooks" / "a.py")}}
+    assert mc.build_additional_context(event) is None
+
+
+def test_missing_config_key_defaults_to_disabled(monkeypatch, vault):
+    proj = vault / "code" / "proj"; proj.mkdir(parents=True)
+    mb = vault / ".mb"; mb.mkdir(parents=True)
+    (mb / "config.json").write_text(json.dumps(
+        {"projects": {"p": {"path": str(proj)}}}), encoding="utf-8")   # no module_context_enabled key
+    _set_module_map(vault, "p", {"hooks": {"globs": ["hooks"], "note": "reference/Hooks.md"}})
+    _write_note(vault, "reference/Hooks.md", "Hook facts.")
+    _resolve_to(monkeypatch, vault)
+    event = {"tool_name": "Edit", "cwd": str(proj),
+            "tool_input": {"file_path": str(proj / "hooks" / "a.py")}}
+    assert mc.build_additional_context(event) is None
+
+
+def test_explicitly_enabled_matches(monkeypatch, vault):
+    proj = _setup_project(vault, enabled=True)
+    _set_module_map(vault, "p", {"hooks": {"globs": ["hooks"], "note": "reference/Hooks.md"}})
+    _write_note(vault, "reference/Hooks.md", "Hook facts.")
+    _resolve_to(monkeypatch, vault)
+    event = {"tool_name": "Edit", "cwd": str(proj), "session_id": "s1",
+            "tool_input": {"file_path": str(proj / "hooks" / "a.py")}}
+    assert mc.build_additional_context(event) is not None
 
 
 def test_file_outside_any_project_is_noop(monkeypatch, vault):

@@ -45,6 +45,12 @@ def build_additional_context(event: dict) -> str | None:
     if vault is None or not vault.exists():
         return None
 
+    # Installed but opt-in: default False so registering the hook (T07) never
+    # starts checking every Edit/Write until the user turns it on.
+    light_cfg = read_config_tolerant(vault)
+    if not light_cfg.get("module_context_enabled", False):
+        return None
+
     cwd = event.get("cwd")
     base = Path(cwd) if isinstance(cwd, str) and cwd.strip() else Path.cwd()
     fp = Path(file_path)
@@ -53,7 +59,6 @@ def build_additional_context(event: dict) -> str | None:
     except (OSError, ValueError):
         return None
 
-    light_cfg = read_config_tolerant(vault)
     registry = light_cfg.get("projects")
     registry = registry if isinstance(registry, dict) else {}
 
