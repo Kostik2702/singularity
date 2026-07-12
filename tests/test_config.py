@@ -115,6 +115,21 @@ def test_load_config_migrates_and_backs_up(tmp_path, monkeypatch):
     assert list(mb.glob("config.json.bak-*"))
 
 
+# --- T03: projects registry validation is merged into validate_config -------
+
+def test_validate_config_merges_projects_errors():
+    from singularity.config import validate_config
+    res = validate_config({"model": "m", "projects": {"general": {"path": "D:/x"}}})
+    assert any("reserved" in e for e in res["errors"])
+
+
+def test_validate_config_does_not_warn_projects_as_unknown_key():
+    from singularity.config import validate_config
+    res = validate_config({"model": "m", "projects": {"p": {"path": "D:/x"}}})
+    assert res["errors"] == []
+    assert not any("projects" in w for w in res["warnings"])
+
+
 def test_load_config_rejects_bad_types_actionably(tmp_path, monkeypatch, capsys):
     from singularity import config as cfgmod
     mb = tmp_path / ".mb"; mb.mkdir(parents=True)

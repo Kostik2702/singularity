@@ -8,6 +8,7 @@ mb doctor [--fix] [--heavy] [--json]
 mb note new <type> <title>
 mb learn "<insight>" [--task ID]
 mb hooks status|enable|disable [--json]
+mb project list|add|remove|detect
 mb init            # write ~/.singularity.json pointer + folder tree
 """
 from __future__ import annotations
@@ -94,6 +95,22 @@ def _build_parser() -> argparse.ArgumentParser:
     cfgs = cfgsub.add_parser("set", help="set a config value (validated, atomic save)")
     cfgs.add_argument("key")
     cfgs.add_argument("value", help="JSON value; falls back to a string literal")
+
+    pr = sub.add_parser("project", help="multi-project registry + cwd detection")
+    prsub = pr.add_subparsers(dest="project_action", required=True)
+    prl = prsub.add_parser("list", help="list registered projects")
+    prl.add_argument("--json", action="store_true")
+    prl.add_argument("--group", help="filter to one group (or a bare project id)")
+    pra = prsub.add_parser("add", help="register a project (validated, atomic)")
+    pra.add_argument("id")
+    pra.add_argument("path")
+    pra.add_argument("--group")
+    pra.add_argument("--about")
+    prr = prsub.add_parser("remove", help="unregister a project")
+    prr.add_argument("id")
+    prd = prsub.add_parser("detect", help="resolve a path (default: cwd) to a registered project")
+    prd.add_argument("path", nargs="?")
+    prd.add_argument("--json", action="store_true")
 
     hk = sub.add_parser("hooks", help="capture/stop hooks control (desired/installed/effective)")
     hksub = hk.add_subparsers(dest="hooks_action", required=True)
@@ -289,6 +306,73 @@ def cmd_config(cfg, args) -> int:
     return 1
 
 
+def cmd_project(cfg, args) -> int:
+    from pathlib import Path
+
+    from . import projects
+    from .config import validate_config
+
+    entries = cfg.get("projects", {}) or {}
+
+    if args.project_action == "list":
+        shown = entries
+        if args.group:
+            try:
+                ids = projects.resolve_selector(entries, args.group)
+            except KeyError as exc:
+                print(f"[mb] {exc}", file=sys.stderr)
+                return 1
+            shown = {pid: entries[pid] for pid in ids}
+        if args.json:
+            print(json.dumps(shown, ensure_ascii=False))
+        else:
+            if not shown:
+                print("(no projects registered)")
+            for pid, e in sorted(shown.items()):
+                extra = "".join(f"  {k}={e[k]}" for k in ("group", "about") if e.get(k))
+                print(f"{pid}: {e.get('path')}{extra}")
+        return 0
+
+    if args.project_action == "add":
+        entry = {"path": args.path}
+        if args.group:
+            entry["group"] = args.group
+        if args.about:
+            entry["about"] = args.about
+        candidate = {**cfg.data, "projects": {**entries, args.id: entry}}
+        result = validate_config(candidate)
+        if result["errors"]:
+            for e in result["errors"]:
+                print(f"[mb] {e}", file=sys.stderr)
+            return 1
+        cfg.data = candidate
+        cfg.save()
+        print(f"project added: {args.id} -> {entry['path']}")
+        return 0
+
+    if args.project_action == "remove":
+        if args.id not in entries:
+            print(f"[mb] unknown project id: {args.id} (known: "
+                  f"{', '.join(sorted(entries)) or '(none)'})", file=sys.stderr)
+            return 1
+        remaining = {pid: e for pid, e in entries.items() if pid != args.id}
+        cfg.data = {**cfg.data, "projects": remaining}
+        cfg.save()
+        print(f"project removed: {args.id}")
+        return 0
+
+    if args.project_action == "detect":
+        target = args.path or str(Path.cwd())
+        pid = projects.detect_project(entries, target)
+        result = {"cwd": target, "project": pid or "general"}
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        else:
+            print(result["project"])
+        return 0
+    return 1
+
+
 def cmd_hooks(cfg, args) -> int:
     from . import hooks_state
 
@@ -480,6 +564,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_config(cfg, args)
     if args.command == "hooks":
         return cmd_hooks(cfg, args)
+    if args.command == "project":
+        return cmd_project(cfg, args)
     if args.command == "note":
         return cmd_note(cfg, args)
     if args.command == "learn":

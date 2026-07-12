@@ -96,8 +96,13 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
         if key in data and data[key] is not None and not isinstance(data[key], str):
             errors.append(f"{key}: must be a path string or null")
 
-    known = set(DEFAULT_CONFIG) | _PATH_KEYS | {"llm"}
+    from .projects import validate_projects
+    proj_result = validate_projects(data)
+    errors.extend(proj_result["errors"])
+
+    known = set(DEFAULT_CONFIG) | _PATH_KEYS | {"llm", "projects"}
     warnings = [f"{k}: unknown config key (ignored)" for k in data if k not in known]
+    warnings.extend(proj_result["warnings"])
     return {"errors": errors, "warnings": warnings}
 
 
