@@ -21,6 +21,24 @@ CLAUDE_SETTINGS = "settings.json"
 GEMINI_SETTINGS = "settings.json"
 AFTER_AGENT_HOOK_NAME = "singularity-after-agent"
 
+# T02: single shared natural-language contract, injected verbatim into the
+# Claude SessionStart context, the Codex ~/.codex/AGENTS.md managed block and
+# the Gemini ~/.gemini/GEMINI.md managed block — one source so the three
+# clients cannot drift apart on what "stop hooks" means or how to act on it.
+CAPTURE_HOOKS_FRAGMENT = """## Capture/stop hooks control
+User intent (RU or EN) like "включи/выключи/покажи stop hooks", "enable/disable/status
+capture hooks", "включи/выключи auto-capture" means ONLY the capture/stop reminder hook —
+never SessionStart/recall and never any guard hook. Run the deterministic CLI, never
+hand-edit settings.json:
+```
+mb hooks status [--json]
+mb hooks enable
+mb hooks disable
+```
+After enable/disable, always run `mb hooks status` and report the effective state back.
+A vague "выключи все хуки" / "disable all hooks" does NOT mean capture hooks by default —
+confirm scope with the user before running a command."""
+
 
 def _read_json_tolerant(path: Path) -> tuple[dict[str, Any], str | None]:
     """(data, error). Missing file -> ({}, None). Malformed/non-object -> ({}, reason)."""

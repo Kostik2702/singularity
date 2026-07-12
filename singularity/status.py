@@ -72,6 +72,7 @@ def _disk(cfg: Config) -> dict[str, Any]:
 def snapshot(cfg: Config) -> dict[str, Any]:
     from .search import client
     from .config import machine_id
+    from . import hooks_state
     return {
         "vault": str(cfg.vault),
         "machine_id": machine_id(),
@@ -80,6 +81,7 @@ def snapshot(cfg: Config) -> dict[str, Any]:
         "watcher": _guard(lambda: _watcher(cfg)),
         "scheduler": _guard(lambda: _scheduler(cfg)),
         "disk": _guard(lambda: _disk(cfg)),
+        "hooks": _guard(lambda: hooks_state.status(cfg.vault)),
     }
 
 
@@ -105,4 +107,10 @@ def run(cfg: Config, as_json: bool = False) -> int:
                     and "error" not in snap["scheduler"] else []):
         print(f"scheduler[{name}]: registered={s.get('registered')}")
     print(f"disk(.mb): {snap['disk'].get('mb_dir_mb')} MB")
+    h = snap["hooks"]
+    if "error" not in h:
+        desired = "enabled" if h.get("configured") else "disabled"
+        clients = ", ".join(f"{n}={'yes' if c['installed'] else 'no'}"
+                            for n, c in h.get("clients", {}).items())
+        print(f"capture hooks: {desired} (source: {h.get('source')}); installed: {clients}")
     return 0

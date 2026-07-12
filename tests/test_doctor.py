@@ -115,3 +115,64 @@ def test_quiet_report_does_not_print(capsys):
 def _parse_checks(cfg):
     data = json.loads((cfg.mb_dir / "doctor-last.json").read_text(encoding="utf-8"))
     return data["checks"]
+
+
+def _check(cfg, check_id):
+    return next(c for c in _parse_checks(cfg) if c["id"] == check_id)
+
+
+# --- T02: D1-hooks — desired/installed/effective, intentional disable != FAIL --
+
+def test_d1_hooks_warns_when_no_client_registered(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    import singularity.hooks_state as hooks_state
+    monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: cfg.vault))
+    doctor.run(cfg, as_json=True)
+    d1 = _check(cfg, "D1-hooks")
+    assert d1["status"] == "WARN"
+    assert "no client has the hook registered" in d1["detail"]
+
+
+def test_d1_hooks_pass_when_installed_and_enabled(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    import singularity.hooks_state as hooks_state
+    monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: cfg.vault))
+    settings = cfg.vault / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps(
+        {"hooks": {"Stop": [{"_mb": True, "hooks": [{"command": "x"}]}]}}), encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    d1 = _check(cfg, "D1-hooks")
+    assert d1["status"] == "PASS"
+    assert "claude=installed" in d1["detail"]
+
+
+def test_d1_hooks_pass_not_fail_when_intentionally_disabled(cfg, monkeypatch):
+    """The whole point of T02: a deliberate `mb hooks disable` must never read
+    as broken installation."""
+    _stub_externals(monkeypatch)
+    import singularity.hooks_state as hooks_state
+    monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: cfg.vault))
+    settings = cfg.vault / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps(
+        {"hooks": {"Stop": [{"_mb": True, "hooks": [{"command": "x"}]}]}}), encoding="utf-8")
+    (cfg.vault / ".mb").mkdir(parents=True, exist_ok=True)
+    (cfg.vault / ".mb" / "config.json").write_text(
+        json.dumps({"auto_capture": False}), encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    d1 = _check(cfg, "D1-hooks")
+    assert d1["status"] == "PASS"
+    assert "intentionally disabled" in d1["detail"]
+
+
+def test_d1_hooks_warns_on_malformed_config(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    import singularity.hooks_state as hooks_state
+    monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: cfg.vault))
+    (cfg.vault / ".mb").mkdir(parents=True, exist_ok=True)
+    (cfg.vault / ".mb" / "config.json").write_text("{not json", encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    d1 = _check(cfg, "D1-hooks")
+    assert d1["status"] == "WARN"
+    assert "unreadable" in d1["detail"]

@@ -71,6 +71,22 @@ def test_fresh_creates_profile_with_block(home):
     assert text.endswith("\n")
 
 
+# --- T02: shared capture-hooks natural-language fragment ----------------------
+
+def test_profile_contains_capture_hooks_fragment(home):
+    register_codex.main()
+    text = _agents(home).read_text(encoding="utf-8")
+    assert "mb hooks status" in text and "mb hooks enable" in text and "mb hooks disable" in text
+    assert "stop hooks" in text                 # EN alias present
+    assert "auto-capture" in text
+
+
+def test_capture_hooks_fragment_is_the_shared_constant(home):
+    register_codex.main()
+    text = _agents(home).read_text(encoding="utf-8")
+    assert register_codex.CAPTURE_HOOKS_FRAGMENT in text        # verbatim, single source
+
+
 def test_council_skills_never_shipped_to_codex(home):
     register_codex.main()
     text = _agents(home).read_text(encoding="utf-8")

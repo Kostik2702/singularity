@@ -387,18 +387,33 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                     fix="python install/register_agents.py")
 
     def d1():
-        settings = Path.home() / ".claude" / "settings.json"
-        if not settings.exists():
-            rep.add("D1-hooks", "SKIP", "no ~/.claude/settings.json (hooks not installed yet — M3)")
+        # T02: desired/installed/effective capture-hooks state across every
+        # client, not just a crude "singularity" substring check on Claude.
+        # An intentionally disabled capture toggle is a deliberate user choice,
+        # never a failure — only a missing registration is worth a WARN.
+        from . import hooks_state
+
+        state = hooks_state.status(cfg.vault)
+        if state["source"] == "error":
+            rep.add("D1-hooks", "WARN",
+                    f"capture hooks config unreadable, treated as default: "
+                    f"{state['warnings'][0] if state['warnings'] else '?'}",
+                    fix="fix or remove .mb/config.json, then mb hooks status")
             return
-        try:
-            data = json.loads(settings.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            rep.add("D1-hooks", "FAIL", "settings.json unparseable")
-            return
-        ours = "singularity" in json.dumps(data.get("hooks", {}))
-        rep.add("D1-hooks", "PASS" if ours else "SKIP",
-                "singularity hooks registered" if ours else "hooks not registered (M3)")
+        desired = "enabled" if state["configured"] else "disabled"
+        clients = state["clients"]
+        installed_any = any(c["installed"] for c in clients.values())
+        detail = (f"capture hooks {desired} (default "
+                  f"{'enabled' if state['default'] else 'disabled'}); " +
+                  ", ".join(f"{n}={'installed' if c['installed'] else 'not-installed'}"
+                           for n, c in clients.items()))
+        if not installed_any:
+            rep.add("D1-hooks", "WARN", detail + " — no client has the hook registered",
+                    fix="python install/register_hooks.py")
+        elif not state["configured"]:
+            rep.add("D1-hooks", "PASS", detail + " — intentionally disabled, not a failure")
+        else:
+            rep.add("D1-hooks", "PASS", detail)
 
     _guard(rep, "D4", d4)
     _guard(rep, "D2", d2)
