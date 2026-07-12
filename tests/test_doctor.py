@@ -238,3 +238,55 @@ def test_d3_warns_on_malformed_settings(cfg, monkeypatch):
     settings.write_text("{not json", encoding="utf-8")
     doctor.run(cfg, as_json=True)
     assert _check(cfg, "D3-module-context")["status"] == "WARN"
+
+
+# --- T08: D5-vault-guard --------------------------------------------------------
+
+def test_d5_skips_when_no_claude_settings(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D5-vault-guard")["status"] == "SKIP"
+
+
+def test_d5_warns_when_not_registered(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    settings = cfg.vault / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"hooks": {"Stop": []}}), encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    d5 = _check(cfg, "D5-vault-guard")
+    assert d5["status"] == "WARN"
+    assert "not registered" in d5["detail"]
+
+
+def test_d5_pass_when_registered_reports_disabled_by_default(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    settings = cfg.vault / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"hooks": {"PreToolUse": [
+        {"_mb": True, "matcher": "Edit|Write|MultiEdit",
+         "hooks": [{"type": "command", "command": "x vault_guard.py"}]}]}}), encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    d5 = _check(cfg, "D5-vault-guard")
+    assert d5["status"] == "PASS"
+    assert "disabled" in d5["detail"]
+
+
+def test_d5_reports_mode_when_enabled(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    settings = cfg.vault / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"hooks": {"PreToolUse": [
+        {"_mb": True, "hooks": [{"type": "command", "command": "x vault_guard.py"}]}]}}),
+        encoding="utf-8")
+    (cfg.vault / ".mb").mkdir(parents=True, exist_ok=True)
+    (cfg.vault / ".mb" / "config.json").write_text(
+        json.dumps({"vault_guard_enabled": True, "vault_guard_mode": "deny"}), encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    d5 = _check(cfg, "D5-vault-guard")
+    assert d5["status"] == "PASS"
+    assert "mode=deny" in d5["detail"]

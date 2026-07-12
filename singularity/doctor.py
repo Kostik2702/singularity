@@ -448,10 +448,46 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
             rep.add("D3-module-context", "WARN", f"module-context hook not registered, {state}",
                     fix="python install/register_hooks.py")
 
+    def d5():
+        # T08: vault-guard PreToolUse hook registration (Claude only, v1).
+        settings = Path.home() / ".claude" / "settings.json"
+        if not settings.exists():
+            rep.add("D5-vault-guard", "SKIP", "no ~/.claude/settings.json")
+            return
+        try:
+            data = json.loads(settings.read_text(encoding="utf-8-sig"))
+        except json.JSONDecodeError:
+            rep.add("D5-vault-guard", "WARN", "settings.json unparseable")
+            return
+        pre = data.get("hooks", {}).get("PreToolUse", []) if isinstance(data, dict) else []
+        installed = False
+        if isinstance(pre, list):
+            for entry in pre:
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("_mb"):
+                    installed = True
+                    break
+                for h in entry.get("hooks", []):
+                    if isinstance(h, dict) and "vault_guard.py" in str(h.get("command", "")):
+                        installed = True
+                        break
+        from .config import read_config_tolerant
+        light_cfg = read_config_tolerant(cfg.vault)
+        enabled = bool(light_cfg.get("vault_guard_enabled", False))
+        mode = light_cfg.get("vault_guard_mode", "audit")
+        state = f"mode={mode}" if enabled else "disabled (default, opt-in via vault_guard_enabled)"
+        if installed:
+            rep.add("D5-vault-guard", "PASS", f"PreToolUse hook registered, {state}")
+        else:
+            rep.add("D5-vault-guard", "WARN", f"vault-guard hook not registered, {state}",
+                    fix="python install/register_hooks.py")
+
     _guard(rep, "D4", d4)
     _guard(rep, "D2", d2)
     _guard(rep, "D1", d1)
     _guard(rep, "D3", d3)
+    _guard(rep, "D5", d5)
 
     # ---- Block E: Gemini CLI integration (GCLI-05) --------------------
     _guard(rep, "E-gemini", lambda: gemini_block(rep, fix))

@@ -48,6 +48,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "session_context_max_lines": 200,  # T06: total SessionStart injection budget
     "module_note_max_lines": 60,       # T07: per-module context note truncation
     "module_context_enabled": False,   # T07: PreToolUse hook installed but no-op until true
+    "vault_guard_enabled": False,      # T08: PreToolUse guard installed but no-op until true
+    "vault_guard_mode": "audit",       # T08: "audit" (warn only) or "deny" (block)
+    "personal_roots": [],              # T08: vault-relative roots classified as personal
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -56,6 +59,27 @@ DEFAULT_CONFIG: dict[str, Any] = {
 # keys that carry machine-specific absolute paths (validated as strings only —
 # their existence is a per-machine concern, not a config-schema error)
 _PATH_KEYS = {"code_repos_dir", "hf_cache"}
+
+# T08: config.example.json is a sanitized, git-trackable snapshot for
+# onboarding on a new machine or sharing the project registry with a
+# collaborator — distinct from `mb backup` (an operational, checksummed
+# snapshot of the CURRENT machine's config + index pointer for disaster
+# recovery on the SAME machine). hf_cache is the only currently known
+# sensitive value (a local model-cache path with no portable meaning);
+# actual secrets never live in config.json at all (singularity.platform.
+# secrets routes them through the OS keyring / an explicit opt-in file).
+_EXAMPLE_REDACTED_KEYS = {"hf_cache"}
+_EXAMPLE_HOME_RELATIVE_KEYS = {"code_repos_dir"}
+
+
+def _home_relative(path_str: str, home: Path) -> str:
+    """`C:/Users/x/code/p` -> `~/code/p` when under home; any other path
+    (outside home, or unresolvable) is retained verbatim. Never raises."""
+    try:
+        rel = Path(path_str).resolve().relative_to(home.resolve())
+    except (OSError, ValueError):
+        return path_str
+    return "~/" + str(rel).replace("\\", "/")
 
 
 def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
@@ -99,6 +123,13 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
         errors.append("auto_capture: must be a boolean")
     if "module_context_enabled" in data and not isinstance(data["module_context_enabled"], bool):
         errors.append("module_context_enabled: must be a boolean")
+    if "vault_guard_enabled" in data and not isinstance(data["vault_guard_enabled"], bool):
+        errors.append("vault_guard_enabled: must be a boolean")
+    if "vault_guard_mode" in data and data["vault_guard_mode"] not in ("audit", "deny"):
+        errors.append("vault_guard_mode: must be 'audit' or 'deny'")
+    if "personal_roots" in data and (not isinstance(data["personal_roots"], list)
+                                     or not all(isinstance(x, str) for x in data["personal_roots"])):
+        errors.append("personal_roots: must be a list of strings")
     if "connectors" in data and not isinstance(data["connectors"], dict):
         errors.append("connectors: must be an object")
     for key in _PATH_KEYS:
@@ -219,6 +250,49 @@ class Config:
             json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
         tmp.replace(self.config_path)
+        try:
+            self._write_sanitized_example(merged)
+        except Exception:  # noqa: BLE001 — example generation must never break a real save
+            pass
+
+    @property
+    def config_example_path(self) -> Path:
+        return self.mb_dir / "config.example.json"
+
+    def _write_sanitized_example(self, merged: dict[str, Any]) -> None:
+        """T08: git-trackable sanitized snapshot of the config. No secrets
+        (hf_cache redacted), project/code paths under home rewritten
+        `~/...` for portability, paths outside home retained as-is."""
+        sanitized = {k: v for k, v in merged.items() if k not in _EXAMPLE_REDACTED_KEYS}
+        home = Path.home()
+        for key in _EXAMPLE_HOME_RELATIVE_KEYS:
+            if isinstance(sanitized.get(key), str):
+                sanitized[key] = _home_relative(sanitized[key], home)
+        if isinstance(sanitized.get("projects"), dict):
+            sanitized["projects"] = {
+                pid: ({**entry, "path": _home_relative(entry["path"], home)}
+                     if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+                     else entry)
+                for pid, entry in sanitized["projects"].items()
+            }
+
+        # Bootstrap-clobber guard: a fresh `mb init`/empty-projects save must
+        # never overwrite an existing, richer example (e.g. pulled via git
+        # from another machine that already registered projects) with a
+        # near-empty one.
+        is_bootstrap = not self.data.get("projects")
+        if is_bootstrap and self.config_example_path.exists():
+            try:
+                existing = json.loads(self.config_example_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                existing = {}
+            if isinstance(existing, dict) and existing.get("projects"):
+                return
+
+        tmp = self.config_example_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(sanitized, indent=2, ensure_ascii=False) + "\n",
+                       encoding="utf-8")
+        tmp.replace(self.config_example_path)
 
     def apply_env(self) -> None:
         """Point HuggingFace cache at the configured location (keep C: clean)

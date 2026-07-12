@@ -54,21 +54,23 @@ def test_fresh_install_registers_all_three_events(home):
     assert set(hooks) == {"SessionStart", "Stop", "PreToolUse"}
 
 
-def test_pretooluse_entry_has_matcher_and_ownership_marker(home):
+def test_pretooluse_entries_have_matcher_and_ownership_marker(home):
     register_hooks.main()
     data = json.loads(_settings(home).read_text(encoding="utf-8"))
     pre = data["hooks"]["PreToolUse"]
-    assert len(pre) == 1
-    assert pre[0]["_mb"] is True
-    assert pre[0]["matcher"] == "Edit|Write|MultiEdit"
-    assert "module_context.py" in pre[0]["hooks"][0]["command"]
+    assert len(pre) == 2                      # T07 module_context + T08 vault_guard
+    assert all(e["_mb"] is True for e in pre)
+    assert all(e["matcher"] == "Edit|Write|MultiEdit" for e in pre)
+    commands = [e["hooks"][0]["command"] for e in pre]
+    assert any("module_context.py" in c for c in commands)
+    assert any("vault_guard.py" in c for c in commands)
 
 
 def test_rerun_replaces_owned_entries_not_duplicates(home):
     register_hooks.main()
     register_hooks.main()
     data = json.loads(_settings(home).read_text(encoding="utf-8"))
-    assert len(data["hooks"]["PreToolUse"]) == 1
+    assert len(data["hooks"]["PreToolUse"]) == 2
     assert len(data["hooks"]["Stop"]) == 1
     assert len(data["hooks"]["SessionStart"]) == 1
 
@@ -101,6 +103,7 @@ def test_foreign_pretooluse_entries_preserved(home):
     commands = [h["hooks"][0]["command"] for h in data["hooks"]["PreToolUse"]]
     assert "someone-elses-hook" in commands
     assert any("module_context.py" in c for c in commands)
+    assert any("vault_guard.py" in c for c in commands)
 
 
 def test_backup_created_when_settings_preexist(home):

@@ -49,28 +49,36 @@ HOOKS = {
                 "type": "command",
                 "command": f'"{PYTHON}" "{ENGINE / "singularity" / "hooks" / "module_context.py"}"',
             }],
-        }
+        },
+        {
+            "_mb": True,
+            "matcher": "Edit|Write|MultiEdit",
+            "hooks": [{
+                "type": "command",
+                "command": f'"{PYTHON}" "{ENGINE / "singularity" / "hooks" / "vault_guard.py"}"',
+            }],
+        },
     ],
 }
 
 
-# Fallback ownership signal (script filename) per event, for entries that
+# Fallback ownership signal (script filenames) per event, for entries that
 # predate the `_mb` marker — must stay in sync with the script names used in
-# HOOKS above.
+# HOOKS above. PreToolUse owns two distinct scripts (T07 module_context,
+# T08 vault_guard), each its own matcher-group entry.
 _OWNED_SCRIPTS = {
-    "SessionStart": "session_start.py",
-    "Stop": "stop_capture.py",
-    "PreToolUse": "module_context.py",
+    "SessionStart": {"session_start.py"},
+    "Stop": {"stop_capture.py"},
+    "PreToolUse": {"module_context.py", "vault_guard.py"},
 }
 
 
 def _is_owned(entry: dict, event: str) -> bool:
     if entry.get("_mb"):
         return True
-    script = _OWNED_SCRIPTS.get(event)
-    if not script:
-        return False
-    return any(script in str(h.get("command", "")) for h in entry.get("hooks", []))
+    scripts = _OWNED_SCRIPTS.get(event, set())
+    return any(script in str(h.get("command", ""))
+              for h in entry.get("hooks", []) for script in scripts)
 
 
 def main() -> int:
