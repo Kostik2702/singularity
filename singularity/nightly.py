@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .config import Config
+from .config import Config, atomic_write_json
 
 DIGEST_SNAPSHOT_NAME = "digest-last.json"
 CURATOR_SNAPSHOT_NAME = "curator-last.json"
@@ -50,13 +50,6 @@ def migrate_scheduler_job(cfg: Config) -> str:
     return scheduler.register(nightly_job(cfg))
 
 
-def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(path)
-
-
 def _guard(fn):
     try:
         return fn()
@@ -82,7 +75,7 @@ def _step_digest(cfg: Config, now: str) -> dict[str, Any]:
     from . import digest
 
     result = digest.plan(cfg)
-    _atomic_write_json(cfg.mb_dir / DIGEST_SNAPSHOT_NAME, {"generated_at": now, **result})
+    atomic_write_json(cfg.mb_dir / DIGEST_SNAPSHOT_NAME, {"generated_at": now, **result})
     return {"status": "ok", "entries": len(result["entries"]),
             "index_status": result["index_status"]}
 
@@ -93,7 +86,7 @@ def _step_curator(cfg: Config, now: str) -> dict[str, Any]:
     issues = curator.validate(cfg)
     report = curator.analyze(cfg)
     lint_report = curator.lint(cfg)   # T13: chunk-level lint, part of the same snapshot
-    _atomic_write_json(cfg.mb_dir / CURATOR_SNAPSHOT_NAME,
+    atomic_write_json(cfg.mb_dir / CURATOR_SNAPSHOT_NAME,
                        {"generated_at": now, "issues": issues, "lint": lint_report, **report})
     return {"status": "ok", "issues": sum(len(v) for v in issues.values()),
             "notes": report["notes"],
@@ -107,7 +100,7 @@ def _step_config(cfg: Config, now: str) -> dict[str, Any]:
 
     merged = {**DEFAULT_CONFIG, **cfg.data}
     result = validate_config(merged)
-    _atomic_write_json(cfg.mb_dir / CONFIG_SNAPSHOT_NAME, {
+    atomic_write_json(cfg.mb_dir / CONFIG_SNAPSHOT_NAME, {
         "generated_at": now, "schema_version": merged.get("schema_version"),
         "errors": result["errors"], "warnings": result["warnings"],
     })

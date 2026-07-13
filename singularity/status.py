@@ -75,10 +75,12 @@ def _backlog(cfg: Config) -> dict[str, Any]:
 
 def _cache_age(cfg: Config) -> dict[str, Any]:
     from . import nightly
+    from . import reflect
     out: dict[str, Any] = {}
     for name, fname in (("digest", nightly.DIGEST_SNAPSHOT_NAME),
                         ("curator", nightly.CURATOR_SNAPSHOT_NAME),
-                        ("config", nightly.CONFIG_SNAPSHOT_NAME)):
+                        ("config", nightly.CONFIG_SNAPSHOT_NAME),
+                        ("reflect", reflect.SNAPSHOT_NAME)):
         p = cfg.mb_dir / fname
         present = p.exists()
         entry: dict[str, Any] = {"present": present}

@@ -57,6 +57,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "nightly_nag_rate_limit_hours": 72,     # T12: min hours between SessionStart digest nags
     "markers_retention_days": 30,           # T12: nightly sweep age for .mb/markers/*
     "nightly_trend_retention_days": 180,    # T12: nightly-history.jsonl row retention
+    "reflect_window_days": 30,              # T14: default `mb reflect` lookback window
+    "reflect_retention_days": 90,           # T14: reflect-history.jsonl row retention (Open Decision)
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -126,6 +128,8 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     _int("nightly_nag_rate_limit_hours", 1, 24 * 30)
     _int("markers_retention_days", 1, 3650)
     _int("nightly_trend_retention_days", 1, 3650)
+    _int("reflect_window_days", 1, 3650)
+    _int("reflect_retention_days", 1, 3650)
     if "nightly_schedule_time" in data:
         v = data["nightly_schedule_time"]
         if not (isinstance(v, str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v)):
@@ -320,6 +324,17 @@ class Config:
             truststore.inject_into_ssl()
         except ImportError:
             pass
+
+
+def atomic_write_json(path: Path, data: Any, *, indent: int = 1) -> None:
+    """Shared tmp+replace idiom for every JSON snapshot/journal the engine
+    writes outside Config.save() itself (digest journal, nightly snapshots,
+    reflect snapshot/history) -- same convention, factored out so a fourth
+    independent copy of it is never written again."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=indent), encoding="utf-8")
+    tmp.replace(path)
 
 
 def read_config_tolerant(vault: Path) -> dict[str, Any]:

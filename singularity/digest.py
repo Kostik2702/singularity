@@ -47,11 +47,8 @@ def _read_journal(cfg: Config) -> dict[str, Any]:
 
 
 def _write_journal(cfg: Config, data: dict[str, Any]) -> None:
-    cfg.mb_dir.mkdir(parents=True, exist_ok=True)
-    path = _journal_path(cfg)
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(path)
+    from .config import atomic_write_json
+    atomic_write_json(_journal_path(cfg), data)
 
 
 def identity_key(file: str, section: str) -> str:

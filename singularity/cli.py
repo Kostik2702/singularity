@@ -12,6 +12,7 @@ mb project list|add|remove|detect
 mb digest plan [--project X] [--json]
 mb digest mark <file> <section> | --all [--json]
 mb nightly [--json]   # index update -> digest/curator/config snapshot -> trend -> markers sweep
+mb reflect [--days N] [--json]   # privacy-safe adoption telemetry (offline transcript walk)
 mb init            # write ~/.singularity.json pointer + folder tree
 """
 from __future__ import annotations
@@ -80,6 +81,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     stt = sub.add_parser("stats", help="memory analytics (notes/chunks/types/coverage)")
     stt.add_argument("--json", action="store_true")
+
+    rfl = sub.add_parser("reflect", help="privacy-safe adoption telemetry "
+                                         "(offline transcript walk, counts/rates only)")
+    rfl.add_argument("--days", type=int, help="lookback window (default: reflect_window_days config)")
+    rfl.add_argument("--json", action="store_true")
 
     bk = sub.add_parser("backup", help="backup/restore config + index pointer")
     bksub = bk.add_subparsers(dest="backup_action", required=True)
@@ -514,6 +520,27 @@ def cmd_nightly(cfg, args) -> int:
     return 1 if nightly.has_error(result) else 0
 
 
+def cmd_reflect(cfg, args) -> int:
+    from . import reflect
+
+    result = reflect.run(cfg, days=args.days)
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+    print(f"== mb reflect — last {result['window_days']}d, "
+          f"{result['total_sessions']} top-level sessions "
+          f"({', '.join(f'{k}={v}' for k, v in result['by_client'].items()) or 'none'}) ==")
+    print(f"  by project: {', '.join(f'{k}={v}' for k, v in result['by_project'].items()) or 'none'}")
+    for name, m in result["metrics"].items():
+        rate = f"{m['rate']:.0%}" if m["rate"] is not None else "n/a"
+        print(f"  {name:18s} {m['count']}/{m['total']}  ({rate})")
+    if result["malformed_transcripts"]:
+        print(f"malformed transcripts skipped: {result['malformed_transcripts']}")
+    excluded = ", ".join(f"{k} ({v})" for k, v in result["excluded_clients"].items())
+    print(f"excluded: {excluded}")
+    return 0
+
+
 def cmd_note(cfg, args) -> int:
     from . import capture
 
@@ -729,6 +756,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_digest(cfg, args)
     if args.command == "nightly":
         return cmd_nightly(cfg, args)
+    if args.command == "reflect":
+        return cmd_reflect(cfg, args)
     if args.command == "note":
         return cmd_note(cfg, args)
     if args.command == "learn":

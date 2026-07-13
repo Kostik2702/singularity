@@ -126,6 +126,16 @@ def test_cache_age_reports_hours_for_present_files(cfg, monkeypatch):
     assert snap["cache_age"]["curator"]["present"] is False
 
 
+def test_cache_age_includes_reflect_snapshot(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    mb = cfg.vault / ".mb"
+    mb.mkdir(parents=True, exist_ok=True)
+    (mb / "reflect-last.json").write_text("{}", encoding="utf-8")
+    snap = status.snapshot(cfg)
+    assert snap["cache_age"]["reflect"]["present"] is True
+    assert "age_hours" in snap["cache_age"]["reflect"]
+
+
 def test_scheduler_probe_uses_new_nightly_job_name(cfg, monkeypatch):
     _stub_all(monkeypatch, home=cfg.vault)
     seen = []
