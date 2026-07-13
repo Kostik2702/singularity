@@ -1,8 +1,8 @@
 # 🧠 Singularity
 
-**A personal AI memory system for Claude Code** — your assistant remembers everything, finds it in milliseconds, and gets smarter with every mistake.
+**A personal AI memory system for Claude Code, Codex, and Gemini CLI** — your assistant remembers what matters, finds it in milliseconds, and gets smarter with every mistake.
 
-Singularity turns an [Obsidian](https://obsidian.md) vault into a living, self-maintaining memory for your AI assistant: knowledge is **captured automatically**, **indexed on save**, **retrieved semantically** (Russian & English, ~15–70 ms), and **fed back into every new session** — while a set of disciplined skills, agents, and multi-agent councils keep the assistant's reasoning honest.
+Singularity turns an [Obsidian](https://obsidian.md) vault into a living, self-maintaining memory for your AI assistant: knowledge is **captured automatically where the client supports hooks**, **indexed on save**, **retrieved semantically** (Russian & English, ~15–70 ms), and **fed back into new Claude/Gemini sessions**. All three clients share the same vault, CLI, and portable skills; Codex support currently has no runtime hook. A set of disciplined skills, agents, and multi-agent councils keeps the assistant's reasoning honest.
 
 > Engine codename: **Singularity** · CLI: **`mb`** (memory brain) · Platforms: **Windows / macOS / Linux**
 
@@ -21,7 +21,7 @@ Every AI coding session starts from zero. Decisions get re-litigated, solved bug
 | Notes rot, links break, knowledge silos | **Memory curator**: finds broken links, orphan notes, and *suggests* semantic wikilinks (never writes without approval) |
 | Big decisions made on vibes | **Multi-agent councils**: adversarial investigator/critic/validator/historian rounds with falsification and calibrated confidence |
 
-Everything lives in **plain Markdown inside your Obsidian vault** — no proprietary database, no cloud. You read and edit the same notes the assistant does; Obsidian's graph, backlinks, and Dataview dashboards work out of the box.
+Everything lives in **plain Markdown inside your Obsidian vault** — no proprietary database and no cloud dependency for the memory layer. (Your chosen AI client may still use a hosted model.) You read and edit the same notes the assistant does; Obsidian's graph, backlinks, and Dataview dashboards work out of the box.
 
 ---
 
@@ -31,7 +31,7 @@ Everything lives in **plain Markdown inside your Obsidian vault** — no proprie
 graph TB
     subgraph CC["Claude Code / Codex / Gemini"]
         MAIN["session"]
-        SK["15 skills (client-neutral,<br/>portability manifest)"]
+        SK["15 manifest-managed skills<br/>12 portable, 3 Claude-only"]
         AG["6 agents + 3 councils<br/>(Claude-only)"]
     end
     subgraph HOOKS["Hooks (deterministic)"]
@@ -57,7 +57,7 @@ graph TB
     H3 -.module/guard.-> MAIN
     MAIN --> SK --> AG
     SK -- "mb search" --> D --> IDX
-    SK -- "mb learn / notes / project add" --> NOTES
+    SK -- "mb learn / note new / project add" --> NOTES
     NOTES -- save --> W --> IDX
     NI --> IDX
     NI -.reload.-> D
@@ -107,7 +107,7 @@ The wrappers are ~20 lines each; all logic lives in `install/install.py`, which 
 1. **Python env** — creates `.venv`, installs dependencies, warms up the embedding model (~470 MB, cached locally — configurable off the system drive).
 2. **Vault** — asks for your vault path, creates the memory folder tree (`learnings/`, `decisions/`, `howto/`, `incidents/`, `rules/`, `reference/`, `changelog/`, `templates/`, `_moc/`), binds it via `~/.singularity.json`.
 3. **First index + daemon** — builds the semantic index over your vault, starts the warm daemon, runs an EN+RU smoke search.
-4. **Client wiring** — registers the two hooks in `~/.claude/settings.json` (careful merge: your existing settings are backed up and preserved; every entry we own is marked `"_mb": true` for clean uninstall), then, **if they are installed**, wires OpenAI Codex and Google Gemini to the same memory (see [Other CLI clients](#other-cli-clients--codex--gemini)).
+4. **Client wiring** — registers four managed hook entries in `~/.claude/settings.json`: SessionStart, Stop, and two opt-in PreToolUse checks (module context and vault guard). Your existing settings are backed up and preserved; every entry we own is marked `"_mb": true` for clean uninstall. Then, **if they are installed**, the installer wires OpenAI Codex and Google Gemini to the same memory (see [Other CLI clients](#other-cli-clients--codex--gemini)).
 5. **Scheduler + verify** — registers the nightly index rebuild and the on-save watcher with your OS scheduler (Task Scheduler / launchd / systemd — all with missed-run catch-up), then finishes with `mb doctor`.
 
 Re-running the installer is safe — it refreshes and re-verifies instead of breaking things. To remove everything (hooks, scheduled jobs, daemon) **without touching your vault**: `mb uninstall`. Already have Singularity installed? See [docs/UPGRADE.md](docs/UPGRADE.md) for exactly what changes on upgrade, and [docs/ROLLBACK.md](docs/ROLLBACK.md) to turn any specific new feature back off.
@@ -157,9 +157,28 @@ gemini -p "summarise the vault" --output-format json   # headless: clean JSON, h
 
 ## Usage
 
-A guided tour of every part of the system, grouped by topic, with real commands and real output — not just a flag reference. Jump to what you need:
+A guided tour of every part of the system, grouped by topic, with copyable commands and real output — not just a flag reference.
 
-[Search](#search-your-memory-the-command-youll-use-constantly) · [Capture](#capture-knowledge) · [Auto-indexing](#everything-indexes-itself) · [Projects](#multi-project-memory) · [Project brain & module context](#project-brain--module-context) · [Digest & nightly](#digest-and-nightly-orchestration) · [Curator](#curator-vault-health-and-semantic-lint) · [Vault guard](#vault-guard) · [Reflect](#adoption-telemetry-with-mb-reflect) · [Health & utilities](#health-stats-backup--config) · [Skills](#skills--say-the-trigger-word-in-any-session) · [Agents](#agents--spawned-for-heavy-lifting) · [Workflow](#the-solo-workflow-optional-but-recommended) · [Obsidian](#obsidian-side) · [Local LLM](#local-llm-backend)
+### First five minutes
+
+```bash
+mb status                                      # which vault, index and services am I using?
+mb search "what do we know about this project" # search memory before reading files
+mb learn "The non-obvious fact worth keeping" --task MY-TASK
+mb curator                                     # report vault problems; changes nothing
+```
+
+That is the everyday loop: **check → search → work → capture → curate**. Everything below is for configuring or diagnosing that loop.
+
+| I want to… | Go to |
+|---|---|
+| Find or save knowledge | [Search](#search-your-memory-the-command-youll-use-constantly) · [Capture](#capture-knowledge) · [Auto-indexing](#everything-indexes-itself) |
+| Separate several codebases | [Projects](#multi-project-memory) · [Project brain & module context](#project-brain--module-context) |
+| Turn journals into durable knowledge | [Digest & nightly](#digest-and-nightly-orchestration) · [Curator](#curator-vault-health-and-semantic-lint) |
+| Keep assistant writes safe | [Vault guard](#vault-guard) · [Health, backup & config](#health-stats-backup--config) |
+| Use the assistant workflows | [Skills](#skills--say-the-trigger-word-in-any-session) · [Agents](#agents--spawned-for-heavy-lifting) · [Solo workflow](#the-solo-workflow-optional-but-recommended) |
+| Inspect adoption or use Obsidian | [Reflect](#adoption-telemetry-with-mb-reflect) · [Obsidian](#obsidian-side) |
+| Run Claude Code on a local GGUF | [Local LLM](#local-llm-backend) |
 
 ### Search your memory (the command you'll use constantly)
 
@@ -172,6 +191,8 @@ mb search "..." --tags search,daemon                   # frontmatter + inline #t
 mb search "..." --links "Doctor_Plan"                  # only notes linked to [[Doctor_Plan]]
 mb search "..." --path-prefix rules/                   # scope to a folder
 mb search "..." --project myproj                       # scope to one project, a group, general, or personal
+mb search "..." --memory-only --max-per-file 1         # diversify results across memory notes
+mb search "..." --explain                              # show how filtering/scoring was applied
 mb search "..." --json --full                          # machine-readable / untruncated
 ```
 
@@ -217,6 +238,8 @@ mb project detect                        # resolve the current directory to a pr
 
 mb project detect D:/Singularity/some/nested/dir --json
 # {"cwd": "D:/Singularity/some/nested/dir", "project": "singularity"}
+
+mb project remove singularity             # unregister only; never deletes the project or vault notes
 ```
 
 Detection is **deepest-path-wins**: the most specific registered path containing your cwd matches, so nested projects never get confused with their parent. Once a project is registered:
@@ -246,7 +269,7 @@ Two SessionStart/PreToolUse mechanisms that hand the assistant exactly the conte
 ```
 
 - **Project brain** — every SessionStart in a registered project's directory injects a budgeted excerpt (`brain_max_lines`, default 40) of `brain_note`, labeled `Project brain (singularity)` in the context. Keep it to what the assistant should know in *every* session of that project — key decisions, architecture, gotchas — not the whole design doc.
-- **Module context** (opt-in — `module_context_enabled: true`) — before the assistant's first edit in a session to a path matching one of `context_map`'s `globs` (longest-prefix match, e.g. anything under `singularity/hooks/`), it gets a once-per-session excerpt of that module's own `note`. Good for "read this before touching this specific subsystem" rules that don't belong in the general project brain.
+- **Module context** (opt-in — enable with `mb config set module_context_enabled true`) — before the assistant's first edit in a session to a path matching one of `context_map`'s `globs` (longest-prefix match, e.g. anything under `singularity/hooks/`), it gets a once-per-session excerpt of that module's own `note`. Good for "read this before touching this specific subsystem" rules that don't belong in the general project brain.
 
 Both fail open silently (a missing/unreadable note just means no block that session, never a crash) and both respect the same path-traversal guard, so a malformed `context.json` entry can't leak a file from outside the vault.
 
@@ -324,6 +347,13 @@ Here, `Atomic.md` really did have the same paragraph typed twice under different
 
 Opt-in (`vault_guard_enabled: true`) PreToolUse check that flags a new note or config edit landing somewhere unexpected — a safety net against "the assistant created a note in the wrong folder" or "edited `.mb/config.json` by hand instead of through `mb config set`." `vault_guard_mode: "audit"` (default once enabled) only warns; `"deny"` blocks the write outright. Start with `audit`, watch what it flags for a few sessions, and only switch to `deny` once you're confident it isn't flagging anything legitimate.
 
+```bash
+mb config set vault_guard_enabled true
+mb config set vault_guard_mode audit        # warn only
+# Later, after observing legitimate work:
+mb config set vault_guard_mode deny         # block unexpected writes
+```
+
 ### Adoption telemetry with mb reflect
 
 ```bash
@@ -362,15 +392,51 @@ capture hooks: enabled (source: explicit); installed: claude=yes, gemini=yes, co
 ```
 (real output — index/daemon/watcher/scheduler/disk/hooks in one snapshot; `mb status --json` adds `backlog` (digest actionable count) and `cache_age` (hours since each nightly snapshot last refreshed))
 
+Use these commands for progressively deeper checks:
+
 ```bash
-mb hooks status --json     # per-client desired/installed/effective capture-hook state
-mb stats                   # notes/chunks/types/coverage from index metadata -- never note content
-mb backup create           # checksummed config + index-pointer snapshot
-mb backup list|verify <id>|restore <id>
-mb config validate         # type/range checks + unknown-key warnings
-mb config get <key>
-mb config set <key> <value>   # validated, atomic write
+mb doctor                  # broad diagnostic; reports findings without repairing them
+mb doctor --fix            # safe/light repairs
+mb doctor --fix --heavy    # may reinstall dependencies and rebuild indexes
+mb selftest                # temporary note -> index -> find -> delete -> verify gone
+mb stats                   # notes/chunks/types/coverage; never note body content
 ```
+
+`mb selftest` is the end-to-end check to run after installation, an upgrade, or suspicious search behavior. It creates a unique note under `_selftest/`, exercises the whole indexing/search/deletion pipeline, and cleans the note up even if the test fails.
+
+Manage the client capture hooks explicitly when you need to pause or resume automatic capture:
+
+```bash
+mb hooks status --json     # desired/installed/effective state for each client
+mb hooks disable           # turn auto-capture off without uninstalling anything
+mb hooks enable            # turn it back on
+```
+
+Backups are checksummed snapshots of the config and index pointer, not copies of every Markdown note:
+
+```bash
+mb backup create
+mb backup list
+mb backup verify <id>      # always verify before restoring
+mb backup restore <id>     # changes current config/index pointer; Markdown notes are untouched
+```
+
+Prefer the validated CLI over editing `.mb/config.json` by hand. Values are JSON when possible, so booleans and numbers keep their types:
+
+```bash
+mb config validate
+mb config get min_score
+mb config set min_score 0.35
+mb config set auto_capture false
+```
+
+`mb init` is a low-level recovery/manual-binding command; the normal installer already runs it. Put the global `--vault` option **before** the command:
+
+```bash
+mb --vault "D:/path/to/my vault" init
+```
+
+This binds the selected vault in `~/.singularity.json`, creates the standard folders, and writes config (defaults if none exists). It does not install hooks, background jobs, or dependencies; use the platform installer for a complete installation. Run `mb <command> --help` whenever you need the full flag reference.
 
 ### Skills — say the trigger word in any session
 
@@ -425,29 +491,57 @@ Small tasks legally skip phases (marked, not silent). The final phase asks one q
 
 ### Local LLM backend
 
-One command brings up a local `llama-server` (OpenAI-compatible) plus an optional router that translates Anthropic's wire format ↔ OpenAI, so a locally-hosted GGUF model can back Claude Code — or any OpenAI-compatible client — instead of a hosted API.
+Singularity can run Claude Code against a local GGUF model through `llama-server`. Modern `llama-server` builds expose Anthropic's `/v1/messages` endpoint natively, so the recommended path connects Claude Code **directly** — no router or manual environment variables required.
+
+#### Setup and repair
 
 ```bash
-mb llm start <model>                  # stop any running server, spawn server, health-poll,
-                                       # spawn router if configured, health-poll
-mb llm stop                           # stop router, then server
-mb llm status [--json]                # running model, pids, ports, liveness, started-at
-mb llm list                           # models from config registry, active one marked (active)
-mb llm logs [server|router] [-n N]    # tail a log (default: server, N=40)
+mb llm setup --dir E:/llama.cpp   # Windows (can auto-download llama.cpp)
+mb llm setup --dir ~/llama.cpp    # macOS/Linux (verify a manual installation)
 ```
 
-`mb llm start` always stops any currently-running server first — one GPU, one model at a time. Once healthy it prints exactly one line, depending on whether a router is configured:
+`setup` is idempotent: run it again whenever the environment changes. It creates the `llm` config section, verifies/repairs the server binary and model arguments, checks GGUF paths and the Claude CLI, and prepares an isolated Claude Code profile. On Windows it can download the current CUDA `llama.cpp` release automatically; on macOS/Linux install `llama-server` yourself and set `server_bin`. Singularity does **not** download model weights.
 
+Add at least one local model to `<vault>/.mb/config.json` under `llm.models`:
+
+```jsonc
+{
+  "llm": {
+    "server_bin": "E:/llama.cpp/llama-server.exe",
+    "server_host": "127.0.0.1",
+    "server_port": 8080,
+    "models": {
+      "qwen3-30b": {
+        "gguf": "E:/models/qwen3-30b-a3b-q4.gguf",
+        "args": ["-ngl", "99", "-c", "16384", "-fa", "on", "--jinja"]
+      }
+    }
+  }
+}
 ```
-export ANTHROPIC_BASE_URL=http://<router-host>:<router-port>   # router configured
-OpenAI-compatible endpoint: http://<host>:<port>/v1              # no router
+
+Run `mb llm setup` once more after editing: it reports missing files, repairs known argument issues, and warns if tool calling is not configured.
+
+#### Everyday use
+
+```bash
+mb llm list                           # configured models; active one is marked
+mb llm start qwen3-30b                # switch from any running model, then health-check
+mb llm code                           # interactive Claude Code on the active local model
+mb llm code -- -p "Summarize this repo" # pass Claude CLI arguments after --
+
+mb llm status --json                  # model, PID, port, liveness and start time
+mb llm logs server -n 100             # inspect recent server output
+mb llm stop
 ```
 
-Run that `export ANTHROPIC_BASE_URL=...` in the shell where you launch Claude Code — that's the step that actually points it at your local model.
+`mb llm code` points Claude Code at the running server and uses a separate `~/.claude-local` profile. It keeps useful Singularity skills and agents, but removes hooks, enabled plugins, MCP configuration, and the full global instruction file that can overwhelm a smaller model or create tool loops. Your normal hosted-Claude profile is not modified. The command exits with Claude Code's own exit code.
 
-**Two-process model.** `llama-server` speaks the OpenAI API; Claude Code speaks Anthropic's wire format, so a router sits between them and translates. The router is config-swappable — the example below runs [claude-code-router](https://github.com/musistudio/claude-code-router) (`ccr`, Node); LiteLLM (`pip`, no Node) is a drop-in alternative, just change `router.cmd`. Skip `router` entirely for a server-only setup — `mb llm start` then hands you the raw OpenAI endpoint instead. Either way, `mb` doesn't install or download anything for you: you provide `server_bin`, the `.gguf`, and (if used) the router yourself.
+Only one model is active at a time: `mb llm start <model>` stops the current server before loading the next one. The same server also remains available to OpenAI-compatible clients at `http://<host>:<port>/v1`.
 
-Config lives in `<vault>/.mb/config.json` under an `"llm"` key:
+#### Advanced configuration
+
+The complete `llm` section supports health timeouts, custom Claude profile paths, and an optional external router for future multi-model/routing setups:
 
 ```jsonc
 {
@@ -457,7 +551,7 @@ Config lives in `<vault>/.mb/config.json` under an `"llm"` key:
     "server_port": 8080,               // default
     "server_ready_path": "/health",    // default
     "health_timeout_s": 120,           // default; deadline for server AND router health-poll
-    "router": {                        // optional — omit for a server-only / raw OpenAI setup
+    "router": {                        // optional advanced path; not needed by mb llm code
       "cmd": ["ccr", "start"],         // or e.g. ["litellm", "--config", "litellm.yaml"]
       "host": "127.0.0.1",
       "port": 3456,
@@ -478,11 +572,13 @@ Config lives in `<vault>/.mb/config.json` under an `"llm"` key:
 }
 ```
 
-`--jinja` (or `--chat-template ...`) in a model's `args` is required for tool-calling; `mb llm start` prints a non-fatal warning if neither is present.
+`--jinja` (or `--chat-template ...`) in a model's `args` is required for tool-calling; `mb llm setup` and `mb llm start` warn if neither is present.
+
+If `router` is configured, `mb llm start` health-checks and supervises both processes and prints the `ANTHROPIC_BASE_URL` export command for an external client; inspect it with `mb llm logs router`. `mb llm code` still uses the direct native endpoint and does not need the router.
 
 **Large context on limited VRAM.** To fit a big `-c` window, quantize the KV cache with `-ctk q8_0 -ctv q8_0` (roughly halves KV memory; requires flash-attention `-fa on`). Measured on the 27B Q4_K_M above (native 256K context): ~20 GB VRAM at `-c 16384`, ~24 GB at `-c 131072` with q8_0 KV — so 128K is the practical ceiling on a 32 GB GPU; a full 256K fp16 cache does not fit.
 
-**Cross-machine:** only the paths inside `llm` change (`server_bin`, each model's `gguf`, maybe ports) — the commands above are identical on every machine, since all runtime state (`llm.state.json`, `llm-server.log`, `llm-router.log`) lives under the vault's `.mb/`.
+**Cross-machine:** only the paths inside `llm` change (`server_bin`, each model's `gguf`, maybe ports) — the commands are identical on every machine, since all runtime state (`llm.state.json`, `llm-server.log`, `llm-router.log`) lives under the vault's `.mb/`.
 
 ---
 
@@ -565,7 +661,7 @@ singularity/
 ├── backup.py                 # checksummed config + index-pointer snapshot/restore
 ├── session_activity.py       # normalized per-session activity + capture-decision core (client-neutral)
 ├── hooks_state.py             # capture-hook desired/installed/effective state, per client
-├── llm.py                     # local llama-server + router lifecycle (`mb llm`)
+├── llm.py                     # local llama-server setup/lifecycle + isolated Claude launcher (`mb llm`)
 ├── selftest.py                # end-to-end pipeline check (create/index/find/delete)
 ├── hooks/
 │   ├── session_start.py       # inject memory context into every session (Claude + Gemini share this)
@@ -603,9 +699,12 @@ And in your **vault**: `rules/` (core discipline + agent preamble), `workflow/` 
 | Symptom | Do this |
 |---|---|
 | Anything feels broken | `mb doctor --fix` — it diagnoses structure, deps, index, daemon, scheduler, and hooks |
+| Install/upgrade succeeded but the full pipeline seems wrong | `mb selftest` — safely exercises create → index → search → delete and cleans up its temporary note |
+| `mb` is using the wrong vault | `mb status` to confirm it; recover explicitly with `mb --vault "D:/correct vault" init` (this binds/initializes only — it is not a full install) |
 | Search returns nothing | `mb daemon status` → `mb index rebuild` → check `min_score` isn't too high |
 | Search is slow (~10 s) | That's a cold start (daemon was down); the query still works and the daemon auto-restarts. Antivirus killing background python? Add `.venv\Scripts\pythonw.exe` to exclusions |
 | New note not searchable | Is `mb watch` running? (`mb doctor` checks the at-login job). Manual: `mb index update` |
+| Local model starts but Claude Code loops or tools fail | Run `mb llm setup` to validate arguments, ensure `--jinja` (or a chat template) is configured, and launch through `mb llm code` so it uses the isolated local profile |
 | Pip/model downloads fail (corporate TLS) | pip: trusted hosts are pre-configured in `.venv/pip.ini`; runtime downloads use `truststore` (OS certificate store) automatically |
 | Broken wikilinks / messy vault | `mb curator` — validation + fix suggestions |
 | Want it gone | `mb uninstall` — removes hooks, scheduler jobs, daemon; **never touches the vault** |
