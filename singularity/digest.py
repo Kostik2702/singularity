@@ -71,32 +71,6 @@ def mark(cfg: Config, identities: list[tuple[str, str]]) -> int:
     return len(identities)
 
 
-# ---------------------------------------------------------------------------
-# committed index load — mirrors search.engine.SearchEngine._load_one's
-# defensive load, without the encoder import (planner must not load a model)
-# ---------------------------------------------------------------------------
-
-def _load_committed_index(cfg: Config) -> tuple[Optional[np.ndarray], list[dict[str, Any]], str]:
-    """(embeddings, chunks, status). status: "ok" | "missing" | "torn"."""
-    from .search import indexer
-
-    files = indexer.index_files(cfg.memory_index_dir)
-    if files is None:
-        return None, [], "missing"
-    emb_path, meta_path = files
-    try:
-        embs = np.load(emb_path, allow_pickle=False).astype(np.float32)
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        chunks = meta.get("chunks", [])
-        if embs.shape[0] != len(chunks):
-            return None, [], "torn"
-        norms = np.linalg.norm(embs, axis=1, keepdims=True)
-        norms[norms == 0] = 1.0
-        return embs / norms, chunks, "ok"
-    except (OSError, ValueError, json.JSONDecodeError):
-        return None, [], "torn"
-
-
 def _pool(embs: np.ndarray, idxs: list[int]) -> Optional[np.ndarray]:
     """Mean-pooled, re-normalized vector over the given chunk rows (same
     aggregation curator._note_embeddings uses for note-level vectors)."""
@@ -176,7 +150,8 @@ def plan(cfg: Config, project_filter: Optional[set[str]] = None) -> dict[str, An
     with a file-name tiebreak, and entries themselves are ordered by their
     best candidate score (most actionable first) then (file, section) for
     entries with no candidate at all."""
-    embs, chunks, status = _load_committed_index(cfg)
+    from .search import indexer
+    embs, chunks, status = indexer.load_committed_index(cfg.memory_index_dir)
     if status != "ok":
         return {"entries": [], "index_status": status, "source_count": 0, "target_count": 0}
 
