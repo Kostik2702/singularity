@@ -157,7 +157,11 @@ gemini -p "summarise the vault" --output-format json   # headless: clean JSON, h
 
 ## Usage
 
-### 1. Search your memory (the command you'll use constantly)
+A guided tour of every part of the system, grouped by topic, with real commands and real output — not just a flag reference. Jump to what you need:
+
+[Search](#search-your-memory-the-command-youll-use-constantly) · [Capture](#capture-knowledge) · [Auto-indexing](#everything-indexes-itself) · [Projects](#multi-project-memory) · [Project brain & module context](#project-brain--module-context) · [Digest & nightly](#digest-and-nightly-orchestration) · [Curator](#curator-vault-health-and-semantic-lint) · [Vault guard](#vault-guard) · [Reflect](#adoption-telemetry-with-mb-reflect) · [Health & utilities](#health-stats-backup--config) · [Skills](#skills--say-the-trigger-word-in-any-session) · [Agents](#agents--spawned-for-heavy-lifting) · [Workflow](#the-solo-workflow-optional-but-recommended) · [Obsidian](#obsidian-side) · [Local LLM](#local-llm-backend)
+
+### Search your memory (the command you'll use constantly)
 
 ```bash
 mb search "how does the auto-capture hook decide to block"
@@ -167,23 +171,27 @@ mb search "..." --type decision                        # learning|decision|howto
 mb search "..." --tags search,daemon                   # frontmatter + inline #tags
 mb search "..." --links "Doctor_Plan"                  # only notes linked to [[Doctor_Plan]]
 mb search "..." --path-prefix rules/                   # scope to a folder
+mb search "..." --project myproj                       # scope to one project, a group, general, or personal
 mb search "..." --json --full                          # machine-readable / untruncated
 ```
 
 Output is compact by design: `file | score | [type] | title/section | excerpt`. Scores ≥ 0.5 are strong matches; below ~0.3 rephrase the query.
 
-### 2. Capture knowledge
+### Capture knowledge
 
 ```bash
 mb learn "Watcher needs venv python on PATH — Task Scheduler runs with a minimal env" --task MY-TASK
+mb learn "..." --task MY-TASK --head "Reload bug root cause"   # adds a semantic heading, not just a timestamp
+mb learn "..." --task MY-TASK --project personal               # explicit personal-space routing
+mb learn "..." --task MY-TASK --force                          # bypass dedup, always append
 mb note new decision "Switch to TCP transport"     # creates a note from templates/
 ```
 
-Worth recording: the non-obvious, the surprising, anything that took more than one attempt, and decisions (with **owner + source** — a decision nobody owns isn't a decision). Not worth recording: anything git already shows. Code goes in as `file:line`, never pasted.
+Worth recording: the non-obvious, the surprising, anything that took more than one attempt, and decisions (with **owner + source** — a decision nobody owns isn't a decision). Not worth recording: anything git already shows. Code goes in as `file:line`, never pasted. `mb learn` deduplicates against the last 10 sections of the target file automatically (exact match, prefix containment, or ~90% similarity) — a near-repeat insight is skipped with the matched heading printed, not silently re-appended, unless you pass `--force`.
 
 **Mostly you won't do this by hand.** The assistant does it: skills auto-append phase notes to the active task's learnings doc, and the Stop-hook nudges once per substantial session if nothing was captured.
 
-### 3. Everything indexes itself
+### Everything indexes itself
 
 Save a note in Obsidian → the watcher re-indexes just that file and hot-reloads the daemon (~5–15 s) → it's searchable. A nightly full rebuild (with missed-run catch-up when the machine was off) is the safety net. Manual controls if you ever need them:
 
@@ -191,33 +199,180 @@ Save a note in Obsidian → the watcher re-indexes just that file and hot-reload
 mb daemon start|stop|status|reload
 mb index rebuild            # full
 mb index update             # incremental (mtime+size diff)
+mb index inspect <path>     # chunk-level view of one file in the current index
 mb watch                    # run the watcher in the foreground
 ```
 
-### 3b. Projects, knowledge compilation & telemetry
+### Multi-project memory
+
+One vault can serve several projects (or none) without their knowledge bleeding together. Register a project once — the assistant's `mb-onboard` skill does this for you conversationally, or run it yourself:
 
 ```bash
-mb project add <id> <path> [--group G] [--about "..."]   # register a project (mb-onboard skill does this + a brain note)
-mb project list [--json] [--group G]
-mb project detect [path] [--json]                        # resolve cwd to a registered project
+mb project add singularity D:/Singularity --group core --about "Personal AI memory engine"
+mb project list
+# singularity: D:/Singularity  group=core  about=Personal AI memory engine
 
-mb digest plan [--project X] [--json]     # merge candidates: learnings -> reference/rule/howto/decision
-mb digest mark <file> <section> | --all   # never re-surface a processed section
+mb project detect                        # resolve the current directory to a project
+# singularity
 
-mb nightly [--json]         # index update -> digest/curator/config snapshot -> trend line -> markers sweep
-                             # (scheduled nightly at nightly_schedule_time; SessionStart nags on the backlog)
-
-mb reflect [--days N] [--json]   # privacy-safe adoption telemetry: offline transcript walk, counts/rates
-                                  # only -- never persists prompt text, tool arguments, or session ids
-
-mb hooks status|enable|disable [--json]   # capture-hook desired/installed/effective state per client
-mb status [--json]          # one health snapshot: index/daemon/watcher/scheduler/disk/hooks/backlog/cache age
-mb stats [--json]           # memory analytics: notes/chunks/types/coverage, no content
-mb backup create|list|verify|restore   # checksummed config + index-pointer snapshot (disaster recovery)
-mb config validate|get|set  # inspect/validate/atomically write .mb/config.json
+mb project detect D:/Singularity/some/nested/dir --json
+# {"cwd": "D:/Singularity/some/nested/dir", "project": "singularity"}
 ```
 
-### 4. Skills — say the trigger word in any Claude Code session
+Detection is **deepest-path-wins**: the most specific registered path containing your cwd matches, so nested projects never get confused with their parent. Once a project is registered:
+
+- `mb search "..." --project singularity` (or `--project core` for the whole group) scopes results to it; unscoped searches still see everything.
+- `mb learn` / `mb note new` auto-detect the project from your current directory and stamp `project: singularity` into the note's frontmatter — you don't have to specify it by hand every time.
+- A note with **no** `project:` frontmatter, or the literal value `general`, is treated as project-agnostic (`general`) — the common case for anything not tied to one codebase (this repo's own vault documentation, for example).
+- **Personal space** is separate from projects and never reached by accident: only `--project personal` explicitly, or a note living under a path listed in `personal_roots` (`.mb/config.json`), is ever classified `personal`. Personal notes are never proposed by `mb digest`, never surfaced by `mb curator`'s suggestions, and never picked up by cwd-based auto-detection.
+
+### Project brain & module context
+
+Two SessionStart/PreToolUse mechanisms that hand the assistant exactly the context it needs, right when it needs it — both authored via `.mb/context.json` (hand-edited today, or via the `mb-onboard` skill for the brain-note part):
+
+```jsonc
+// .mb/context.json
+{
+  "singularity": {
+    "brain_note": "reference/Singularity Brain.md",
+    "context_map": {
+      "hooks": {
+        "globs": ["singularity/hooks", "install/register_hooks.py"],
+        "note": "reference/Singularity Hooks Architecture.md"
+      }
+    }
+  }
+}
+```
+
+- **Project brain** — every SessionStart in a registered project's directory injects a budgeted excerpt (`brain_max_lines`, default 40) of `brain_note`, labeled `Project brain (singularity)` in the context. Keep it to what the assistant should know in *every* session of that project — key decisions, architecture, gotchas — not the whole design doc.
+- **Module context** (opt-in — `module_context_enabled: true`) — before the assistant's first edit in a session to a path matching one of `context_map`'s `globs` (longest-prefix match, e.g. anything under `singularity/hooks/`), it gets a once-per-session excerpt of that module's own `note`. Good for "read this before touching this specific subsystem" rules that don't belong in the general project brain.
+
+Both fail open silently (a missing/unreadable note just means no block that session, never a crash) and both respect the same path-traversal guard, so a malformed `context.json` entry can't leak a file from outside the vault.
+
+### Digest and nightly orchestration
+
+Learnings accumulate in `learnings/active/` all day; `mb digest` is how they turn into permanent, cross-referenced knowledge instead of just piling up.
+
+```bash
+mb digest plan
+```
+```
+== mb digest plan -- index:ok sources:1 targets:1 ==
+
+learnings/active/T.md / Some insight
+   0.67  reference/Atomic.md  [reference]
+```
+(real output, this repo's own dev vault — a learning about "atomic file writes" correctly matched an existing "Atomic writes" reference note)
+
+That's a **suggestion**, never an automatic merge: read the source section, fold it into the target note yourself (or have the assistant do it), then tell the journal it's handled so it never resurfaces:
+
+```bash
+mb digest mark learnings/active/T.md "Some insight"
+mb digest mark --all              # mark every entry currently in the plan
+mb digest plan --project myproj   # scope to one project's learnings
+```
+
+`mb nightly` is the automation behind this: scheduled once a day (`nightly_schedule_time`, default 03:00), or run by hand any time —
+
+```bash
+mb nightly
+```
+```
+== mb nightly 2026-07-13T10:09:10 ==
+  index: ok
+  digest: ok
+  curator: ok
+  config: ok
+  markers: ok
+  trend: ok
+```
+
+— it updates the index, refreshes the digest/curator/config snapshots, appends one row to a trend history (so you can watch backlog size over time), and sweeps stale per-session marker files. If the index writer lock is held (the on-save watcher mid-update), the `index` step reports `skipped` rather than racing it — everything else still runs against the last committed generation. The next SessionStart after a nightly run with a real backlog shows the top 3 concrete actions (rate-limited to once per 72h, never a bare "you have pending work" nag):
+
+```
+digest backlog (3 actionable): learnings/active/T.md#Some insight -> reference/Atomic.md (0.67); ... — `mb digest plan` / `mb digest mark`
+```
+
+### Curator, vault health and semantic lint
+
+```bash
+mb curator
+```
+
+Three layers, all report-only — **curator never writes to your vault**, every finding needs your (or the assistant's) approval before anything changes:
+
+1. **Mechanics** (free, no model): broken wikilinks, missing mandatory frontmatter, decisions without an owner/source, duplicate titles.
+2. **Semantic suggestions**: notes that are topically related (cosine > 0.65 on whole-note embeddings) but have no wikilink between them yet — a candidate to link, not a duplicate.
+3. **Semantic lint** (chunk-level, a stricter bar — cosine > 0.90): near-duplicate content, possibly split across two sections or two notes; supersession candidates (a much newer note saying nearly the same thing as a much older one, ≥60 days apart); and `.mb/context.json` issues — a `brain_note`/module note that's missing, or one that's grown past its line budget and is silently being truncated at runtime.
+
+Real example (a seeded test vault, illustrating all three lint findings at once):
+
+```
+Duplicate sections (same file, cosine>0.9): 1
+   0.96  reference/Atomic.md :: Main content  <->  Duplicate content
+Duplicate sections (cross file, cosine>0.9): 0
+Supersession candidates (gap>=60d): 0
+Context budget/reference issues: 2
+   [over_budget] demo-project: reference/BigBrain.md
+   [missing_note] demo-project/core: reference/DoesNotExist.md
+```
+
+Here, `Atomic.md` really did have the same paragraph typed twice under different headings (a genuine duplicate, worth trimming); `BigBrain.md` is a registered project-brain note that's grown to 82 lines against a 40-line budget (still works, just silently truncated — worth shortening); and one module's context note points at a file that no longer exists (worth fixing or removing the mapping). `mb curator --json` gives you the same three layers as one machine-readable document.
+
+### Vault guard
+
+Opt-in (`vault_guard_enabled: true`) PreToolUse check that flags a new note or config edit landing somewhere unexpected — a safety net against "the assistant created a note in the wrong folder" or "edited `.mb/config.json` by hand instead of through `mb config set`." `vault_guard_mode: "audit"` (default once enabled) only warns; `"deny"` blocks the write outright. Start with `audit`, watch what it flags for a few sessions, and only switch to `deny` once you're confident it isn't flagging anything legitimate.
+
+### Adoption telemetry with mb reflect
+
+```bash
+mb reflect --days 30
+```
+```
+== mb reflect — last 30d, 43 top-level sessions (claude=40, gemini=3) ==
+  by project: general=43
+  search_then_read   17/43  (40%)
+  vault_touch        18/43  (42%)
+  code_edits         12/43  (28%)
+  eligible_research  9/43  (21%)
+  skill_invocation   19/43  (44%)
+excluded: codex (no runtime hook / no discoverable transcript in this integration)
+```
+(real output — this repo's own dev machine, 43 actual Claude/Gemini sessions from the last 30 days)
+
+Reading it: **43 top-level sessions** is the denominator every rate below is measured against — regardless of whether they touched Singularity at all, so a session that searched, read, and captured is never excluded from its own denominator. `search_then_read` (40%) — a search was followed by actually reading something, not fired and ignored. `vault_touch` (42%) — the vault was read or written at all. `code_edits` (28%) — a successful edit happened outside the vault. `eligible_research` (21%) — real search/read activity with **zero** code edits: pure investigation sessions, which a naive "did they edit code" metric would completely miss. `skill_invocation` (44%) — an engine-owned skill fired at least once.
+
+Nothing here is a raw prompt, a tool argument, a session id, or a transcript path — only counts and rates, snapshotted to `.mb/reflect-last.json` and a 90-day trend history. See [Performance & privacy](#performance--privacy) below for how that's verified, not just claimed.
+
+### Health, stats, backup & config
+
+```bash
+mb status
+```
+```
+vault: D:\obsidian\memory brain
+index: 2139 chunks, generation, age 1.9h, schema 3
+daemon: up (pid 12345, orphan=False)
+watcher: alive (heartbeat 4.2s ago)
+scheduler[nightly]: registered=True
+scheduler[watch]: registered=True
+disk(.mb): 41.2 MB
+capture hooks: enabled (source: explicit); installed: claude=yes, gemini=yes, codex=no
+```
+(real output — index/daemon/watcher/scheduler/disk/hooks in one snapshot; `mb status --json` adds `backlog` (digest actionable count) and `cache_age` (hours since each nightly snapshot last refreshed))
+
+```bash
+mb hooks status --json     # per-client desired/installed/effective capture-hook state
+mb stats                   # notes/chunks/types/coverage from index metadata -- never note content
+mb backup create           # checksummed config + index-pointer snapshot
+mb backup list|verify <id>|restore <id>
+mb config validate         # type/range checks + unknown-key warnings
+mb config get <key>
+mb config set <key> <value>   # validated, atomic write
+```
+
+### Skills — say the trigger word in any session
 
 | Skill | Say… | What happens |
 |---|---|---|
@@ -236,7 +391,7 @@ mb config validate|get|set  # inspect/validate/atomically write .mb/config.json
 | `planning-council` | *plc, разбей задачу* | Decomposition + Klein pre-mortem + three-point estimation (Claude-only) |
 | `observation-council` | *oc, why is X happening* | Hypothesis-driven root cause hunt: every hypothesis must survive a falsification attempt (Claude-only) |
 
-### 5. Agents — spawned for heavy lifting
+### Agents — spawned for heavy lifting
 
 Six specialists share one canonical rulebook (`rules/AGENT_SHARED_PREAMBLE.md` in the vault — lazy-loaded by section):
 
@@ -249,7 +404,7 @@ Six specialists share one canonical rulebook (`rules/AGENT_SHARED_PREAMBLE.md` i
 
 Councils orchestrate them in parallel rounds with a machine-parseable contract (`HAVE SOMETHING TO ADD / NOTHING TO ADD / NEED DATA:`), anti-sycophancy rules (agreement without a new argument counts as nothing), and calibrated confidence thresholds before any verdict.
 
-### 6. The solo workflow (optional but recommended)
+### The solo workflow (optional but recommended)
 
 Say **`fw`** at the start of a task. The workflow lives in your vault (`workflow/`), loads one phase at a time, and every phase ends with an automatic learnings append:
 
@@ -261,14 +416,14 @@ Step-Back → Approach → Investigation → Grill → Planning
 
 Small tasks legally skip phases (marked, not silent). The final phase asks one question — *"finalize learnings?"* — and turns any mistakes made along the way into rules.
 
-### 7. Obsidian side
+### Obsidian side
 
 - Install the **Dataview** plugin → `_moc/Dashboard.md` shows live lists of active tasks, recent decisions, and incidents; `_moc/Orphans.md` shows unlinked notes.
 - The graph view and backlinks are fed by the wikilinks the assistant writes.
 - `.mb/` (indexes, daemon state, config) is excluded from Obsidian's own indexing.
 - Templates for every note type live in `templates/` — usable via Templater or `mb note new`.
 
-### 8. Local LLM backend (`mb llm`)
+### Local LLM backend
 
 One command brings up a local `llama-server` (OpenAI-compatible) plus an optional router that translates Anthropic's wire format ↔ OpenAI, so a locally-hosted GGUF model can back Claude Code — or any OpenAI-compatible client — instead of a hosted API.
 
