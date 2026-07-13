@@ -13,7 +13,9 @@ registrar stays a plain module that calls these functions.
 - Ownership proof for paths -> resolves_into
 
 Skill directory links are NOT re-implemented here: register_skills._link_dir is the
-single source of that junction/symlink/backup logic and is reused directly.
+single source of that junction/symlink/backup logic and is reused directly. Which
+skills go to which client is likewise not decided here -- see skill_manifest.py
+(T15): each client script calls skill_manifest.skills_for_client(<name>) directly.
 """
 from __future__ import annotations
 
@@ -21,24 +23,6 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
-
-
-# Portable, CLI/self-contained skills mirrored into every non-Claude client
-# (Codex, Gemini). Single source of truth so the clients cannot drift. Excludes
-# council / planning-council / observation-council, which spawn Claude subagents
-# and are meaningless outside Claude Code.
-PORTABLE_SKILLS = [
-    "mb-search",
-    "mb-memory",
-    "mb-llm-delegate",
-    "workflow-helper",
-    "grill",
-    "confidence-calibration",
-    "memory-curator",
-    "error-reports",
-    "report",
-    "compaction-plan",
-]
 
 
 # --- managed Markdown block ----------------------------------------------------
