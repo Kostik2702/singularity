@@ -20,6 +20,8 @@ mb learn "<плотный инсайт одной-тремя фразами>" --
 mb note new decision "Название решения"    # новая заметка из шаблона (learning|decision|howto|incident|rule|reference|daily)
 ```
 
+- [ ] Личное (не относится ни к одному рабочему проекту) — добавь `--project personal` к `mb learn`/`mb note new`, или, если запись уже создаётся в каталоге из `personal_roots` (см. `.mb/config.json`), routing применится автоматически. Личные заметки никогда не попадают в digest/curator-предложения и никогда не резолвятся случайным cwd-детектом — только explicit `--project personal` или personal_roots.
+
 Крупные записи — редактируй `.md` напрямую (Edit/Write), соблюдая контракт:
 
 - [ ] Frontmatter обязателен: `type, title, tags, created`; для decision — `owner` и `source` (Never Decide Alone: у решения есть автор и происхождение).

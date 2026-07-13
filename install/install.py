@@ -91,10 +91,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_schedule:
         print("== Phase 5: scheduler ==")
         from singularity.platform import scheduler
-        nightly = scheduler.Job("nightly-index",
-                                ["-m", "singularity", "--vault", str(cfg.vault),
-                                 "index", "update"], daily_at="03:00")
-        print("nightly-index:", scheduler.register(nightly))
+        from singularity import nightly as nightly_mod
+        # single source with `mb doctor --fix` (doctor.py C1) so a re-install
+        # on a machine that still has the legacy T02 "nightly-index" job
+        # migrates it instead of leaving two competing scheduled jobs (T12).
+        print("nightly:", nightly_mod.migrate_scheduler_job(cfg))
         watch_job = scheduler.Job("watch",
                                   ["-m", "singularity", "--vault", str(cfg.vault),
                                    "watch"], at_login=True)

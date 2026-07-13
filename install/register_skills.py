@@ -25,24 +25,14 @@ from pathlib import Path
 
 ENGINE = Path(__file__).resolve().parents[1]
 SKILLS_SRC = ENGINE / "singularity" / "skills"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-# Engine-owned skills (source of truth in singularity/skills/). Non-engine skills
-# living loose in ~/.claude/skills are intentionally absent and left untouched.
-SKILLS = [
-    "mb-search",
-    "mb-memory",
-    "mb-llm-delegate",
-    "workflow-helper",
-    "grill",
-    "confidence-calibration",
-    "memory-curator",
-    "council",
-    "planning-council",
-    "observation-council",
-    "error-reports",
-    "report",
-    "compaction-plan",
-]
+import skill_manifest  # noqa: E402  (T15: single source of client->skills)
+
+# Engine-owned skills deployed to Claude (source of truth: skill_manifest.py).
+# Non-engine skills living loose in ~/.claude/skills are intentionally absent
+# and left untouched.
+SKILLS = skill_manifest.skills_for_client("claude")
 
 
 def _points_to(link: Path, target: Path) -> bool:

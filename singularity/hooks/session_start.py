@@ -5,15 +5,25 @@ design). MUST be fast: file reads only, no model, no daemon round-trip.
 
 Emits hookSpecificOutput.additionalContext with:
   - date/time + vault location + mb quick reference
+  - project brain (T06): project resolved from the hook event's cwd (falling
+    back to process cwd, then "general"), budgeted brain-note excerpt from
+    .mb/context.json
   - active tasks (learnings/active/*)
   - latest changelog entry heading
   - doctor warnings from the last cached run (.mb/doctor-last.json)
+  - digest nag (T12): top-3 actionable merge candidates from the cached
+    .mb/digest-last.json (mb nightly), threshold + 72h rate-gated via
+    .mb/nag-state.json; stale/missing cache -> silent or one bounded line,
+    never a crash, never a stamp write on an empty/failed show
+The whole injection is capped by `session_context_max_lines` (T06 total
+budget) on top of each block's own truncation.
 Self-heal: silently restarts the search daemon / watcher jobs is NOT done
 here (too slow) — doctor-last warnings surface the problem instead.
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from datetime import datetime
@@ -22,9 +32,11 @@ from pathlib import Path
 # hook runs outside the package context; make the package importable
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+STALE_CACHE_HOURS = 48   # T12: older digest-last.json -> one bounded line, no action nag
 
-def build_context() -> str:
-    from singularity.config import resolve_vault
+
+def build_context(event_cwd: str | None = None) -> str:
+    from singularity.config import read_config_tolerant, resolve_vault
 
     vault = resolve_vault(None)
     lines: list[str] = []
@@ -40,10 +52,32 @@ def build_context() -> str:
         "SEM-FIRST: use it BEFORE grep/Read for any knowledge discovery. "
         "Capture insights: `mb learn \"<insight>\" --task <ID>`; new notes: `mb note new <type> <title>`."
     )
+    from singularity.hooks_state import CAPTURE_HOOKS_FRAGMENT
+    lines.append(CAPTURE_HOOKS_FRAGMENT)
 
     if not vault.exists():
         lines.append("WARNING: vault path does not exist on this machine.")
         return "\n".join(lines)
+
+    light_cfg = read_config_tolerant(vault)
+
+    # T06: project brain — independent fail-open block. Project detection
+    # never touches SessionStart's own operation even if it errors.
+    try:
+        from singularity import projects as projects_mod
+        from singularity.context_map import DEFAULT_BRAIN_MAX_LINES, project_brain_block
+
+        registry = light_cfg.get("projects")
+        registry = registry if isinstance(registry, dict) else {}
+        cwd = event_cwd or os.getcwd()          # event cwd first, else process cwd
+        project = projects_mod.detect_project(registry, cwd)   # None -> "general"
+
+        max_lines = light_cfg.get("brain_max_lines", DEFAULT_BRAIN_MAX_LINES)
+        brain = project_brain_block(vault, project, max_lines)
+        if brain:
+            lines.append(brain)
+    except Exception:  # noqa: BLE001 — a broken brain note must never break the session
+        pass
 
     # pending compaction plans (resume offers) — one-shot files, see compaction-plan skill
     plans_dir = vault / "compaction-plans"
@@ -91,19 +125,82 @@ def build_context() -> str:
         except json.JSONDecodeError:
             pass
 
-    return "\n".join(lines)
+    # T12: cached digest-actions nag — file-only, threshold + 72h rate-gated,
+    # top-3 concrete actions. Fail-open: a broken/missing cache must never
+    # break the session, and a suppressed/empty nag must never write a stamp.
+    try:
+        digest_last = vault / ".mb" / "digest-last.json"
+        if digest_last.exists():
+            age_h = (time.time() - digest_last.stat().st_mtime) / 3600
+            data = json.loads(digest_last.read_text(encoding="utf-8"))
+            threshold = float(light_cfg.get("digest_score_threshold", 0.45))
+            entries = data.get("entries", [])
+            actionable = [e for e in entries
+                         if e.get("candidates") and e["candidates"][0]["score"] >= threshold]
+            if age_h > STALE_CACHE_HOURS:
+                lines.append(f"mb nightly cache stale ({age_h:.0f}h old) — digest nag "
+                             "suppressed until nightly runs again.")
+            elif actionable:
+                nag_state_path = vault / ".mb" / "nag-state.json"
+                last_shown = None
+                if nag_state_path.exists():
+                    try:
+                        last_shown = json.loads(
+                            nag_state_path.read_text(encoding="utf-8")).get("last_shown_at")
+                    except json.JSONDecodeError:
+                        last_shown = None
+                rate_limit_h = float(light_cfg.get("nightly_nag_rate_limit_hours", 72))
+                due = True
+                if last_shown:
+                    try:
+                        shown_age_h = ((datetime.now() - datetime.fromisoformat(last_shown))
+                                      .total_seconds() / 3600)
+                        due = shown_age_h >= rate_limit_h
+                    except ValueError:
+                        due = True
+                if due:
+                    top = sorted(actionable, key=lambda e: -e["candidates"][0]["score"])[:3]
+                    actions = "; ".join(
+                        f"{e['file']}#{e['section']} -> {e['candidates'][0]['file']} "
+                        f"({e['candidates'][0]['score']:.2f})" for e in top)
+                    lines.append(f"digest backlog ({len(actionable)} actionable): {actions} "
+                                "— `mb digest plan` / `mb digest mark`")
+                    nag_tmp = nag_state_path.with_suffix(".json.tmp")
+                    nag_tmp.write_text(json.dumps(
+                        {"last_shown_at": datetime.now().isoformat(timespec="seconds")}),
+                        encoding="utf-8")
+                    nag_tmp.replace(nag_state_path)
+    except Exception:  # noqa: BLE001 — a broken digest cache must never break the session
+        pass
+
+    # T06: total injection budget on top of each block's own truncation.
+    text = "\n".join(lines)
+    budget = light_cfg.get("session_context_max_lines", 200)
+    if isinstance(budget, int) and budget > 0:
+        all_lines = text.splitlines()
+        if len(all_lines) > budget:
+            text = "\n".join(all_lines[:budget]) + \
+                f"\n... (session context truncated at session_context_max_lines={budget})"
+    return text
 
 
 def main() -> int:
     # Windows console defaults stdout to cp1251 → Cyrillic becomes mojibake;
     # Claude Code reads hook stdout as UTF-8 (twin of the stdin utf-8-sig rule)
     sys.stdout.reconfigure(encoding="utf-8")
+    event_cwd = None
     try:
-        sys.stdin.read()  # consume the event payload (content not needed)
-    except OSError:
-        pass
+        raw = sys.stdin.buffer.read().decode("utf-8-sig", errors="ignore").strip()
+        if raw:
+            event = json.loads(raw)
+            if isinstance(event, dict):
+                cwd = event.get("cwd")
+                if isinstance(cwd, str) and cwd.strip():
+                    event_cwd = cwd
+    except (OSError, json.JSONDecodeError, AttributeError):
+        pass       # T06: missing/malformed event cwd falls back to process cwd
     try:
-        context = build_context()
+        context = build_context(event_cwd)
     except Exception as exc:  # noqa: BLE001 — a broken hook must never block the session
         context = f"[Singularity memory] hook error: {exc}"
     print(json.dumps({

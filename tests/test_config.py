@@ -54,6 +54,69 @@ def test_save_is_atomic_no_tmp_left(tmp_path):
     assert leftovers == []
 
 
+# --- T08: sanitized config.example.json --------------------------------------
+
+def test_save_generates_example(tmp_path):
+    cfg = Config(vault=tmp_path, data={"model": "m"})
+    cfg.save()
+    assert cfg.config_example_path.exists()
+
+
+def test_example_redacts_hf_cache(tmp_path):
+    cfg = Config(vault=tmp_path, data={"hf_cache": str(tmp_path / "secret-cache")})
+    cfg.save()
+    example = json.loads(cfg.config_example_path.read_text(encoding="utf-8"))
+    assert "hf_cache" not in example
+
+
+def test_example_no_leftover_tmp_file(tmp_path):
+    cfg = Config(vault=tmp_path, data={"model": "m"})
+    cfg.save()
+    leftovers = [p for p in cfg.config_path.parent.iterdir()
+                if p.name.startswith("config") and p.suffix != ".json"]
+    assert leftovers == []
+
+
+def test_example_home_relativizes_project_paths(tmp_path, monkeypatch):
+    home = tmp_path / "home"; home.mkdir()
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: home))
+    proj = home / "code" / "myproj"
+    cfg = Config(vault=tmp_path, data={"projects": {"p": {"path": str(proj)}}})
+    cfg.save()
+    example = json.loads(cfg.config_example_path.read_text(encoding="utf-8"))
+    assert example["projects"]["p"]["path"] == "~/code/myproj"
+
+
+def test_example_retains_paths_outside_home(tmp_path, monkeypatch):
+    home = tmp_path / "home"; home.mkdir()
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: home))
+    outside = tmp_path / "elsewhere" / "otherproj"
+    cfg = Config(vault=tmp_path, data={"projects": {"p": {"path": str(outside)}}})
+    cfg.save()
+    example = json.loads(cfg.config_example_path.read_text(encoding="utf-8"))
+    assert example["projects"]["p"]["path"] == str(outside)
+
+
+def test_example_bootstrap_save_does_not_clobber_richer_existing(tmp_path):
+    cfg = Config(vault=tmp_path, data={"projects": {"real": {"path": "D:/real"}}})
+    cfg.save()
+    richer = json.loads(cfg.config_example_path.read_text(encoding="utf-8"))
+    assert richer["projects"]
+
+    bootstrap_cfg = Config(vault=tmp_path, data={})    # no projects at all
+    bootstrap_cfg.save()
+    after = json.loads(cfg.config_example_path.read_text(encoding="utf-8"))
+    assert after["projects"] == richer["projects"]     # untouched, not clobbered
+
+
+def test_example_generation_failure_does_not_break_real_save(tmp_path, monkeypatch):
+    cfg = Config(vault=tmp_path, data={"model": "m"})
+    monkeypatch.setattr(cfg, "_write_sanitized_example",
+                        lambda merged: (_ for _ in ()).throw(RuntimeError("boom")))
+    cfg.save()      # must not raise
+    assert json.loads(cfg.config_path.read_text(encoding="utf-8"))["model"] == "m"
+
+
 # --- AUD-13: config schema validation + migration ---------------------------
 
 def test_validate_clean_config_has_no_errors():
@@ -113,6 +176,42 @@ def test_load_config_migrates_and_backs_up(tmp_path, monkeypatch):
     assert cfg.data["schema_version"] == cfgmod.SCHEMA_VERSION
     # a backup of the pre-migration file was written
     assert list(mb.glob("config.json.bak-*"))
+
+
+# --- T03: projects registry validation is merged into validate_config -------
+
+def test_validate_config_merges_projects_errors():
+    from singularity.config import validate_config
+    res = validate_config({"model": "m", "projects": {"general": {"path": "D:/x"}}})
+    assert any("reserved" in e for e in res["errors"])
+
+
+def test_validate_config_does_not_warn_projects_as_unknown_key():
+    from singularity.config import validate_config
+    res = validate_config({"model": "m", "projects": {"p": {"path": "D:/x"}}})
+    assert res["errors"] == []
+    assert not any("projects" in w for w in res["warnings"])
+
+
+# --- T12: nightly orchestration config keys ----------------------------------
+
+def test_validate_nightly_numeric_keys_range():
+    from singularity.config import validate_config
+    res = validate_config({"nightly_nag_rate_limit_hours": 0, "markers_retention_days": 0,
+                           "nightly_trend_retention_days": 0})
+    joined = " ".join(res["errors"])
+    assert "nightly_nag_rate_limit_hours" in joined
+    assert "markers_retention_days" in joined
+    assert "nightly_trend_retention_days" in joined
+
+
+def test_validate_nightly_schedule_time_format():
+    from singularity.config import validate_config
+    assert any("nightly_schedule_time" in e
+              for e in validate_config({"nightly_schedule_time": "3:00"})["errors"])
+    assert any("nightly_schedule_time" in e
+              for e in validate_config({"nightly_schedule_time": "25:00"})["errors"])
+    assert validate_config({"nightly_schedule_time": "03:00"})["errors"] == []
 
 
 def test_load_config_rejects_bad_types_actionably(tmp_path, monkeypatch, capsys):

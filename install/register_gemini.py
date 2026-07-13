@@ -39,10 +39,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling install/ imp
 
 import client_registration  # noqa: E402  (shared safe-registration primitives)
 import register_skills  # noqa: E402  (reuse the junction helpers, single source)
+import skill_manifest  # noqa: E402  (T15: single source of client->skills)
 from singularity.config import resolve_vault  # noqa: E402  (stdlib-only, pre-deps safe)
+from singularity.hooks_state import CAPTURE_HOOKS_FRAGMENT  # noqa: E402  (T02 shared fragment)
 
 SKILLS_SRC = ENGINE / "singularity" / "skills"
-GEMINI_SKILLS = client_registration.PORTABLE_SKILLS
+GEMINI_SKILLS = skill_manifest.skills_for_client("gemini")
 
 PYTHON = ENGINE / ".venv" / ("Scripts/python.exe" if sys.platform.startswith("win")
                              else "bin/python")
@@ -115,6 +117,8 @@ Record the non-obvious / contradicting / needed-more-than-one-attempt (code only
 mb learn "<insight>" --task <ID>     # decisions carry owner + source
 ```
 Dedup with `mb search` before writing. Maintenance: `mb doctor --fix`.
+
+{CAPTURE_HOOKS_FRAGMENT}
 
 ## Shortcuts (user may type these)
 - **um** — update memory (capture insight/decision into the vault; dedup first)

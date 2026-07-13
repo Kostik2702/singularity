@@ -79,6 +79,16 @@ def test_skills_linked_and_no_council(home):
         assert not (dest / council).exists()
 
 
+# --- T02: shared capture-hooks natural-language fragment ----------------------
+
+def test_profile_contains_capture_hooks_fragment(home):
+    register_gemini.main()
+    text = _profile(home).read_text(encoding="utf-8")
+    assert "mb hooks status" in text and "mb hooks enable" in text and "mb hooks disable" in text
+    assert "stop hooks" in text
+    assert register_gemini.CAPTURE_HOOKS_FRAGMENT in text        # verbatim, single source
+
+
 # --- append / refresh / malformed ---------------------------------------------
 
 def test_append_preserves_user_content(home):

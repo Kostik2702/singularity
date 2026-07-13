@@ -44,6 +44,21 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "batch_size": 64,
     "code_repos_dir": None,     # optional code index root
     "auto_capture": True,
+    "brain_max_lines": 40,             # T06: per-project brain note truncation
+    "session_context_max_lines": 200,  # T06: total SessionStart injection budget
+    "module_note_max_lines": 60,       # T07: per-module context note truncation
+    "module_context_enabled": False,   # T07: PreToolUse hook installed but no-op until true
+    "vault_guard_enabled": False,      # T08: PreToolUse guard installed but no-op until true
+    "vault_guard_mode": "audit",       # T08: "audit" (warn only) or "deny" (block)
+    "personal_roots": [],              # T08: vault-relative roots classified as personal
+    "digest_score_threshold": 0.45,    # T11: min cosine to surface a merge candidate
+    "digest_top_k": 3,                 # T11: max candidate targets per learning section
+    "nightly_schedule_time": "03:00",       # T12: mb nightly daily trigger (HH:MM)
+    "nightly_nag_rate_limit_hours": 72,     # T12: min hours between SessionStart digest nags
+    "markers_retention_days": 30,           # T12: nightly sweep age for .mb/markers/*
+    "nightly_trend_retention_days": 180,    # T12: nightly-history.jsonl row retention
+    "reflect_window_days": 30,              # T14: default `mb reflect` lookback window
+    "reflect_retention_days": 90,           # T14: reflect-history.jsonl row retention (Open Decision)
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -52,6 +67,27 @@ DEFAULT_CONFIG: dict[str, Any] = {
 # keys that carry machine-specific absolute paths (validated as strings only —
 # their existence is a per-machine concern, not a config-schema error)
 _PATH_KEYS = {"code_repos_dir", "hf_cache"}
+
+# T08: config.example.json is a sanitized, git-trackable snapshot for
+# onboarding on a new machine or sharing the project registry with a
+# collaborator — distinct from `mb backup` (an operational, checksummed
+# snapshot of the CURRENT machine's config + index pointer for disaster
+# recovery on the SAME machine). hf_cache is the only currently known
+# sensitive value (a local model-cache path with no portable meaning);
+# actual secrets never live in config.json at all (singularity.platform.
+# secrets routes them through the OS keyring / an explicit opt-in file).
+_EXAMPLE_REDACTED_KEYS = {"hf_cache"}
+_EXAMPLE_HOME_RELATIVE_KEYS = {"code_repos_dir"}
+
+
+def _home_relative(path_str: str, home: Path) -> str:
+    """`C:/Users/x/code/p` -> `~/code/p` when under home; any other path
+    (outside home, or unresolvable) is retained verbatim. Never raises."""
+    try:
+        rel = Path(path_str).resolve().relative_to(home.resolve())
+    except (OSError, ValueError):
+        return path_str
+    return "~/" + str(rel).replace("\\", "/")
 
 
 def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
@@ -84,20 +120,48 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     _int("daemon_port", 0, 65535)
     _int("excerpt_chars", 1, 1_000_000)
     _int("batch_size", 1, 1_000_000)
+    _int("brain_max_lines", 1, 10_000)
+    _int("session_context_max_lines", 1, 10_000)
+    _int("module_note_max_lines", 1, 10_000)
+    _num("digest_score_threshold", 0.0, 1.0)
+    _int("digest_top_k", 1, 50)
+    _int("nightly_nag_rate_limit_hours", 1, 24 * 30)
+    _int("markers_retention_days", 1, 3650)
+    _int("nightly_trend_retention_days", 1, 3650)
+    _int("reflect_window_days", 1, 3650)
+    _int("reflect_retention_days", 1, 3650)
+    if "nightly_schedule_time" in data:
+        v = data["nightly_schedule_time"]
+        if not (isinstance(v, str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v)):
+            errors.append("nightly_schedule_time: must be 'HH:MM' 24h string")
     for key in ("skip_dirs", "skip_path_parts"):
         if key in data and (not isinstance(data[key], list)
                             or not all(isinstance(x, str) for x in data[key])):
             errors.append(f"{key}: must be a list of strings")
     if "auto_capture" in data and not isinstance(data["auto_capture"], bool):
         errors.append("auto_capture: must be a boolean")
+    if "module_context_enabled" in data and not isinstance(data["module_context_enabled"], bool):
+        errors.append("module_context_enabled: must be a boolean")
+    if "vault_guard_enabled" in data and not isinstance(data["vault_guard_enabled"], bool):
+        errors.append("vault_guard_enabled: must be a boolean")
+    if "vault_guard_mode" in data and data["vault_guard_mode"] not in ("audit", "deny"):
+        errors.append("vault_guard_mode: must be 'audit' or 'deny'")
+    if "personal_roots" in data and (not isinstance(data["personal_roots"], list)
+                                     or not all(isinstance(x, str) for x in data["personal_roots"])):
+        errors.append("personal_roots: must be a list of strings")
     if "connectors" in data and not isinstance(data["connectors"], dict):
         errors.append("connectors: must be an object")
     for key in _PATH_KEYS:
         if key in data and data[key] is not None and not isinstance(data[key], str):
             errors.append(f"{key}: must be a path string or null")
 
-    known = set(DEFAULT_CONFIG) | _PATH_KEYS | {"llm"}
+    from .projects import validate_projects
+    proj_result = validate_projects(data)
+    errors.extend(proj_result["errors"])
+
+    known = set(DEFAULT_CONFIG) | _PATH_KEYS | {"llm", "projects"}
     warnings = [f"{k}: unknown config key (ignored)" for k in data if k not in known]
+    warnings.extend(proj_result["warnings"])
     return {"errors": errors, "warnings": warnings}
 
 
@@ -205,6 +269,49 @@ class Config:
             json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
         tmp.replace(self.config_path)
+        try:
+            self._write_sanitized_example(merged)
+        except Exception:  # noqa: BLE001 — example generation must never break a real save
+            pass
+
+    @property
+    def config_example_path(self) -> Path:
+        return self.mb_dir / "config.example.json"
+
+    def _write_sanitized_example(self, merged: dict[str, Any]) -> None:
+        """T08: git-trackable sanitized snapshot of the config. No secrets
+        (hf_cache redacted), project/code paths under home rewritten
+        `~/...` for portability, paths outside home retained as-is."""
+        sanitized = {k: v for k, v in merged.items() if k not in _EXAMPLE_REDACTED_KEYS}
+        home = Path.home()
+        for key in _EXAMPLE_HOME_RELATIVE_KEYS:
+            if isinstance(sanitized.get(key), str):
+                sanitized[key] = _home_relative(sanitized[key], home)
+        if isinstance(sanitized.get("projects"), dict):
+            sanitized["projects"] = {
+                pid: ({**entry, "path": _home_relative(entry["path"], home)}
+                     if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+                     else entry)
+                for pid, entry in sanitized["projects"].items()
+            }
+
+        # Bootstrap-clobber guard: a fresh `mb init`/empty-projects save must
+        # never overwrite an existing, richer example (e.g. pulled via git
+        # from another machine that already registered projects) with a
+        # near-empty one.
+        is_bootstrap = not self.data.get("projects")
+        if is_bootstrap and self.config_example_path.exists():
+            try:
+                existing = json.loads(self.config_example_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                existing = {}
+            if isinstance(existing, dict) and existing.get("projects"):
+                return
+
+        tmp = self.config_example_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(sanitized, indent=2, ensure_ascii=False) + "\n",
+                       encoding="utf-8")
+        tmp.replace(self.config_example_path)
 
     def apply_env(self) -> None:
         """Point HuggingFace cache at the configured location (keep C: clean)
@@ -217,6 +324,35 @@ class Config:
             truststore.inject_into_ssl()
         except ImportError:
             pass
+
+
+def atomic_write_json(path: Path, data: Any, *, indent: int = 1) -> None:
+    """Shared tmp+replace idiom for every JSON snapshot/journal the engine
+    writes outside Config.save() itself (digest journal, nightly snapshots,
+    reflect snapshot/history) -- same convention, factored out so a fourth
+    independent copy of it is never written again."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=indent), encoding="utf-8")
+    tmp.replace(path)
+
+
+def read_config_tolerant(vault: Path) -> dict[str, Any]:
+    """Dependency-free, never-raising read of vault/.mb/config.json — for hook
+    hot paths (SessionStart, PreToolUse, ...) that must NOT go through the
+    full load_config() gate: that path sys.exit(2)s on a malformed config,
+    which is correct CLI behavior but would kill a hook mid-session. Missing/
+    malformed/non-object -> {}; every caller already treats absence as "use
+    the default". See [[Rule - hooks must never use the full validated Config
+    load path]]."""
+    cfg_path = vault / ".mb" / "config.json"
+    if not cfg_path.exists():
+        return {}
+    try:
+        data = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:

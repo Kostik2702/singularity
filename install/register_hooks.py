@@ -1,7 +1,15 @@
 """Register Singularity hooks in ~/.claude/settings.json (idempotent merge).
 
 Every entry we own carries "_mb": true so re-register and uninstall can
-find them without touching anything else in the user's settings.
+find them without touching anything else in the user's settings. Ownership
+detection also falls back to matching our own script filename in the
+command — see [[Rule - hook ownership detection must tolerate pre-marker
+installs]]: a machine can have SessionStart/Stop entries that predate the
+`_mb` marker (this repo's own dev machine did). Without the fallback, a
+re-register would treat that legacy entry as "foreign" and ADD a second,
+duplicate entry alongside it instead of replacing it — confirmed live on
+2026-07-12 (T07): running the then-current merge produced two SessionStart
+and two Stop entries pointing at the identical command.
 """
 from __future__ import annotations
 
@@ -33,7 +41,44 @@ HOOKS = {
             }],
         }
     ],
+    "PreToolUse": [
+        {
+            "_mb": True,
+            "matcher": "Edit|Write|MultiEdit",
+            "hooks": [{
+                "type": "command",
+                "command": f'"{PYTHON}" "{ENGINE / "singularity" / "hooks" / "module_context.py"}"',
+            }],
+        },
+        {
+            "_mb": True,
+            "matcher": "Edit|Write|MultiEdit",
+            "hooks": [{
+                "type": "command",
+                "command": f'"{PYTHON}" "{ENGINE / "singularity" / "hooks" / "vault_guard.py"}"',
+            }],
+        },
+    ],
 }
+
+
+# Fallback ownership signal (script filenames) per event, for entries that
+# predate the `_mb` marker — must stay in sync with the script names used in
+# HOOKS above. PreToolUse owns two distinct scripts (T07 module_context,
+# T08 vault_guard), each its own matcher-group entry.
+_OWNED_SCRIPTS = {
+    "SessionStart": {"session_start.py"},
+    "Stop": {"stop_capture.py"},
+    "PreToolUse": {"module_context.py", "vault_guard.py"},
+}
+
+
+def _is_owned(entry: dict, event: str) -> bool:
+    if entry.get("_mb"):
+        return True
+    scripts = _OWNED_SCRIPTS.get(event, set())
+    return any(script in str(h.get("command", ""))
+              for h in entry.get("hooks", []) for script in scripts)
 
 
 def main() -> int:
@@ -47,9 +92,10 @@ def main() -> int:
 
     hooks = data.setdefault("hooks", {})
     for event, entries in HOOKS.items():
-        existing = [e for e in hooks.get(event, []) if not e.get("_mb")]
+        existing = [e for e in hooks.get(event, []) if not _is_owned(e, event)]
         hooks[event] = existing + entries
 
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
                              encoding="utf-8")
     print(f"registered {sum(len(v) for v in HOOKS.values())} hook entr(y/ies); "

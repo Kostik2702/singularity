@@ -85,6 +85,13 @@ class SearchEngine:
             wanted_repos = set(repos if isinstance(repos, list) else str(repos).split(","))
             if meta.get("repo") not in wanted_repos:
                 return False
+        proj = req.get("filter_project")
+        if proj:
+            # exact match like repos/type (registry ids, not free-text tags);
+            # a chunk with no project key classifies as "general" (T04 §8.2).
+            wanted_projects = set(proj if isinstance(proj, list) else str(proj).split(","))
+            if (meta.get("project") or "general") not in wanted_projects:
+                return False
         return True
 
     def _search_source(self, q_emb: np.ndarray, embs: Optional[np.ndarray],
@@ -95,7 +102,7 @@ class SearchEngine:
         top_k = int(req.get("top_k", 5))
         has_filters = any(req.get(k) for k in
                           ("filter_type", "filter_tags", "path_prefix",
-                           "filter_wikilinks", "repos"))
+                           "filter_wikilinks", "repos", "filter_project"))
         pool = top_k * (20 if has_filters else 3)   # Genevra candidate pool
         scores = embs @ q_emb                        # cosine (normalized)
         order = np.argsort(scores)[::-1][:pool]
@@ -142,6 +149,8 @@ class SearchEngine:
         if meta.get("line"):
             loc = f"{loc}:{meta['line']}"
         tag = meta.get("type") or meta.get("kind") or item["source"]
+        if meta.get("project"):
+            tag = f"{tag}@{meta['project']}"
         head = meta.get("title", "")
         if meta.get("section"):
             head = f"{head}/{meta['section']}"

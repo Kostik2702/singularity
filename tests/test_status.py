@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from singularity import status
+from singularity import hooks_state, status
 from singularity.config import Config
 from singularity.platform import proc, scheduler
 from singularity.search import client
@@ -14,27 +14,44 @@ def cfg(tmp_path):
     return Config(vault=tmp_path, data={})
 
 
-def _stub_all(monkeypatch):
+def _stub_all(monkeypatch, home=None):
     monkeypatch.setattr(client, "status",
                         lambda cfg: {"ping": None, "pid": None, "orphan": False})
     monkeypatch.setattr(scheduler, "verify", lambda job: {"registered": False})
+    if home is not None:
+        monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: home))
 
 
 def test_snapshot_has_all_sections(cfg, monkeypatch):
-    _stub_all(monkeypatch)
+    _stub_all(monkeypatch, home=cfg.vault)
     snap = status.snapshot(cfg)
-    for key in ("vault", "index", "daemon", "watcher", "scheduler", "disk"):
+    for key in ("vault", "index", "daemon", "watcher", "scheduler", "disk", "hooks"):
         assert key in snap
     assert snap["index"]["present"] is False       # empty vault, no index
 
 
+# --- T02: hooks section -------------------------------------------------------
+
+def test_snapshot_hooks_section_shape(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    snap = status.snapshot(cfg)
+    assert snap["hooks"]["kind"] == "capture_hooks"
+    assert set(snap["hooks"]["clients"]) == {"claude", "gemini", "codex"}
+
+
+def test_run_human_output_mentions_capture_hooks(cfg, monkeypatch, capsys):
+    _stub_all(monkeypatch, home=cfg.vault)
+    status.run(cfg, as_json=False)
+    assert "capture hooks:" in capsys.readouterr().out
+
+
 def test_snapshot_is_json_serializable(cfg, monkeypatch):
-    _stub_all(monkeypatch)
+    _stub_all(monkeypatch, home=cfg.vault)
     json.dumps(status.snapshot(cfg))               # must not raise
 
 
 def test_probe_failure_is_isolated(cfg, monkeypatch):
-    _stub_all(monkeypatch)
+    _stub_all(monkeypatch, home=cfg.vault)
     def boom(c):
         raise RuntimeError("disk probe blew up")
     monkeypatch.setattr(status, "_disk", boom)
@@ -44,7 +61,7 @@ def test_probe_failure_is_isolated(cfg, monkeypatch):
 
 
 def test_run_json_valid(cfg, monkeypatch, capsys):
-    _stub_all(monkeypatch)
+    _stub_all(monkeypatch, home=cfg.vault)
     status.run(cfg, as_json=True)
     json.loads(capsys.readouterr().out.strip())
 
@@ -70,3 +87,60 @@ def test_log_rotation_noop_when_small(tmp_path):
     log.write_bytes(b"tiny")
     proc.rotate_log(log, max_bytes=1_000_000)
     assert log.exists() and not (tmp_path / "d.log.1").exists()
+
+
+# --- T12: backlog / cache-age probes -----------------------------------------
+
+def test_snapshot_includes_backlog_and_cache_age(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    snap = status.snapshot(cfg)
+    assert "backlog" in snap and "cache_age" in snap
+
+
+def test_backlog_absent_when_no_digest_cache(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    snap = status.snapshot(cfg)
+    assert snap["backlog"] == {"present": False}
+
+
+def test_backlog_reports_actionable_count(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    mb = cfg.vault / ".mb"
+    mb.mkdir(parents=True, exist_ok=True)
+    (mb / "digest-last.json").write_text(json.dumps({
+        "entries": [{"candidates": [{"score": 0.9}]}, {"candidates": []}],
+        "index_status": "ok"}), encoding="utf-8")
+    snap = status.snapshot(cfg)
+    assert snap["backlog"]["entries"] == 2
+    assert snap["backlog"]["actionable"] == 1
+
+
+def test_cache_age_reports_hours_for_present_files(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    mb = cfg.vault / ".mb"
+    mb.mkdir(parents=True, exist_ok=True)
+    (mb / "digest-last.json").write_text("{}", encoding="utf-8")
+    snap = status.snapshot(cfg)
+    assert snap["cache_age"]["digest"]["present"] is True
+    assert "age_hours" in snap["cache_age"]["digest"]
+    assert snap["cache_age"]["curator"]["present"] is False
+
+
+def test_cache_age_includes_reflect_snapshot(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    mb = cfg.vault / ".mb"
+    mb.mkdir(parents=True, exist_ok=True)
+    (mb / "reflect-last.json").write_text("{}", encoding="utf-8")
+    snap = status.snapshot(cfg)
+    assert snap["cache_age"]["reflect"]["present"] is True
+    assert "age_hours" in snap["cache_age"]["reflect"]
+
+
+def test_scheduler_probe_uses_new_nightly_job_name(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    seen = []
+    monkeypatch.setattr(scheduler, "verify",
+                        lambda job: seen.append(job.name) or {"registered": False})
+    status.snapshot(cfg)
+    assert "nightly" in seen
+    assert "nightly-index" not in seen

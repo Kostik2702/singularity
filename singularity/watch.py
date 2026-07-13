@@ -77,19 +77,36 @@ def run(cfg: Config) -> None:
             newest = max(pending.values())
             if time.monotonic() - newest < DEBOUNCE_SECONDS:
                 continue
-            files = sorted(pending)
-            pending.clear()
-            from .search import indexer
-            from .search import client
-
-            try:
-                stats = indexer.update(cfg, only_files=files)
-                client.reload_daemon(cfg)
-                print(f"[watch] updated {files} -> {stats}", flush=True)
-            except Exception as exc:  # noqa: BLE001 — watcher must survive bad files
-                print(f"[watch] update failed: {exc}", flush=True)
+            _process_pending(cfg, pending)
     except KeyboardInterrupt:
         pass
     finally:
         observer.stop()
         observer.join()
+
+
+def _process_pending(cfg: Config, pending: dict[str, float]) -> None:
+    """One debounced batch. On failure -- including a held writer lock (e.g.
+    `mb nightly` running) -- the files go BACK into `pending` with a fresh
+    timestamp so they retry after the next debounce window instead of
+    vanishing silently (T12: "не теряй pending watcher files"). Only the
+    files actually handled this batch are cleared on success, so an edit
+    that lands on another file while this batch is in flight survives."""
+    files = sorted(pending)
+    from .search import indexer
+    from .search import client
+
+    try:
+        stats = indexer.update(cfg, only_files=files)
+        client.reload_daemon(cfg)
+        print(f"[watch] updated {files} -> {stats}", flush=True)
+        for rel in files:
+            pending.pop(rel, None)
+    except indexer.IndexLockedError:
+        print(f"[watch] index locked, will retry: {files}", flush=True)
+        for rel in files:
+            pending[rel] = time.monotonic()
+    except Exception as exc:  # noqa: BLE001 — watcher must survive bad files
+        print(f"[watch] update failed: {exc}", flush=True)
+        for rel in files:
+            pending[rel] = time.monotonic()

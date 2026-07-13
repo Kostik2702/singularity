@@ -2,12 +2,26 @@
 
 mb search "<query>" [--top N] [--type T] [--tags a,b] [--links X] [--json] ...
 mb daemon start|stop|status|reload|run
-mb index rebuild|update [--files f1 f2]
+mb index rebuild|update [--files f1 f2]|inspect <path>
 mb watch
 mb doctor [--fix] [--heavy] [--json]
+mb curator [--json]
+mb selftest [--json]
+mb status [--json]
+mb stats [--json]
+mb backup create|list|verify|restore <id>
+mb config validate|get <key>|set <key> <value>
 mb note new <type> <title>
 mb learn "<insight>" [--task ID]
+mb hooks status|enable|disable [--json]
+mb project list|add|remove|detect
+mb digest plan [--project X] [--json]
+mb digest mark <file> <section> | --all [--json]
+mb nightly [--json]   # index update -> digest/curator/config snapshot -> trend -> markers sweep
+mb reflect [--days N] [--json]   # privacy-safe adoption telemetry (offline transcript walk)
+mb llm start|stop|status|list|logs|code|setup
 mb init            # write ~/.singularity.json pointer + folder tree
+mb uninstall       # remove hooks/scheduler jobs/daemon (vault untouched)
 """
 from __future__ import annotations
 
@@ -37,6 +51,8 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("--tags", dest="filter_tags")
     s.add_argument("--links", dest="filter_wikilinks",
                    help="only notes linked to [[X]]")
+    s.add_argument("--project", dest="filter_project",
+                   help="comma-separated ids/groups/general/personal (T04)")
     s.add_argument("--path-prefix")
     s.add_argument("--memory-only", action="store_true")
     s.add_argument("--code-only", action="store_true")
@@ -74,6 +90,11 @@ def _build_parser() -> argparse.ArgumentParser:
     stt = sub.add_parser("stats", help="memory analytics (notes/chunks/types/coverage)")
     stt.add_argument("--json", action="store_true")
 
+    rfl = sub.add_parser("reflect", help="privacy-safe adoption telemetry "
+                                         "(offline transcript walk, counts/rates only)")
+    rfl.add_argument("--days", type=int, help="lookback window (default: reflect_window_days config)")
+    rfl.add_argument("--json", action="store_true")
+
     bk = sub.add_parser("backup", help="backup/restore config + index pointer")
     bksub = bk.add_subparsers(dest="backup_action", required=True)
     bksub.add_parser("create", help="create a checksummed backup")
@@ -94,11 +115,51 @@ def _build_parser() -> argparse.ArgumentParser:
     cfgs.add_argument("key")
     cfgs.add_argument("value", help="JSON value; falls back to a string literal")
 
+    pr = sub.add_parser("project", help="multi-project registry + cwd detection")
+    prsub = pr.add_subparsers(dest="project_action", required=True)
+    prl = prsub.add_parser("list", help="list registered projects")
+    prl.add_argument("--json", action="store_true")
+    prl.add_argument("--group", help="filter to one group (or a bare project id)")
+    pra = prsub.add_parser("add", help="register a project (validated, atomic)")
+    pra.add_argument("id")
+    pra.add_argument("path")
+    pra.add_argument("--group")
+    pra.add_argument("--about")
+    prr = prsub.add_parser("remove", help="unregister a project")
+    prr.add_argument("id")
+    prd = prsub.add_parser("detect", help="resolve a path (default: cwd) to a registered project")
+    prd.add_argument("path", nargs="?")
+    prd.add_argument("--json", action="store_true")
+
+    hk = sub.add_parser("hooks", help="capture/stop hooks control (desired/installed/effective)")
+    hksub = hk.add_subparsers(dest="hooks_action", required=True)
+    hkst = hksub.add_parser("status", help="show capture hooks desired/installed/effective state")
+    hkst.add_argument("--json", action="store_true")
+    hksub.add_parser("enable", help="enable capture hooks (auto_capture=true)")
+    hksub.add_parser("disable", help="disable capture hooks (auto_capture=false)")
+
+    dg = sub.add_parser("digest", help="digest planner: learnings -> reference/rule/howto/decision merge candidates")
+    dgsub = dg.add_subparsers(dest="digest_action", required=True)
+    dgp = dgsub.add_parser("plan", help="propose merge candidates for un-marked active learning sections")
+    dgp.add_argument("--project", dest="filter_project",
+                     help="comma-separated ids/groups/general (T04 resolver, FR-1)")
+    dgp.add_argument("--json", action="store_true")
+    dgm = dgsub.add_parser("mark", help="record learning section(s) as processed (won't reappear in plan)")
+    dgm.add_argument("file", nargs="?", help="vault-relative source file (learnings/active/...)")
+    dgm.add_argument("section", nargs="?", help="section heading, used together with <file>")
+    dgm.add_argument("--all", action="store_true", help="mark every entry in the current plan")
+    dgm.add_argument("--json", action="store_true")
+
+    nt = sub.add_parser("nightly", help="orchestrated nightly run: index update -> "
+                                        "digest/curator/config snapshot -> trend line -> markers sweep")
+    nt.add_argument("--json", action="store_true")
+
     n = sub.add_parser("note", help="notes")
     nsub = n.add_subparsers(dest="note_action", required=True)
     nn = nsub.add_parser("new")
     nn.add_argument("type")
     nn.add_argument("title")
+    nn.add_argument("--project", help="explicit project id/general/personal (else cwd-detected)")
 
     ll = sub.add_parser("llm", help="local inference server (llama-server + router)")
     llsub = ll.add_subparsers(dest="llm_action", required=True)
@@ -121,6 +182,9 @@ def _build_parser() -> argparse.ArgumentParser:
     l = sub.add_parser("learn", help="append an insight to active learnings")
     l.add_argument("insight")
     l.add_argument("--task", default="GENERAL")
+    l.add_argument("--project", help="explicit project id/general/personal (else cwd-detected)")
+    l.add_argument("--head", help="semantic heading appended after the timestamp")
+    l.add_argument("--force", action="store_true", help="bypass dedup and always append")
 
     sub.add_parser("init", help="bind this vault (pointer file) + create folder tree")
     sub.add_parser("uninstall", help="remove hooks/scheduler jobs/daemon (vault untouched)")
@@ -130,7 +194,23 @@ def _build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 def cmd_search(cfg, args) -> int:
+    from . import projects as projects_mod
     from .search import client
+
+    filter_project = None
+    if args.filter_project:
+        registry = cfg.get("projects", {}) or {}
+        expanded: set[str] = set()
+        for token in args.filter_project.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            try:
+                expanded.update(projects_mod.resolve_selector(registry, token))
+            except KeyError as exc:
+                print(f"[mb] {exc}", file=sys.stderr)
+                return 1
+        filter_project = sorted(expanded)
 
     payload = {
         "cmd": "search",
@@ -141,6 +221,7 @@ def cmd_search(cfg, args) -> int:
         "filter_type": args.filter_type,
         "filter_tags": args.filter_tags,
         "filter_wikilinks": args.filter_wikilinks,
+        "filter_project": filter_project,
         "path_prefix": args.path_prefix,
         "full_content": args.full,
         "explain": args.explain,
@@ -281,7 +362,196 @@ def cmd_config(cfg, args) -> int:
     return 1
 
 
+def cmd_project(cfg, args) -> int:
+    from pathlib import Path
+
+    from . import projects
+    from .config import validate_config
+
+    entries = cfg.get("projects", {}) or {}
+
+    if args.project_action == "list":
+        shown = entries
+        if args.group:
+            try:
+                ids = projects.resolve_selector(entries, args.group)
+            except KeyError as exc:
+                print(f"[mb] {exc}", file=sys.stderr)
+                return 1
+            shown = {pid: entries[pid] for pid in ids}
+        if args.json:
+            print(json.dumps(shown, ensure_ascii=False))
+        else:
+            if not shown:
+                print("(no projects registered)")
+            for pid, e in sorted(shown.items()):
+                extra = "".join(f"  {k}={e[k]}" for k in ("group", "about") if e.get(k))
+                print(f"{pid}: {e.get('path')}{extra}")
+        return 0
+
+    if args.project_action == "add":
+        entry = {"path": args.path}
+        if args.group:
+            entry["group"] = args.group
+        if args.about:
+            entry["about"] = args.about
+        candidate = {**cfg.data, "projects": {**entries, args.id: entry}}
+        result = validate_config(candidate)
+        if result["errors"]:
+            for e in result["errors"]:
+                print(f"[mb] {e}", file=sys.stderr)
+            return 1
+        cfg.data = candidate
+        cfg.save()
+        print(f"project added: {args.id} -> {entry['path']}")
+        return 0
+
+    if args.project_action == "remove":
+        if args.id not in entries:
+            print(f"[mb] unknown project id: {args.id} (known: "
+                  f"{', '.join(sorted(entries)) or '(none)'})", file=sys.stderr)
+            return 1
+        remaining = {pid: e for pid, e in entries.items() if pid != args.id}
+        cfg.data = {**cfg.data, "projects": remaining}
+        cfg.save()
+        print(f"project removed: {args.id}")
+        return 0
+
+    if args.project_action == "detect":
+        target = args.path or str(Path.cwd())
+        pid = projects.detect_project(entries, target)
+        result = {"cwd": target, "project": pid or "general"}
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        else:
+            print(result["project"])
+        return 0
+    return 1
+
+
+def cmd_hooks(cfg, args) -> int:
+    from . import hooks_state
+
+    if args.hooks_action == "status":
+        data = hooks_state.status(cfg.vault)
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False))
+        else:
+            desired = "enabled" if data["configured"] else "disabled"
+            default = "enabled" if data["default"] else "disabled"
+            print(f"capture hooks: {desired} (default: {default}, source: {data['source']})")
+            for name, c in data["clients"].items():
+                print(f"{name}: installed={'yes' if c['installed'] else 'no'}, "
+                      f"mode={c['mode']}, effective={'yes' if c['effective'] else 'no'}")
+            for w in data["warnings"]:
+                print(f"[warn] {w}")
+        return 0
+
+    enabled = args.hooks_action == "enable"
+    try:
+        hooks_state.set_capture_enabled(cfg, enabled)
+    except ValueError as exc:
+        print(f"[mb] {exc}", file=sys.stderr)
+        return 1
+    print(f"capture hooks {'enabled' if enabled else 'disabled'}")
+    return 0
+
+
+def cmd_digest(cfg, args) -> int:
+    from . import digest
+    from . import projects as projects_mod
+
+    if args.digest_action == "plan":
+        project_filter = None
+        if getattr(args, "filter_project", None):
+            registry = cfg.get("projects", {}) or {}
+            expanded: set[str] = set()
+            for token in args.filter_project.split(","):
+                token = token.strip()
+                if not token:
+                    continue
+                try:
+                    expanded.update(projects_mod.resolve_selector(registry, token))
+                except KeyError as exc:
+                    print(f"[mb] {exc}", file=sys.stderr)
+                    return 1
+            project_filter = expanded
+
+        result = digest.plan(cfg, project_filter=project_filter)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        else:
+            print(f"== mb digest plan -- index:{result['index_status']} "
+                  f"sources:{result['source_count']} targets:{result['target_count']} ==")
+            if not result["entries"]:
+                print("(no candidates)")
+            for e in result["entries"]:
+                tag = f" @{e['project']}" if e["project"] else ""
+                print(f"\n{e['file']} / {e['section']}{tag}")
+                if not e["candidates"]:
+                    print("   (no target match >= threshold)")
+                for c in e["candidates"]:
+                    ctag = f"@{c['project']}" if c["project"] else ""
+                    print(f"   {c['score']:.2f}  {c['file']}  [{c['type']}{ctag}]")
+        return 0
+
+    if args.digest_action == "mark":
+        if args.all:
+            result = digest.plan(cfg)
+            identities = [(e["file"], e["section"]) for e in result["entries"]]
+        elif args.file and args.section:
+            identities = [(args.file, args.section)]
+        else:
+            print("[mb] usage: mb digest mark <file> <section> | --all", file=sys.stderr)
+            return 1
+        count = digest.mark(cfg, identities)
+        if args.json:
+            print(json.dumps({"marked": count}, ensure_ascii=False))
+        else:
+            print(f"marked: {count}")
+        return 0
+    return 1
+
+
+def cmd_nightly(cfg, args) -> int:
+    from . import nightly
+
+    result = nightly.run(cfg)
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        print(f"== mb nightly {result['started_at']} ==")
+        for name, s in result["steps"].items():
+            extra = f" — {s['error']}" if s.get("error") else \
+                    f" ({s['reason']})" if s.get("reason") else ""
+            print(f"  {name}: {s.get('status')}{extra}")
+    return 1 if nightly.has_error(result) else 0
+
+
+def cmd_reflect(cfg, args) -> int:
+    from . import reflect
+
+    result = reflect.run(cfg, days=args.days)
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+    print(f"== mb reflect — last {result['window_days']}d, "
+          f"{result['total_sessions']} top-level sessions "
+          f"({', '.join(f'{k}={v}' for k, v in result['by_client'].items()) or 'none'}) ==")
+    print(f"  by project: {', '.join(f'{k}={v}' for k, v in result['by_project'].items()) or 'none'}")
+    for name, m in result["metrics"].items():
+        rate = f"{m['rate']:.0%}" if m["rate"] is not None else "n/a"
+        print(f"  {name:18s} {m['count']}/{m['total']}  ({rate})")
+    if result["malformed_transcripts"]:
+        print(f"malformed transcripts skipped: {result['malformed_transcripts']}")
+    excluded = ", ".join(f"{k} ({v})" for k, v in result["excluded_clients"].items())
+    print(f"excluded: {excluded}")
+    return 0
+
+
 def cmd_note(cfg, args) -> int:
+    from . import capture
+
     folder_by_type = {"learning": "learnings/active", "decision": "decisions",
                       "howto": "howto", "incident": "incidents", "rule": "rules",
                       "reference": "reference", "daily": "daily"}
@@ -295,6 +565,13 @@ def cmd_note(cfg, args) -> int:
     if path.exists():
         print(f"[mb] already exists: {path}", file=sys.stderr)
         return 1
+
+    dest_rel = str(path.relative_to(cfg.vault)).replace("\\", "/")
+    project, err = capture.resolve_capture_project(cfg, args.project, dest_rel)
+    if err:
+        print(f"[mb] {err}", file=sys.stderr)
+        return 1
+
     today = datetime.now().strftime("%Y-%m-%d")
     template = cfg.vault / "templates" / f"{args.type}.md"
     if template.exists():
@@ -305,6 +582,7 @@ def cmd_note(cfg, args) -> int:
         body = (f"---\ntype: {args.type}\ntitle: \"{args.title}\"\ntags: []\n"
                 f"created: {today}\nstatus: active\nsource: \"\"\nowner: user\n---\n\n"
                 f"# {args.title}\n\n## Контекст\n\n\n## Суть\n\n")
+    body = capture.with_project_frontmatter(body, project)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body, encoding="utf-8")
     print(str(path))
@@ -312,16 +590,43 @@ def cmd_note(cfg, args) -> int:
 
 
 def cmd_learn(cfg, args) -> int:
+    from .search.chunking import parse_frontmatter
+    from . import capture
+
     path = cfg.vault / "learnings" / "active" / f"{args.task}.md"
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    dest_rel = str(path.relative_to(cfg.vault)).replace("\\", "/")
+    project, err = capture.resolve_capture_project(cfg, args.project, dest_rel)
+    if err:
+        print(f"[mb] {err}", file=sys.stderr)
+        return 1
+
+    existing_text = path.read_text(encoding="utf-8") if path.exists() else ""
+
+    if not args.force and existing_text:
+        dup = capture.find_duplicate(existing_text, args.insight)
+        if dup:
+            print(f"[mb] duplicate skipped (matches '{dup.heading}'): {path}")
+            return 0
+
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            f"---\ntype: learning\ntitle: \"{args.task}\"\ntags: []\n"
-            f"created: {datetime.now().strftime('%Y-%m-%d')}\nstatus: active\n---\n\n"
-            f"# {args.task}\n", encoding="utf-8")
+        body = (f"---\ntype: learning\ntitle: \"{args.task}\"\ntags: []\n"
+                f"created: {datetime.now().strftime('%Y-%m-%d')}\nstatus: active\n---\n\n"
+                f"# {args.task}\n")
+        body = capture.with_project_frontmatter(body, project)
+        path.write_text(body, encoding="utf-8")
+    elif project:
+        existing_fm, _ = parse_frontmatter(existing_text)
+        existing_project = existing_fm.get("project")
+        if existing_project and existing_project != project:
+            print(f"[mb] WARNING: appending to {path.name} (project={existing_project}) "
+                  f"from a different project '{project}' — not changed", file=sys.stderr)
+
+    heading = f"{stamp} — {args.head}" if args.head else stamp
     with open(path, "a", encoding="utf-8") as f:
-        f.write(f"\n## {stamp}\n{args.insight}\n")
+        f.write(f"\n## {heading}\n{args.insight}\n")
     print(str(path))
     return 0
 
@@ -347,20 +652,33 @@ def cmd_llm(cfg, args) -> int:
 
 
 def cmd_uninstall(cfg, _args) -> int:
-    """Remove hooks (_mb-marked), scheduler jobs and the daemon. Vault untouched."""
+    """Remove hooks (_mb-marked, plus pre-marker legacy entries recognized by
+    their own command — [[Rule - hook ownership detection must tolerate
+    pre-marker installs]]), scheduler jobs and the daemon. Vault untouched."""
     from pathlib import Path as _P
+
+    import importlib.util
 
     from .platform import scheduler
     from .search import client
 
+    _eng = _P(__file__).resolve().parents[1]
+
+    def _load(name: str):
+        spec = importlib.util.spec_from_file_location(name, _eng / "install" / f"{name}.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
     settings_path = _P.home() / ".claude" / "settings.json"
     if settings_path.exists():
+        _rh = _load("register_hooks")
         data = json.loads(settings_path.read_text(encoding="utf-8"))
         hooks = data.get("hooks", {})
         removed = 0
         for event in list(hooks):
             before = len(hooks[event])
-            hooks[event] = [e for e in hooks[event] if not e.get("_mb")]
+            hooks[event] = [e for e in hooks[event] if not _rh._is_owned(e, event)]
             removed += before - len(hooks[event])
             if not hooks[event]:
                 del hooks[event]
@@ -369,17 +687,13 @@ def cmd_uninstall(cfg, _args) -> int:
         print(f"hooks removed: {removed}")
 
     # Gemini artifacts (owned managed block, named hook, engine-pointing skill links)
-    import importlib.util
-    _eng = _P(__file__).resolve().parents[1]
-    _spec = importlib.util.spec_from_file_location(
-        "register_gemini", _eng / "install" / "register_gemini.py")
-    _rg = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(_rg)
+    _rg = _load("register_gemini")
     g = _rg.uninstall()
     print(f"gemini: profile {g['profile']}, {g['hooks']} hook(s) removed, "
           f"{g['skills_removed']} skill link(s) removed, {g['skills_kept']} kept (foreign)")
 
-    for job in (scheduler.Job("nightly-index", [], daily_at="03:00"),
+    for job in (scheduler.Job("nightly-index", [], daily_at="03:00"),   # T02 legacy
+                scheduler.Job("nightly", [], daily_at="03:00"),         # T12
                 scheduler.Job("watch", [], at_login=True)):
         scheduler.unregister(job)
         print(f"scheduler job removed: {job.task_id}")
@@ -442,6 +756,16 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_backup(cfg, args)
     if args.command == "config":
         return cmd_config(cfg, args)
+    if args.command == "hooks":
+        return cmd_hooks(cfg, args)
+    if args.command == "project":
+        return cmd_project(cfg, args)
+    if args.command == "digest":
+        return cmd_digest(cfg, args)
+    if args.command == "nightly":
+        return cmd_nightly(cfg, args)
+    if args.command == "reflect":
+        return cmd_reflect(cfg, args)
     if args.command == "note":
         return cmd_note(cfg, args)
     if args.command == "learn":

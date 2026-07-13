@@ -81,6 +81,33 @@ def index_files(index_dir: Path) -> tuple[Path, Path] | None:
     return None
 
 
+def load_committed_index(index_dir: Path) -> tuple[np.ndarray | None, list[dict[str, Any]], str]:
+    """(row-normalized embeddings, chunks, status). status: "ok" | "missing" | "torn".
+    Reads the CURRENT committed generation via index_files() -- never a torn
+    partial write, never a legacy flat leftover -- and never imports the
+    encoder (no model load). Single source for every reader that needs the
+    live committed index without triggering a rebuild: digest.plan() and
+    curator's semantic layer both use this instead of re-deriving their own
+    path resolution (T13: curator._note_embeddings() used to read
+    memory_index/embeddings.npy directly, bypassing the CURRENT-generation
+    pointer -- silently stale on any vault using the transactional layout)."""
+    files = index_files(index_dir)
+    if files is None:
+        return None, [], "missing"
+    emb_path, meta_path = files
+    try:
+        embs = np.load(emb_path, allow_pickle=False).astype(np.float32)
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        chunks = meta.get("chunks", [])
+        if embs.shape[0] != len(chunks):
+            return None, [], "torn"
+        norms = np.linalg.norm(embs, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        return embs / norms, chunks, "ok"
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None, [], "torn"
+
+
 def _prune_generations(index_dir: Path, keep_current: str) -> None:
     """Keep the current generation and the single most-recent previous one
     (last-good); remove older generations."""
@@ -126,22 +153,31 @@ def _commit_generation(index_dir: Path, embs: np.ndarray, meta: dict[str, Any]) 
 @contextlib.contextmanager
 def _writer_lock(cfg: Config):
     """Serialize every index writer (rebuild/update/watcher/nightly) with one
-    cross-process mkdir lock. Takes over a lock older than STALE_LOCK_SECONDS."""
+    cross-process mkdir lock. Takes over a lock older than STALE_LOCK_SECONDS.
+
+    A losing (contended) acquisition attempt must NEVER remove the lock: the
+    unconditional `finally: shutil.rmtree(...)` this used to have deleted the
+    OTHER writer's still-active lock the moment a second writer's `mkdir`
+    failed and IndexLockedError was raised -- confirmed live (T12) with a
+    manual repro -- which let a third writer race in while the real holder
+    was still mid-write. Cleanup now only runs when this call actually owns
+    the lock (freshly acquired, or a stale takeover)."""
     lock = cfg.lock_dir
     lock.parent.mkdir(parents=True, exist_ok=True)
-    acquired_new = False
+    owns_lock = False
     try:
-        try:
-            lock.mkdir(exist_ok=False)
-            acquired_new = True
-        except FileExistsError:
-            age = time.time() - lock.stat().st_mtime
-            if age < STALE_LOCK_SECONDS:
-                raise IndexLockedError("another index writer holds the lock")
-            # stale -> take over the existing lock dir
+        lock.mkdir(exist_ok=False)
+        owns_lock = True
+    except FileExistsError:
+        age = time.time() - lock.stat().st_mtime
+        if age < STALE_LOCK_SECONDS:
+            raise IndexLockedError("another index writer holds the lock")
+        owns_lock = True   # stale -> take over; we now own cleanup
+    try:
         yield
     finally:
-        shutil.rmtree(lock, ignore_errors=True)
+        if owns_lock:
+            shutil.rmtree(lock, ignore_errors=True)
 
 
 def _file_stat(path: Path) -> list[int]:
@@ -191,8 +227,9 @@ def _rebuild(cfg: Config, progress: bool = True) -> dict[str, int]:
     files = _scan_vault(cfg)
     chunks: list[dict[str, Any]] = []
     file_meta: dict[str, list[int]] = {}
+    personal_roots = cfg.get("personal_roots") or []
     for rel, path in sorted(files.items()):
-        file_chunks = extract_chunks(path, rel)
+        file_chunks = extract_chunks(path, rel, personal_roots)
         if file_chunks:
             chunks.extend(file_chunks)
         file_meta[rel] = _file_stat(path)
@@ -219,7 +256,8 @@ def inspect(cfg: Config, rel: str) -> list[dict[str, Any]]:
     return [{"chunk_id": c.get("chunk_id"), "section": c.get("section"),
              "chunk_index": c.get("chunk_index"),
              "line_start": c.get("line_start"), "line_end": c.get("line_end"),
-             "chars": len(c.get("content", ""))}
+             "chars": len(c.get("content", "")),
+             "project": c.get("project")}
             for c in meta.get("chunks", []) if c.get("file") == rel]
 
 
@@ -271,9 +309,10 @@ def _update(cfg: Config, only_files: list[str] | None = None) -> dict[str, int]:
         old_meta.pop(rel, None)
 
     # re-chunk changed/new files, vstack
+    personal_roots = cfg.get("personal_roots") or []
     new_chunks: list[dict[str, Any]] = []
     for rel in sorted(added_or_changed):
-        new_chunks.extend(extract_chunks(files[rel], rel))
+        new_chunks.extend(extract_chunks(files[rel], rel, personal_roots))
         old_meta[rel] = _file_stat(files[rel])
     if new_chunks:
         encoder = shared_encoder(cfg.model, cfg.get("batch_size"))

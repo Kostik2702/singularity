@@ -296,14 +296,16 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     # ---- Block C: scheduler -------------------------------------------
     def c1():
-        job = scheduler.Job("nightly-index",
-                            ["-m", "singularity", "--vault", str(cfg.vault),
-                             "index", "update"],
-                            daily_at="03:00")
+        from . import nightly
+
+        job = nightly.nightly_job(cfg)
         state = scheduler.verify(job)
         if not state.get("registered"):
             if fix:
-                res = scheduler.register(job)
+                # migrate_scheduler_job also removes the legacy standalone
+                # "nightly-index" job if still present (T12) — single source
+                # shared with the installer, so the two paths can't drift.
+                res = nightly.migrate_scheduler_job(cfg)
                 rep.add("C1-nightly", "FIXED" if res.startswith("OK") else "FAIL", res)
             else:
                 rep.add("C1-nightly", "WARN", "nightly job not registered",
@@ -314,7 +316,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
         # not read as healthy.
         if not _action_matches(state, scheduler.expected_arguments(job)):
             if fix:
-                res = scheduler.register(job)
+                res = nightly.migrate_scheduler_job(cfg)
                 rep.add("C1-nightly", "FIXED" if res.startswith("OK") else "FAIL",
                         f"stale/broken action re-registered: {res}")
             else:
@@ -387,22 +389,107 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                     fix="python install/register_agents.py")
 
     def d1():
+        # T02: desired/installed/effective capture-hooks state across every
+        # client, not just a crude "singularity" substring check on Claude.
+        # An intentionally disabled capture toggle is a deliberate user choice,
+        # never a failure — only a missing registration is worth a WARN.
+        from . import hooks_state
+
+        state = hooks_state.status(cfg.vault)
+        if state["source"] == "error":
+            rep.add("D1-hooks", "WARN",
+                    f"capture hooks config unreadable, treated as default: "
+                    f"{state['warnings'][0] if state['warnings'] else '?'}",
+                    fix="fix or remove .mb/config.json, then mb hooks status")
+            return
+        desired = "enabled" if state["configured"] else "disabled"
+        clients = state["clients"]
+        installed_any = any(c["installed"] for c in clients.values())
+        detail = (f"capture hooks {desired} (default "
+                  f"{'enabled' if state['default'] else 'disabled'}); " +
+                  ", ".join(f"{n}={'installed' if c['installed'] else 'not-installed'}"
+                           for n, c in clients.items()))
+        if not installed_any:
+            rep.add("D1-hooks", "WARN", detail + " — no client has the hook registered",
+                    fix="python install/register_hooks.py")
+        elif not state["configured"]:
+            rep.add("D1-hooks", "PASS", detail + " — intentionally disabled, not a failure")
+        else:
+            rep.add("D1-hooks", "PASS", detail)
+
+    def d3():
+        # T07: module-context PreToolUse hook registration (Claude only, v1).
         settings = Path.home() / ".claude" / "settings.json"
         if not settings.exists():
-            rep.add("D1-hooks", "SKIP", "no ~/.claude/settings.json (hooks not installed yet — M3)")
+            rep.add("D3-module-context", "SKIP", "no ~/.claude/settings.json")
             return
         try:
-            data = json.loads(settings.read_text(encoding="utf-8"))
+            data = json.loads(settings.read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError:
-            rep.add("D1-hooks", "FAIL", "settings.json unparseable")
+            rep.add("D3-module-context", "WARN", "settings.json unparseable")
             return
-        ours = "singularity" in json.dumps(data.get("hooks", {}))
-        rep.add("D1-hooks", "PASS" if ours else "SKIP",
-                "singularity hooks registered" if ours else "hooks not registered (M3)")
+        pre = data.get("hooks", {}).get("PreToolUse", []) if isinstance(data, dict) else []
+        installed = False
+        if isinstance(pre, list):
+            for entry in pre:
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("_mb"):
+                    installed = True
+                    break
+                for h in entry.get("hooks", []):
+                    if isinstance(h, dict) and "module_context.py" in str(h.get("command", "")):
+                        installed = True
+                        break
+        from .config import read_config_tolerant
+        enabled = bool(read_config_tolerant(cfg.vault).get("module_context_enabled", False))
+        state = "enabled" if enabled else "disabled (default, opt-in via module_context_enabled)"
+        if installed:
+            rep.add("D3-module-context", "PASS", f"PreToolUse hook registered, {state}")
+        else:
+            rep.add("D3-module-context", "WARN", f"module-context hook not registered, {state}",
+                    fix="python install/register_hooks.py")
+
+    def d5():
+        # T08: vault-guard PreToolUse hook registration (Claude only, v1).
+        settings = Path.home() / ".claude" / "settings.json"
+        if not settings.exists():
+            rep.add("D5-vault-guard", "SKIP", "no ~/.claude/settings.json")
+            return
+        try:
+            data = json.loads(settings.read_text(encoding="utf-8-sig"))
+        except json.JSONDecodeError:
+            rep.add("D5-vault-guard", "WARN", "settings.json unparseable")
+            return
+        pre = data.get("hooks", {}).get("PreToolUse", []) if isinstance(data, dict) else []
+        installed = False
+        if isinstance(pre, list):
+            for entry in pre:
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("_mb"):
+                    installed = True
+                    break
+                for h in entry.get("hooks", []):
+                    if isinstance(h, dict) and "vault_guard.py" in str(h.get("command", "")):
+                        installed = True
+                        break
+        from .config import read_config_tolerant
+        light_cfg = read_config_tolerant(cfg.vault)
+        enabled = bool(light_cfg.get("vault_guard_enabled", False))
+        mode = light_cfg.get("vault_guard_mode", "audit")
+        state = f"mode={mode}" if enabled else "disabled (default, opt-in via vault_guard_enabled)"
+        if installed:
+            rep.add("D5-vault-guard", "PASS", f"PreToolUse hook registered, {state}")
+        else:
+            rep.add("D5-vault-guard", "WARN", f"vault-guard hook not registered, {state}",
+                    fix="python install/register_hooks.py")
 
     _guard(rep, "D4", d4)
     _guard(rep, "D2", d2)
     _guard(rep, "D1", d1)
+    _guard(rep, "D3", d3)
+    _guard(rep, "D5", d5)
 
     # ---- Block E: Gemini CLI integration (GCLI-05) --------------------
     _guard(rep, "E-gemini", lambda: gemini_block(rep, fix))
