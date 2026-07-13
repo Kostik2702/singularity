@@ -2,9 +2,15 @@
 
 mb search "<query>" [--top N] [--type T] [--tags a,b] [--links X] [--json] ...
 mb daemon start|stop|status|reload|run
-mb index rebuild|update [--files f1 f2]
+mb index rebuild|update [--files f1 f2]|inspect <path>
 mb watch
 mb doctor [--fix] [--heavy] [--json]
+mb curator [--json]
+mb selftest [--json]
+mb status [--json]
+mb stats [--json]
+mb backup create|list|verify|restore <id>
+mb config validate|get <key>|set <key> <value>
 mb note new <type> <title>
 mb learn "<insight>" [--task ID]
 mb hooks status|enable|disable [--json]
@@ -13,7 +19,9 @@ mb digest plan [--project X] [--json]
 mb digest mark <file> <section> | --all [--json]
 mb nightly [--json]   # index update -> digest/curator/config snapshot -> trend -> markers sweep
 mb reflect [--days N] [--json]   # privacy-safe adoption telemetry (offline transcript walk)
+mb llm start|stop|status|list|logs|code|setup
 mb init            # write ~/.singularity.json pointer + folder tree
+mb uninstall       # remove hooks/scheduler jobs/daemon (vault untouched)
 """
 from __future__ import annotations
 
