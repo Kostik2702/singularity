@@ -88,6 +88,16 @@ def test_curator_snapshot_written(cfg, monkeypatch):
     assert "issues" in data and "notes" in data
 
 
+def test_curator_snapshot_includes_t13_lint(cfg, monkeypatch):
+    _no_index_update(monkeypatch)
+    result = nightly.run(cfg)
+    data = json.loads((cfg.mb_dir / nightly.CURATOR_SNAPSHOT_NAME).read_text(encoding="utf-8"))
+    assert "lint" in data
+    assert "duplicates" in data["lint"] and "supersession" in data["lint"]
+    assert "duplicates" in result["steps"]["curator"]
+    assert "supersession" in result["steps"]["curator"]
+
+
 # --- config snapshot -------------------------------------------------------------
 
 def test_config_snapshot_reports_validation_errors(cfg, monkeypatch):

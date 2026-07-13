@@ -92,10 +92,14 @@ def _step_curator(cfg: Config, now: str) -> dict[str, Any]:
 
     issues = curator.validate(cfg)
     report = curator.analyze(cfg)
+    lint_report = curator.lint(cfg)   # T13: chunk-level lint, part of the same snapshot
     _atomic_write_json(cfg.mb_dir / CURATOR_SNAPSHOT_NAME,
-                       {"generated_at": now, "issues": issues, **report})
+                       {"generated_at": now, "issues": issues, "lint": lint_report, **report})
     return {"status": "ok", "issues": sum(len(v) for v in issues.values()),
-            "notes": report["notes"]}
+            "notes": report["notes"],
+            "duplicates": len(lint_report["duplicates"]["same_file"])
+                         + len(lint_report["duplicates"]["cross_file"]),
+            "supersession": len(lint_report["supersession"])}
 
 
 def _step_config(cfg: Config, now: str) -> dict[str, Any]:
