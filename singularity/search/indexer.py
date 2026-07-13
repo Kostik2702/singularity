@@ -126,22 +126,31 @@ def _commit_generation(index_dir: Path, embs: np.ndarray, meta: dict[str, Any]) 
 @contextlib.contextmanager
 def _writer_lock(cfg: Config):
     """Serialize every index writer (rebuild/update/watcher/nightly) with one
-    cross-process mkdir lock. Takes over a lock older than STALE_LOCK_SECONDS."""
+    cross-process mkdir lock. Takes over a lock older than STALE_LOCK_SECONDS.
+
+    A losing (contended) acquisition attempt must NEVER remove the lock: the
+    unconditional `finally: shutil.rmtree(...)` this used to have deleted the
+    OTHER writer's still-active lock the moment a second writer's `mkdir`
+    failed and IndexLockedError was raised -- confirmed live (T12) with a
+    manual repro -- which let a third writer race in while the real holder
+    was still mid-write. Cleanup now only runs when this call actually owns
+    the lock (freshly acquired, or a stale takeover)."""
     lock = cfg.lock_dir
     lock.parent.mkdir(parents=True, exist_ok=True)
-    acquired_new = False
+    owns_lock = False
     try:
-        try:
-            lock.mkdir(exist_ok=False)
-            acquired_new = True
-        except FileExistsError:
-            age = time.time() - lock.stat().st_mtime
-            if age < STALE_LOCK_SECONDS:
-                raise IndexLockedError("another index writer holds the lock")
-            # stale -> take over the existing lock dir
+        lock.mkdir(exist_ok=False)
+        owns_lock = True
+    except FileExistsError:
+        age = time.time() - lock.stat().st_mtime
+        if age < STALE_LOCK_SECONDS:
+            raise IndexLockedError("another index writer holds the lock")
+        owns_lock = True   # stale -> take over; we now own cleanup
+    try:
         yield
     finally:
-        shutil.rmtree(lock, ignore_errors=True)
+        if owns_lock:
+            shutil.rmtree(lock, ignore_errors=True)
 
 
 def _file_stat(path: Path) -> list[int]:

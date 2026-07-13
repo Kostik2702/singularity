@@ -147,6 +147,20 @@ def test_writer_lock_is_exclusive(cfg):
         pass
 
 
+def test_losing_contender_does_not_delete_the_winners_lock(cfg):
+    # T12 real-machine finding: a contended acquisition attempt used to run
+    # `finally: shutil.rmtree(lock)` unconditionally, deleting the OTHER
+    # writer's still-active lock the instant its own `mkdir` failed -- which
+    # would let a THIRD writer race in while the real holder was mid-write.
+    with indexer._writer_lock(cfg):
+        assert cfg.lock_dir.exists()
+        with pytest.raises(indexer.IndexLockedError):
+            with indexer._writer_lock(cfg):
+                pass
+        assert cfg.lock_dir.exists()   # still held by the outer (winning) writer
+    assert not cfg.lock_dir.exists()   # released once the actual owner exits
+
+
 def test_writer_lock_takes_over_stale(cfg, monkeypatch):
     cfg.lock_dir.parent.mkdir(parents=True, exist_ok=True)
     cfg.lock_dir.mkdir()
