@@ -45,15 +45,46 @@ def _watcher(cfg: Config) -> dict[str, Any]:
 
 def _scheduler(cfg: Config) -> dict[str, Any]:
     from .platform import scheduler
+    from . import nightly
     out = {}
-    for name, kw in (("nightly-index", {"daily_at": "03:00"}),
-                     ("watch", {"at_login": True})):
-        args = ["-m", "singularity", "--vault", str(cfg.vault),
-                "index", "update"] if name == "nightly-index" else \
-               ["-m", "singularity", "--vault", str(cfg.vault), "watch"]
-        st = scheduler.verify(scheduler.Job(name, args, **kw))
+    jobs = {
+        nightly.JOB_NAME: nightly.nightly_job(cfg),
+        "watch": scheduler.Job("watch", ["-m", "singularity", "--vault",
+                                         str(cfg.vault), "watch"], at_login=True),
+    }
+    for name, job in jobs.items():
+        st = scheduler.verify(job)
         out[name] = {"registered": st.get("registered", False),
                      "coalescing": st.get("coalescing")}
+    return out
+
+
+def _backlog(cfg: Config) -> dict[str, Any]:
+    from . import nightly
+    path = cfg.mb_dir / nightly.DIGEST_SNAPSHOT_NAME
+    if not path.exists():
+        return {"present": False}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    threshold = float(cfg.get("digest_score_threshold"))
+    entries = data.get("entries", [])
+    actionable = sum(1 for e in entries
+                     if e.get("candidates") and e["candidates"][0]["score"] >= threshold)
+    return {"present": True, "entries": len(entries), "actionable": actionable,
+            "index_status": data.get("index_status")}
+
+
+def _cache_age(cfg: Config) -> dict[str, Any]:
+    from . import nightly
+    out: dict[str, Any] = {}
+    for name, fname in (("digest", nightly.DIGEST_SNAPSHOT_NAME),
+                        ("curator", nightly.CURATOR_SNAPSHOT_NAME),
+                        ("config", nightly.CONFIG_SNAPSHOT_NAME)):
+        p = cfg.mb_dir / fname
+        present = p.exists()
+        entry: dict[str, Any] = {"present": present}
+        if present:
+            entry["age_hours"] = round((time.time() - p.stat().st_mtime) / 3600, 1)
+        out[name] = entry
     return out
 
 
@@ -82,6 +113,8 @@ def snapshot(cfg: Config) -> dict[str, Any]:
         "scheduler": _guard(lambda: _scheduler(cfg)),
         "disk": _guard(lambda: _disk(cfg)),
         "hooks": _guard(lambda: hooks_state.status(cfg.vault)),
+        "backlog": _guard(lambda: _backlog(cfg)),
+        "cache_age": _guard(lambda: _cache_age(cfg)),
     }
 
 

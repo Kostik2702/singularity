@@ -193,6 +193,27 @@ def test_validate_config_does_not_warn_projects_as_unknown_key():
     assert not any("projects" in w for w in res["warnings"])
 
 
+# --- T12: nightly orchestration config keys ----------------------------------
+
+def test_validate_nightly_numeric_keys_range():
+    from singularity.config import validate_config
+    res = validate_config({"nightly_nag_rate_limit_hours": 0, "markers_retention_days": 0,
+                           "nightly_trend_retention_days": 0})
+    joined = " ".join(res["errors"])
+    assert "nightly_nag_rate_limit_hours" in joined
+    assert "markers_retention_days" in joined
+    assert "nightly_trend_retention_days" in joined
+
+
+def test_validate_nightly_schedule_time_format():
+    from singularity.config import validate_config
+    assert any("nightly_schedule_time" in e
+              for e in validate_config({"nightly_schedule_time": "3:00"})["errors"])
+    assert any("nightly_schedule_time" in e
+              for e in validate_config({"nightly_schedule_time": "25:00"})["errors"])
+    assert validate_config({"nightly_schedule_time": "03:00"})["errors"] == []
+
+
 def test_load_config_rejects_bad_types_actionably(tmp_path, monkeypatch, capsys):
     from singularity import config as cfgmod
     mb = tmp_path / ".mb"; mb.mkdir(parents=True)

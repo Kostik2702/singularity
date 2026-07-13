@@ -53,6 +53,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "personal_roots": [],              # T08: vault-relative roots classified as personal
     "digest_score_threshold": 0.45,    # T11: min cosine to surface a merge candidate
     "digest_top_k": 3,                 # T11: max candidate targets per learning section
+    "nightly_schedule_time": "03:00",       # T12: mb nightly daily trigger (HH:MM)
+    "nightly_nag_rate_limit_hours": 72,     # T12: min hours between SessionStart digest nags
+    "markers_retention_days": 30,           # T12: nightly sweep age for .mb/markers/*
+    "nightly_trend_retention_days": 180,    # T12: nightly-history.jsonl row retention
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -119,6 +123,13 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     _int("module_note_max_lines", 1, 10_000)
     _num("digest_score_threshold", 0.0, 1.0)
     _int("digest_top_k", 1, 50)
+    _int("nightly_nag_rate_limit_hours", 1, 24 * 30)
+    _int("markers_retention_days", 1, 3650)
+    _int("nightly_trend_retention_days", 1, 3650)
+    if "nightly_schedule_time" in data:
+        v = data["nightly_schedule_time"]
+        if not (isinstance(v, str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v)):
+            errors.append("nightly_schedule_time: must be 'HH:MM' 24h string")
     for key in ("skip_dirs", "skip_path_parts"):
         if key in data and (not isinstance(data[key], list)
                             or not all(isinstance(x, str) for x in data[key])):

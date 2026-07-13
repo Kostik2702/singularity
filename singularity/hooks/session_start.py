@@ -11,7 +11,10 @@ Emits hookSpecificOutput.additionalContext with:
   - active tasks (learnings/active/*)
   - latest changelog entry heading
   - doctor warnings from the last cached run (.mb/doctor-last.json)
-  - [T11/T12 will add a cached digest-actions block here]
+  - digest nag (T12): top-3 actionable merge candidates from the cached
+    .mb/digest-last.json (mb nightly), threshold + 72h rate-gated via
+    .mb/nag-state.json; stale/missing cache -> silent or one bounded line,
+    never a crash, never a stamp write on an empty/failed show
 The whole injection is capped by `session_context_max_lines` (T06 total
 budget) on top of each block's own truncation.
 Self-heal: silently restarts the search daemon / watcher jobs is NOT done
@@ -28,6 +31,8 @@ from pathlib import Path
 
 # hook runs outside the package context; make the package importable
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+STALE_CACHE_HOURS = 48   # T12: older digest-last.json -> one bounded line, no action nag
 
 
 def build_context(event_cwd: str | None = None) -> str:
@@ -119,6 +124,54 @@ def build_context(event_cwd: str | None = None) -> str:
                 lines.append(f"mb doctor ({age_h:.0f}h ago): {brief} — run `mb doctor --fix`")
         except json.JSONDecodeError:
             pass
+
+    # T12: cached digest-actions nag — file-only, threshold + 72h rate-gated,
+    # top-3 concrete actions. Fail-open: a broken/missing cache must never
+    # break the session, and a suppressed/empty nag must never write a stamp.
+    try:
+        digest_last = vault / ".mb" / "digest-last.json"
+        if digest_last.exists():
+            age_h = (time.time() - digest_last.stat().st_mtime) / 3600
+            data = json.loads(digest_last.read_text(encoding="utf-8"))
+            threshold = float(light_cfg.get("digest_score_threshold", 0.45))
+            entries = data.get("entries", [])
+            actionable = [e for e in entries
+                         if e.get("candidates") and e["candidates"][0]["score"] >= threshold]
+            if age_h > STALE_CACHE_HOURS:
+                lines.append(f"mb nightly cache stale ({age_h:.0f}h old) — digest nag "
+                             "suppressed until nightly runs again.")
+            elif actionable:
+                nag_state_path = vault / ".mb" / "nag-state.json"
+                last_shown = None
+                if nag_state_path.exists():
+                    try:
+                        last_shown = json.loads(
+                            nag_state_path.read_text(encoding="utf-8")).get("last_shown_at")
+                    except json.JSONDecodeError:
+                        last_shown = None
+                rate_limit_h = float(light_cfg.get("nightly_nag_rate_limit_hours", 72))
+                due = True
+                if last_shown:
+                    try:
+                        shown_age_h = ((datetime.now() - datetime.fromisoformat(last_shown))
+                                      .total_seconds() / 3600)
+                        due = shown_age_h >= rate_limit_h
+                    except ValueError:
+                        due = True
+                if due:
+                    top = sorted(actionable, key=lambda e: -e["candidates"][0]["score"])[:3]
+                    actions = "; ".join(
+                        f"{e['file']}#{e['section']} -> {e['candidates'][0]['file']} "
+                        f"({e['candidates'][0]['score']:.2f})" for e in top)
+                    lines.append(f"digest backlog ({len(actionable)} actionable): {actions} "
+                                "— `mb digest plan` / `mb digest mark`")
+                    nag_tmp = nag_state_path.with_suffix(".json.tmp")
+                    nag_tmp.write_text(json.dumps(
+                        {"last_shown_at": datetime.now().isoformat(timespec="seconds")}),
+                        encoding="utf-8")
+                    nag_tmp.replace(nag_state_path)
+    except Exception:  # noqa: BLE001 — a broken digest cache must never break the session
+        pass
 
     # T06: total injection budget on top of each block's own truncation.
     text = "\n".join(lines)

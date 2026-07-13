@@ -6,6 +6,7 @@ the T02 capture-hooks natural-language fragment it now injects.
 """
 import io
 import json
+import time
 
 import pytest
 
@@ -253,3 +254,125 @@ def test_main_malformed_stdin_json_falls_back_gracefully(monkeypatch, vault, cap
     assert rc == 0
     payload = json.loads(capsys.readouterr().out.strip())
     assert "SEM-FIRST" in payload["hookSpecificOutput"]["additionalContext"]
+
+
+# --- T12: digest nag ----------------------------------------------------------
+
+def _write_digest_last(vault, entries, index_status="ok", age_hours=0):
+    mb = vault / ".mb"
+    mb.mkdir(parents=True, exist_ok=True)
+    path = mb / "digest-last.json"
+    path.write_text(json.dumps({"generated_at": "x", "entries": entries,
+                                "index_status": index_status}), encoding="utf-8")
+    if age_hours:
+        import os
+        old = time.time() - age_hours * 3600
+        os.utime(path, (old, old))
+
+
+def test_nag_shown_when_actionable_entries_above_threshold(monkeypatch, vault):
+    _write_digest_last(vault, [
+        {"file": "learnings/active/T.md", "section": "S1",
+         "candidates": [{"file": "reference/R.md", "type": "reference", "score": 0.9}]},
+    ])
+    _resolve_to(monkeypatch, vault)
+    ctx = session_start.build_context()
+    assert "learnings/active/T.md#S1" in ctx
+    assert "reference/R.md" in ctx
+
+
+def test_nag_writes_stamp_only_on_successful_show(monkeypatch, vault):
+    _write_digest_last(vault, [
+        {"file": "A.md", "section": "S",
+         "candidates": [{"file": "B.md", "type": "reference", "score": 0.9}]},
+    ])
+    _resolve_to(monkeypatch, vault)
+    session_start.build_context()
+    assert (vault / ".mb" / "nag-state.json").exists()
+
+
+def test_nag_no_stamp_when_no_actionable_entries(monkeypatch, vault):
+    _write_digest_last(vault, [])
+    _resolve_to(monkeypatch, vault)
+    session_start.build_context()
+    assert not (vault / ".mb" / "nag-state.json").exists()
+
+
+def test_nag_rate_limited_within_72h(monkeypatch, vault):
+    _write_digest_last(vault, [
+        {"file": "A.md", "section": "S",
+         "candidates": [{"file": "B.md", "type": "reference", "score": 0.9}]},
+    ])
+    mb = vault / ".mb"
+    mb.mkdir(parents=True, exist_ok=True)
+    from datetime import datetime, timedelta
+    recent = (datetime.now() - timedelta(hours=1)).isoformat(timespec="seconds")
+    (mb / "nag-state.json").write_text(json.dumps({"last_shown_at": recent}), encoding="utf-8")
+    _resolve_to(monkeypatch, vault)
+    ctx = session_start.build_context()
+    assert "A.md#S" not in ctx
+
+
+def test_nag_shown_again_after_72h(monkeypatch, vault):
+    _write_digest_last(vault, [
+        {"file": "A.md", "section": "S",
+         "candidates": [{"file": "B.md", "type": "reference", "score": 0.9}]},
+    ])
+    mb = vault / ".mb"
+    mb.mkdir(parents=True, exist_ok=True)
+    from datetime import datetime, timedelta
+    old = (datetime.now() - timedelta(hours=73)).isoformat(timespec="seconds")
+    (mb / "nag-state.json").write_text(json.dumps({"last_shown_at": old}), encoding="utf-8")
+    _resolve_to(monkeypatch, vault)
+    ctx = session_start.build_context()
+    assert "A.md#S" in ctx
+
+
+def test_nag_top_3_only(monkeypatch, vault):
+    entries = [
+        {"file": f"L{i}.md", "section": "S",
+         "candidates": [{"file": "T.md", "type": "reference", "score": 0.9 - i * 0.01}]}
+        for i in range(5)
+    ]
+    _write_digest_last(vault, entries)
+    _resolve_to(monkeypatch, vault)
+    ctx = session_start.build_context()
+    shown = sum(1 for i in range(5) if f"L{i}.md" in ctx)
+    assert shown == 3
+
+
+def test_nag_below_threshold_not_shown(monkeypatch, vault):
+    _write_digest_last(vault, [
+        {"file": "A.md", "section": "S",
+         "candidates": [{"file": "B.md", "type": "reference", "score": 0.1}]},
+    ])
+    _resolve_to(monkeypatch, vault)
+    ctx = session_start.build_context()
+    assert "A.md#S" not in ctx
+
+
+def test_nag_stale_cache_shows_bounded_message_not_full_nag(monkeypatch, vault):
+    _write_digest_last(vault, [
+        {"file": "A.md", "section": "S",
+         "candidates": [{"file": "B.md", "type": "reference", "score": 0.9}]},
+    ], age_hours=72)
+    _resolve_to(monkeypatch, vault)
+    ctx = session_start.build_context()
+    assert "stale" in ctx.lower()
+    assert "A.md#S" not in ctx
+
+
+def test_missing_digest_cache_is_silent(monkeypatch, vault):
+    _resolve_to(monkeypatch, vault)
+    ctx = session_start.build_context()
+    assert "digest backlog" not in ctx
+    assert "nag" not in ctx.lower()
+
+
+def test_malformed_digest_cache_does_not_crash(monkeypatch, vault):
+    mb = vault / ".mb"
+    mb.mkdir(parents=True)
+    (mb / "digest-last.json").write_text("{not json", encoding="utf-8")
+    _resolve_to(monkeypatch, vault)
+    ctx = session_start.build_context()   # must not raise
+    assert "SEM-FIRST" in ctx

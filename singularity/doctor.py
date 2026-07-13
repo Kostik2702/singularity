@@ -296,14 +296,16 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     # ---- Block C: scheduler -------------------------------------------
     def c1():
-        job = scheduler.Job("nightly-index",
-                            ["-m", "singularity", "--vault", str(cfg.vault),
-                             "index", "update"],
-                            daily_at="03:00")
+        from . import nightly
+
+        job = nightly.nightly_job(cfg)
         state = scheduler.verify(job)
         if not state.get("registered"):
             if fix:
-                res = scheduler.register(job)
+                # migrate_scheduler_job also removes the legacy standalone
+                # "nightly-index" job if still present (T12) — single source
+                # shared with the installer, so the two paths can't drift.
+                res = nightly.migrate_scheduler_job(cfg)
                 rep.add("C1-nightly", "FIXED" if res.startswith("OK") else "FAIL", res)
             else:
                 rep.add("C1-nightly", "WARN", "nightly job not registered",
@@ -314,7 +316,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
         # not read as healthy.
         if not _action_matches(state, scheduler.expected_arguments(job)):
             if fix:
-                res = scheduler.register(job)
+                res = nightly.migrate_scheduler_job(cfg)
                 rep.add("C1-nightly", "FIXED" if res.startswith("OK") else "FAIL",
                         f"stale/broken action re-registered: {res}")
             else:

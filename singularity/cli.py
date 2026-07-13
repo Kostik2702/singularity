@@ -11,6 +11,7 @@ mb hooks status|enable|disable [--json]
 mb project list|add|remove|detect
 mb digest plan [--project X] [--json]
 mb digest mark <file> <section> | --all [--json]
+mb nightly [--json]   # index update -> digest/curator/config snapshot -> trend -> markers sweep
 mb init            # write ~/.singularity.json pointer + folder tree
 """
 from __future__ import annotations
@@ -134,6 +135,10 @@ def _build_parser() -> argparse.ArgumentParser:
     dgm.add_argument("section", nargs="?", help="section heading, used together with <file>")
     dgm.add_argument("--all", action="store_true", help="mark every entry in the current plan")
     dgm.add_argument("--json", action="store_true")
+
+    nt = sub.add_parser("nightly", help="orchestrated nightly run: index update -> "
+                                        "digest/curator/config snapshot -> trend line -> markers sweep")
+    nt.add_argument("--json", action="store_true")
 
     n = sub.add_parser("note", help="notes")
     nsub = n.add_subparsers(dest="note_action", required=True)
@@ -494,6 +499,21 @@ def cmd_digest(cfg, args) -> int:
     return 1
 
 
+def cmd_nightly(cfg, args) -> int:
+    from . import nightly
+
+    result = nightly.run(cfg)
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        print(f"== mb nightly {result['started_at']} ==")
+        for name, s in result["steps"].items():
+            extra = f" — {s['error']}" if s.get("error") else \
+                    f" ({s['reason']})" if s.get("reason") else ""
+            print(f"  {name}: {s.get('status')}{extra}")
+    return 1 if nightly.has_error(result) else 0
+
+
 def cmd_note(cfg, args) -> int:
     from . import capture
 
@@ -637,7 +657,8 @@ def cmd_uninstall(cfg, _args) -> int:
     print(f"gemini: profile {g['profile']}, {g['hooks']} hook(s) removed, "
           f"{g['skills_removed']} skill link(s) removed, {g['skills_kept']} kept (foreign)")
 
-    for job in (scheduler.Job("nightly-index", [], daily_at="03:00"),
+    for job in (scheduler.Job("nightly-index", [], daily_at="03:00"),   # T02 legacy
+                scheduler.Job("nightly", [], daily_at="03:00"),         # T12
                 scheduler.Job("watch", [], at_login=True)):
         scheduler.unregister(job)
         print(f"scheduler job removed: {job.task_id}")
@@ -706,6 +727,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_project(cfg, args)
     if args.command == "digest":
         return cmd_digest(cfg, args)
+    if args.command == "nightly":
+        return cmd_nightly(cfg, args)
     if args.command == "note":
         return cmd_note(cfg, args)
     if args.command == "learn":

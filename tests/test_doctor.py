@@ -275,6 +275,35 @@ def test_d5_pass_when_registered_reports_disabled_by_default(cfg, monkeypatch):
     assert "disabled" in d5["detail"]
 
 
+# --- T12: C1-nightly job migration --------------------------------------------
+
+def test_c1_fix_migrates_legacy_nightly_index_job(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    calls = []
+
+    def fake_verify(job):
+        return {"registered": job.name == "nightly-index"}
+    monkeypatch.setattr(scheduler, "verify", fake_verify)
+    monkeypatch.setattr(scheduler, "unregister",
+                        lambda job: calls.append(("unregister", job.name)))
+    monkeypatch.setattr(scheduler, "register",
+                        lambda job: calls.append(("register", job.name)) or "OK")
+    doctor.run(cfg, fix=True, as_json=True)
+    assert ("unregister", "nightly-index") in calls
+    assert ("register", "nightly") in calls
+    assert _check(cfg, "C1-nightly")["status"] == "FIXED"
+
+
+def test_c1_warns_without_fix_when_only_legacy_job_present(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    monkeypatch.setattr(scheduler, "verify",
+                        lambda job: {"registered": job.name == "nightly-index"})
+    doctor.run(cfg, fix=False, as_json=True)
+    c1 = _check(cfg, "C1-nightly")
+    assert c1["status"] == "WARN"
+    assert "not registered" in c1["detail"]
+
+
 def test_d5_reports_mode_when_enabled(cfg, monkeypatch):
     _stub_externals(monkeypatch)
     _home(monkeypatch, cfg)

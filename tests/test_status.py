@@ -87,3 +87,50 @@ def test_log_rotation_noop_when_small(tmp_path):
     log.write_bytes(b"tiny")
     proc.rotate_log(log, max_bytes=1_000_000)
     assert log.exists() and not (tmp_path / "d.log.1").exists()
+
+
+# --- T12: backlog / cache-age probes -----------------------------------------
+
+def test_snapshot_includes_backlog_and_cache_age(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    snap = status.snapshot(cfg)
+    assert "backlog" in snap and "cache_age" in snap
+
+
+def test_backlog_absent_when_no_digest_cache(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    snap = status.snapshot(cfg)
+    assert snap["backlog"] == {"present": False}
+
+
+def test_backlog_reports_actionable_count(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    mb = cfg.vault / ".mb"
+    mb.mkdir(parents=True, exist_ok=True)
+    (mb / "digest-last.json").write_text(json.dumps({
+        "entries": [{"candidates": [{"score": 0.9}]}, {"candidates": []}],
+        "index_status": "ok"}), encoding="utf-8")
+    snap = status.snapshot(cfg)
+    assert snap["backlog"]["entries"] == 2
+    assert snap["backlog"]["actionable"] == 1
+
+
+def test_cache_age_reports_hours_for_present_files(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    mb = cfg.vault / ".mb"
+    mb.mkdir(parents=True, exist_ok=True)
+    (mb / "digest-last.json").write_text("{}", encoding="utf-8")
+    snap = status.snapshot(cfg)
+    assert snap["cache_age"]["digest"]["present"] is True
+    assert "age_hours" in snap["cache_age"]["digest"]
+    assert snap["cache_age"]["curator"]["present"] is False
+
+
+def test_scheduler_probe_uses_new_nightly_job_name(cfg, monkeypatch):
+    _stub_all(monkeypatch, home=cfg.vault)
+    seen = []
+    monkeypatch.setattr(scheduler, "verify",
+                        lambda job: seen.append(job.name) or {"registered": False})
+    status.snapshot(cfg)
+    assert "nightly" in seen
+    assert "nightly-index" not in seen
