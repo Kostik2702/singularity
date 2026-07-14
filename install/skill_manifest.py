@@ -53,6 +53,13 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
         "reason": "spawns Claude subagents via the Agent/Task tool -- "
                   "Codex/Gemini have no equivalent executor",
     },
+    "design-fidelity-audit": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "judgment step requires visually comparing viewport screenshots "
+                  "against the design mockup via multimodal Read and consulting the "
+                  "vault (mb search) for owner decisions during A/B categorization — "
+                  "Codex/Gemini have no equivalent multimodal review loop here",
+    },
     "image-asset-qa": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "thin SKILL.md over the imgqa CLI whose interpretation step "
