@@ -53,6 +53,15 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
         "reason": "spawns Claude subagents via the Agent/Task tool -- "
                   "Codex/Gemini have no equivalent executor",
     },
+    "image-asset-qa": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "thin SKILL.md over the imgqa CLI whose interpretation step "
+                  "requires visually reading imgqa's rendered outputs (200% edge "
+                  "crops, 3-background composites) as images via multimodal Read "
+                  "and driving a human edge-acceptance gate; that inspection + "
+                  "dogfood/GT loop is authored and tested only against Claude "
+                  "Code -- not validated on Codex/Gemini",
+    },
 }
 
 
