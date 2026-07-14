@@ -8,3 +8,7 @@ watchdog>=3.0
 psutil>=5.9
 keyring>=24
 pytest>=7.0
+# imgqa extras (light: no torch/onnx) — test_imgqa.py runs in the fast suite,
+# so CI must install what [project.optional-dependencies] imgqa declares.
+Pillow>=10
+scipy>=1.10
