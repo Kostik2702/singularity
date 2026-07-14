@@ -250,3 +250,42 @@ def test_full_gt_d1_defringe_reproduction(tmp_path):
                           "--bbox", f"{rx},{ry},{rw},{rh}",
                           "--max-mae", "1.0", "--max-diff-ratio", "0.01")
     assert code == 0, env["data"]
+
+
+# --- cutout dispatch e2e (WSF-03; auto-skips without the ML venv) ---------------
+
+ML_VENV = Path(os.environ.get("IMGQA_ML_VENV", r"D:\venvs\imgqa-ml"))
+requires_ml_venv = pytest.mark.skipif(
+    not (ML_VENV / "Scripts" / "python.exe").is_file()
+    and not (ML_VENV / "bin" / "python").is_file(),
+    reason="isolated ML venv not provisioned (WSF-03 spike)")
+
+
+def test_cutout_missing_venv_is_tool_error_with_remediation(tmp_path, monkeypatch):
+    monkeypatch.setenv("IMGQA_ML_VENV", str(tmp_path / "no-such-venv"))
+    code, env = run_imgqa("cutout", str(FIXTURES / "boot-fringe.before.png"),
+                          "--out", str(tmp_path / "out"))
+    assert code == 2 and "ML venv python not found" in env["error"]
+    assert "OD-1" in env["error"]  # remediation must explain the isolation rule
+
+
+@requires_ml_venv
+def test_cutout_dispatch_end_to_end(tmp_path):
+    from singularity.imgqa.synthetic import make_cutout
+    from PIL import Image
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    src = src_dir / "subject.png"
+    # flatten the synthetic cutout onto a background -> a real removal task
+    rgba = make_cutout()
+    im = Image.fromarray(rgba, "RGBA")
+    flat = Image.new("RGBA", im.size, (40, 90, 40, 255))
+    flat.alpha_composite(im)
+    flat.convert("RGB").save(src)
+    out = tmp_path / "out"
+    code, env = run_imgqa("cutout", str(src), "--out", str(out))
+    assert code == 0, env.get("error")
+    produced = Path(env["outputs"][0])
+    assert produced.is_file() and produced.parent == out.resolve()
+    code, env = run_imgqa("probe", str(produced))
+    assert env["data"]["has_alpha"] is True

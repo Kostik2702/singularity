@@ -53,6 +53,13 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
         "reason": "spawns Claude subagents via the Agent/Task tool -- "
                   "Codex/Gemini have no equivalent executor",
     },
+    "bg-remove": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "human-gate step requires visually judging cutout edges/hair "
+                  "matting from rendered QA images via multimodal Read; also "
+                  "depends on the local isolated ML venv only provisioned for "
+                  "the Claude-side imgqa toolchain",
+    },
     "design-fidelity-audit": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "judgment step requires visually comparing viewport screenshots "
