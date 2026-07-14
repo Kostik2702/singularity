@@ -53,6 +53,13 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
         "reason": "spawns Claude subagents via the Agent/Task tool -- "
                   "Codex/Gemini have no equivalent executor",
     },
+    "visual-regression-bootstrap": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "acceptance requires the operator to visually review initial "
+                  "baselines and drive the mandatory negative tolerance test; "
+                  "bound to the local Playwright/browser provisioning conventions "
+                  "of the Claude-side toolchain",
+    },
     "bg-remove": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "human-gate step requires visually judging cutout edges/hair "
