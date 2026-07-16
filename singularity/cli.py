@@ -70,6 +70,15 @@ def _build_parser() -> argparse.ArgumentParser:
     i.add_argument("--files", nargs="*", help="update only these vault-relative files")
     i.add_argument("path", nargs="?", help="file to inspect (index inspect <path>)")
 
+    mdl = sub.add_parser("model", help="local embedding-model lifecycle")
+    mdlsub = mdl.add_subparsers(dest="model_action", required=True)
+    mdls = mdlsub.add_parser("status", help="verify the pinned local snapshot")
+    mdls.add_argument("--json", action="store_true")
+    mdli = mdlsub.add_parser("install", help="adopt/download the model once, then restart daemon")
+    mdli.add_argument("--revision", help="optional Hugging Face revision to pin")
+    mdli.add_argument("--force", action="store_true", help="re-resolve even with a healthy manifest")
+    mdli.add_argument("--json", action="store_true")
+
     sub.add_parser("watch", help="on-save incremental index watcher")
 
     doc = sub.add_parser("doctor", help="installation verification")
@@ -279,19 +288,50 @@ def cmd_index(cfg, args) -> int:
         print(json.dumps({"file": target, "chunks": rows}, ensure_ascii=False, indent=1))
         return 0
 
-    # The indexer owns the writer lock now (so watcher/nightly are serialized
-    # too, not just the CLI). Reload happens only after a successful commit.
     try:
-        if args.action == "rebuild":
-            stats = indexer.rebuild(cfg)
+        stats = client.run_index(cfg, args.action, args.files or None)
+    except client.RemoteIndexError as exc:
+        if exc.error_type == "IndexLockedError":
+            print("[mb] another index writer in progress (lock present)", file=sys.stderr)
         else:
-            stats = indexer.update(cfg, only_files=args.files or None)
-    except indexer.IndexLockedError:
-        print("[mb] another index writer in progress (lock present)", file=sys.stderr)
+            print(f"[mb] index failed: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(stats, ensure_ascii=False))
-    client.reload_daemon(cfg)
     return 0
+
+
+def cmd_model(cfg, args) -> int:
+    from .search import client, model_store
+
+    if args.model_action == "status":
+        state = model_store.status(cfg)
+        if args.json:
+            print(json.dumps(state, ensure_ascii=False))
+        elif state["installed"]:
+            print(f"installed: {state['model']} @ {state.get('revision', '?')}")
+            print(f"snapshot: {state['snapshot']}")
+        else:
+            print(f"not installed: {state.get('reason', 'unknown reason')}")
+            print(f"cache: {state.get('cache', cfg.hf_cache)}")
+        return 0 if state["installed"] else 1
+
+    try:
+        result = model_store.install(cfg, revision=args.revision, force=args.force)
+        client.stop_daemon(cfg)
+        daemon_ok = client.start_daemon(cfg)
+    except Exception as exc:  # explicit command: surface actionable install failure
+        if args.json:
+            print(json.dumps({"installed": False, "error": str(exc)}, ensure_ascii=False))
+        else:
+            print(f"[mb] model install failed: {exc}", file=sys.stderr)
+        return 1
+    result["daemon"] = "up" if daemon_ok else "failed"
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False))
+    else:
+        print(f"model: {result.get('source', 'installed')} -> {result.get('snapshot', '?')}")
+        print("daemon:", result["daemon"])
+    return 0 if daemon_ok else 1
 
 
 def cmd_backup(cfg, args) -> int:
@@ -733,6 +773,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_daemon(cfg, args)
     if args.command == "index":
         return cmd_index(cfg, args)
+    if args.command == "model":
+        return cmd_model(cfg, args)
     if args.command == "watch":
         from . import watch
         watch.run(cfg)

@@ -93,17 +93,18 @@ def _process_pending(cfg: Config, pending: dict[str, float]) -> None:
     files actually handled this batch are cleared on success, so an edit
     that lands on another file while this batch is in flight survives."""
     files = sorted(pending)
-    from .search import indexer
     from .search import client
 
     try:
-        stats = indexer.update(cfg, only_files=files)
-        client.reload_daemon(cfg)
+        stats = client.run_index(cfg, "update", files)
         print(f"[watch] updated {files} -> {stats}", flush=True)
         for rel in files:
             pending.pop(rel, None)
-    except indexer.IndexLockedError:
-        print(f"[watch] index locked, will retry: {files}", flush=True)
+    except client.RemoteIndexError as exc:
+        if exc.error_type != "IndexLockedError":
+            print(f"[watch] update failed: {exc}", flush=True)
+        else:
+            print(f"[watch] index locked, will retry: {files}", flush=True)
         for rel in files:
             pending[rel] = time.monotonic()
     except Exception as exc:  # noqa: BLE001 — watcher must survive bad files

@@ -76,8 +76,80 @@ def _stub_externals(monkeypatch):
     """Neutralise heavy/external checks so a doctor run is fast + deterministic."""
     monkeypatch.setattr(doctor.importlib, "import_module", lambda name: object())
     monkeypatch.setattr(scheduler, "verify", lambda job: {"registered": False})
+    monkeypatch.setattr(scheduler, "register", lambda job: "OK")
+    monkeypatch.setattr(scheduler, "unregister", lambda job: "OK")
     import singularity.search.client as client_mod
+    import singularity.search.model_store as model_store_mod
     monkeypatch.setattr(client_mod, "ping", lambda cfg: None)
+    monkeypatch.setattr(client_mod, "start_daemon", lambda cfg: True)
+    monkeypatch.setattr(client_mod, "stop_daemon", lambda cfg: True)
+    monkeypatch.setattr(model_store_mod, "status",
+                        lambda cfg: {"installed": True, "model": cfg.model,
+                                     "snapshot": "/test/model", "revision": "test"})
+
+
+def test_b3_reports_missing_local_model(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    import singularity.search.model_store as model_store_mod
+    monkeypatch.setattr(model_store_mod, "status",
+                        lambda cfg: {"installed": False, "model": cfg.model,
+                                     "cache": str(cfg.hf_cache),
+                                     "reason": "manifest missing"})
+    doctor.run(cfg, as_json=True)
+    check = _check(cfg, "B3-model")
+    assert check["status"] == "FAIL"
+    assert "doctor --fix --heavy" in check["fix"]
+
+
+def test_b3_fix_heavy_installs_model_and_restarts_daemon(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    import singularity.search.client as client_mod
+    import singularity.search.model_store as model_store_mod
+    calls = []
+    monkeypatch.setattr(model_store_mod, "status",
+                        lambda cfg: {"installed": False, "model": cfg.model,
+                                     "cache": str(cfg.hf_cache),
+                                     "reason": "manifest missing"})
+    monkeypatch.setattr(model_store_mod, "install",
+                        lambda cfg: calls.append("install") or
+                        {"installed": True, "source": "download"})
+    monkeypatch.setattr(client_mod, "stop_daemon",
+                        lambda cfg: calls.append("stop") or True)
+    monkeypatch.setattr(client_mod, "start_daemon",
+                        lambda cfg: calls.append("start") or True)
+    monkeypatch.setattr(client_mod, "run_index",
+                        lambda cfg, action="update", files=None: {"chunks": 0})
+    doctor.run(cfg, fix=True, heavy=True, as_json=True)
+    assert calls[:3] == ["install", "stop", "start"]
+    assert _check(cfg, "B3-model")["status"] == "FIXED"
+
+
+def test_b4_reads_current_generation_layout(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    import numpy as np
+    gen = cfg.memory_index_dir / "gen_test"
+    gen.mkdir(parents=True)
+    np.save(gen / "embeddings.npy", np.ones((1, 3), dtype=np.float32))
+    (gen / "metadata.json").write_text(
+        json.dumps({"model": cfg.model, "chunks": [{"file": "x.md"}]}),
+        encoding="utf-8")
+    (cfg.memory_index_dir / "CURRENT").write_text("gen_test", encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    check = _check(cfg, "B4-index")
+    assert check["status"] == "PASS"
+    assert "1 chunks" in check["detail"]
+
+
+def test_b4_fix_heavy_rebuilds_via_daemon(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    import singularity.search.client as client_mod
+    calls = []
+    monkeypatch.setattr(client_mod, "run_index",
+                        lambda cfg, action="update", files=None:
+                        calls.append(action) or {"chunks": 2})
+    doctor.run(cfg, fix=True, heavy=True, as_json=True)
+    assert calls == ["rebuild"]
+    assert _check(cfg, "B4-index")["status"] == "FIXED"
 
 
 def _run_capture(cfg, capsys, **kw):

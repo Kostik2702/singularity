@@ -37,7 +37,7 @@ def _wire_happy_dependencies(monkeypatch, tmp_path, *, doctor_rc=0):
     replaced with trivial no-ops."""
     import singularity.config as config_mod
     import singularity.cli as cli_mod
-    import singularity.search.indexer as indexer_mod
+    import singularity.search.model_store as model_store_mod
     import singularity.search.client as client_mod
     import singularity.doctor as doctor_mod
 
@@ -46,8 +46,12 @@ def _wire_happy_dependencies(monkeypatch, tmp_path, *, doctor_rc=0):
                         lambda vault_arg=None: Config(vault=tmp_path, data={}))
     monkeypatch.setattr(config_mod, "write_pointer", lambda vault: None)
     monkeypatch.setattr(cli_mod, "cmd_init", lambda cfg, _args: 0)
-    monkeypatch.setattr(indexer_mod, "rebuild", lambda cfg: {"notes": 0})
+    monkeypatch.setattr(model_store_mod, "install",
+                        lambda cfg: {"installed": True, "source": "test"})
+    monkeypatch.setattr(client_mod, "stop_daemon", lambda cfg: True)
     monkeypatch.setattr(client_mod, "start_daemon", lambda cfg: True)
+    monkeypatch.setattr(client_mod, "run_index",
+                        lambda cfg, action="update", files=None: {"notes": 0})
     monkeypatch.setattr(doctor_mod, "run",
                         lambda cfg, fix=False, heavy=False, as_json=False: doctor_rc)
     # register_agents / register_gemini are required phases like hooks/skills;
@@ -132,3 +136,25 @@ def test_install_missing_vault_fails_fast_before_any_phase(tmp_path, monkeypatch
     # reached Phase 4 it would ImportError (they're not on sys.path here)
     rc = install.main(["--skip-deps", "--skip-schedule"])
     assert rc == 2
+
+
+def test_install_downloads_model_before_starting_daemon_and_index(tmp_path, monkeypatch):
+    _wire_happy_dependencies(monkeypatch, tmp_path)
+    for name in ("register_hooks", "register_skills", "register_codex"):
+        monkeypatch.setitem(sys.modules, name, _fake_module(name, 0))
+    import singularity.search.model_store as model_store_mod
+    import singularity.search.client as client_mod
+    calls = []
+    monkeypatch.setattr(model_store_mod, "install",
+                        lambda cfg: calls.append("model") or {"source": "local-cache"})
+    monkeypatch.setattr(client_mod, "stop_daemon",
+                        lambda cfg: calls.append("stop") or True)
+    monkeypatch.setattr(client_mod, "start_daemon",
+                        lambda cfg: calls.append("start") or True)
+    monkeypatch.setattr(client_mod, "run_index",
+                        lambda cfg, action="update", files=None:
+                        calls.append(f"index:{action}") or {"chunks": 0})
+
+    assert install.main(["--skip-deps", "--skip-schedule",
+                         "--vault", str(tmp_path)]) == 0
+    assert calls == ["model", "stop", "start", "index:rebuild"]

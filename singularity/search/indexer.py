@@ -234,7 +234,7 @@ def _rebuild(cfg: Config, progress: bool = True) -> dict[str, int]:
             chunks.extend(file_chunks)
         file_meta[rel] = _file_stat(path)
 
-    encoder = shared_encoder(cfg.model, cfg.get("batch_size"))
+    encoder = shared_encoder(cfg.model, cfg.get("batch_size"), cfg=cfg)
     if chunks:
         embs = encoder.encode([c["text"] for c in chunks], progress=progress)
     else:
@@ -315,7 +315,7 @@ def _update(cfg: Config, only_files: list[str] | None = None) -> dict[str, int]:
         new_chunks.extend(extract_chunks(files[rel], rel, personal_roots))
         old_meta[rel] = _file_stat(files[rel])
     if new_chunks:
-        encoder = shared_encoder(cfg.model, cfg.get("batch_size"))
+        encoder = shared_encoder(cfg.model, cfg.get("batch_size"), cfg=cfg)
         new_embs = encoder.encode([c["text"] for c in new_chunks])
         embs = np.vstack([embs, new_embs]) if embs.size else new_embs
         meta["chunks"].extend(new_chunks)
