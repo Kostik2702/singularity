@@ -228,25 +228,51 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
         else:
             rep.add("B2-deps", "PASS", "python deps importable")
 
+    def b3():
+        from .search import client, model_store
+
+        state = model_store.status(cfg)
+        if state["installed"]:
+            rep.add("B3-model", "PASS",
+                    f"{state['model']} @ {state.get('revision', '?')} "
+                    f"({state.get('snapshot', '?')})")
+            return
+        if fix and heavy:
+            installed = model_store.install(cfg)
+            client.stop_daemon(cfg)
+            daemon_ok = client.start_daemon(cfg)
+            rep.add("B3-model", "FIXED" if daemon_ok else "FAIL",
+                    f"{installed.get('source', 'installed')}; "
+                    f"daemon={'restarted' if daemon_ok else 'restart failed'}",
+                    fix="" if daemon_ok else "mb daemon start")
+            return
+        rep.add("B3-model", "FAIL",
+                f"local embedding model unavailable: {state.get('reason', 'unknown')}; "
+                f"cache={state.get('cache', cfg.hf_cache)}",
+                fix="mb model install  (or mb doctor --fix --heavy)")
+
     def b4():
-        emb = cfg.memory_index_dir / "embeddings.npy"
-        meta = cfg.memory_index_dir / "metadata.json"
-        if emb.exists() and meta.exists():
+        from .search import indexer
+
+        files = indexer.index_files(cfg.memory_index_dir)
+        if files is not None:
+            emb, meta = files
             data = json.loads(meta.read_text(encoding="utf-8"))
-            n = data.get("chunk_count", 0)
+            chunks = data.get("chunks", [])
+            n = len(chunks) if isinstance(chunks, list) else 0
             if n > 0:
                 age_h = (time.time() - emb.stat().st_mtime) / 3600
                 status = "PASS" if age_h < 48 else "WARN"
                 rep.add("B4-index", status,
                         f"{n} chunks, model={data.get('model','?')}, age={age_h:.0f}h")
                 return
-        if heavy:
-            from .search import indexer
-            stats = indexer.rebuild(cfg)
+        if fix and heavy:
+            from .search import client
+            stats = client.run_index(cfg, "rebuild")
             rep.add("B4-index", "FIXED", f"rebuilt: {stats}")
         else:
             rep.add("B4-index", "FAIL", "memory index missing/empty",
-                    fix="mb index rebuild  (or doctor --fix --heavy)")
+                    fix="mb index rebuild  (or mb doctor --fix --heavy)")
 
     def b7():
         from .search import client
@@ -289,6 +315,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                     f"no orphan (instance={str(st.get('instance_id'))[:8] or '-'})")
 
     _guard(rep, "B2", b2)
+    _guard(rep, "B3", b3)
     _guard(rep, "B4", b4)
     _guard(rep, "B7", b7)
     _guard(rep, "B8", b8)

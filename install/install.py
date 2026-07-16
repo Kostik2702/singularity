@@ -51,15 +51,20 @@ def main(argv: list[str] | None = None) -> int:
     write_pointer(cfg.vault)
     cmd_init(cfg, None)
 
-    print("== Phase 3: model warmup + first index ==")
+    print("== Phase 3: local model install/adoption ==")
     cfg.apply_env()
-    from singularity.search import indexer, client
-    stats = indexer.rebuild(cfg)
-    print(f"index: {stats}")
+    from singularity.search import client, model_store
+    model = model_store.install(cfg)
+    print(f"model: {model.get('source')} -> {model.get('snapshot')}")
 
-    print("== Phase 3b: daemon ==")
+    print("== Phase 3b: warm daemon + first index ==")
+    client.stop_daemon(cfg)
     ok = client.start_daemon(cfg)
     print("daemon:", "up" if ok else "FAILED (see .mb/daemon.log)")
+    if not ok:
+        return 1
+    stats = client.run_index(cfg, "rebuild")
+    print(f"index: {stats}")
 
     print("== Phase 4: Claude Code hooks + skills + agents ==")
     failures: list[str] = []

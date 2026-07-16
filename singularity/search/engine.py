@@ -23,7 +23,7 @@ _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n", re.DOTALL)
 class SearchEngine:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.encoder = shared_encoder(cfg.model, cfg.get("batch_size"))
+        self.encoder = shared_encoder(cfg.model, cfg.get("batch_size"), cfg=cfg)
         self.mem_embs: np.ndarray | None = None
         self.mem_chunks: list[dict[str, Any]] = []
         self.code_embs: np.ndarray | None = None

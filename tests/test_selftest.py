@@ -1,4 +1,4 @@
-"""AUD-16: mb selftest orchestration (client.search + indexer.update stubbed —
+"""AUD-16: mb selftest orchestration (client search/index stubbed —
 no model). Verifies stage flow, pass/fail, cleanup, and --json."""
 import json
 
@@ -15,9 +15,9 @@ def cfg(tmp_path):
 
 def _stub(monkeypatch, *, found_seq):
     """found_seq: values returned by successive _found() calls (via search)."""
-    import singularity.search.indexer as indexer_mod
     import singularity.search.client as client_mod
-    monkeypatch.setattr(indexer_mod, "update", lambda cfg, only_files=None: {"added": 1})
+    monkeypatch.setattr(client_mod, "run_index",
+                        lambda cfg, action="update", files=None: {"added": 1})
     calls = {"n": 0}
 
     def fake_search(cfg, payload):
@@ -60,9 +60,9 @@ def test_json_output_is_valid(cfg, monkeypatch, capsys):
 
 
 def test_cleanup_on_stage_exception(cfg, monkeypatch):
-    import singularity.search.indexer as indexer_mod
     import singularity.search.client as client_mod
-    monkeypatch.setattr(indexer_mod, "update", lambda cfg, only_files=None: {"added": 1})
+    monkeypatch.setattr(client_mod, "run_index",
+                        lambda cfg, action="update", files=None: {"added": 1})
 
     def boom(cfg, payload):
         raise KeyboardInterrupt("user aborted mid-search")

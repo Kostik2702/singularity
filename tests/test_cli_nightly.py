@@ -5,7 +5,7 @@ import pytest
 
 from singularity import cli
 from singularity.config import Config
-from singularity.search import indexer
+from singularity.search import client
 
 
 @pytest.fixture
@@ -18,7 +18,8 @@ def cfg(tmp_path):
 @pytest.fixture
 def wired(monkeypatch, cfg):
     monkeypatch.setattr(cli, "load_config", lambda vault_arg=None: cfg)
-    monkeypatch.setattr(indexer, "update", lambda cfg, only_files=None: {"added": 0})
+    monkeypatch.setattr(client, "run_index",
+                        lambda cfg, action="update", files=None: {"added": 0})
     return cfg
 
 

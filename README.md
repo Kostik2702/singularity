@@ -104,9 +104,9 @@ cd ~/singularity
 
 The wrappers are ~20 lines each; all logic lives in `install/install.py`, which walks five phases:
 
-1. **Python env** — creates `.venv`, installs dependencies, warms up the embedding model (~470 MB, cached locally — configurable off the system drive).
+1. **Python env** — creates `.venv` and installs dependencies.
 2. **Vault** — asks for your vault path, creates the memory folder tree (`learnings/`, `decisions/`, `howto/`, `incidents/`, `rules/`, `reference/`, `changelog/`, `templates/`, `_moc/`), binds it via `~/.singularity.json`.
-3. **First index + daemon** — builds the semantic index over your vault, starts the warm daemon, runs an EN+RU smoke search.
+3. **Local model + first index + daemon** — explicitly adopts or downloads the embedding snapshot once (~470 MB) into the configured `hf_cache`, writes a pinned local manifest, starts the daemon, and builds the first index inside that warm process. Search/index runtime opens only that local snapshot (`local_files_only`); it never silently falls back to Hugging Face.
 4. **Client wiring** — registers four managed hook entries in `~/.claude/settings.json`: SessionStart, Stop, and two opt-in PreToolUse checks (module context and vault guard). Your existing settings are backed up and preserved; every entry we own is marked `"_mb": true` for clean uninstall. Then, **if they are installed**, the installer wires OpenAI Codex and Google Gemini to the same memory (see [Other CLI clients](#other-cli-clients--codex--gemini)).
 5. **Scheduler + verify** — registers the nightly index rebuild and the on-save watcher with your OS scheduler (Task Scheduler / launchd / systemd — all with missed-run catch-up), then finishes with `mb doctor`.
 
@@ -118,7 +118,7 @@ Re-running the installer is safe — it refreshes and re-verifies instead of bre
 mb doctor
 ```
 
-You want a summary with `PASS` well into the double digits and no `FAIL` (real example from this repo's own dev machine: `PASS 19 | WARN 3` — the WARNs were "nightly job not yet migrated", "watcher not currently running", "vault guard disabled by default", all benign). Anything broken gets a status (`FAIL`/`WARN`/`AUTH`/`SKIP`), a reason, and a fix hint; `mb doctor --fix` repairs the light stuff, `--fix --heavy` reinstalls deps and rebuilds indexes.
+You want a summary with `PASS` well into the double digits and no `FAIL` (real example from this repo's own dev machine: `PASS 19 | WARN 3` — the WARNs were "nightly job not yet migrated", "watcher not currently running", "vault guard disabled by default", all benign). Anything broken gets a status (`FAIL`/`WARN`/`AUTH`/`SKIP`), a reason, and a fix hint; `mb doctor --fix` repairs the light stuff. `mb doctor --fix --heavy` may adopt/download a missing embedding model, restart the daemon, and rebuild the index — the recovery path for an existing installation that predates the local-model manifest.
 
 ### Other CLI clients — Codex & Gemini
 
@@ -214,10 +214,12 @@ Worth recording: the non-obvious, the surprising, anything that took more than o
 
 ### Everything indexes itself
 
-Save a note in Obsidian → the watcher re-indexes just that file and hot-reloads the daemon (~5–15 s) → it's searchable. A nightly full rebuild (with missed-run catch-up when the machine was off) is the safety net. Manual controls if you ever need them:
+Save a note in Obsidian → the watcher asks the already-warm daemon to re-index just that file (~5–15 s) → it's searchable. CLI update/rebuild, nightly, and selftest use the same daemon RPC, so the model stays loaded once in one process instead of being reloaded by every command. A nightly full rebuild (with missed-run catch-up when the machine was off) is the safety net. Manual controls if you ever need them:
 
 ```bash
 mb daemon start|stop|status|reload
+mb model status             # verify pinned local snapshot + manifest
+mb model install            # explicit one-time adopt/download + daemon restart
 mb index rebuild            # full
 mb index update             # incremental (mtime+size diff)
 mb index inspect <path>     # chunk-level view of one file in the current index
@@ -397,7 +399,7 @@ Use these commands for progressively deeper checks:
 ```bash
 mb doctor                  # broad diagnostic; reports findings without repairing them
 mb doctor --fix            # safe/light repairs
-mb doctor --fix --heavy    # may reinstall dependencies and rebuild indexes
+mb doctor --fix --heavy    # may install missing local model, restart daemon, rebuild index
 mb selftest                # temporary note -> index -> find -> delete -> verify gone
 mb stats                   # notes/chunks/types/coverage; never note body content
 ```
@@ -676,8 +678,9 @@ singularity/
 │   │                       #   cross-process writer lock, load_committed_index (shared committed-gen reader)
 │   ├── encoder.py         # sentence-transformers, normalized embeddings
 │   ├── engine.py          # cosine search, filters, trim_meta, compact format
-│   ├── daemon.py          # warm TCP daemon, ndjson protocol
-│   └── client.py          # auto-start, retry, cold fallback
+│   ├── daemon.py          # warm TCP daemon, search + index ndjson protocol
+│   ├── client.py          # auto-start, search + index RPC
+│   └── model_store.py     # pinned local snapshot manifest + explicit install
 ├── platform/              # ALL OS-specific code lives here
 │   ├── scheduler.py       # Task Scheduler / launchd / systemd (+missed-run catch-up)
 │   ├── proc.py            # detached process spawn per OS
@@ -705,7 +708,7 @@ And in your **vault**: `rules/` (core discipline + agent preamble), `workflow/` 
 | Search is slow (~10 s) | That's a cold start (daemon was down); the query still works and the daemon auto-restarts. Antivirus killing background python? Add `.venv\Scripts\pythonw.exe` to exclusions |
 | New note not searchable | Is `mb watch` running? (`mb doctor` checks the at-login job). Manual: `mb index update` |
 | Local model starts but Claude Code loops or tools fail | Run `mb llm setup` to validate arguments, ensure `--jinja` (or a chat template) is configured, and launch through `mb llm code` so it uses the isolated local profile |
-| Pip/model downloads fail (corporate TLS) | pip: trusted hosts are pre-configured in `.venv/pip.ini`; runtime downloads use `truststore` (OS certificate store) automatically |
+| Pip/model downloads fail (corporate TLS) | pip: trusted hosts are pre-configured in `.venv/pip.ini`; the explicit `mb model install` step uses `truststore` (OS certificate store). Search/index runtime never downloads weights |
 | Broken wikilinks / messy vault | `mb curator` — validation + fix suggestions |
 | Want it gone | `mb uninstall` — removes hooks, scheduler jobs, daemon; **never touches the vault** |
 
