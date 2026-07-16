@@ -4,8 +4,9 @@ snapshot -> trend line -> markers sweep.
 `mb nightly` replaces the standalone "nightly-index" job (T02, `index
 update` only) -- see NIGHTLY_JOB/migrate_scheduler_job, the single source
 both `mb doctor --fix` and the installer use so the two registration paths
-can't drift. The index step reuses indexer.update()'s own writer lock (the
-same lock the watcher already goes through); the other steps only ever read
+    can't drift. The index step calls the warm daemon, which reuses
+    indexer.update()'s writer lock (the same lock the watcher already goes
+    through); the other steps only ever read
 the committed generation or touch their own snapshot files, so they need no
 lock. Every step is independently guarded (one failing step never aborts the
 chain) and every persisted file is a tmp+replace atomic write.
@@ -62,12 +63,14 @@ def _guard(fn):
 # ---------------------------------------------------------------------------
 
 def _step_index(cfg: Config) -> dict[str, Any]:
-    from .search import indexer
+    from .search import client
 
     try:
-        stats = indexer.update(cfg)
-    except indexer.IndexLockedError:
-        return {"status": "skipped", "reason": "locked"}
+        stats = client.run_index(cfg, "update")
+    except client.RemoteIndexError as exc:
+        if exc.error_type == "IndexLockedError":
+            return {"status": "skipped", "reason": "locked"}
+        raise
     return {"status": "ok", "stats": stats}
 
 

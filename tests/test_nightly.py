@@ -16,7 +16,7 @@ import pytest
 
 from singularity import nightly
 from singularity.config import Config
-from singularity.search import indexer
+from singularity.search import client, indexer
 
 
 @pytest.fixture
@@ -42,25 +42,25 @@ def _commit(cfg, pairs):
 
 
 def _no_index_update(monkeypatch):
-    monkeypatch.setattr(indexer, "update", lambda cfg, only_files=None: {"added": 0})
+    monkeypatch.setattr(client, "run_index", lambda cfg, action, files=None: {"added": 0})
 
 
 # --- index step: lock handling ------------------------------------------------
 
 def test_locked_index_step_is_skipped_not_raised(cfg, monkeypatch):
-    def boom(cfg, only_files=None):
-        raise indexer.IndexLockedError("locked")
-    monkeypatch.setattr(indexer, "update", boom)
+    def boom(cfg, action, files=None):
+        raise client.RemoteIndexError("locked", error_type="IndexLockedError")
+    monkeypatch.setattr(client, "run_index", boom)
     result = nightly.run(cfg)
     assert result["steps"]["index"] == {"status": "skipped", "reason": "locked"}
 
 
-def test_index_step_delegates_to_indexer_update(cfg, monkeypatch):
+def test_index_step_delegates_to_daemon(cfg, monkeypatch):
     calls = []
-    monkeypatch.setattr(indexer, "update",
-                        lambda cfg, only_files=None: calls.append(1) or {"added": 0})
+    monkeypatch.setattr(client, "run_index",
+                        lambda cfg, action, files=None: calls.append(action) or {"added": 0})
     nightly.run(cfg)
-    assert calls == [1]
+    assert calls == ["update"]
 
 
 # --- digest snapshot -----------------------------------------------------------

@@ -1,6 +1,7 @@
 """Warm-model search daemon: TCP 127.0.0.1, newline-delimited JSON.
 
-Commands: {"cmd":"ping"} | {"cmd":"reload"} | {"cmd":"search", ...}
+Commands: {"cmd":"ping"} | {"cmd":"reload"} | {"cmd":"search", ...} |
+{"cmd":"index", "action":"update|rebuild", "files":[...]}
 (the Genevra reload bug `command` vs `cmd` is fixed here: only `cmd`).
 
 Loopback-only bind; actual port is written to .mb/daemon.port so the client
@@ -45,6 +46,23 @@ class SearchDaemon:
             out = self.engine.search(req)
             out["time_ms"] = round((time.perf_counter() - t0) * 1000, 1)
             return out
+        if cmd == "index":
+            from . import indexer
+
+            action = req.get("action")
+            files = req.get("files")
+            if action not in {"update", "rebuild"}:
+                return {"error": f"unknown index action: {action}"}
+            if files is not None and (not isinstance(files, list)
+                                      or not all(isinstance(f, str) for f in files)):
+                return {"error": "index files must be a list of vault-relative strings"}
+            try:
+                stats = (indexer.rebuild(self.cfg) if action == "rebuild"
+                         else indexer.update(self.cfg, only_files=files or None))
+            except indexer.IndexLockedError as exc:
+                return {"error": str(exc), "error_type": "IndexLockedError"}
+            counts = self.engine.reload()
+            return {"status": "indexed", "stats": stats, "index": counts}
         return {"error": f"unknown cmd: {cmd}"}
 
     def _serve_conn(self, conn: socket.socket) -> None:

@@ -19,6 +19,13 @@ from ..platform import proc
 
 START_TIMEOUT_TRIES = 30   # x1s: model load can take ~10-20s on first run
 CONNECT_TIMEOUT = 5.0
+INDEX_READ_TIMEOUT = 60 * 30.0
+
+
+class RemoteIndexError(RuntimeError):
+    def __init__(self, message: str, *, error_type: str | None = None):
+        super().__init__(message)
+        self.error_type = error_type
 
 
 def _read_state(cfg: Config) -> Optional[dict[str, Any]]:
@@ -39,10 +46,12 @@ def _read_port(cfg: Config) -> Optional[int]:
 
 
 def _request(port: int, payload: dict[str, Any],
-             timeout: float = CONNECT_TIMEOUT) -> Optional[dict[str, Any]]:
+             timeout: float = CONNECT_TIMEOUT,
+             read_timeout: float | None = None) -> Optional[dict[str, Any]]:
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=timeout) as s:
-            s.settimeout(max(timeout, 30.0))  # search on a warm model is fast; encode of a long query is not
+            s.settimeout(read_timeout if read_timeout is not None
+                         else max(timeout, 30.0))
             s.sendall(json.dumps(payload, ensure_ascii=False).encode("utf-8") + b"\n")
             buf = b""
             while b"\n" not in buf:
@@ -145,6 +154,43 @@ def reload_daemon(cfg: Config) -> Optional[dict[str, Any]]:
     if port is None:
         return None
     return _request(port, {"cmd": "reload"})
+
+
+def run_index(cfg: Config, action: str = "update",
+              files: list[str] | None = None) -> dict[str, Any]:
+    """Run an index write inside the warm daemon process.
+
+    There is deliberately no local fallback: a one-off CLI process would load
+    another copy of the embedding model and defeat the daemon-resident contract.
+    """
+    if action not in {"update", "rebuild"}:
+        raise ValueError(f"unknown index action: {action}")
+    payload: dict[str, Any] = {"cmd": "index", "action": action}
+    if files:
+        payload["files"] = files
+    port = _read_port(cfg)
+    resp = (_request(port, payload, read_timeout=INDEX_READ_TIMEOUT)
+            if port is not None else None)
+    if resp is None:
+        if not start_daemon(cfg):
+            raise RemoteIndexError(
+                "search daemon unavailable; run `mb daemon start` and inspect the daemon log",
+                error_type="DaemonUnavailable")
+        port = _read_port(cfg)
+        if port is None:
+            raise RemoteIndexError("search daemon started without a readable port",
+                                   error_type="DaemonUnavailable")
+        resp = _request(port, payload, read_timeout=INDEX_READ_TIMEOUT)
+    if resp is None:
+        raise RemoteIndexError("index daemon request failed or timed out",
+                               error_type="DaemonUnavailable")
+    if resp.get("error"):
+        raise RemoteIndexError(str(resp["error"]),
+                               error_type=resp.get("error_type"))
+    stats = resp.get("stats")
+    if not isinstance(stats, dict):
+        raise RemoteIndexError("index daemon returned an invalid response")
+    return stats
 
 
 def status(cfg: Config) -> dict[str, Any]:

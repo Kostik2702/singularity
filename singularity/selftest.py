@@ -24,7 +24,7 @@ def _token() -> str:
 
 
 def run(cfg: Config, as_json: bool = False) -> int:
-    from .search import client, indexer
+    from .search import client
 
     token = _token()
     rel = f"{SELFTEST_DIR}/{token}.md"
@@ -57,11 +57,11 @@ def run(cfg: Config, as_json: bool = False) -> int:
                                 "for the mb selftest end-to-end check.\n",
                                 encoding="utf-8"),
                 f"wrote {rel}")[-1]):
-            if stage("index", lambda: f"indexed: {indexer.update(cfg, only_files=[rel])}"):
+            if stage("index", lambda: f"indexed: {client.run_index(cfg, 'update', [rel])}"):
                 stage("find", lambda: "token found in index"
                       if _found() else _fail("token NOT found after indexing"))
         stage("delete", lambda: (note.unlink(missing_ok=True),
-                                 f"removed, reindex: {indexer.update(cfg, only_files=[rel])}")[-1])
+                                 f"removed, reindex: {client.run_index(cfg, 'update', [rel])}")[-1])
         stage("verify-gone", lambda: "token gone from index"
               if not _found() else _fail("token still present after delete"))
     finally:

@@ -39,6 +39,14 @@ and nothing here requires you to do anything by hand for a normal upgrade.
   `mb nightly` run, whether scheduled or manual), `.mb/reflect-last.json` /
   `.mb/reflect-history.jsonl` (written by the first `mb reflect` run). None
   of these exist until their owning command runs at least once.
+- **The embedding model gets an explicit local manifest.** Re-running the
+  installer adopts a complete snapshot already present in `.mb/hf-cache`
+  without downloading it again (or downloads it once when genuinely absent),
+  writes `.mb/hf-cache/singularity-model.json`, restarts the daemon, and
+  rebuilds through that warm process. If you update without re-running the
+  installer, `mb doctor` reports `B3-model`; repair with
+  `mb doctor --fix --heavy` or `mb model install`. Normal search/index
+  runtime is offline-only and cannot silently contact Hugging Face.
 - **Existing notes are never moved or rewritten.** No code path in
   `singularity/search/` or `singularity/curator.py` calls `shutil.move`,
   `Path.rename`, or `os.rename` on a vault file — confirmed by direct source
