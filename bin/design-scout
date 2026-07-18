@@ -1,0 +1,14 @@
+#!/bin/sh
+# POSIX shim (macOS/Linux/Windows Git Bash -- Git Bash resolves THIS extensionless
+# file, not design-scout.cmd, so it must work everywhere).
+# Same pattern as bin/mb after the 2026-07-14 incident: never `exec A || exec B`
+# -- a failed exec exits a non-interactive shell with 127 before B runs. Pick
+# the interpreter by checking the file, fail LOUD if neither exists.
+d="$(dirname "$0")"
+py="$d/../.venv/bin/python"
+[ -x "$py" ] || py="$d/../.venv/Scripts/python.exe"
+if [ ! -x "$py" ]; then
+  echo "design-scout: no python interpreter found at $d/../.venv/{bin/python,Scripts/python.exe}" >&2
+  exit 127
+fi
+exec "$py" -m singularity.scout.cli "$@"

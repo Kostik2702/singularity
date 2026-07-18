@@ -26,6 +26,7 @@ imgqa = ["Pillow>=10", "scipy>=1.10"]
 [project.scripts]
 mb = "singularity.cli:main"
 imgqa = "singularity.imgqa.cli:main"
+design-scout = "singularity.scout.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["singularity*"]

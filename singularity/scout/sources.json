@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "comment": "design-scout source registry (WSF-09). A new source is a row here, not code. enabled=false requires disabled_reason. License policies per CONTRACT.md §4 (OD-2 owner 2026-07-14).",
+  "budgets": {
+    "per_fetch_timeout_s": 15,
+    "max_results_per_source": 24,
+    "max_thumb_downloads": 60,
+    "max_sources_per_run": 8,
+    "wall_budget_s": 300,
+    "retry_max": 1,
+    "retryable_classes": ["timeout", "http-5xx"],
+    "floor_live_total": 3,
+    "floor_live_api": 1
+  },
+  "sources": [
+    {
+      "name": "openverse",
+      "method": "api",
+      "enabled": true,
+      "license_policy": "api-free-license",
+      "probe_url": "https://api.openverse.org/v1/images/?q=design&page_size=1",
+      "search_endpoint": "https://api.openverse.org/v1/images/?q={query}&page_size={per}&license_type=all",
+      "max_per": 20,
+      "robots_note": "public API, no key for anonymous tier; UA header REQUIRED — default urllib UA gets 403; anonymous page_size cap is 20 (page_size=24 -> 400, GT run 2026-07-18); license/creator/foreign_landing_url per record"
+    },
+    {
+      "name": "arena",
+      "method": "api",
+      "enabled": true,
+      "license_policy": "per-block",
+      "probe_url": "https://api.are.na/v2/search/channels?q=design&per=1",
+      "search_endpoint": "https://api.are.na/v2/search/channels?q={query}&per=4",
+      "contents_endpoint": "https://api.are.na/v2/channels/{slug}/contents?per=8",
+      "robots_note": "v2 /search/channels works unauthenticated; /search/blocks returns 403 without auth (probe-spike 2026-07-18) — do not use blocks search; block license rarely present, default = link only"
+    },
+    {
+      "name": "httpster",
+      "method": "public-html",
+      "enabled": true,
+      "license_policy": "links-only",
+      "base_url": "https://httpster.net",
+      "probe_url": "https://httpster.net/",
+      "keyword_paths": {
+        "dark": "/style/dark/",
+        "minimal": "/style/minimal/",
+        "typographic": "/style/typographic/",
+        "brutalist": "/style/brutalist/",
+        "colourful": "/style/colourful/",
+        "colorful": "/style/colourful/",
+        "interactive": "/style/interactive/",
+        "retro": "/style/retro/",
+        "monotone": "/style/monotone/",
+        "fullscreen": "/style/fullscreen/",
+        "grid": "/style/grid/"
+      },
+      "robots_note": "no robots.txt (404, probe-spike 2026-07-18); hand-picked showcase grid; real nav paths are /style/<name>/ SINGULAR (GT run 2026-07-18: /styles/* -> 404), no search — keyword->path routing, homepage fallback"
+    },
+    {
+      "name": "minimal-gallery",
+      "method": "public-html",
+      "enabled": true,
+      "license_policy": "links-only",
+      "probe_url": "https://minimal.gallery/",
+      "search_endpoint": "https://minimal.gallery/websites/",
+      "robots_note": "WordPress; robots.txt disallows only /wp-admin/ (probe-spike 2026-07-18); ?s= search returns a page with ZERO result cards (GT run 2026-07-18) — use the /websites/ listing instead, no query targeting"
+    },
+    {
+      "name": "land-book",
+      "method": "public-html",
+      "enabled": true,
+      "license_policy": "links-only",
+      "probe_url": "https://land-book.com/",
+      "search_endpoint": "https://land-book.com/",
+      "robots_note": "robots.txt disallows /api/ and ALL query-param URLs incl. ?search= — homepage/category paths only",
+      "known_issue": "anti-bot: plain fetch gets 403 (probe-spike 2026-07-18) — expected typed status unavailable:http-403; revisit via Playwright only after owner decision"
+    },
+    {
+      "name": "godly",
+      "method": "public-html",
+      "enabled": false,
+      "license_policy": "links-only",
+      "probe_url": "https://godly.website/",
+      "disabled_reason": "robots.txt: ClaudeBot/GPTBot/CCBot etc. Disallow: / and content-signal ai-train=no (probe-spike 2026-07-18). Respected by default; enabling is an OWNER decision (use=reference signal permits reference links, but the AI-crawler ban is explicit).",
+      "robots_note": "User-agent:* allowed; AI crawlers banned; content signal: search=yes, ai-train=no, use=reference"
+    },
+    {
+      "name": "siteinspire",
+      "method": "public-html",
+      "enabled": false,
+      "license_policy": "links-only",
+      "probe_url": "https://www.siteinspire.com/",
+      "disabled_reason": "robots.txt: ClaudeBot and Claude-SearchBot Disallow: / ; /api/, /collections, category listings disallowed for everyone (probe-spike 2026-07-18). Respected by default; enabling is an OWNER decision.",
+      "robots_note": "sitemaps exist (websites/profiles/categories) but AI-crawler ban is explicit"
+    },
+    {
+      "name": "unsplash",
+      "method": "api",
+      "enabled": true,
+      "license_policy": "api-hotlink",
+      "key_env": "UNSPLASH_ACCESS_KEY",
+      "auth_header": "Authorization: Client-ID {key}",
+      "probe_url": "https://api.unsplash.com/search/photos?query=design&per_page=1",
+      "search_endpoint": "https://api.unsplash.com/search/photos?query={query}&per_page={per}",
+      "robots_note": "key required (demo 50 req/h); ToS REQUIRES hotlinking returned URLs + attribution — hence api-hotlink, no downloads (probe-spike 2026-07-18)"
+    },
+    {
+      "name": "pexels",
+      "method": "api",
+      "enabled": true,
+      "license_policy": "api-free-license",
+      "key_env": "PEXELS_API_KEY",
+      "auth_header": "Authorization: {key}",
+      "probe_url": "https://api.pexels.com/v1/search?query=design&per_page=1",
+      "search_endpoint": "https://api.pexels.com/v1/search?query={query}&per_page={per}",
+      "robots_note": "key required (200 req/h); Pexels License free use, attribution: link to Pexels + photographer (probe-spike 2026-07-18)"
+    }
+  ]
+}
