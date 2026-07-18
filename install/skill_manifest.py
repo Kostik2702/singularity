@@ -74,6 +74,13 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "vault (mb search) for owner decisions during A/B categorization — "
                   "Codex/Gemini have no equivalent multimodal review loop here",
     },
+    "design-analysis": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "one of the two Stage-1 skills with a legitimate LLM judgment "
+                  "step: aesthetic/structural mockup reading requires multimodal "
+                  "Read anchored to design-metrics numbers, plus the owner brief "
+                  "gate — GT-tested only against Claude Code (WSF-06)",
+    },
     "contrast-and-a11y-check": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "judgment step cross-references vault owner decisions (mb "
