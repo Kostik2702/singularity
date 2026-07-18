@@ -74,6 +74,14 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "vault (mb search) for owner decisions during A/B categorization — "
                   "Codex/Gemini have no equivalent multimodal review loop here",
     },
+    "contrast-and-a11y-check": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "judgment step cross-references vault owner decisions (mb "
+                  "search) for A/B categorization of violations and reads "
+                  "rendered evidence multimodally; keyboard protocol depends on "
+                  "the local Playwright provisioning conventions — GT-tested "
+                  "only against Claude Code (WSF-05)",
+    },
     "video-visual-review": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "interpretation step requires visually reading contact sheets "
