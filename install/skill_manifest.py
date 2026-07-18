@@ -74,6 +74,13 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "vault (mb search) for owner decisions during A/B categorization — "
                   "Codex/Gemini have no equivalent multimodal review loop here",
     },
+    "video-visual-review": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "interpretation step requires visually reading contact sheets "
+                  "via multimodal Read to judge crop vs letterbox and to surface "
+                  "content-structure questions to the owner (NIKA-03 lesson); "
+                  "GT-tested only against Claude Code (WSF-04)",
+    },
     "design-reference-scout": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "thin SKILL.md over the design-scout CLI; the query-expansion "
