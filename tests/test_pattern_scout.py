@@ -77,6 +77,47 @@ def test_cli_providers_lists(capsys):
     assert rows["react-bits"]["license"] == "MIT + Commons Clause"
 
 
+def test_scoring_components_and_defaults():
+    from singularity.providers.scoring import hard_fail_reasons, score_candidate
+    lic = make_candidate("p", "a", kind="component", name="A",
+                         source_url="https://e.example/", license_str="MIT",
+                         install_method="shadcn", framework="react")
+    unl = make_candidate("p", "b", kind="component", name="B",
+                         source_url="https://e.example/b",
+                         license_str="unknown", install_method="shadcn")
+    s_lic = score_candidate(lic, brief_fit=1.0, project_profile="react-motion")
+    s_unl = score_candidate(unl, brief_fit=1.0, project_profile="react-motion")
+    assert s_lic["components"]["license"]["points"] == 20
+    assert s_unl["components"]["license"]["points"] == 0
+    assert s_lic["components"]["stack"]["points"] == 15
+    assert s_lic["total"] > s_unl["total"]
+    # unknowns never score max
+    assert s_lic["components"]["a11y"]["points"] < 10
+    assert s_lic["components"]["freshness"]["points"] < 5
+    # hard fails
+    assert hard_fail_reasons(lic) == []
+    assert any("license unknown" in r for r in hard_fail_reasons(unl))
+    stale = dict(lic)
+    stale["stale"] = True
+    assert any("stale" in r for r in hard_fail_reasons(stale))
+
+
+def test_board_renders_escaped_no_scripts():
+    from singularity.providers.board import render
+    from singularity.providers.scoring import score_candidate
+    cand = make_candidate(
+        "p", "x", kind="component", name='<script>alert(1)</script>',
+        source_url="https://e.example/x", license_str="MIT",
+        install_method="shadcn", description="desc <b>bold</b>")
+    cand["_hard_fails"] = []
+    html_text = render({"queries": ["q"], "capabilities": [],
+                        "providers": {"p": {"status": "live", "results": 1}}},
+                       [(cand, score_candidate(cand, brief_fit=0.5))])
+    assert "<script>alert" not in html_text
+    assert "&lt;script&gt;" in html_text
+    assert "score evidence" in html_text
+
+
 def test_bad_registry_is_tool_error(tmp_path, capsys):
     bad = tmp_path / "r.json"
     bad.write_text(json.dumps({"schema_version": 1, "budgets": {},
