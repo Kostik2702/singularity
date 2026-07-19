@@ -1,7 +1,7 @@
 {
  "schema_version": "golden-registry/1",
  "name": "letter-glitch-wall",
- "status": "candidate",
+ "status": "golden",
  "capabilities": [
   "background",
   "text"
@@ -70,8 +70,17 @@
    "project": "matrix-3d-web",
    "at": "2026-07-19T13:06:54+00:00",
    "evidence": "D:\\Project\\matrix-3d-web-evidence\\letter-glitch-acceptance"
+  },
+  {
+   "project": "nika-studio",
+   "at": "2026-07-19T14:06:18+00:00",
+   "evidence": "D:\\Project\\nika-evidence\\glyph-wall-retrofit-2026-07-19.png + determinism byte-identical proof (NIKA retrofit branch feat/glyph-wall-retrofit)"
   }
  ],
- "promotion": null,
+ "promotion": {
+  "by": "reuse",
+  "at": "2026-07-19T14:06:18+00:00",
+  "evidence": "D:\\Project\\nika-evidence\\glyph-wall-retrofit-2026-07-19.png + determinism byte-identical proof (NIKA retrofit branch feat/glyph-wall-retrofit)"
+ },
  "deprecation": null
 }
