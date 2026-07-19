@@ -1,0 +1,11 @@
+{
+  "name": "__PROJECT_NAME__",
+  "private": true,
+  "description": "static-lite starter (WEBSITE-FACTORY WSF-10). After copying: replace __PLACEHOLDERS__ (owner-provided facts only), write .factory/manifest.json, then run the visual-regression-bootstrap skill for the test harness.",
+  "scripts": {
+    "serve": "http-server -p 8790 -c-1 --cors"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
