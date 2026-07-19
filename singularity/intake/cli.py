@@ -255,7 +255,48 @@ def build_parser() -> argparse.ArgumentParser:
                    help="project root whose node_modules has playwright")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=_cmd_run)
+    r = sub.add_parser("recipe")
+    r.add_argument("--report", help="intake-report.json -> scaffold a recipe")
+    r.add_argument("--id", help="candidate_id override for the scaffold")
+    r.add_argument("--out", help="where to write the scaffold (required with --report)")
+    r.add_argument("--validate", help="recipe.json to validate")
+    r.add_argument("--json", action="store_true")
+    r.set_defaults(func=_cmd_recipe)
     return parser
+
+
+def _cmd_recipe(args) -> int:
+    from .recipe import (RECIPE_SCHEMA, RecipeError, load,
+                         scaffold_from_report, validate)
+    if args.validate:
+        problems = validate(load(Path(args.validate)))
+        verdict = {"result": "PASS" if not problems else "FAIL",
+                   "reason": "; ".join(problems) or "recipe complete"}
+        _emit(envelope("recipe", {"validate": args.validate},
+                       data={"problems": problems}, verdict=verdict), args.json)
+        return EXIT_PASS if not problems else EXIT_NOT_PASS
+    if args.report:
+        if not args.out:
+            raise IntakeError("--out is required with --report")
+        try:
+            report = json.loads(Path(args.report).read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError) as exc:
+            raise IntakeError(f"cannot read report: {exc}") from exc
+        recipe = scaffold_from_report(report, args.id)
+        out_path = Path(args.out).resolve()
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = out_path.with_name(out_path.name + ".tmp")
+        tmp.write_text(json.dumps(recipe, ensure_ascii=False, indent=1),
+                       encoding="utf-8")
+        tmp.replace(out_path)
+        _emit(envelope("recipe", {"report": args.report},
+                       data={"schema": RECIPE_SCHEMA,
+                             "todos": sum(1 for v in recipe.values()
+                                          if isinstance(v, str)
+                                          and v.startswith("TODO"))},
+                       outputs=[str(out_path)]), args.json)
+        return EXIT_PASS
+    raise IntakeError("recipe needs --report (scaffold) or --validate")
 
 
 def main(argv: list[str] | None = None) -> int:

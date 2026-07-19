@@ -74,6 +74,13 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "vault (mb search) for owner decisions during A/B categorization — "
                   "Codex/Gemini have no equivalent multimodal review loop here",
     },
+    "pattern-adapter": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "resolving recipe TODOs (intent, token mapping, fallback "
+                  "design) is a judgment layer over the recipe CLI that "
+                  "consults the vault and ends at owner acceptance — GT-tested "
+                  "only against Claude Code (WSF-E04)",
+    },
     "motion-qa": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "budget findings need A/B triage against owner decisions in "

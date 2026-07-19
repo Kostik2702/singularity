@@ -175,6 +175,55 @@ def test_runtime_clean_component_reaches_pass(tmp_path):
     assert env["data"]["checks"]["runtime"]["bundle"]["gzip_bytes"] > 0
 
 
+def test_recipe_scaffold_and_validation_gate(tmp_path):
+    # real intake report -> scaffold carries provenance facts, TODOs block
+    item = _item(tmp_path, "rcp", [{"path": "Fx.jsx",
+                                    "content": MIT_HEADER + ANIM}])
+    cands = tmp_path / "candidates.json"
+    cands.write_text(json.dumps({"candidates": [{
+        "candidate_id": "react-bits/rcp", "name": "rcp",
+        "source_url": "https://x.example/", "license": "MIT"}]}),
+        encoding="utf-8")
+    rc, env = _run(tmp_path, "--source-file", str(item),
+                   "--candidates", str(cands), "--id", "react-bits/rcp")
+    report_path = Path(env["outputs"][0])
+
+    rc2 = intake_main(["recipe", "--report", str(report_path),
+                       "--out", str(tmp_path / "recipe.json"), "--json"])
+    assert rc2 == 0
+    recipe = json.loads((tmp_path / "recipe.json").read_text("utf-8"))
+    assert recipe["candidate_id"] == "react-bits/rcp"
+    assert recipe["upstream"]["files"][0]["sha256"]
+    assert "prefers-reduced-motion" in recipe["reduced_motion"]
+
+    # draft with TODOs must FAIL validation (cannot enter implementation)
+    rc3 = intake_main(["recipe", "--validate", str(tmp_path / "recipe.json")])
+    assert rc3 == 1
+
+    # completing every TODO makes it PASS
+    for key, val in list(recipe.items()):
+        if isinstance(val, str) and val.startswith("TODO"):
+            recipe[key] = f"resolved: {key}"
+        if isinstance(val, dict):
+            for k, v in val.items():
+                if isinstance(v, str) and v.startswith("TODO"):
+                    val[k] = f"resolved: {k}"
+    (tmp_path / "recipe2.json").write_text(json.dumps(recipe), encoding="utf-8")
+    rc4 = intake_main(["recipe", "--validate", str(tmp_path / "recipe2.json")])
+    assert rc4 == 0
+
+
+def test_recipe_rejected_candidate_cannot_have_recipe(tmp_path):
+    from singularity.intake.recipe import scaffold_from_report, validate
+    report = {"provenance": {"candidate_id": "x/y", "origin": "https://x/"},
+              "checks": {"snapshot": {"files": [{"path": "a", "sha256": "ff"}]},
+                         "license": {"license": "unknown"}},
+              "requirements": [], "verdict": {"result": "REJECT"}}
+    recipe = scaffold_from_report(report)
+    problems = validate(recipe)
+    assert any("REJECT" in p for p in problems)
+
+
 def test_path_traversal_flattened(tmp_path):
     item = _item(tmp_path, "sneaky",
                  [{"path": "..\\..\\outside.jsx",
