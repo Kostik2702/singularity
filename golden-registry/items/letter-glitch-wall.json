@@ -1,0 +1,77 @@
+{
+ "schema_version": "golden-registry/1",
+ "name": "letter-glitch-wall",
+ "status": "candidate",
+ "capabilities": [
+  "background",
+  "text"
+ ],
+ "style_tags": [
+  "matrix",
+  "phosphor"
+ ],
+ "stack": "static-lite",
+ "recipe": {
+  "schema_version": "adaptation-recipe/1",
+  "candidate_id": "react-bits/LetterGlitch-JS-CSS",
+  "upstream": {
+   "origin": "https://reactbits.dev/r/LetterGlitch-JS-CSS.json",
+   "retrieved_at": "2026-07-19T11:40:49+00:00",
+   "files": [
+    {
+     "path": "LetterGlitch.jsx",
+     "bytes": 6700,
+     "sha256": "644075738a9c11ea4840e95028736828ac8f5ae8664a7d7e55a938aa46caaf88"
+    }
+   ]
+  },
+  "license": {
+   "license": "MIT + Commons Clause",
+   "source": "candidate-record (E02 provenance chain)",
+   "obligations": "MIT notice сохранён в шапке адаптированного файла (attribution: React Bits / DavidHDev, MIT + Commons Clause). Commons Clause: компонент нельзя ПРОДАВАТЬ как продукт — использование внутри сайта разрешено."
+  },
+  "preserved_intent": "Стена глифов как живой фон: моноширинная сетка случайных символов, каждые glitchSpeed мс ~5% ячеек меняют символ и цель-цвет, цвет плавно интерполируется (шаг 0.05/кадр), поверх — радиальная виньетка, скрывающая края. ДНК = grid+flip+interpolate+vignette; react-обёртка НЕ переносится (draft-решение о cross-framework port canvas-DNA, DRAFT-GATES 2026-07-19 п.2).",
+  "replacements": {
+   "glitch_colors": "демо ['#2b4539','#61dca3','#61b3dc'] -> токены MATRIX: --phos #22ff77 + производные [#0c3, #22ff77 глубины] из :root index.html (фирменный фосфор вместо чужой палитры)",
+   "characters": "демо ASCII-набор -> GLYPHS сайта (катакана+hex, тот же набор что в code-rain) — единая типографика эффектов",
+   "content": "демо-текстов/ассетов в кандидате нет — переносить нечего",
+   "background": "#000000 -> --bg #030905 (токен сайта)"
+  },
+  "timing": {
+   "glitch_tick_ms": 50,
+   "color_step_per_frame": 0.05,
+   "mapping": "тики привязаны к тем же значениям, что upstream (50ms/0.05) — motion-токенов у static-lite scaffold ещё нет; при появлении motion grammar значения выносятся в токены (пометка для E05)"
+  },
+  "breakpoints": {
+   "desktop": "секция-band高 32vh под hero, полная плотность (charWidth 10 / charHeight 20)",
+   "mobile": "та же секция, плотность сетки та же (DPR-aware), высота 24vh — не отдельная композиция, эффект декоративный"
+  },
+  "reduced_motion": "prefers-reduced-motion: reduce -> анимация НЕ стартует; рисуется ОДИН статичный кадр сетки (seeded), контент секции (заголовок/текст) остаётся полностью читаемым. Требование intake закрыто кодом, не только CSS.",
+  "static_fallback": "no-JS: секция несёт текстовый заголовок и подпись вне canvas — смысл и навигация сохраняются; canvas пуст (фон --bg), ничего не ломается.",
+  "cleanup": "cancelAnimationFrame + removeEventListener('resize') + IntersectionObserver.disconnect в destroy(); пауза цикла при выходе секции из viewport (observer) — включая обратный вход; no orphaned listeners (проверяется motion-qa rAF-after-settle: секция вне вьюпорта не тикает).",
+  "lazy_strategy": "island: <script> модуль инициализируется по IntersectionObserver (rootMargin 200px), не в критическом пути; бюджет: vanilla-порт ~3KB (против 61.7KB gzip react-бандла из intake runtime) — деплой инлайном в index.html по паттерну scaffold.",
+  "patch_set": "ПОРТ react->vanilla (draft-решение): (1) useRef/useEffect -> замыкание initLetterGlitch(container, opts) с destroy(); (2) параметры-пропсы -> opts c дефолтами сайта; (3) [НОВОЕ] seeded PRNG mulberry32(7331) вместо Math.random — детерминизм ?visual-test=1 (контракт harness WSF-08); (4) [НОВОЕ] reduced-motion одна-кадровая ветка; (5) [НОВОЕ] IntersectionObserver пауза; (6) [СОХРАНЕНО] DPR-resize, 5% updateCount, интерполяция, виньетка — алгоритмы upstream байт-в-байт по смыслу.",
+  "acceptance": "D:/Project/matrix-3d-web-evidence/letter-glitch-acceptance/ — скриншот секции (fidelity 1440x900), motion-qa-report.json живой страницы, determinism-чекер harness (2 прогона byte-identical в visual-test).",
+  "target_files": "candidate react-bits/LetterGlitch-JS-CSS -> recipe-letterglitch.json -> D:/Project/matrix-3d-web/index.html (секция #glitch-wall: разметка+стили+island-скрипт)",
+  "notes": "Первый прогон E04 part 2 GT по draft-гейтам (DRAFT-GATES 2026-07-19). Владелец может отменить порт-решение — тогда кандидат возвращается в reference-only.",
+  "intake_requirements": [
+   "add prefers-reduced-motion variant (component animates, no handling found)"
+  ],
+  "intake_verdict": "ADAPT"
+ },
+ "files": [
+  "recipe.json",
+  "reference-implementation-index.html",
+  "upstream-LetterGlitch.jsx.txt"
+ ],
+ "registered_at": "2026-07-19T13:06:54+00:00",
+ "applications": [
+  {
+   "project": "matrix-3d-web",
+   "at": "2026-07-19T13:06:54+00:00",
+   "evidence": "D:\\Project\\matrix-3d-web-evidence\\letter-glitch-acceptance"
+  }
+ ],
+ "promotion": null,
+ "deprecation": null
+}
