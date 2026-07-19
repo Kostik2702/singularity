@@ -74,6 +74,12 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "vault (mb search) for owner decisions during A/B categorization — "
                   "Codex/Gemini have no equivalent multimodal review loop here",
     },
+    "component-intake": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "quarantine judgment (disputed REJECTs, requirement triage "
+                  "into adaptation recipes) consults the vault and drives owner "
+                  "gates — GT-tested only against Claude Code (WSF-E03)",
+    },
     "pattern-source-scout": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "query-expansion judgment from the brief and the review-board "
