@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MATRIX-3D-WEB — scaffold</title>
+<style>
+  :root { --phos: #22ff77; --bg: #030905; }
+  * { margin: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--phos);
+    font-family: "Cascadia Mono", "Consolas", monospace;
+    min-height: 100vh;
+  }
+  #rain { position: fixed; inset: 0; z-index: 0; opacity: .5; }
+  main { position: relative; z-index: 1; text-align: center; padding: 2rem;
+         min-height: 100vh; display: grid; place-items: center; }
+  /* #glitch-wall — adapted pattern (recipe-letterglitch, WSF-E04 GT):
+     glyph wall island under the hero; band heights per recipe breakpoints */
+  #glitch-wall { position: relative; z-index: 1; height: 32vh; overflow: hidden;
+                 background: var(--bg); }
+  @media (max-width: 640px) { #glitch-wall { height: 24vh; } }
+  #glitch-wall canvas { display: block; width: 100%; height: 100%; }
+  #glitch-wall .vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(circle, rgba(3,9,5,0) 60%, rgba(3,9,5,1) 100%); }
+  #glitch-wall .caption { position: absolute; inset: 0; display: grid;
+    place-items: center; pointer-events: none; }
+  #glitch-wall .caption h2 { letter-spacing: .3em; text-shadow: 0 0 10px var(--phos);
+    font-size: clamp(1rem, 2.5vw, 1.6rem); }
+  h1 { font-size: clamp(1.4rem, 4vw, 2.6rem); letter-spacing: .35em; text-shadow: 0 0 12px var(--phos); }
+  p { margin-top: 1rem; opacity: .7; font-size: .9rem; }
+  .cursor { display: inline-block; width: .6em; height: 1em; background: var(--phos);
+            vertical-align: text-bottom; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  /* visual-test determinism contract: kill every animation */
+  html[data-visual-test] *, html[data-visual-test] *::before, html[data-visual-test] *::after {
+    animation: none !important; transition: none !important;
+  }
+  /* reduced-motion: same kill-switch — content keeps full meaning
+     (gap caught by motion-qa on the WSF-E04 GT run) */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<canvas id="rain"></canvas>
+<main>
+  <h1>MATRIX-3D-WEB</h1>
+  <p>scaffold // scroll-driven video scenes + canvas rain are coming<span class="cursor"></span></p>
+</main>
+<section id="glitch-wall" aria-label="glyph wall">
+  <canvas id="glitch-canvas"></canvas>
+  <div class="vignette"></div>
+  <div class="caption"><h2>SIGNAL // NOISE</h2></div>
+</section>
+<script>
+  // run-mode flag BEFORE anything animates (?visual-test=1 -> deterministic)
+  const visualTest = new URLSearchParams(location.search).has("visual-test");
+  if (visualTest) document.documentElement.dataset.visualTest = "1";
+
+  const canvas = document.getElementById("rain");
+  const ctx = canvas.getContext("2d");
+  const GLYPHS = "アカサタナハマヤラワ0123456789ABCDEF";
+  // seeded PRNG (mulberry32) -- the rain is reproducible by construction,
+  // so the visual-test frame is identical between runs
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  let drops = [];
+  function resize() {
+    canvas.width = innerWidth; canvas.height = innerHeight;
+    const rand = mulberry32(1999);
+    drops = Array.from({ length: Math.floor(canvas.width / 18) },
+      (_, i) => ({ x: i * 18, y: rand() * canvas.height, v: 2 + rand() * 4, rand }));
+    ctx.fillStyle = "#030905"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  function step() {
+    ctx.fillStyle = "rgba(3,9,5,0.12)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#22ff77"; ctx.font = "14px monospace";
+    for (const d of drops) {
+      ctx.fillText(GLYPHS[Math.floor(d.rand() * GLYPHS.length)], d.x, d.y);
+      d.y = d.y > canvas.height ? 0 : d.y + d.v;
+    }
+  }
+  resize();
+  addEventListener("resize", resize);
+  if (visualTest) {
+    // deterministic single frame WITHOUT alpha accumulation: 60 accumulated
+    // low-alpha fills amplified GPU rasterization noise to ±1 LSB between
+    // runs (caught by check-visual-determinism). Draw each column's trail
+    // once, integer coords, fixed per-level colors — byte-stable.
+    ctx.fillStyle = "#030905"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = "14px monospace";
+    const LEVELS = ["#22ff77", "#1cd464", "#17aa51", "#12813d", "#0c572a", "#062e16"];
+    for (const d of drops) {
+      const head = Math.round(d.y);
+      for (let k = 0; k < 12; k++) {
+        ctx.fillStyle = LEVELS[Math.min(k >> 1, LEVELS.length - 1)];
+        ctx.fillText(GLYPHS[Math.floor(d.rand() * GLYPHS.length)],
+                     d.x, head - k * 16);
+      }
+    }
+  } else {
+    (function loop() { step(); requestAnimationFrame(loop); })();
+  }
+
+  /* letter-glitch island — adapted from react-bits/LetterGlitch-JS-CSS
+     (MIT + Commons Clause, attribution: React Bits / DavidHDev;
+     recipe: matrix-3d-web-evidence/intake-letterglitch/recipe-letterglitch.json,
+     upstream sha256 6440757…af88). Preserved DNA: glyph grid, 5% random
+     flips per 50ms tick, smooth color interpolation (0.05/frame), vignette.
+     Port additions per patch_set: seeded PRNG (determinism contract),
+     reduced-motion single frame, IntersectionObserver pause, destroy(). */
+  function initLetterGlitch(canvas, opts) {
+    const o = Object.assign({
+      colors: ["#0c6b35", "#22ff77", "#0e3b21"],   // site phosphor tokens
+      glyphs: GLYPHS,                                // shared site glyph set
+      tickMs: 50, colorStep: 0.05,
+      charWidth: 10, charHeight: 20, fontSize: 16,
+      seed: 7331,
+    }, opts);
+    const ctx2 = canvas.getContext("2d");
+    const rand = mulberry32(o.seed);
+    let cells = [], cols = 0, rows = 0, rafId = null, lastTick = 0, dead = false;
+
+    const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+    const hexToRgb = (hex) => {
+      const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : null;
+    };
+    const mix = (a, b, f) =>
+      `rgb(${Math.round(a.r + (b.r - a.r) * f)}, ${Math.round(a.g + (b.g - a.g) * f)}, ${Math.round(a.b + (b.b - a.b) * f)})`;
+
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * dpr; canvas.height = rect.height * dpr;
+      ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cols = Math.ceil(rect.width / o.charWidth);
+      rows = Math.ceil(rect.height / o.charHeight);
+      cells = Array.from({ length: cols * rows }, () => {
+        const c = pick(o.colors);
+        return { ch: pick(o.glyphs), color: c, from: c,
+                 target: pick(o.colors), progress: 1 };
+      });
+      draw();
+    }
+    function draw() {
+      const rect = canvas.getBoundingClientRect();
+      ctx2.clearRect(0, 0, rect.width, rect.height);
+      ctx2.font = o.fontSize + "px monospace"; ctx2.textBaseline = "top";
+      for (let i = 0; i < cells.length; i++) {
+        ctx2.fillStyle = cells[i].color;
+        ctx2.fillText(cells[i].ch, (i % cols) * o.charWidth,
+                      Math.floor(i / cols) * o.charHeight);
+      }
+    }
+    function tick(now) {
+      if (dead) return;
+      if (now - lastTick >= o.tickMs) {
+        const flips = Math.max(1, Math.floor(cells.length * 0.05));
+        for (let k = 0; k < flips; k++) {
+          const c = cells[Math.floor(rand() * cells.length)];
+          c.ch = pick(o.glyphs); c.from = c.target; c.target = pick(o.colors);
+          c.progress = 0;
+        }
+        lastTick = now;
+      }
+      let dirty = false;
+      for (const c of cells) {
+        if (c.progress < 1) {
+          c.progress = Math.min(1, c.progress + o.colorStep);
+          const a = hexToRgb(c.from);
+          const b = hexToRgb(c.target);
+          c.color = (a && b && c.progress < 1) ? mix(a, b, c.progress) : c.target;
+          dirty = true;
+        }
+      }
+      if (dirty) draw();
+      rafId = requestAnimationFrame(tick);
+    }
+    const reducedMq = matchMedia("(prefers-reduced-motion: reduce)");
+    const reduced = reducedMq.matches;
+    // live preference change stops the loop and leaves a readable static frame
+    reducedMq.addEventListener("change", (e) => {
+      if (e.matches && rafId !== null) {
+        cancelAnimationFrame(rafId); rafId = null; draw();
+      }
+    });
+    resize();
+    let resizeTimer;
+    const onResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(resize, 100);
+    };
+    addEventListener("resize", onResize);
+    let observer = null;
+    if (!reduced && !visualTest) {
+      observer = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting && rafId === null) {
+            rafId = requestAnimationFrame(tick);
+          } else if (!e.isIntersecting && rafId !== null) {
+            cancelAnimationFrame(rafId); rafId = null;
+          }
+        }
+      }, { rootMargin: "200px" });
+      observer.observe(canvas);
+    }
+    // reduced motion / visual-test: the single deterministic frame from
+    // resize() stays — content and caption remain fully readable
+    return function destroy() {
+      dead = true;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      removeEventListener("resize", onResize);
+      if (observer) observer.disconnect();
+    };
+  }
+  initLetterGlitch(document.getElementById("glitch-canvas"));
+</script>
+</body>
+</html>
