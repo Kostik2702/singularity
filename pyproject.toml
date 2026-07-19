@@ -30,6 +30,7 @@ design-scout = "singularity.scout.cli:main"
 pattern-scout = "singularity.providers.cli:main"
 component-intake = "singularity.intake.cli:main"
 golden = "singularity.golden.cli:main"
+factory = "singularity.factory.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["singularity*"]
