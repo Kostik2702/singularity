@@ -172,17 +172,42 @@ try {
     clsUnavailable: window.__mq.clsUnavailable || null,
   }));
 
-  // WebGL census + forced loss/recovery probe
+  // WebGL census + forced loss/recovery probe. v2 (E06): browser-level
+  // restore is not enough — the APP'S SCENE must repaint after recovery.
+  // sceneRecovery compares canvas pixels before loss vs after restore:
+  // a scene whose render loop died on context loss leaves a blank canvas.
   const webgl = await page.evaluate(async () => {
+    function sampleCanvas(c) {
+      try {
+        const probe = document.createElement("canvas");
+        probe.width = Math.min(64, c.width || 64);
+        probe.height = Math.min(64, c.height || 64);
+        const p = probe.getContext("2d");
+        p.drawImage(c, 0, 0, probe.width, probe.height);
+        const data = p.getImageData(0, 0, probe.width, probe.height).data;
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 4) sum += data[i] + data[i + 1] + data[i + 2];
+        return sum;
+      } catch { return null; }
+    }
     const canvases = [...document.querySelectorAll("canvas")];
     let contexts = 0;
     let recovery = null;
+    let sceneRecovery = null;
     for (const c of canvases) {
       const gl = c.getContext("webgl2") || c.getContext("webgl");
       if (!gl) continue;
       contexts += 1;
+      if (gl.isContextLost()) {
+        // the browser already reclaimed this context (headless does this to
+        // handler-less canvases within ~1s) and the app did NOT recover it —
+        // this IS the death mode the gate exists to catch
+        if (recovery === null) { recovery = "already-lost"; sceneRecovery = false; }
+        continue;
+      }
       const ext = gl.getExtension("WEBGL_lose_context");
       if (ext && recovery === null) {
+        const before = sampleCanvas(c);
         recovery = await new Promise((res) => {
           let restored = false;
           c.addEventListener("webglcontextrestored", () => { restored = true; }, { once: true });
@@ -191,9 +216,19 @@ try {
           setTimeout(() => { try { ext.restoreContext(); } catch { /* noop */ } }, 100);
           setTimeout(() => res(restored), 800);
         });
+        // give the app 1s to repaint, then compare against a blank canvas
+        await new Promise((res) => setTimeout(res, 1000));
+        const after = sampleCanvas(c);
+        if (before === null || after === null) {
+          sceneRecovery = "unmeasurable";
+        } else {
+          // after must be non-blank; if the scene painted before, it must
+          // paint again (a dead render loop leaves after === 0 while before > 0)
+          sceneRecovery = before > 0 ? after > 0 : true;
+        }
       }
     }
-    return { canvases: canvases.length, contexts, recovery };
+    return { canvases: canvases.length, contexts, recovery, sceneRecovery };
   });
 
   // reduced-motion emulation: does the page change at all?
@@ -265,12 +300,31 @@ try {
   gate("webgl-contexts", webgl.contexts <= budgets.max_webgl_contexts,
        `${webgl.contexts} live contexts on ${webgl.canvases} canvases (budget ${budgets.max_webgl_contexts})`);
   if (budgets.require_context_recovery) {
-    if (webgl.contexts === 0) gate("webgl-recovery", true, "no WebGL contexts — n/a");
-    else if (webgl.recovery === null) gate("webgl-recovery", false,
-      "WEBGL_lose_context unavailable", true);
-    else gate("webgl-recovery", webgl.recovery,
-      webgl.recovery ? "context restored after forced loss"
-                     : "context NOT restored after forced loss");
+    if (webgl.contexts === 0) {
+      gate("webgl-recovery", true, "no WebGL contexts — n/a");
+      gate("scene-recovery", true, "no WebGL contexts — n/a");
+    } else if (webgl.recovery === "already-lost") {
+      gate("webgl-recovery", false,
+           "context was ALREADY LOST at probe time and never recovered — the app has no context-loss handling");
+      gate("scene-recovery", false,
+           "canvas dead: context reclaimed by the browser, scene never repainted");
+    } else if (webgl.recovery === null) {
+      gate("webgl-recovery", false, "WEBGL_lose_context unavailable", true);
+      gate("scene-recovery", false, "no loss probe ran", true);
+    } else {
+      gate("webgl-recovery", webgl.recovery,
+           webgl.recovery ? "context restored after forced loss"
+                          : "context NOT restored after forced loss");
+      if (webgl.sceneRecovery === "unmeasurable") {
+        gate("scene-recovery", false,
+             "canvas pixels unreadable (tainted?) — cannot prove the scene repainted", true);
+      } else {
+        gate("scene-recovery", webgl.sceneRecovery !== false,
+             webgl.sceneRecovery !== false
+               ? "app scene repainted after restore"
+               : "canvas BLANK after restore — the render loop died on context loss");
+      }
+    }
   }
   if (budgets.require_reduced_motion_variant) {
     gate("reduced-motion",
