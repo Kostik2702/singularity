@@ -74,6 +74,13 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "vault (mb search) for owner decisions during A/B categorization — "
                   "Codex/Gemini have no equivalent multimodal review loop here",
     },
+    "motion-qa": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "budget findings need A/B triage against owner decisions in "
+                  "the vault (a continuous background loop can be a deliberate "
+                  "choice) and drive the owner budget sign-off — GT-tested only "
+                  "against Claude Code (WSF-E06)",
+    },
     "component-intake": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "quarantine judgment (disputed REJECTs, requirement triage "
