@@ -141,6 +141,40 @@ def test_dep_version_specifiers_normalized(tmp_path):
     assert out["heavy"] == ["@react-three/fiber", "gsap"]
 
 
+_RUNTIME_ENV = all(map(__import__("os").environ.get,
+                       ("INTAKE_ESBUILD", "INTAKE_DEPS_ROOT",
+                        "INTAKE_PLAYWRIGHT_PROJECT")))
+
+
+@pytest.mark.skipif(not _RUNTIME_ENV,
+                    reason="runtime env (esbuild/deps/playwright) not configured")
+def test_runtime_phone_home_rejected_despite_static_miss(tmp_path):
+    # URL split across strings + Image().src: invisible to the static regex,
+    # caught by the network-quarantine runtime gate.
+    code = (MIT_HEADER + REDUCED
+            + "export default function Fx(){\n"
+              "  const i = new Image();\n"
+              "  i.src = 'ht' + 'tps://evil2.example/x.png';\n"
+              "  return null;\n}\n")
+    item = _item(tmp_path, "beacon", [{"path": "Fx.jsx", "content": code}])
+    rc, env = _run(tmp_path, "--source-file", str(item), "--runtime")
+    assert env["data"]["checks"]["static-scan"]["status"] == "ok"  # static missed it
+    assert env["verdict"]["result"] == "REJECT"
+    assert any("phones home" in r for r in env["data"]["reject_reasons"])
+
+
+@pytest.mark.skipif(not _RUNTIME_ENV,
+                    reason="runtime env (esbuild/deps/playwright) not configured")
+def test_runtime_clean_component_reaches_pass(tmp_path):
+    code = (MIT_HEADER + REDUCED
+            + "export default function Fx(){ return null; }\n")
+    item = _item(tmp_path, "cleanrt", [{"path": "Fx.jsx", "content": code}])
+    rc, env = _run(tmp_path, "--source-file", str(item), "--runtime")
+    assert env["data"]["checks"]["runtime"]["status"] == "ok", env["data"]["checks"]["runtime"]
+    assert env["verdict"]["result"] == "PASS" and rc == 0
+    assert env["data"]["checks"]["runtime"]["bundle"]["gzip_bytes"] > 0
+
+
 def test_path_traversal_flattened(tmp_path):
     item = _item(tmp_path, "sneaky",
                  [{"path": "..\\..\\outside.jsx",
