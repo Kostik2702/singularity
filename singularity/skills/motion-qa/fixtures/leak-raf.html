@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>fixture: rAF leak</title>
+<style>@media (prefers-reduced-motion: reduce){ .x{animation:none} }</style>
+</head><body>
+<main><h1>Leaky page</h1><p>This page runs a busy requestAnimationFrame loop
+forever, even when idle — the raf-after-settle gate must catch it.</p></main>
+<script>
+  (function loop(){ requestAnimationFrame(loop); })();
+</script>
+</body></html>
