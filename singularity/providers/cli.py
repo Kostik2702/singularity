@@ -129,6 +129,26 @@ def _cmd_search(args) -> int:
             encoding="utf-8")
         tmp.replace(dest)
         outputs.append(str(dest))
+        if args.board:
+            from .adapters import _match_score
+            from .board import render
+            from .scoring import hard_fail_reasons, score_candidate
+            scored = []
+            for cand in result["candidates"]:
+                fit = _match_score(
+                    f"{cand.get('name', '')} {cand.get('description', '')}",
+                    queries)
+                cand["_hard_fails"] = hard_fail_reasons(cand)
+                scored.append((cand, score_candidate(
+                    cand, brief_fit=fit, project_profile=args.profile)))
+            scored.sort(key=lambda t: -t[1]["total"])
+            board_path = out_dir / "review-board.html"
+            tmp_b = board_path.with_name(board_path.name + ".tmp")
+            tmp_b.write_text(render(
+                {"queries": queries, "capabilities": caps,
+                 "providers": result["providers"]}, scored), encoding="utf-8")
+            tmp_b.replace(board_path)
+            outputs.append(str(board_path))
     data = {"providers": result["providers"],
             "candidates_total": len(result["candidates"]),
             "importable": sum(1 for c in result["candidates"] if c["importable"]),
@@ -168,6 +188,10 @@ def build_parser() -> argparse.ArgumentParser:
                            help=f"one of {sorted(CAPABILITIES)}")
             p.add_argument("--out")
             p.add_argument("--no-cache", action="store_true")
+            p.add_argument("--board", action="store_true",
+                           help="also render review-board.html (scored)")
+            p.add_argument("--profile", default=None,
+                           help="project stack profile for stack-fit scoring")
     return parser
 
 
