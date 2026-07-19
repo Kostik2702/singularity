@@ -28,6 +28,7 @@ mb = "singularity.cli:main"
 imgqa = "singularity.imgqa.cli:main"
 design-scout = "singularity.scout.cli:main"
 pattern-scout = "singularity.providers.cli:main"
+component-intake = "singularity.intake.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["singularity*"]
