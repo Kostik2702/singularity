@@ -74,6 +74,12 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "vault (mb search) for owner decisions during A/B categorization — "
                   "Codex/Gemini have no equivalent multimodal review loop here",
     },
+    "website-factory": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "orchestrates the E09 graph across multimodal review skills "
+                  "and vault-driven owner gates; acceptance path exercised only "
+                  "on Claude Code (WSF-12)",
+    },
     "motion-3d-implementer": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "runtime-choice judgment and the evidence loop read rendered "
