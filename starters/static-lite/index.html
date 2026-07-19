@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__PROJECT_NAME__</title>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<!-- static-lite starter (WSF-10, WEBSITE-FACTORY). Conventions baked in:
+     - tokens-first styling (css/tokens.css is the only place for colors/sizes)
+     - every dynamic module = js/modules/<name>.js + data-module hook + safeInit
+     - visual-test determinism contract: ?visual-test=1 kills animations and
+       every canvas draws ONE seeded frame (see js/main.js + css kill-switch)
+     - decor layers follow the live-only convention (OFF under visual-test and
+       reduced-motion) so visual baselines stay byte-stable
+     - content placeholders are truth-gated: __DOUBLE_UNDERSCORE__ values are
+       NOT facts and must be replaced via the owner (NIKA truth-gate lesson) -->
+<header class="site-header">
+  <span class="site-header__brand">__PROJECT_NAME__</span>
+  <nav class="site-header__nav" aria-label="primary">
+    <a href="#hero">Home</a>
+    <a href="#contact">Contact</a>
+  </nav>
+</header>
+<main>
+  <section id="hero" class="hero" aria-labelledby="hero-title">
+    <h1 id="hero-title">__HERO_TITLE__</h1>
+    <p class="hero__lede">__HERO_LEDE__</p>
+    <a class="button" href="#contact">__HERO_CTA__</a>
+  </section>
+  <section id="contact" class="contact" aria-labelledby="contact-title">
+    <h2 id="contact-title">__CONTACT_TITLE__</h2>
+    <p data-truth-gate="dev-placeholder">__CONTACT_CHANNELS_PLACEHOLDER__</p>
+  </section>
+</main>
+<footer class="site-footer">
+  <p>© <span data-component="current-year">2026</span> __PROJECT_NAME__</p>
+</footer>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
