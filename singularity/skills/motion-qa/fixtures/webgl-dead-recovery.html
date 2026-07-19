@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>fixture: dead scene recovery</title>
+<style>@media (prefers-reduced-motion: reduce){ .x{animation:none} }
+canvas{width:300px;height:200px}</style></head><body>
+<main><h1>Dead recovery</h1><p>WebGL scene paints once and its loop dies on
+context loss (no restore handler) — the scene-recovery gate must catch the
+blank canvas after forced restore.</p>
+<canvas id="c" width="300" height="200"></canvas></main>
+<script>
+  const gl = document.getElementById("c").getContext("webgl");
+  function paint() {
+    gl.clearColor(0.2, 0.9, 0.4, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+  paint();
+  // no webglcontextrestored handler: after loss+restore nothing repaints
+</script>
+</body></html>
