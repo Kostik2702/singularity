@@ -110,7 +110,9 @@ def load_payload(args, fetch) -> tuple[dict, dict]:
     return payload, provenance
 
 
-def run_intake(payload: dict, provenance: dict, workspace: Path) -> dict:
+def run_intake(payload: dict, provenance: dict, workspace: Path,
+               runtime: bool = False,
+               playwright_project: str | None = None) -> dict:
     files = payload["files"]
     src_dir = workspace / "src"
     src_dir.mkdir(parents=True, exist_ok=True)
@@ -159,11 +161,19 @@ def run_intake(payload: dict, provenance: dict, workspace: Path) -> dict:
     if reduced["status"] == "adapt":
         requirements.append(reduced["requirement"])
 
-    checks["runtime"] = {"status": "unavailable",
-                         "why": "usage fixture / Playwright / bundle delta are "
-                                "v2 phases — verdict capped at ADAPT (§2)"}
-    requirements.append("runtime evidence pending (v2): fixture, screenshots, "
-                        "bundle delta")
+    if runtime:
+        from .runtime import run_runtime
+        rt = run_runtime(files, workspace, playwright_project)
+    else:
+        rt = {"status": "unavailable",
+              "why": "runtime phase not requested (--runtime)"}
+    checks["runtime"] = rt
+    if rt["status"] == "fail":
+        reject += [f"runtime: {f}" for f in rt.get("failures", [])]
+    elif rt["status"] == "unavailable":
+        requirements.append(f"runtime evidence unavailable: {rt['why']} — "
+                            f"verdict capped at ADAPT")
+    # rt ok lifts the v1 cap: PASS is reachable on full runtime evidence
 
     if reject:
         result = "REJECT"
@@ -189,7 +199,9 @@ def _cmd_run(args) -> int:
                      "wall_budget_s": 120}, log)
     payload, provenance = load_payload(args, fetch)
     workspace = resolve_workspace(args.workspace, payload["name"])
-    result = run_intake(payload, provenance, workspace)
+    result = run_intake(payload, provenance, workspace,
+                        runtime=args.runtime,
+                        playwright_project=args.playwright_project)
     report_path = workspace / "intake-report.json"
     tmp = report_path.with_name(report_path.name + ".tmp")
     tmp.write_text(json.dumps({"schema_version": SCHEMA, **result},
@@ -235,6 +247,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--candidates", help="E02 candidates.json (provenance chain)")
     p.add_argument("--id", help="candidate_id inside --candidates")
     p.add_argument("--workspace")
+    p.add_argument("--runtime", action="store_true",
+                   help="v2: bundle + network-quarantined live run (needs "
+                        "INTAKE_ESBUILD, INTAKE_DEPS_ROOT, "
+                        "INTAKE_PLAYWRIGHT_PROJECT)")
+    p.add_argument("--playwright-project",
+                   help="project root whose node_modules has playwright")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=_cmd_run)
     return parser

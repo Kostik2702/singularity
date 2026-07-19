@@ -116,8 +116,23 @@ const INSTRUMENT = `(() => {
 const browser = await chromium.launch({ headless: true });
 let out = null;
 let exitCode = 2;
+const networkAttempts = [];
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  if (args["block-network"] === "1") {
+    // quarantine mode (intake runtime): nothing leaves the machine — every
+    // non-local request is aborted AND recorded as evidence. A component
+    // that phones home reveals itself here even if the static scan missed it.
+    await page.route("**", (route) => {
+      const url = route.request().url();
+      if (url.startsWith("file://") || url.includes("://localhost")
+          || url.includes("://127.0.0.1") || url.startsWith("data:")) {
+        return route.continue();
+      }
+      networkAttempts.push(url.slice(0, 200));
+      return route.abort();
+    });
+  }
   await page.addInitScript(INSTRUMENT);
   // "load", not "networkidle": pages with streaming media (NIKA video) never
   // go network-idle and would time out (caught on the first live GT run)
@@ -200,6 +215,17 @@ try {
 
   // no-JS: fresh context with JS disabled — is meaningful content present?
   const nojsCtx = await browser.newContext({ javaScriptEnabled: false });
+  if (args["block-network"] === "1") {
+    await nojsCtx.route("**", (route) => {
+      const url = route.request().url();
+      if (url.startsWith("file://") || url.includes("://localhost")
+          || url.includes("://127.0.0.1") || url.startsWith("data:")) {
+        return route.continue();
+      }
+      networkAttempts.push(url.slice(0, 200));
+      return route.abort();
+    });
+  }
   const nojsPage = await nojsCtx.newPage();
   let nojs = { unavailable: null, textLength: 0 };
   try {
@@ -259,11 +285,19 @@ try {
               `no-JS text length ${nojs.textLength} — meaning and CTA must survive`);
   }
 
+  if (args["block-network"] === "1") {
+    gate("network-quarantine", networkAttempts.length === 0,
+         networkAttempts.length
+           ? `blocked outbound attempts: ${[...new Set(networkAttempts)].slice(0, 5).join(", ")}`
+           : "no outbound network attempts");
+  }
+
   const result = failures.length ? "FAIL" : unavailable.length ? "PASS-WITH-UNAVAILABLE" : "PASS";
   const report = {
     schema_version: SCHEMA, url: args.url, budgets,
     playwright_version: playwrightVersion,
-    metrics: { ...metrics, rafAfterSettle, webgl, reduced, nojs, docHeight },
+    metrics: { ...metrics, rafAfterSettle, webgl, reduced, nojs, docHeight,
+               networkAttempts },
     checks,
   };
   const reportPath = join(outDir, "motion-qa-report.json");

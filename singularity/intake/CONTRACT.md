@@ -56,4 +56,14 @@ SystemRoot, TEMP) — no tokens/secrets inherited.
 
 ## §4 Amendments
 
-None. Changes require an owner-visible commit touching this file.
+- 2026-07-19 (v2 runtime phases, schema unchanged): `run --runtime` adds
+  bundle proof + delta (esbuild --bundle against an ISOLATED deps root,
+  gzip + component-own bytes from the metafile) and a network-QUARANTINED
+  live mount: the fixture runs in a headless browser whose every non-local
+  request is aborted AND recorded (`network-quarantine` gate) — a component
+  that phones home at runtime is REJECTed even when the static scan missed
+  the vector (split-string URLs, Image().src beacons). Mount failure =>
+  REJECT. Runtime `ok` lifts the v1 ADAPT ceiling: PASS is reachable only
+  on full runtime evidence; runtime `unavailable` still caps at ADAPT.
+
+Changes require an owner-visible commit touching this file.
