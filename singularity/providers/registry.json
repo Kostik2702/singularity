@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "comment": "pattern-scout provider registry (WSF-E00). A provider is a config row + adapter name; enabled=false requires disabled_reason. Paid policy per CONTRACT.md §7.",
+  "budgets": {
+    "per_fetch_timeout_s": 20,
+    "retry_max": 1,
+    "retryable_classes": ["timeout", "http-5xx"],
+    "wall_budget_s": 300,
+    "max_candidates_per_provider": 20,
+    "max_providers_per_run": 8,
+    "cli_timeout_s": 90
+  },
+  "providers": [
+    {
+      "name": "twentyfirst",
+      "class": "meta-registry",
+      "adapter": "twentyfirst_cli",
+      "enabled": true,
+      "method": "cli",
+      "cli_command": "21st",
+      "probe_args": ["search", "button", "--limit", "1", "--json"],
+      "notes": "21st.dev CLI (installed+authenticated). search --json gives id/name/description/previewUrl/installCommand/url; NO license in output -> every candidate license=unknown, reference-only until per-item check. Live fetch failed reproduced 2026-07-17 -> typed UNAVAILABLE + cache mandatory (worked again 2026-07-19)."
+    },
+    {
+      "name": "react-bits",
+      "class": "creative-components",
+      "adapter": "shadcn_registry",
+      "enabled": true,
+      "method": "api",
+      "registry_url": "https://reactbits.dev/r/registry.json",
+      "item_url_template": "https://reactbits.dev/r/{name}.json",
+      "site_url_template": "https://reactbits.dev/",
+      "license": "MIT + Commons Clause",
+      "usage_rights": "commercial",
+      "risks": ["commons-clause: forbids SELLING the components themselves; use inside client/products OK"],
+      "framework": "react",
+      "notes": "shadcn-style registry (~150 animated components, JS/TS x CSS/TW variants); LICENSE verified 2026-07-19: MIT + Commons Clause badge in DavidHDev/react-bits — NOT plain MIT; dependencies declared per item."
+    },
+    {
+      "name": "three-examples",
+      "class": "canonical-3d",
+      "adapter": "three_examples",
+      "enabled": true,
+      "method": "api",
+      "catalog_url": "https://threejs.org/examples/files.json",
+      "example_url_template": "https://threejs.org/examples/#{name}",
+      "source_url_template": "https://github.com/mrdoob/three.js/blob/master/examples/{name}.html",
+      "license": "MIT",
+      "usage_rights": "commercial",
+      "framework": "three",
+      "notes": "official three.js example catalog (~850 entries, files.json); MIT; reference/porting source for scene architecture and primitives."
+    },
+    {
+      "name": "motion-primitives",
+      "class": "motion-primitives",
+      "adapter": "shadcn_registry",
+      "enabled": true,
+      "method": "api",
+      "registry_url": "https://motion-primitives.com/r/registry.json",
+      "item_url_template": "https://motion-primitives.com/r/{name}.json",
+      "license": "MIT",
+      "usage_rights": "commercial",
+      "framework": "react",
+      "notes": "ibelick/motion-primitives; MIT verified 2026-07-19 (repo LICENSE.md); registry endpoint UNVERIFIED guess — unavailable maps to typed status, not error."
+    },
+    {
+      "name": "gsap-demos",
+      "class": "timeline-scroll",
+      "adapter": "reference_only",
+      "enabled": true,
+      "method": "api",
+      "probe_url": "https://gsap.com/docs/v3/",
+      "links": [
+        {"name": "ScrollTrigger docs+demos", "url": "https://gsap.com/docs/v3/Plugins/ScrollTrigger/", "capabilities": ["scroll-linked", "transition"]},
+        {"name": "GSAP showcase", "url": "https://gsap.com/showcase/", "capabilities": ["interaction", "transition"]},
+        {"name": "Timeline docs", "url": "https://gsap.com/docs/v3/GSAP/Timeline/", "capabilities": ["transition"]}
+      ],
+      "notes": "inspiration/reference lane: GSAP demos are copyrighted showcase content; code import only after per-item license check (reference-only by construction). GSAP itself: free Webflow license incl. commercial since 2024, but demos != library."
+    }
+  ]
+}

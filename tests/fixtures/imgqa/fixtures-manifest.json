@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "policy": "Two-tier fixtures (owner-ratified 2026-07-14, WSF-01d): tier 1 = synthetic images generated deterministically by singularity/imgqa/synthetic.py (no binaries); tier 2 = real lossless before/after crops below, committed as the versioned benchmark (CONTRACT.md §5). Standing rule: every real defect found or MISSED during dogfooding gets added here as a new crop pair with provenance.",
+  "fixtures": [
+    {
+      "name": "boot-fringe.before.png",
+      "provenance": {
+        "source": "D:\\Project\\Content Creator website\\references\\IMG GEN_SD3 - Remove Background_2026-07-13_05-34-49.png",
+        "crop_box_x0y0x1y1": [330, 1620, 1010, 2048],
+        "cropped": "2026-07-14",
+        "ownership": "owner-provided NIKA project asset (confirmed ours, NIKA-3D-WEB 2026-07-12); crop committed for internal QA benchmarking only",
+        "defect": "wide (~80-150px) soft semi-transparent glow around the boot/leg left by the SD3 'Remove Background' tool (NIKA-02, reports/NIKA-02-asset-qa.md)"
+      },
+      "expected": {
+        "detect-fringe": "exactly 1 detection, score >= 0.8, inside the crop's boot region (full-image reference detection [448,1904,160,144] @ 0.896; crop-local [112,272,160,156] @ 0.861)"
+      }
+    },
+    {
+      "name": "boot-fringe.after.png",
+      "provenance": {
+        "source": "D:\\Project\\Content Creator website\\assets\\images\\hero\\hero-master.png",
+        "crop_box_x0y0x1y1": [330, 1620, 1010, 2048],
+        "cropped": "2026-07-14",
+        "ownership": "same as before-crop; this is the owner-ACCEPTED clean result produced by tools/cleanup_alpha_fringe.py (bbox 330,1620..1010,2048, feather 22, remap 95..130)",
+        "defect": "none — ground-truth clean reference"
+      },
+      "expected": {
+        "detect-fringe": "0 detections",
+        "defringe-reproduction": "defringe(before, bbox=0,0,680,428, feather=22) vs after within inner region (40,40,600,348): mae <= 1.0 AND diff_ratio(threshold=2) <= 1% (GT-D1; inner inset excludes crop-border feather truncation, measured mae 0.0448 / max_delta 2)"
+      }
+    }
+  ],
+  "full_image_gt": {
+    "note": "Full-size GT tests (GT-P1/N1/D1 on the original files) run only when IMGQA_GT_ROOT points at the NIKA project root; pytest marker imgqa_gt auto-skips otherwise.",
+    "expected_root_content": [
+      "references/IMG GEN_SD3 - Remove Background_2026-07-13_05-34-49.png",
+      "assets/images/hero/hero-master.png"
+    ]
+  }
+}

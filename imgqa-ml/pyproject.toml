@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "imgqa-ml"
+version = "0.1.0"
+description = "ML side of the imgqa cutout dispatch (rembg/BiRefNet) — installed ONLY into the isolated ML venv (OD-1), never into the Singularity engine venv"
+requires-python = ">=3.10"
+dependencies = [
+    "rembg[cpu]>=2.0.57",
+    "Pillow>=10",
+]
+
+[tool.setuptools.packages.find]
+include = ["imgqa_ml*"]

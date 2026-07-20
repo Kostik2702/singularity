@@ -53,6 +53,106 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
         "reason": "spawns Claude subagents via the Agent/Task tool -- "
                   "Codex/Gemini have no equivalent executor",
     },
+    "visual-regression-bootstrap": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "acceptance requires the operator to visually review initial "
+                  "baselines and drive the mandatory negative tolerance test; "
+                  "bound to the local Playwright/browser provisioning conventions "
+                  "of the Claude-side toolchain",
+    },
+    "bg-remove": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "human-gate step requires visually judging cutout edges/hair "
+                  "matting from rendered QA images via multimodal Read; also "
+                  "depends on the local isolated ML venv only provisioned for "
+                  "the Claude-side imgqa toolchain",
+    },
+    "design-fidelity-audit": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "judgment step requires visually comparing viewport screenshots "
+                  "against the design mockup via multimodal Read and consulting the "
+                  "vault (mb search) for owner decisions during A/B categorization — "
+                  "Codex/Gemini have no equivalent multimodal review loop here",
+    },
+    "website-factory": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "orchestrates the E09 graph across multimodal review skills "
+                  "and vault-driven owner gates; acceptance path exercised only "
+                  "on Claude Code (WSF-12)",
+    },
+    "motion-3d-implementer": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "runtime-choice judgment and the evidence loop read rendered "
+                  "screenshots multimodally and consult vault decisions; ends "
+                  "at the owner visual gate — GT-precedent (letter-glitch) "
+                  "executed only on Claude Code (WSF-E05)",
+    },
+    "pattern-adapter": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "resolving recipe TODOs (intent, token mapping, fallback "
+                  "design) is a judgment layer over the recipe CLI that "
+                  "consults the vault and ends at owner acceptance — GT-tested "
+                  "only against Claude Code (WSF-E04)",
+    },
+    "motion-qa": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "budget findings need A/B triage against owner decisions in "
+                  "the vault (a continuous background loop can be a deliberate "
+                  "choice) and drive the owner budget sign-off — GT-tested only "
+                  "against Claude Code (WSF-E06)",
+    },
+    "component-intake": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "quarantine judgment (disputed REJECTs, requirement triage "
+                  "into adaptation recipes) consults the vault and drives owner "
+                  "gates — GT-tested only against Claude Code (WSF-E03)",
+    },
+    "pattern-source-scout": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "query-expansion judgment from the brief and the review-board "
+                  "reading before the owner shortlist gate rely on multimodal "
+                  "Read and vault consultation — GT-tested only against Claude "
+                  "Code (WSF-E02)",
+    },
+    "design-analysis": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "one of the two Stage-1 skills with a legitimate LLM judgment "
+                  "step: aesthetic/structural mockup reading requires multimodal "
+                  "Read anchored to design-metrics numbers, plus the owner brief "
+                  "gate — GT-tested only against Claude Code (WSF-06)",
+    },
+    "contrast-and-a11y-check": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "judgment step cross-references vault owner decisions (mb "
+                  "search) for A/B categorization of violations and reads "
+                  "rendered evidence multimodally; keyboard protocol depends on "
+                  "the local Playwright provisioning conventions — GT-tested "
+                  "only against Claude Code (WSF-05)",
+    },
+    "video-visual-review": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "interpretation step requires visually reading contact sheets "
+                  "via multimodal Read to judge crop vs letterbox and to surface "
+                  "content-structure questions to the owner (NIKA-03 lesson); "
+                  "GT-tested only against Claude Code (WSF-04)",
+    },
+    "design-reference-scout": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "thin SKILL.md over the design-scout CLI; the query-expansion "
+                  "step and the moodboard review before the owner acceptance "
+                  "gate rely on multimodal Read of the rendered board and vault "
+                  "consultation (mb search/mb learn) — authored and GT-tested "
+                  "only against Claude Code (WSF-09)",
+    },
+    "image-asset-qa": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "thin SKILL.md over the imgqa CLI whose interpretation step "
+                  "requires visually reading imgqa's rendered outputs (200% edge "
+                  "crops, 3-background composites) as images via multimodal Read "
+                  "and driving a human edge-acceptance gate; that inspection + "
+                  "dogfood/GT loop is authored and tested only against Claude "
+                  "Code -- not validated on Codex/Gemini",
+    },
 }
 
 

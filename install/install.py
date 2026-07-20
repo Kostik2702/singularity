@@ -19,7 +19,11 @@ def phase1_deps() -> None:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-r",
                            str(ENGINE / "requirements.txt")])
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", str(ENGINE)])
+    # [imgqa] extras are part of the standard install: the imgqa console script
+    # is registered unconditionally, so a plain -e install would leave it broken
+    # (ModuleNotFoundError: PIL) on a fresh machine. Heavy ML stays out (OD-1).
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-e",
+                           f"{ENGINE}[imgqa]"])
 
 
 def main(argv: list[str] | None = None) -> int:

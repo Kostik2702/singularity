@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>fixture: no reduced variant</title>
+<style>
+  .spin { width:40px;height:40px;background:#4af;
+          animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style></head><body>
+<main><h1>Animated page</h1><p>Endless CSS animation with NO
+prefers-reduced-motion handling — the reduced-motion gate must catch it.</p>
+<div class="spin"></div></main>
+</body></html>

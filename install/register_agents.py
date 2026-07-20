@@ -30,6 +30,8 @@ AGENTS = [
     "historian",
     "reviewer",
     "coder",
+    "web-implementer",
+    "web-viewer",
 ]
 
 

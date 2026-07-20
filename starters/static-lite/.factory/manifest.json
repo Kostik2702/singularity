@@ -1,0 +1,16 @@
+{
+  "_comment": "project capability manifest (stackrouter input, E09 S3). Fill honestly; the router picks the cheapest sufficient profile from THESE answers.",
+  "name": "__PROJECT_NAME__",
+  "content_site": true,
+  "ssr_required": false,
+  "cms_required": false,
+  "dynamic_routes": false,
+  "stateful_ui_components": 0,
+  "shared_motion_primitives": false,
+  "isolated_effects": 0,
+  "needs_scene_graph": false,
+  "needs_camera_paths": false,
+  "needs_3d_materials": false,
+  "needs_3d_interactivity": false,
+  "current_profile": "static-lite"
+}

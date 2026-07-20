@@ -1,0 +1,7 @@
+# POSIX shims must stay LF: a CRLF-rewritten sh script dies in Git Bash with
+# "/bin/sh^M" — the same silent-death class as the 2026-07-14 bin/mb incident.
+bin/mb text eol=lf
+bin/imgqa text eol=lf
+bin/design-scout text eol=lf
+# cmd shims are Windows-native; CRLF is their canonical form.
+bin/*.cmd text eol=crlf

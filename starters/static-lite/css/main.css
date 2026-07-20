@@ -1,0 +1,55 @@
+/* Cascade layers: reset < primitives < layout — additions go into the
+   matching layer, never above it (NIKA convention). */
+@layer reset, primitives, layout;
+
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; }
+  img, video, canvas { max-inline-size: 100%; display: block; }
+}
+
+@layer primitives {
+  body {
+    background: var(--bg-950);
+    color: var(--ink-100);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    min-block-size: 100vh;
+  }
+  a { color: var(--accent-500); text-decoration: none; }
+  a:focus-visible { outline: 2px solid var(--accent-500); outline-offset: 3px; }
+  .button {
+    display: inline-block;
+    padding: 0.7rem 1.4rem;
+    border: 1px solid var(--accent-500);
+    border-radius: 999px;
+    transition: background var(--motion-fast) var(--motion-ease);
+  }
+  .button:hover { background: var(--accent-600); color: var(--ink-100); }
+}
+
+@layer layout {
+  .site-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 1rem clamp(1rem, 4vw, 3rem);
+  }
+  .site-header__nav { display: flex; gap: 1.2rem; }
+  .hero {
+    min-block-size: 80vh; display: grid; place-content: center;
+    text-align: center; gap: 1rem; padding: 2rem;
+  }
+  .hero h1 { font-size: clamp(2rem, 6vw, 4rem); }
+  .hero__lede { color: var(--ink-400); max-inline-size: 46ch; }
+  .contact { padding: clamp(3rem, 8vw, 6rem) clamp(1rem, 4vw, 3rem); }
+  .site-footer { padding: 2rem clamp(1rem, 4vw, 3rem); color: var(--ink-400); }
+}
+
+/* visual-test determinism contract: kill every animation */
+html[data-visual-test] *, html[data-visual-test] *::before,
+html[data-visual-test] *::after {
+  animation: none !important; transition: none !important;
+}
+/* reduced-motion: the same kill-switch — content keeps full meaning
+   (motion-qa gate requires this site-wide) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

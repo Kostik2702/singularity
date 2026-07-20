@@ -1,0 +1,18 @@
+/* Design tokens — the ONLY place for colors, fonts and motion numbers.
+   Modules read them via getComputedStyle, never hardcode (factory rule). */
+:root {
+  --bg-950: #0b0b0d;
+  --bg-900: #121216;
+  --ink-100: #f2f2f4;
+  --ink-400: #9a9aa4;
+  --accent-500: #4f8cff;
+  --accent-600: #3a6fd6;
+
+  --font-body: system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", monospace;
+
+  /* motion grammar: every animation must use these, not ad-hoc numbers */
+  --motion-fast: 150ms;
+  --motion-base: 300ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0.2, 1);
+}
