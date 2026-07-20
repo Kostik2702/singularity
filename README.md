@@ -4,6 +4,8 @@
 
 Singularity turns an [Obsidian](https://obsidian.md) vault into a living, self-maintaining memory for your AI assistant: knowledge is **captured automatically where the client supports hooks**, **indexed on save**, **retrieved semantically** (Russian & English, ~15–70 ms), and **fed back into new Claude/Gemini sessions**. All three clients share the same vault, CLI, and portable skills; Codex support currently has no runtime hook. A set of disciplined skills, agents, and multi-agent councils keeps the assistant's reasoning honest.
 
+Since **v0.3.0** the same engine also ships **[Website Factory](#website-factory--reference-to-release-pipeline)** — a reference-to-release pipeline that compiles a brief into a released motion/3D site, letting no unvetted external code into your project without passing a deterministic quarantine and QA gates.
+
 > Engine codename: **Singularity** · CLI: **`mb`** (memory brain) · Platforms: **Windows / macOS / Linux**
 
 ---
@@ -31,8 +33,8 @@ Everything lives in **plain Markdown inside your Obsidian vault** — no proprie
 graph TB
     subgraph CC["Claude Code / Codex / Gemini"]
         MAIN["session"]
-        SK["15 manifest-managed skills<br/>12 portable, 3 Claude-only"]
-        AG["6 agents + 3 councils<br/>(Claude-only)"]
+        SK["29 manifest-managed skills<br/>12 portable, 17 Claude-only"]
+        AG["8 agents + 3 councils<br/>(Claude-only)"]
     end
     subgraph HOOKS["Hooks (deterministic)"]
         H1["SessionStart → project brain,<br/>digest nag, doctor warnings"]
@@ -584,6 +586,66 @@ If `router` is configured, `mb llm start` health-checks and supervises both proc
 
 ---
 
+## Website Factory — reference-to-release pipeline
+
+*New in **v0.3.0**.* The same engine that runs your memory also ships a pipeline for building motion/3D websites. Its premise: the best components already exist in external ecosystems (React Bits, Motion Primitives, three.js examples, GSAP, Remotion, 21st) — the hard part is getting one into *your* project without importing an unknown dependency, a hostile install script, or an effect that tanks your frame budget. Website Factory is that missing middle: external code brings the variety, and a **deterministic trust layer** (quarantine, license classification, perf/a11y gates) decides what is allowed to land.
+
+It is a **compiler, not a generator** — it does not hallucinate a site, it adapts a *specific, vetted* source pattern along a typed route with hard human gates:
+
+```
+brief → design scout (moodboard) → design analysis (brief) → stack profile
+      → pattern scout (ranked candidates) → quarantine intake (REJECT/ADAPT/PASS)
+      → adaptation recipe → implementation loop → motion/3D + a11y + fidelity QA
+      → visual-regression baseline → promotion to local golden catalog
+```
+
+Every arrow has a typed artifact as its **resume-point** (the run survives a provider outage or a restart), and five of them are **hard owner gates** — the pipeline does work up to the gate and *stops*, it never self-approves. The visual baseline in particular is owner-only by construction (a tool cannot bless its own screenshots).
+
+### The trust-layer CLIs (deterministic, no LLM)
+
+Four standalone commands do the measurable work; they are pure Python (Pillow/scipy at most) so they are fast, scriptable, and CI-friendly. The heavy ML for background removal lives in a **separate venv** so the main install stays light.
+
+```bash
+imgqa            # image-QA: real transparency, edge fringe/halo, cutout correctness on 3 backgrounds
+design-scout     # collect licensed design references from open sources → moodboard.html
+pattern-scout    # brief → ranked shortlist of installable motion/3D/component patterns (+licenses)
+component-intake # fetch WITHOUT executing → sha256 provenance, license class, lifecycle-script ban,
+                 #   hidden network/eval scan, dependency review, esbuild check → PASS / ADAPT / REJECT
+```
+
+`component-intake` is the security boundary: an external component is fetched into a quarantine workspace and **never executed** during vetting; it emits a typed `intake-report.json` and only a `PASS`/`ADAPT` verdict (with a full adaptation recipe) lets its DNA cross into a feature branch. A `REJECT` ends that candidate's branch with a typed reason and never touches the rest of the run.
+
+### The skills and agents
+
+Fourteen new **skills** drive the pipeline conversationally (all Claude-only — each one interprets rendered images or drives multi-agent tooling, so they need Claude's multimodal/agent capabilities):
+
+| Stage | Skills |
+|---|---|
+| Reference & analysis | `design-reference-scout`, `design-analysis`, `design-fidelity-audit` |
+| Asset QA | `image-asset-qa`, `bg-remove`, `video-visual-review`, `contrast-and-a11y-check` |
+| Pattern sourcing & adaptation | `pattern-source-scout`, `component-intake`, `pattern-adapter` |
+| Implementation & motion QA | `motion-3d-implementer`, `motion-qa`, `visual-regression-bootstrap` |
+| Orchestration | `website-factory` (drives the whole state graph) |
+
+Two new **agents** form the implementation loop (WSF-11): **web-implementer** applies exactly one slice from a validated recipe and then stops, and **web-viewer** judges the live slice against deterministic gate evidence (motion-qa, a11y, fidelity) and returns a structured verdict — the implementer never grades its own work.
+
+### Running it
+
+```bash
+# conversational: the website-factory skill walks the state graph, one owner gate at a time
+#   say: "сделай сайт по конвейеру" / "what's the next stage" / "resume the factory"
+
+# pipeline status is COMPUTED, never stored — a stage is "done" when its typed
+# artifact exists and parses, so status is always truthful after any manual edit:
+mb search "website factory next stage"   # or drive the skill, which reports the gate you're blocked on
+```
+
+Status is derived from the evidence tree the tools already write (moodboard, candidates, intake reports, recipes, QA reports), so there is no separate state file to drift out of sync. A successfully adapted pattern is promoted into a **local golden catalog** only after a second real application or an explicit owner decision — the first golden, `letter-glitch-wall`, was promoted exactly this way.
+
+For the full stage-by-stage contract (typed inputs/outputs, resume-points, gate ownership) see the ratified decisions in the vault: `mb search "E09 state graph" --type decision`.
+
+---
+
 ## Configuration
 
 Everything lives in `<vault>/.mb/config.json` (created with defaults on first run, validated on every load — `mb config validate`). `mb config get <key>` / `mb config set <key> <value>` read/write it atomically. A sanitized, git-trackable snapshot (`config.example.json`, secrets redacted, paths home-relativized) is regenerated on every save.
@@ -685,6 +747,13 @@ singularity/
 │   ├── scheduler.py       # Task Scheduler / launchd / systemd (+missed-run catch-up)
 │   ├── proc.py            # detached process spawn per OS
 │   └── secrets.py         # keyring (DPAPI/Keychain/SecretService) + file fallback
+├── imgqa/                 # `imgqa` CLI — deterministic image QA (transparency/fringe/edges)
+├── scout/                 # `design-scout` CLI — licensed design references → moodboard.html
+├── providers/            # `pattern-scout` CLI + provider catalog (21st/React Bits/three.js/…)
+├── intake/               # `component-intake` CLI — quarantine fetch, vet, adaptation recipe
+├── golden/               # local golden pattern registry (promote on 2nd use / owner decision)
+└── factory/              # `factory-status` — computed E09 pipeline stage/next-gate
+starters/                  # profile-family scaffolds (static-lite; react-3d planned)
 install/                   # install.py + thin ps1/sh wrappers + hook/skill registration +
 │                           #   skill_manifest.py (single source of client -> skill support)
 tests/                     # contract tests (no ML deps needed): pytest tests -q
@@ -692,7 +761,7 @@ bin/                       # `mb` shims added to PATH
 docs/                      # UPGRADE.md, ROLLBACK.md, incoming-fork-baseline.md
 ```
 
-Plus, in your **`~/.claude/`**: 15 skills (`skills/*/SKILL.md`) and 6 agents (`agents/*.md`).
+Plus, in your **`~/.claude/`**: 29 skills (`skills/*/SKILL.md`) and 8 agents (`agents/*.md`).
 And in your **vault**: `rules/` (core discipline + agent preamble), `workflow/` (router + 10 phases), `templates/`, `_moc/` dashboards.
 
 ---
@@ -727,6 +796,7 @@ Logs: `<vault>/.mb/daemon.log`, `watch.log`, `mb.log`. Last doctor run: `.mb/doc
 ## Roadmap
 
 - [x] **CI matrix** — Windows / macOS / Linux × Python 3.10/3.11/3.12, `.github/workflows/ci.yml` (fast gate on every push; opt-in heavy ML smoke and real-Gemini-CLI E2E via `workflow_dispatch`)
+- [x] **Website Factory** (v0.3.0) — reference-to-release motion/3D pipeline: deterministic trust-layer CLIs (`imgqa`/`design-scout`/`pattern-scout`/`component-intake`), 14 skills + 2 loop agents, E09 state graph with hard owner gates (see [Website Factory](#website-factory--reference-to-release-pipeline))
 - [ ] **Codex health checks** — Codex gets an install phase (profile + skill junctions) but no `mb doctor` block and no runtime hook yet, unlike Gemini's `E*-gemini` checks (see "Other CLI clients" above) — verify manually for now
 - [ ] **Code index** — semantic search over your source repos, merged with memory results (`code_repos_dir`)
 - [ ] **RU score calibration** — tuned `min_score` from a bilingual query→note benchmark
