@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib
 import json
 import shutil
+import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -70,6 +71,13 @@ def _action_matches(state: dict, expected_args: str | None) -> bool:
     if expected_args is None or actual is None:
         return True
     return actual.strip() == expected_args.strip()
+
+
+def _run_shim(sh: str, shim: Path) -> tuple[int, str, str]:
+    """Run the POSIX shim through sh; separated so tests can stub the subprocess."""
+    proc = subprocess.run([sh, str(shim), "--version"],
+                          capture_output=True, text=True, timeout=60)
+    return proc.returncode, (proc.stdout or "").strip(), (proc.stderr or "").strip()
 
 
 # Watcher is considered alive if its heartbeat file was touched this recently.
@@ -512,11 +520,35 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
             rep.add("D5-vault-guard", "WARN", f"vault-guard hook not registered, {state}",
                     fix="python install/register_hooks.py")
 
+    def d6():
+        # incident 2026-07-14 "mb POSIX shim silently dies in Git Bash": the
+        # extensionless bin/mb shadows mb.cmd in Git Bash, so it must actually
+        # run there — exit 0 with non-empty output, never a silent 127.
+        shim = Path(__file__).resolve().parents[1] / "bin" / "mb"
+        if not shim.exists():
+            rep.add("D6-posix-shim", "SKIP", "no bin/mb POSIX shim")
+            return
+        sh = shutil.which("sh") or shutil.which("bash")
+        if sh is None:
+            rep.add("D6-posix-shim", "SKIP", "no sh/bash on PATH (POSIX shim unused)")
+            return
+        code, out, err = _run_shim(sh, shim)
+        if code == 0 and out:
+            rep.add("D6-posix-shim", "PASS", f"`sh bin/mb --version` -> {out}")
+        else:
+            detail = (f"`sh bin/mb --version` exit {code}, "
+                      f"stdout {'empty' if not out else repr(out)}")
+            if err:
+                detail += f", stderr: {err[:120]}"
+            rep.add("D6-posix-shim", "FAIL", detail,
+                    fix="bin/mb must pick the interpreter via [ -x ... ] and fail loud")
+
     _guard(rep, "D4", d4)
     _guard(rep, "D2", d2)
     _guard(rep, "D1", d1)
     _guard(rep, "D3", d3)
     _guard(rep, "D5", d5)
+    _guard(rep, "D6", d6)
 
     # ---- Block E: Gemini CLI integration (GCLI-05) --------------------
     _guard(rep, "E-gemini", lambda: gemini_block(rep, fix))

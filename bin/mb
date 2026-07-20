@@ -1,4 +1,15 @@
 #!/bin/sh
-# POSIX shim (macOS/Linux; on Windows Git Bash resolves mb.cmd via PATHEXT-less lookup of this file)
-exec "$(dirname "$0")/../.venv/bin/python" -m singularity "$@" 2>/dev/null \
-  || exec "$(dirname "$0")/../.venv/Scripts/python.exe" -m singularity "$@"
+# POSIX shim (macOS/Linux/Windows Git Bash -- Git Bash resolves THIS extensionless
+# file, not mb.cmd, so it must work everywhere).
+# NOTE: `exec A || exec B` is a false fallback: a failed exec exits a
+# non-interactive shell with 127 before B can run (incident 2026-07-14,
+# "mb POSIX shim silently dies in Git Bash"). Pick the interpreter by
+# checking the file instead, and fail LOUD if neither exists.
+d="$(dirname "$0")"
+py="$d/../.venv/bin/python"
+[ -x "$py" ] || py="$d/../.venv/Scripts/python.exe"
+if [ ! -x "$py" ]; then
+  echo "mb: no python interpreter found at $d/../.venv/{bin/python,Scripts/python.exe}" >&2
+  exit 127
+fi
+exec "$py" -m singularity "$@"
