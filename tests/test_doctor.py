@@ -86,6 +86,7 @@ def _stub_externals(monkeypatch):
     monkeypatch.setattr(model_store_mod, "status",
                         lambda cfg: {"installed": True, "model": cfg.model,
                                      "snapshot": "/test/model", "revision": "test"})
+    monkeypatch.setattr(doctor, "_run_shim", lambda sh, shim: (0, "mb 0.2.0", ""))
 
 
 def test_b3_reports_missing_local_model(cfg, monkeypatch):
@@ -374,6 +375,46 @@ def test_c1_warns_without_fix_when_only_legacy_job_present(cfg, monkeypatch):
     c1 = _check(cfg, "C1-nightly")
     assert c1["status"] == "WARN"
     assert "not registered" in c1["detail"]
+
+
+# --- D6: POSIX shim smoke (incident "mb shim silently dies in Git Bash") ------
+
+def test_d6_pass_when_shim_answers(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"C:/git/{name}.exe")
+    doctor.run(cfg, as_json=True)
+    d6 = _check(cfg, "D6-posix-shim")
+    assert d6["status"] == "PASS"
+    assert "mb 0.2.0" in d6["detail"]
+
+
+def test_d6_fail_on_silent_exit_127(cfg, monkeypatch):
+    """The exact incident shape: exit 127, zero bytes of output."""
+    _stub_externals(monkeypatch)
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"C:/git/{name}.exe")
+    monkeypatch.setattr(doctor, "_run_shim", lambda sh, shim: (127, "", ""))
+    doctor.run(cfg, as_json=True)
+    d6 = _check(cfg, "D6-posix-shim")
+    assert d6["status"] == "FAIL"
+    assert "exit 127" in d6["detail"]
+    assert "stdout empty" in d6["detail"]
+
+
+def test_d6_fail_when_exit_zero_but_silent(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"C:/git/{name}.exe")
+    monkeypatch.setattr(doctor, "_run_shim", lambda sh, shim: (0, "", ""))
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D6-posix-shim")["status"] == "FAIL"
+
+
+def test_d6_skip_without_posix_shell(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: None)
+    doctor.run(cfg, as_json=True)
+    d6 = _check(cfg, "D6-posix-shim")
+    assert d6["status"] == "SKIP"
+    assert "no sh/bash" in d6["detail"]
 
 
 def test_d5_reports_mode_when_enabled(cfg, monkeypatch):
