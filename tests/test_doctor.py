@@ -70,6 +70,76 @@ def test_doctor_watcher_check_warns_when_no_heartbeat(cfg, monkeypatch):
     assert c2[0]["status"] in {"WARN", "FAIL"}
 
 
+# --- C2-watcher: login-task argv verify + re-register fix ---------------------
+# Incident 2026-07-20: the watch task registered by a pre-AUD-01 installer kept
+# an unquoted vault path in its stored action and exited 1 at every login; C2
+# only saw "no heartbeat" and the broken registration read as background noise.
+
+def test_watch_job_is_single_source(cfg):
+    job = watch.watch_job(cfg)
+    assert job.at_login and job.daily_at is None
+    assert job.args == ["-m", "singularity", "--vault", str(cfg.vault), "watch"]
+    assert job.task_id == "Singularity-watch"
+
+
+def test_c2_fails_without_fix_on_argv_mismatch(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    monkeypatch.setattr(scheduler, "current_os", lambda: "windows")
+
+    def fake_verify(job):
+        if job.name == "watch":
+            return {"registered": True,
+                    "arguments": "-m singularity --vault D:\\a b watch"}
+        return {"registered": False}
+    monkeypatch.setattr(scheduler, "verify", fake_verify)
+    doctor.run(cfg, as_json=True)
+    c2 = _check(cfg, "C2-watcher")
+    assert c2["status"] == "FAIL"
+    assert "expected argv" in c2["detail"]
+
+
+def test_c2_fix_reregisters_on_argv_mismatch(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    monkeypatch.setattr(scheduler, "current_os", lambda: "windows")
+    calls = []
+
+    def fake_verify(job):
+        if job.name == "watch":
+            return {"registered": True, "arguments": "broken action"}
+        return {"registered": False}
+    monkeypatch.setattr(scheduler, "verify", fake_verify)
+    monkeypatch.setattr(scheduler, "register",
+                        lambda job: calls.append(job.name) or "OK")
+    doctor.run(cfg, fix=True, as_json=True)
+    assert "watch" in calls
+    assert _check(cfg, "C2-watcher")["status"] == "FIXED"
+
+
+def test_c2_fix_registers_when_task_missing(cfg, monkeypatch):
+    _stub_externals(monkeypatch)          # verify -> registered False for all jobs
+    calls = []
+    monkeypatch.setattr(scheduler, "register",
+                        lambda job: calls.append(job.name) or "OK")
+    doctor.run(cfg, fix=True, as_json=True)
+    assert "watch" in calls
+    assert _check(cfg, "C2-watcher")["status"] == "FIXED"
+
+
+def test_c2_heartbeat_checked_once_registration_healthy(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+
+    def fake_verify(job):
+        if job.name == "watch":
+            return {"registered": True}   # non-windows shape: no arguments read-back
+        return {"registered": False}
+    monkeypatch.setattr(scheduler, "verify", fake_verify)
+    watch._write_heartbeat(cfg)
+    doctor.run(cfg, as_json=True)
+    c2 = _check(cfg, "C2-watcher")
+    assert c2["status"] == "PASS"
+    assert "heartbeat" in c2["detail"]
+
+
 # --- --json contract ---------------------------------------------------------
 
 def _stub_externals(monkeypatch):

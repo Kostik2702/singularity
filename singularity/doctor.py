@@ -365,6 +365,30 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                 f"coalescing={state.get('coalescing')}")
 
     def c2():
+        from . import watch as watch_mod
+
+        # The login task must be registered AND its STORED action must be the
+        # argv we intended — a watch task whose --vault path lost its quoting
+        # (pre-AUD-01 registration) exits 1 at every login and is otherwise
+        # visible only as "no heartbeat" (incident 2026-07-20).
+        job = watch_mod.watch_job(cfg)
+        state = scheduler.verify(job)
+        problem = None
+        if not state.get("registered"):
+            problem = ("WARN", "watch login task not registered")
+        elif not _action_matches(state, scheduler.expected_arguments(job)):
+            problem = ("FAIL",
+                       f"registered action != expected argv (stored: {state.get('arguments')!r})")
+        if problem:
+            if fix:
+                res = scheduler.register(job)
+                rep.add("C2-watcher", "FIXED" if res.startswith("OK") else "FAIL",
+                        f"{problem[1]} -> re-registered: {res} "
+                        "(starts at next login; `mb watch` to start now)")
+            else:
+                rep.add("C2-watcher", problem[0], problem[1], fix="mb doctor --fix")
+            return
+        # Registration verified — now liveness via the heartbeat file.
         hb = cfg.watch_heartbeat_file
         if not hb.exists():
             rep.add("C2-watcher", "WARN", "no watcher heartbeat (watcher not running?)",
