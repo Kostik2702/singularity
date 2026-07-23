@@ -27,9 +27,11 @@ Safety contract (see tests/fixtures/grok/README.md, GRK-00):
   - Version probed with a timeboxed subprocess (`grok --version` ->
     "grok 0.2.111 (94172f2aa4)"); an old/unparseable version is a WARN — the
     profile is still useful, so we do not fail.
-  - Everything is written BOM-less UTF-8: Grok silently skips BOM'd hook JSON,
-    ignores BOM'd SKILL.md frontmatter, and leaks a BOM'd AGENTS.md into the
-    model context as mojibake (GRK-00).
+  - Every file WE create is BOM-less UTF-8: Grok silently skips BOM'd hook
+    JSON, ignores BOM'd SKILL.md frontmatter, and leaks a BOM'd AGENTS.md into
+    the model context as mojibake (GRK-00). A pre-existing BOM on a
+    user-created AGENTS.md is preserved by merge_managed_block (user bytes win
+    over cosmetics).
   - config.toml is NEVER touched. The one runtime hook (GRK-04) is the Stop
     capture nudge — a Singularity-owned <grok-home>/hooks/singularity.json —
     registered only when the probed version proves the stop-gate contract

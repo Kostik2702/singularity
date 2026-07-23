@@ -51,8 +51,8 @@ _FAILURE_PREFIXES = ("Tool `", "Failed to parse arguments")
 def _is_failure_result(content: str) -> bool:
     """Grok wraps tool errors in fixed prefixes (observed on 0.2.111):
     'Tool `write` failed: ...' / 'Failed to parse arguments for tool ...'."""
-    return content.startswith("Failed to parse arguments") or (
-        content.startswith("Tool `") and "` failed:" in content[:80])
+    return content.startswith(_FAILURE_PREFIXES[1]) or (
+        content.startswith(_FAILURE_PREFIXES[0]) and "` failed:" in content[:80])
 
 
 def parse_chat_history(history_path: Path, session_id: str, cwd: str,

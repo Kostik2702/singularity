@@ -626,10 +626,18 @@ def test_grok_search_then_read_requires_exit0_and_order(_isolate_home, cfg):
 
 
 def test_grok_project_id_from_verified_summary_cwd(_isolate_home, cfg):
-    cfg.data["projects"] = {"proj-x": {"roots": [r"C:\proj"]}}
-    _write_grok_session(_isolate_home, "sid-1", ['{"type":"assistant","content":"hi"}'])
-    result = reflect.reflect(cfg, days=7)
-    assert "proj-x" in result["by_project"] or "general" in result["by_project"]
+    d = _write_grok_session(_isolate_home, "sid-1",
+                            ['{"type":"assistant","content":"hi"}'])
+    registry = {"proj-x": {"path": r"C:\proj"}}
+    s = reflect._parse_grok_session(d, cfg.vault, set(), registry)
+    assert s.project_id == "proj-x"
+
+
+def test_grok_project_id_none_when_cwd_not_registered(_isolate_home, cfg):
+    d = _write_grok_session(_isolate_home, "sid-1",
+                            ['{"type":"assistant","content":"hi"}'])
+    s = reflect._parse_grok_session(d, cfg.vault, set(), {})
+    assert s.project_id is None
 
 
 def test_grok_skill_invocations_never_counted_documented_limitation(_isolate_home, cfg):

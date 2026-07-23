@@ -246,7 +246,10 @@ def grok_block(rep: Report, fix: bool) -> None:
     if h == "malformed":
         rep.add("F4-grok-capture", "FAIL",
                 f"{grok_home / 'hooks' / rg.HOOK_FILENAME} unparseable",
-                fix="repair or remove the file, then mb doctor --fix")
+                fix="repair or remove the file" + (
+                    ", then mb doctor --fix" if supported else
+                    " (re-registration needs grok >= "
+                    f"{'.'.join(map(str, rg.MIN_GROK_VERSION))})"))
     elif not supported:
         rep.add("F4-grok-capture", "SKIP",
                 f"Stop capture hook requires grok >= {'.'.join(map(str, rg.MIN_GROK_VERSION))} "
@@ -667,6 +670,8 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     # ---- Block E: Gemini CLI integration (GCLI-05) --------------------
     _guard(rep, "E-gemini", lambda: gemini_block(rep, fix))
+
+    # ---- Block F: Grok Build CLI integration (GRK-03/04) --------------
     _guard(rep, "F-grok", lambda: grok_block(rep, fix))
 
     # ---- summary -------------------------------------------------------

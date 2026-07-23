@@ -216,12 +216,16 @@ def _grok_session_paths(root: Path, since: float) -> tuple[list[Path], int]:
     malformed = 0
     if not root.is_dir():
         return out, malformed
-    for group in root.iterdir():
-        if not group.is_dir():
-            continue
-        for sdir in group.iterdir():
-            if not sdir.is_dir():
-                continue
+    try:
+        groups = [g for g in root.iterdir() if g.is_dir()]
+    except OSError:
+        return out, malformed
+    for group in groups:
+        try:
+            session_dirs = [s for s in group.iterdir() if s.is_dir()]
+        except OSError:
+            continue   # one unreadable group must not sink the whole walk
+        for sdir in session_dirs:
             history = sdir / "chat_history.jsonl"
             if not history.is_file():
                 continue
@@ -397,7 +401,7 @@ def _parse_gemini_session(path: Path, vault: Path, known_skills: set[str],
     return activity
 
 
-def _grok_result_failed(name: str, content: str) -> bool:
+def _grok_result_failed(content: str) -> bool:
     return content.startswith(_GROK_FAILURE_PREFIXES) or (
         content.startswith("Tool `") and "` failed:" in content[:80])
 
@@ -460,7 +464,7 @@ def _parse_grok_session(sdir: Path, vault: Path, known_skills: set[str],
                         continue
                     name, args = pending.pop(cid)
                     content = row.get("content")
-                    if not isinstance(content, str) or _grok_result_failed(name, content):
+                    if not isinstance(content, str) or _grok_result_failed(content):
                         continue   # failed call never counts
 
                     if name in _GROK_WRITE_TOOLS:
