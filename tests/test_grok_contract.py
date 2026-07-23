@@ -161,6 +161,21 @@ def test_chat_history_row_types_and_prompt_markers():
     assert results and results[0]["tool_call_id"] == call["id"]
 
 
+def test_edit_tool_result_failure_signatures():
+    """GRK-04 parser contract: tool errors carry fixed content prefixes
+    ('Tool `x` failed: ...' / 'Failed to parse arguments...'); a successful
+    write reads as free text WITHOUT those prefixes. The capture adapter's
+    success/failure classifier is built on exactly these signatures."""
+    rows = _jsonl("chat_history_edit_results.jsonl")
+    results = {r["tool_call_id"]: r["content"] for r in rows if r["type"] == "tool_result"}
+    ok = results["call_762af7f0"]
+    io_fail = results["call_ed8d8b5a"]
+    arg_fail = results["call_a9a10bad"]
+    assert not ok.startswith("Tool `") and not ok.startswith("Failed to parse arguments")
+    assert io_fail.startswith("Tool `") and "` failed:" in io_fail
+    assert arg_fail.startswith("Failed to parse arguments")
+
+
 def test_windows_hook_example_never_uses_bare_quoted_argv0():
     """Regression guard for the Windows quoting kill-finding: a hook command
     starting with a double-quoted path (Claude settings.json style) fails under

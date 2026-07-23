@@ -83,13 +83,54 @@ def test_grok_home_env_override_is_checked(tmp_path, monkeypatch):
     assert _status(rep, "F3-grok-skills") == "PASS"
 
 
-def test_capture_capability_is_skip_never_pass(iso_home):
-    """GRK-04 has not shipped a runtime hook — a PASS here would be a false
-    capability claim (hooks_state also reports supported:false)."""
+def test_capture_skip_when_version_unproven(iso_home):
+    """Version unreadable -> the stop-gate contract is unproven -> SKIP, and
+    never a false PASS for a hook file that may not even be honored."""
     (iso_home / ".grok").mkdir()
     rep = Report(quiet=True)
     grok_block(rep, fix=False)
     assert _status(rep, "F4-grok-capture") == "SKIP"
+
+
+def _stub_proven_version(monkeypatch):
+    """Make the freshly-loaded register_grok inside grok_block see a real
+    binary at the proven contract version (shared module objects, so patching
+    shutil/subprocess globally reaches it)."""
+    import subprocess as sp
+    monkeypatch.setattr(shutil, "which", lambda _n: "grok")
+    monkeypatch.setattr(sp, "run", lambda *a, **k: sp.CompletedProcess(
+        a, 0, stdout="grok 0.2.111 (94172f2aa4)\n", stderr=""))
+
+
+def test_capture_pass_when_hook_registered(iso_home, monkeypatch):
+    _stub_proven_version(monkeypatch)
+    hook = iso_home / ".grok" / "hooks" / "singularity.json"
+    hook.parent.mkdir(parents=True)
+    hook.write_text('{"hooks": {"Stop": [{"hooks": [{"type": "command", '
+                    '"command": "python x/grok_stop_capture.py"}]}]}}\n',
+                    encoding="utf-8")
+    rep = Report(quiet=True)
+    grok_block(rep, fix=False)
+    assert _status(rep, "F1-grok") == "PASS"
+    assert _status(rep, "F4-grok-capture") == "PASS"
+
+
+def test_capture_warn_when_hook_missing_at_proven_version(iso_home, monkeypatch):
+    _stub_proven_version(monkeypatch)
+    (iso_home / ".grok").mkdir()
+    rep = Report(quiet=True)
+    grok_block(rep, fix=False)
+    assert _status(rep, "F4-grok-capture") == "WARN"
+
+
+def test_capture_fail_when_hook_file_malformed(iso_home, monkeypatch):
+    _stub_proven_version(monkeypatch)
+    hook = iso_home / ".grok" / "hooks" / "singularity.json"
+    hook.parent.mkdir(parents=True)
+    hook.write_text("{ broken json", encoding="utf-8")
+    rep = Report(quiet=True)
+    grok_block(rep, fix=False)
+    assert _status(rep, "F4-grok-capture") == "FAIL"
 
 
 def test_fix_runs_safe_registrar_and_marks_fixed(iso_home, monkeypatch):

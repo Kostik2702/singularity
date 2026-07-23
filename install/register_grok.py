@@ -30,14 +30,19 @@ Safety contract (see tests/fixtures/grok/README.md, GRK-00):
   - Everything is written BOM-less UTF-8: Grok silently skips BOM'd hook JSON,
     ignores BOM'd SKILL.md frontmatter, and leaks a BOM'd AGENTS.md into the
     model context as mojibake (GRK-00).
-  - Hooks and config.toml are NOT touched here — the runtime adapter is
-    GRK-04, lifecycle wiring is GRK-03.
+  - config.toml is NEVER touched. The one runtime hook (GRK-04) is the Stop
+    capture nudge — a Singularity-owned <grok-home>/hooks/singularity.json —
+    registered only when the probed version proves the stop-gate contract
+    (>= MIN_GROK_VERSION). Dynamic SessionStart recall is a documented NO-GO
+    (GRK-00: no context-injection channel exists), covered statically by the
+    AGENTS.md block instead.
 
 Return codes: 0 = skipped (absent) or success; 1 = a real partial failure
 (engine-owned skill missing from the repo).
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -58,9 +63,20 @@ from singularity.hooks_state import CAPTURE_HOOKS_FRAGMENT  # noqa: E402  (T02 s
 SKILLS_SRC = ENGINE / "singularity" / "skills"
 GROK_SKILLS = skill_manifest.skills_for_client("grok")
 
+PYTHON = ENGINE / ".venv" / ("Scripts/python.exe" if sys.platform.startswith("win")
+                             else "bin/python")
+
 # The only version the GRK-00 contract fixtures are proven against. Older or
-# unprobeable versions get the profile anyway (WARN) — it is plain Markdown.
+# unprobeable versions get the profile anyway (WARN) — it is plain Markdown —
+# but the runtime Stop hook is NOT registered (conservative: the stop-gate
+# contract is only proven at this version).
 MIN_GROK_VERSION = (0, 2, 111)
+
+# Singularity owns this exact FILE inside <grok-home>/hooks/ (grok loads every
+# *.json there). Ownership on uninstall is proven by the file containing our
+# hook script marker, never by a name substring elsewhere.
+HOOK_FILENAME = "singularity.json"
+HOOK_SCRIPT_MARKER = "grok_stop_capture.py"
 
 BEGIN = "<!-- SINGULARITY:BEGIN (managed by install/register_grok.py — edits below are overwritten) -->"
 END = "<!-- SINGULARITY:END -->"
@@ -159,6 +175,49 @@ def _deploy_skills() -> dict:
     return counts
 
 
+def _hook_command() -> str:
+    """The Stop-hook command line, in the ONLY quoting shapes proven to spawn
+    under grok's per-platform hook runner (GRK-00, Windows kill-finding):
+    Windows commands run through PowerShell where a bare double-quoted argv0
+    is a parse error — the call operator `&` is required; POSIX shells invoke
+    a quoted path directly. Never reference env vars in the string (grok's
+    load-time $-expansion corrupts them)."""
+    script = ENGINE / "singularity" / "hooks" / "grok_stop_capture.py"
+    command = f'"{PYTHON}" "{script}"'
+    if sys.platform.startswith("win"):
+        command = f"& {command}"
+    return command
+
+
+def _register_hook() -> str:
+    """Write the Singularity-owned Stop capture hook to
+    <grok-home>/hooks/singularity.json (BOM-less UTF-8 — grok silently skips
+    BOM'd hook JSON). A foreign file squatting our exact filename is backed up
+    first (timestamped, never overwritten silently). Returns a status word."""
+    hooks_dir = _grok_home() / "hooks"
+    hook_path = hooks_dir / HOOK_FILENAME
+    payload = {
+        "hooks": {
+            "Stop": [
+                {"hooks": [{"type": "command", "command": _hook_command(),
+                            "timeout": 30}]}
+            ]
+        }
+    }
+    text = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+    if hook_path.exists():
+        current = hook_path.read_text(encoding="utf-8-sig", errors="ignore")
+        if current == text:
+            return "ok"
+        if HOOK_SCRIPT_MARKER not in current:
+            backup = client_registration.backup_file(hook_path)
+            print(f"[grok] foreign file at {hook_path} preserved as {backup.name}",
+                  file=sys.stderr)
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    hook_path.write_text(text, encoding="utf-8")
+    return "registered"
+
+
 def _remove_link(link: Path) -> None:
     """Delete a symlink/junction without touching its target."""
     if link.is_symlink():
@@ -179,10 +238,20 @@ def uninstall() -> dict:
     Foreign skills, backup dirs, credentials, sessions, config.toml, the Grok
     binary and the vault are never touched. Safe to run when Grok is absent."""
     grok_home = _grok_home()
-    result = {"profile": "absent", "skills_removed": 0, "skills_kept": 0}
+    result = {"profile": "absent", "hooks": 0, "skills_removed": 0, "skills_kept": 0}
 
     if client_registration.remove_managed_block(grok_home / "AGENTS.md", BEGIN, END):
         result["profile"] = "removed"
+
+    hook_path = grok_home / "hooks" / HOOK_FILENAME
+    if hook_path.exists():
+        content = hook_path.read_text(encoding="utf-8-sig", errors="ignore")
+        if HOOK_SCRIPT_MARKER in content:
+            hook_path.unlink()
+            result["hooks"] = 1
+        else:
+            print(f"[grok] {hook_path} exists but is not ours — left untouched",
+                  file=sys.stderr)
 
     skills_dir = grok_home / "skills"
     for name in GROK_SKILLS:
@@ -224,6 +293,15 @@ def main() -> int:
     print(f"[grok] {len(GROK_SKILLS)} skills: {counts['linked']} linked, "
           f"{counts['ok']} already ok, {counts['copied']} copied, "
           f"{counts['backed-up']} backed up, {counts['missing']} missing")
+
+    # Stop capture nudge — only when the version is proven to honor the
+    # stop-gate contract (GRK-00 fixtures). SessionStart recall stays static.
+    if version is not None and version >= MIN_GROK_VERSION:
+        print(f"[grok] Stop capture hook: {_register_hook()}")
+    else:
+        print("[grok] Stop capture hook: skipped (version unknown or < "
+              f"{'.'.join(map(str, MIN_GROK_VERSION))} — stop-gate contract unproven)",
+              file=sys.stderr)
 
     return 1 if counts["missing"] else 0
 

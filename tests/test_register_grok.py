@@ -8,7 +8,9 @@ missing engine skill, foreign-skill conflict backup, exact-link uninstall,
 foreign-at-owned-name preservation, and the install->uninstall byte round-trip.
 """
 import importlib.util
+import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -310,4 +312,71 @@ def test_uninstall_when_absent_is_safe(tmp_path, monkeypatch):
     monkeypatch.setattr(register_grok.Path, "home",
                         classmethod(lambda cls: tmp_path))
     result = register_grok.uninstall()
-    assert result == {"profile": "absent", "skills_removed": 0, "skills_kept": 0}
+    assert result == {"profile": "absent", "hooks": 0,
+                      "skills_removed": 0, "skills_kept": 0}
+
+
+# --- GRK-04: Stop capture hook registration --------------------------------------
+
+def _hook_path(home):
+    return home / ".grok" / "hooks" / "singularity.json"
+
+
+def test_hook_registered_bom_less_with_safe_command(home):
+    register_grok.main()
+    raw = _hook_path(home).read_bytes()
+    assert not raw.startswith(b"\xef\xbb\xbf"), "BOM'd hook JSON is silently skipped by grok"
+    data = json.loads(raw.decode("utf-8"))
+    cmd = data["hooks"]["Stop"][0]["hooks"][0]["command"]
+    assert "grok_stop_capture.py" in cmd
+    assert "$env:" not in cmd            # load-time $-expansion would corrupt it
+    if sys.platform.startswith("win"):
+        assert cmd.startswith("& "), "PowerShell runner needs the call operator"
+    else:
+        assert not cmd.startswith("& ")
+
+
+def test_hook_skipped_when_version_unproven(home, monkeypatch, capsys):
+    monkeypatch.setattr(register_grok, "_grok_version", lambda: (0, 1, 0))
+    register_grok.main()
+    assert not _hook_path(home).exists()
+    assert "stop-gate contract unproven" in capsys.readouterr().err
+
+
+def test_hook_registration_idempotent(home):
+    register_grok.main()
+    first = _hook_path(home).read_bytes()
+    register_grok.main()
+    assert _hook_path(home).read_bytes() == first
+    backups = [p for p in _hook_path(home).parent.iterdir()
+               if p.name.startswith("singularity.json.bak")]
+    assert backups == [], "an identical rerun must not create backups"
+
+
+def test_foreign_file_at_hook_name_backed_up(home):
+    p = _hook_path(home)
+    p.parent.mkdir(parents=True)
+    p.write_text('{"hooks": {"Stop": [{"hooks": [{"command": "user-own"}]}]}}\n',
+                 encoding="utf-8")
+    register_grok.main()
+    backups = [b for b in p.parent.iterdir() if b.name.startswith("singularity.json.bak")]
+    assert backups, "foreign content must be preserved as a timestamped backup"
+    assert "user-own" in backups[0].read_text(encoding="utf-8")
+    assert "grok_stop_capture.py" in p.read_text(encoding="utf-8")
+
+
+def test_uninstall_removes_owned_hook_file(home):
+    register_grok.main()
+    result = register_grok.uninstall()
+    assert result["hooks"] == 1
+    assert not _hook_path(home).exists()
+
+
+def test_uninstall_keeps_foreign_hook_file(home):
+    p = _hook_path(home)
+    p.parent.mkdir(parents=True)
+    foreign = '{"hooks": {"Stop": [{"hooks": [{"command": "user-own"}]}]}}\n'
+    p.write_text(foreign, encoding="utf-8")
+    result = register_grok.uninstall()
+    assert result["hooks"] == 0
+    assert p.read_text(encoding="utf-8") == foreign

@@ -87,10 +87,16 @@ See `hooks_windows_example.json` for the two safe shapes.
   (stdout and `additionalContext` both ignored on SessionStart/UserPromptSubmit).
   Fallback: static recall instructions inside the managed `GROK_HOME/AGENTS.md` block
   (delivered to every session as `project_instructions`), agent executes `mb recall` itself.
-- **GRK-04 capture reminder (stop-nudge): GO.** Stop hook supports Claude's decision
-  vocabulary end-to-end in headless and interactive paths; `stopHookActive` + `reason ==
-  "end_turn"` guard verified; feedback reaches the model. Port `stop_capture.py` behind a
-  camelCase-aware payload reader and a Windows-safe command line.
+- **GRK-04 capture reminder (stop-nudge): GO — IMPLEMENTED** as
+  `singularity/hooks/grok_stop_capture.py`, registered by `install/register_grok.py`
+  into `<grok-home>/hooks/singularity.json`. Real-CLI smoke (0.2.111, fake endpoint):
+  the block reason reached the model exactly once; the once-per-session marker
+  (`capture-grok-<sid>`) suppressed repeats; baseline-vs-hooked headless JSON had
+  identical schema keys and clean stderr — the only difference is the documented,
+  bounded extra round (`num_turns` 1→2, `text` concatenates the two turns), the same
+  semantics as Claude's block gate. Edit success/failure classified via the fixed
+  tool_result prefixes in `chat_history_edit_results.jsonl` ('Tool `x` failed:' /
+  'Failed to parse arguments'); shell success requires the 'exit: 0' echo.
 - **GRK-05 reflect parser: GO.** `chat_history.jsonl` is a stable typed JSONL
   (`prompt_index` marks real user prompts; `tool_calls`/`tool_result` carry tool usage;
   `model_id` per assistant row); subagent sessions are excludable via

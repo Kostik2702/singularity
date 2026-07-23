@@ -14,6 +14,9 @@ from singularity.config import Config
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: tmp_path))
+    # GRK-04: _grok_installed honors $GROK_HOME — a leaked developer env var
+    # would point the probe at a REAL Grok home.
+    monkeypatch.delenv("GROK_HOME", raising=False)
     return tmp_path
 
 
@@ -127,6 +130,42 @@ def test_gemini_not_installed_when_only_foreign_named_hook(home):
             {"type": "command", "command": "x", "name": "someone-elses"}]}]}
     }), encoding="utf-8")
     assert hooks_state._gemini_installed() is False
+
+
+def test_grok_installed_when_owned_hook_file_present(home):
+    hook = home / ".grok" / "hooks" / "singularity.json"
+    hook.parent.mkdir(parents=True)
+    hook.write_text(json.dumps({
+        "hooks": {"Stop": [{"hooks": [
+            {"type": "command", "command": "python .../grok_stop_capture.py"}]}]}
+    }), encoding="utf-8")
+    assert hooks_state._grok_installed() is True
+
+
+def test_grok_not_installed_when_absent(home):
+    assert hooks_state._grok_installed() is False
+
+
+def test_grok_not_installed_when_file_is_foreign(home):
+    hook = home / ".grok" / "hooks" / "singularity.json"
+    hook.parent.mkdir(parents=True)
+    hook.write_text(json.dumps({
+        "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "someone-elses"}]}]}
+    }), encoding="utf-8")
+    assert hooks_state._grok_installed() is False
+
+
+def test_grok_installed_honors_grok_home_env(tmp_path, monkeypatch):
+    custom = tmp_path / "custom-root"
+    hook = custom / "hooks" / "singularity.json"
+    hook.parent.mkdir(parents=True)
+    hook.write_text(json.dumps({
+        "hooks": {"Stop": [{"hooks": [
+            {"type": "command", "command": "python .../grok_stop_capture.py"}]}]}
+    }), encoding="utf-8")
+    monkeypatch.setenv("GROK_HOME", str(custom))
+    monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: tmp_path))
+    assert hooks_state._grok_installed() is True
 
 
 # --- client_states / status -----------------------------------------------------

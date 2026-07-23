@@ -192,9 +192,26 @@ def grok_block(rep: Report, fix: bool) -> None:
         d = grok_home / "skills"
         return [n for n in rg.GROK_SKILLS if not (d / n).exists()]
 
+    def hook_state():
+        p = grok_home / "hooks" / rg.HOOK_FILENAME
+        if not p.exists():
+            return False
+        try:
+            data = json.loads(p.read_text(encoding="utf-8-sig"))   # BOM-tolerant read
+        except json.JSONDecodeError:
+            return "malformed"
+        for dfn in data.get("hooks", {}).get("Stop", []):
+            for h in dfn.get("hooks", []):
+                if rg.HOOK_SCRIPT_MARKER in str(h.get("command", "")):
+                    return True
+        return False
+
+    supported = version is not None and version >= rg.MIN_GROK_VERSION
+
     # --fix runs ONLY the safe registrar (no network/auth) once, then re-checks.
     fixed = False
-    if fix and (not profile_ok() or missing_skills()):
+    if fix and (not profile_ok() or missing_skills()
+                or (supported and hook_state() is not True)):
         rg.main()
         fixed = True
 
@@ -222,11 +239,24 @@ def grok_block(rep: Report, fix: bool) -> None:
         rep.add("F3-grok-skills", "WARN", f"skills not deployed: {', '.join(miss)}",
                 fix="python install/register_grok.py")
 
-    # Honest capability state: no runtime capture/recall hook exists for Grok
-    # until GRK-04 lands (dynamic recall is NO-GO per GRK-00; the capture nudge
-    # is GO but not yet implemented). SKIP — a PASS here would be a false claim.
-    rep.add("F4-grok-capture", "SKIP",
-            "runtime capture hook not implemented for Grok yet (GRK-04)")
+    # Runtime capability: the Stop capture nudge (GRK-04). Dynamic SessionStart
+    # recall stays a documented NO-GO (GRK-00: no context-injection channel) —
+    # the static AGENTS.md instruction covered by F2 is the recall path.
+    h = hook_state()
+    if h == "malformed":
+        rep.add("F4-grok-capture", "FAIL",
+                f"{grok_home / 'hooks' / rg.HOOK_FILENAME} unparseable",
+                fix="repair or remove the file, then mb doctor --fix")
+    elif not supported:
+        rep.add("F4-grok-capture", "SKIP",
+                f"Stop capture hook requires grok >= {'.'.join(map(str, rg.MIN_GROK_VERSION))} "
+                "(stop-gate contract unproven below)")
+    elif h is True:
+        rep.add("F4-grok-capture", "FIXED" if fixed else "PASS",
+                "Stop capture hook registered")
+    else:
+        rep.add("F4-grok-capture", "WARN", "Stop capture hook not registered",
+                fix="python install/register_grok.py")
 
 
 def run(cfg: Config, fix: bool = False, heavy: bool = False,
