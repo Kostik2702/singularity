@@ -31,7 +31,15 @@ def skill_manifest():
     return _load("skill_manifest", INSTALL / "skill_manifest.py")
 
 
-CLIENTS = ["claude", "codex", "gemini"]
+CLIENTS = ["claude", "codex", "gemini", "grok"]
+
+# GRK-01: the approved portable baseline — every cross-client skill, in
+# manifest order. Codex/Gemini golden regression AND the Grok launch set.
+PORTABLE_BASELINE = [
+    "mb-search", "mb-memory", "mb-llm-delegate", "mb-onboard", "mb-triage",
+    "workflow-helper", "grill", "confidence-calibration", "memory-curator",
+    "error-reports", "report", "compaction-plan",
+]
 
 
 # --- manifest <-> repo inventory agreement ------------------------------------
@@ -95,6 +103,46 @@ def test_exclusion_reason_present_when_not_supported():
 def test_exclusion_reason_none_for_unknown_skill():
     manifest = _load("skill_manifest", INSTALL / "skill_manifest.py")
     assert manifest.exclusion_reason("totally-unknown-skill", "codex") is None
+
+
+def test_skills_for_unknown_client_is_empty(skill_manifest):
+    assert skill_manifest.skills_for_client("cursor") == []
+    assert skill_manifest.skills_for_client("") == []
+
+
+# --- GRK-01: golden client matrix ----------------------------------------------
+
+def test_codex_list_is_golden_baseline(skill_manifest):
+    """Regression guard: adding grok must not change the Codex set."""
+    assert skill_manifest.skills_for_client("codex") == PORTABLE_BASELINE
+
+
+def test_gemini_list_is_golden_baseline(skill_manifest):
+    """Regression guard: adding grok must not change the Gemini set."""
+    assert skill_manifest.skills_for_client("gemini") == PORTABLE_BASELINE
+
+
+def test_grok_list_equals_approved_portable_baseline(skill_manifest):
+    """GRK-01: Grok launches with exactly the portable baseline — no council
+    or visual/GT-gated skill is silently promoted (GRK-00 proved SKILL.md
+    discovery + advertisement; Claude-only skills stay excluded with reasons)."""
+    assert skill_manifest.skills_for_client("grok") == PORTABLE_BASELINE
+
+
+def test_grok_exclusions_are_client_accurate(skill_manifest):
+    """Every skill excluded from grok carries a reason, and the council family
+    must not claim Grok lacks subagents (it has spawn_subagent — GRK-00)."""
+    for name, meta in skill_manifest.SKILL_MANIFEST.items():
+        if "grok" in meta["clients"]:
+            continue
+        reason = skill_manifest.exclusion_reason(name, "grok")
+        assert reason, f"{name}: excluded from grok without a reason"
+    for name in ("council", "planning-council", "observation-council"):
+        reason = skill_manifest.exclusion_reason(name, "grok")
+        assert "spawn_subagent" in reason, (
+            f"{name}: reason must acknowledge Grok's subagent capability, "
+            "not blanket-claim no executor exists"
+        )
 
 
 def test_council_family_claude_only(skill_manifest):

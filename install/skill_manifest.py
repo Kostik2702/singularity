@@ -17,9 +17,10 @@ from __future__ import annotations
 
 from typing import Any
 
-_ALL_CLIENTS = ["claude", "codex", "gemini"]
+_ALL_CLIENTS = ["claude", "codex", "gemini", "grok"]
 
-# clients: subset of {"claude", "codex", "gemini"} this skill is deployed to.
+# clients: subset of {"claude", "codex", "gemini", "grok"} this skill is
+# deployed to.
 # tools: informational -- the execution capability the skill's BODY actually
 # depends on (e.g. "Agent" = spawns subagents via the Task/Agent tool), not
 # enforced at install time; there is no per-client tool-availability probe.
@@ -41,17 +42,23 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
     "council": {
         "clients": ["claude"], "tools": ["Agent"],
         "reason": "spawns Claude subagents (investigator/critic/validator/historian) "
-                  "via the Agent/Task tool -- Codex/Gemini have no equivalent executor",
+                  "via the Agent/Task tool -- Codex/Gemini have no subagent "
+                  "executor; Grok has spawn_subagent but the council personas are "
+                  "Claude agent definitions, not adapted or real-client tested there",
     },
     "planning-council": {
         "clients": ["claude"], "tools": ["Agent"],
         "reason": "spawns Claude subagents (investigator/critic/validator/historian) "
-                  "via the Agent/Task tool -- Codex/Gemini have no equivalent executor",
+                  "via the Agent/Task tool -- Codex/Gemini have no subagent "
+                  "executor; Grok has spawn_subagent but the council personas are "
+                  "Claude agent definitions, not adapted or real-client tested there",
     },
     "observation-council": {
         "clients": ["claude"], "tools": ["Agent"],
-        "reason": "spawns Claude subagents via the Agent/Task tool -- "
-                  "Codex/Gemini have no equivalent executor",
+        "reason": "spawns Claude subagents via the Agent/Task tool -- Codex/Gemini "
+                  "have no subagent executor; Grok has spawn_subagent but the "
+                  "council personas are Claude agent definitions, not adapted or "
+                  "real-client tested there",
     },
     "visual-regression-bootstrap": {
         "clients": ["claude"], "tools": ["Bash"],
@@ -72,7 +79,7 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
         "reason": "judgment step requires visually comparing viewport screenshots "
                   "against the design mockup via multimodal Read and consulting the "
                   "vault (mb search) for owner decisions during A/B categorization — "
-                  "Codex/Gemini have no equivalent multimodal review loop here",
+                  "that review loop is authored and validated only on Claude Code",
     },
     "website-factory": {
         "clients": ["claude"], "tools": ["Bash"],
@@ -151,7 +158,7 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "crops, 3-background composites) as images via multimodal Read "
                   "and driving a human edge-acceptance gate; that inspection + "
                   "dogfood/GT loop is authored and tested only against Claude "
-                  "Code -- not validated on Codex/Gemini",
+                  "Code -- not validated on Codex/Gemini/Grok",
     },
 }
 

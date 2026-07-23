@@ -1,0 +1,17 @@
+{
+  "subagent_id": "019f9031-379e-7df1-a374-b6f92f2500f4",
+  "parent_session_id": "019f902f-d099-78c0-9389-b5e3dd255827",
+  "child_session_id": "019f9031-379e-7df1-a374-b6f92f2500f4",
+  "subagent_type": "general-purpose",
+  "description": "probe subagent",
+  "prompt": "Reply with one word: done",
+  "status": "completed",
+  "started_at": "2026-07-23T18:16:12.448687800Z",
+  "completed_at": "2026-07-23T18:16:12.582063600Z",
+  "duration_ms": 133,
+  "tool_calls": 0,
+  "turns": 1,
+  "effective_context_source": "new",
+  "child_cwd": "D:\\iso\\proj",
+  "effective_model_id": "probe-model"
+}

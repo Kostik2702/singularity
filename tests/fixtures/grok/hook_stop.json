@@ -1,0 +1,15 @@
+{
+  "hookEventName": "stop",
+  "sessionId": "019f9016-edf9-7bc0-afac-f3113c2d197e",
+  "cwd": "D:\\iso\\proj",
+  "workspaceRoot": "D:\\iso\\proj",
+  "timestamp": "2026-07-23T17:47:31.753532500+00:00",
+  "transcriptPath": "D:\\iso\\grokhome\\sessions\\D%3A%5Ciso%5Cproj\\019f9016-edf9-7bc0-afac-f3113c2d197e\\updates.jsonl",
+  "promptId": "ee34d50e-814f-4a11-ae74-3d0338a0e952",
+  "permissionMode": "default",
+  "reason": "end_turn",
+  "stopHookActive": false,
+  "lastAssistantMessage": "PROBE-REPLY-OK",
+  "backgroundTasks": [],
+  "sessionCrons": []
+}

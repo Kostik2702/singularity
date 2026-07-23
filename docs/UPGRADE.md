@@ -83,10 +83,40 @@ and nothing here requires you to do anything by hand for a normal upgrade.
   file, then saves — this already happened for every machine that upgraded
   through AUD-13 and needs no new action now.
 
+## Grok Build CLI support (feat/grok-cli-integration)
+
+Upgrading onto a machine that has the xAI Grok Build CLI adds a fourth
+client on the next install / `mb doctor --fix` run:
+
+- **Prerequisite** (yours to install; Singularity never installs,
+  updates or authenticates Grok): the official CLI — see the README's
+  "Other CLI clients" section for the install one-liners. Minimum proven
+  version **0.2.111**; below it the profile and skills still deploy but the
+  runtime capture hook is skipped (`F4-grok-capture: SKIP`) because the
+  stop-gate contract is unproven there.
+- **Native paths**: everything lives under `$GROK_HOME` when set, else
+  `~/.grok` — the same resolution order the CLI itself uses; install,
+  doctor and uninstall all share that one resolver.
+- **What appears**: the managed `SINGULARITY:BEGIN/END` block in
+  `<grok-home>/AGENTS.md`, 12 portable skill junctions in
+  `<grok-home>/skills/`, and the owned Stop-capture hook file
+  `<grok-home>/hooks/singularity.json`.
+- **Safe re-registration**: re-running the installer (or
+  `mb doctor --fix`) refreshes only the managed block and our links —
+  byte-identical reruns are no-ops, and a foreign file squatting our hook
+  filename is backed up (`singularity.json.bak-<ts>`), never overwritten
+  silently.
+- **Capability tier is observed, not promised**: capture nudge yes
+  (block-mode, once per session), dynamic session-start recall no (Grok has
+  no context-injection channel — the AGENTS.md block carries a static
+  recall instruction instead), `mb reflect` counts Grok sessions.
+  See `tests/fixtures/grok/README.md` for the full evidence matrix.
+
 ## Foreign hooks and settings
 
 Every settings mutation (Claude `~/.claude/settings.json`, Gemini
-`~/.gemini/settings.json`/`GEMINI.md`, Codex `~/.codex/AGENTS.md`) is a
+`~/.gemini/settings.json`/`GEMINI.md`, Codex `~/.codex/AGENTS.md`, Grok
+`<grok-home>/AGENTS.md`/`hooks/singularity.json`) is a
 marker-delimited merge or an owned-entry filter — never a blind overwrite.
 A hook/block that isn't ours (no `_mb`/named-hook marker, or outside the
 `SINGULARITY:BEGIN/END` markers) survives every install, upgrade, and

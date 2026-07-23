@@ -36,7 +36,7 @@ def test_snapshot_hooks_section_shape(cfg, monkeypatch):
     _stub_all(monkeypatch, home=cfg.vault)
     snap = status.snapshot(cfg)
     assert snap["hooks"]["kind"] == "capture_hooks"
-    assert set(snap["hooks"]["clients"]) == {"claude", "gemini", "codex"}
+    assert set(snap["hooks"]["clients"]) == {"claude", "gemini", "codex", "grok"}
 
 
 def test_run_human_output_mentions_capture_hooks(cfg, monkeypatch, capsys):

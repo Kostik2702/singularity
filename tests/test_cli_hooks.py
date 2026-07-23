@@ -28,8 +28,12 @@ def test_status_json_has_expected_schema(wired, capsys):
     assert data["kind"] == "capture_hooks"
     assert data["configured"] is True
     assert data["source"] == "default"
-    for name in ("claude", "gemini", "codex"):
+    for name in ("claude", "gemini", "codex", "grok"):
         assert set(data["clients"][name]) == {"installed", "supported", "mode", "effective"}
+    # GRK-04: Grok mirrors Claude's block-mode Stop gate (installed varies by
+    # machine state, so only capability fields are pinned here).
+    assert data["clients"]["grok"]["supported"] is True
+    assert data["clients"]["grok"]["mode"] == "block"
 
 
 def test_status_human_output_mentions_all_clients(wired, capsys):
@@ -37,7 +41,7 @@ def test_status_human_output_mentions_all_clients(wired, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "capture hooks: enabled" in out
-    assert "claude:" in out and "gemini:" in out and "codex:" in out
+    assert "claude:" in out and "gemini:" in out and "codex:" in out and "grok:" in out
 
 
 def test_disable_then_status_reflects_it(wired, capsys):

@@ -18,6 +18,10 @@ from singularity.config import Config
 def home(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "load_config", lambda vault_arg=None: Config(vault=tmp_path, data={}))
     monkeypatch.setattr(pathlib.Path, "home", classmethod(lambda cls: tmp_path))
+    # GRK-03: cmd_uninstall now also calls register_grok.uninstall(), whose
+    # config root honors $GROK_HOME — a leaked developer env var would point
+    # the test at a REAL Grok home. Force the isolated fallback.
+    monkeypatch.delenv("GROK_HOME", raising=False)
 
     from singularity.platform import scheduler as sched_mod
     monkeypatch.setattr(sched_mod, "unregister", lambda job: None)
@@ -72,3 +76,50 @@ def test_foreign_entries_preserved(home):
 def test_no_settings_file_is_a_noop_not_a_crash(home):
     rc = cli.main(["uninstall"])
     assert rc == 0
+
+
+# --- GRK-03: Grok owned-artifact removal ----------------------------------------
+
+def _load_register_grok():
+    import importlib.util
+    engine = pathlib.Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(
+        "register_grok", engine / "install" / "register_grok.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_uninstall_removes_grok_owned_artifacts(home, monkeypatch, capsys):
+    """Install -> `mb uninstall` round trip: managed AGENTS.md block and
+    engine-pointing skill links removed; foreign Grok content untouched."""
+    rk = _load_register_grok()
+    monkeypatch.setattr(rk, "resolve_vault", lambda: home / "vault")
+    monkeypatch.setattr(rk, "_grok_version", lambda: (0, 2, 111))
+    monkeypatch.setattr(rk.shutil, "which", lambda _n: None)
+    (home / ".grok").mkdir()
+    (home / "vault").mkdir()
+    assert rk.main() == 0
+
+    user_agents = "# my own grok notes\n"
+    agents = home / ".grok" / "AGENTS.md"
+    agents.write_text(user_agents + agents.read_text(encoding="utf-8"),
+                      encoding="utf-8")
+    foreign = home / ".grok" / "skills" / "user-own-skill"
+    foreign.mkdir()
+    (foreign / "SKILL.md").write_text("mine\n", encoding="utf-8")
+
+    rc = cli.main(["uninstall"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "grok: profile removed" in out
+    assert agents.read_text(encoding="utf-8") == user_agents   # user bytes intact
+    assert foreign.exists()
+    for name in rk.GROK_SKILLS:
+        assert not (home / ".grok" / "skills" / name).exists()
+
+
+def test_uninstall_reports_grok_absent_cleanly(home, capsys):
+    rc = cli.main(["uninstall"])
+    assert rc == 0
+    assert "grok: profile absent" in capsys.readouterr().out

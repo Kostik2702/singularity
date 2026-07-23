@@ -1,0 +1,16 @@
+{
+  "hookEventName": "pre_tool_use",
+  "sessionId": "019f902b-6678-7562-b484-fa321cd86011",
+  "cwd": "D:\\iso\\proj",
+  "workspaceRoot": "D:\\iso\\proj",
+  "timestamp": "2026-07-23T18:09:53.931020800+00:00",
+  "transcriptPath": "D:\\iso\\grokhome\\sessions\\D%3A%5Ciso%5Cproj\\019f902b-6678-7562-b484-fa321cd86011\\updates.jsonl",
+  "permissionMode": "bypassPermissions",
+  "toolName": "run_terminal_command",
+  "toolUseId": "call_a9a101e0",
+  "toolInput": {
+    "command": "echo PROBE-TOOL-OK",
+    "description": "probe echo"
+  },
+  "toolInputTruncated": false
+}

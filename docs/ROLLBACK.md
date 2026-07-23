@@ -51,16 +51,32 @@ supported reason to prefer the narrower one going forward.
 mb uninstall
 ```
 
-Removes: Claude/Gemini/Codex hooks and managed profile blocks (only
+Removes: Claude/Gemini/Codex/Grok hooks and managed profile blocks (only
 entries we own — see [UPGRADE.md](UPGRADE.md#foreign-hooks-and-settings)),
 the `nightly`/`watch` scheduled jobs, the search daemon process, and skill
-junctions that resolve back into this repo. **Never touches**: your vault,
-your notes, `.mb/config.json` or any `.mb/*.json`/`*.jsonl` snapshot or
-journal file, foreign hooks, foreign skills, credentials, or any
-third-party CLI (Codex/Gemini themselves are never uninstalled). Re-running
-the installer afterward picks up exactly where you left off — nothing
-about your vault's content or history is lost by uninstalling and
+junctions that resolve back into this repo. For Grok specifically that is
+exactly three artifact kinds under `$GROK_HOME` (else `~/.grok`): the
+`SINGULARITY:BEGIN/END` block in `AGENTS.md` (your own text around it is
+preserved byte-for-byte), the `hooks/singularity.json` file (only when it
+contains our `grok_stop_capture.py` command — a foreign file at that name
+is left untouched), and `skills/<name>` links that resolve into this repo.
+**Never touches**: your vault, your notes, `.mb/config.json` or any
+`.mb/*.json`/`*.jsonl` snapshot or journal file, foreign hooks, foreign
+skills, credentials, Grok's `config.toml`/`sessions/`/`auth.json`, or any
+third-party CLI (Codex/Gemini/Grok themselves are never uninstalled).
+Re-running the installer afterward picks up exactly where you left off —
+nothing about your vault's content or history is lost by uninstalling and
 reinstalling the engine.
+
+## Disabling only the Grok capture nudge
+
+You don't need an uninstall for that: `mb hooks disable` turns the desired
+`auto_capture` state off for **all** clients at once (Claude, Gemini, Grok
+— the hook files stay installed but become no-ops; `mb hooks status` shows
+`effective: false`). To remove just the Grok hook file while keeping the
+profile and skills, delete `<grok-home>/hooks/singularity.json` — the next
+installer/`mb doctor --fix` run re-creates it, so pair the deletion with
+`mb hooks disable` if you want it to stay gone in effect.
 
 ## If a rollback leaves the system in a confusing state
 

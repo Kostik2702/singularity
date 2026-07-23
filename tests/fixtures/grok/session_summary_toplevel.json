@@ -1,0 +1,20 @@
+{
+  "info": {
+    "id": "019f902b-6678-7562-b484-fa321cd86011",
+    "cwd": "D:\\iso\\proj"
+  },
+  "session_summary": "TOOLCALL please run the probe tool",
+  "created_at": "2026-07-23T18:09:51.234839800Z",
+  "updated_at": "2026-07-23T18:09:54.965653400Z",
+  "num_messages": 12,
+  "num_chat_messages": 9,
+  "current_model_id": "probe",
+  "next_trace_turn": 1,
+  "chat_format_version": 1,
+  "request_id": "6ce13481-4c21-4c0d-acaa-da03c444243b",
+  "grok_home": "D:\\iso\\grokhome",
+  "last_active_at": "2026-07-23T18:09:54.965653400Z",
+  "generated_title": "TOOLCALL please run the probe tool",
+  "agent_name": "grok-build-plan",
+  "sandbox_profile": "off"
+}

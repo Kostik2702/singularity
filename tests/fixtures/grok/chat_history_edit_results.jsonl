@@ -1,0 +1,6 @@
+{"type":"assistant","content":"","tool_calls":[{"id":"call_762af7f0","name":"write","arguments":"{\"file_path\": \"D:\\\\iso\\\\proj\\\\probe_written.txt\", \"content\": \"probe file content\\n\"}"}],"model_id":"probe"}
+{"type":"tool_result","tool_call_id":"call_762af7f0","content":"The file D:\\iso\\proj\\probe_written.txt has been created."}
+{"type":"assistant","content":"","tool_calls":[{"id":"call_ed8d8b5a","name":"write","arguments":"{\"file_path\": \"Q:\\\\no-such-drive\\\\dir\\\\probe.txt\", \"content\": \"probe file content\\n\"}"}],"model_id":"probe"}
+{"type":"tool_result","tool_call_id":"call_ed8d8b5a","content":"Tool `write` failed: IO Error: failed to create whole tree"}
+{"type":"assistant","content":"","tool_calls":[{"id":"call_a9a10bad","name":"run_terminal_command","arguments":"{\"command\": \"echo PROBE-TOOL-OK\"}"}],"model_id":"probe"}
+{"type":"tool_result","tool_call_id":"call_a9a10bad","content":"Failed to parse arguments for tool `run_terminal_command`: missing field `description`\n\nYour original arguments:\n{\"command\": \"echo PROBE-TOOL-OK\"}"}

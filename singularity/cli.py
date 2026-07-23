@@ -732,6 +732,13 @@ def cmd_uninstall(cfg, _args) -> int:
     print(f"gemini: profile {g['profile']}, {g['hooks']} hook(s) removed, "
           f"{g['skills_removed']} skill link(s) removed, {g['skills_kept']} kept (foreign)")
 
+    # Grok artifacts (owned managed AGENTS.md block, engine-pointing skill links;
+    # config.toml, sessions, credentials and foreign content are never touched)
+    _rk = _load("register_grok")
+    k = _rk.uninstall()
+    print(f"grok: profile {k['profile']}, {k['hooks']} hook(s) removed, "
+          f"{k['skills_removed']} skill link(s) removed, {k['skills_kept']} kept (foreign)")
+
     for job in (scheduler.Job("nightly-index", [], daily_at="03:00"),   # T02 legacy
                 scheduler.Job("nightly", [], daily_at="03:00"),         # T12
                 scheduler.Job("watch", [], at_login=True)):

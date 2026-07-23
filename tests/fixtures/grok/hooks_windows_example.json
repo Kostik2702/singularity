@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "D:/tools/python/python.exe D:/tools/hooks/session_start.py" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "& \"D:\\tools\\python\\python.exe\" \"D:\\tools\\hooks\\stop_capture.py\"", "timeout": 30 }
+        ]
+      }
+    ]
+  }
+}

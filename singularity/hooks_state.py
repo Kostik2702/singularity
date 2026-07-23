@@ -6,12 +6,14 @@ tolerant JSON read already used by singularity.hooks.capture_decision so the
 same fail-open behavior is visible here as `source: "error"` instead of a
 silent default.
 
-Scope: capture hooks only (Claude Stop, Gemini AfterAgent). SessionStart and
-any future guard hooks are untouched by every function in this module.
+Scope: capture hooks only (Claude Stop, Gemini AfterAgent, Grok Stop).
+SessionStart and any future guard hooks are untouched by every function in
+this module.
 """
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,7 @@ from .config import Config, validate_config
 CLAUDE_SETTINGS = "settings.json"
 GEMINI_SETTINGS = "settings.json"
 AFTER_AGENT_HOOK_NAME = "singularity-after-agent"
+GROK_HOOK_FILE = "singularity.json"
 
 # T02: single shared natural-language contract, injected verbatim into the
 # Claude SessionStart context, the Codex ~/.codex/AGENTS.md managed block and
@@ -107,6 +110,27 @@ def _gemini_installed() -> bool:
     return False
 
 
+def _grok_installed() -> bool:
+    """True if the Singularity-owned Stop hook file exists in the Grok config
+    root ($GROK_HOME else ~/.grok — the same resolver register_grok uses) and
+    carries our grok_stop_capture.py command."""
+    env = os.environ.get("GROK_HOME", "").strip()
+    grok_home = Path(env) if env else Path.home() / ".grok"
+    data, error = _read_json_tolerant(grok_home / "hooks" / GROK_HOOK_FILE)
+    if error is not None:
+        return False
+    stop = data.get("hooks", {}).get("Stop", [])
+    if not isinstance(stop, list):
+        return False
+    for entry in stop:
+        if not isinstance(entry, dict):
+            continue
+        for h in entry.get("hooks", []):
+            if isinstance(h, dict) and "grok_stop_capture.py" in str(h.get("command", "")):
+                return True
+    return False
+
+
 def client_states(vault: Path) -> dict[str, dict[str, Any]]:
     """Per-client installed/supported/mode/effective. `effective` additionally
     requires the desired auto_capture flag to be on — installed-but-disabled
@@ -114,6 +138,7 @@ def client_states(vault: Path) -> dict[str, dict[str, Any]]:
     enabled = capture_config_state(vault)["configured"]
     claude_installed = _claude_installed()
     gemini_installed = _gemini_installed()
+    grok_installed = _grok_installed()
     return {
         "claude": {"installed": claude_installed, "supported": True, "mode": "block",
                    "effective": claude_installed and enabled},
@@ -122,6 +147,10 @@ def client_states(vault: Path) -> dict[str, dict[str, Any]]:
         # Codex never receives a runtime capture hook (install/register_codex.py
         # deploys only AGENTS.md + skill junctions) — always unsupported, not probed.
         "codex": {"installed": False, "supported": False, "mode": "none", "effective": False},
+        # Grok Stop hook mirrors Claude's block-mode gate (GRK-00 proved the
+        # Claude-compatible stop-gate vocabulary; GRK-04 shipped the adapter).
+        "grok": {"installed": grok_installed, "supported": True, "mode": "block",
+                 "effective": grok_installed and enabled},
     }
 
 

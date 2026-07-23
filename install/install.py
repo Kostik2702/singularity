@@ -97,6 +97,14 @@ def main(argv: list[str] | None = None) -> int:
     if register_gemini.main() != 0:
         failures.append("register_gemini")
 
+    print("== Phase 4d: Grok profile + skills ==")
+    import register_grok
+    # Same contract: absent client -> rc 0 (skip); Singularity never downloads,
+    # authenticates or upgrades Grok. A nonzero here means Grok IS present and
+    # registration genuinely failed.
+    if register_grok.main() != 0:
+        failures.append("register_grok")
+
     if not args.skip_schedule:
         print("== Phase 5: scheduler ==")
         from singularity.platform import scheduler

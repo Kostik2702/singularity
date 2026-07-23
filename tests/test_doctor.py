@@ -142,8 +142,22 @@ def test_c2_heartbeat_checked_once_registration_healthy(cfg, monkeypatch):
 
 # --- --json contract ---------------------------------------------------------
 
-def _stub_externals(monkeypatch):
-    """Neutralise heavy/external checks so a doctor run is fast + deterministic."""
+def _stub_externals(monkeypatch, tmp_path=None):
+    """Neutralise heavy/external checks so a doctor run is fast + deterministic.
+
+    Also isolates the client blocks (E-gemini / F-grok): a doctor.run(fix=True)
+    against the developer's real home would otherwise run the REAL registrars
+    and mutate ~/.gemini / ~/.grok — exactly what happened once with the grok
+    block (2026-07-23) before this isolation existed."""
+    import pathlib
+    import shutil as shutil_mod
+    import tempfile
+    fake_home = (tmp_path / "home") if tmp_path is not None else \
+        pathlib.Path(tempfile.mkdtemp(prefix="doctor-fake-home-"))
+    fake_home.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(pathlib.Path, "home", classmethod(lambda cls: fake_home))
+    monkeypatch.delenv("GROK_HOME", raising=False)
+    monkeypatch.setattr(shutil_mod, "which", lambda _n: None)
     monkeypatch.setattr(doctor.importlib, "import_module", lambda name: object())
     monkeypatch.setattr(scheduler, "verify", lambda job: {"registered": False})
     monkeypatch.setattr(scheduler, "register", lambda job: "OK")

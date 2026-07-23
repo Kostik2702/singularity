@@ -168,6 +168,100 @@ def gemini_block(rep: Report, fix: bool) -> None:
                 fix="python install/register_gemini.py")
 
 
+def grok_block(rep: Report, fix: bool) -> None:
+    """Block F: verify the Grok Build CLI integration on a WORKING path (version,
+    managed AGENTS.md block, portable skill targets), not mere file presence.
+    Default path is local, read-only, auth-free and network-free: the probe is
+    `grok --version` — never a session (GRK-00: sessions auto-connect real MCP
+    servers even from an isolated GROK_HOME). `--fix` runs ONLY the safe
+    registrar. Absent client is a single SKIP. Runtime capture hooks are not
+    deployed for Grok yet (GRK-04) — reported as SKIP, never a false PASS.
+    Module-level (not a run() closure) so it is unit-testable."""
+    rg = _load_install("register_grok")
+    grok_home = rg._grok_home()
+    if not rg._grok_present():
+        rep.add("F1-grok", "SKIP", "Grok CLI not installed on this machine")
+        return
+    version = rg._grok_version()
+
+    def profile_ok() -> bool:
+        p = grok_home / "AGENTS.md"
+        return p.exists() and rg.BEGIN in p.read_text(encoding="utf-8", errors="ignore")
+
+    def missing_skills() -> list[str]:
+        d = grok_home / "skills"
+        return [n for n in rg.GROK_SKILLS if not (d / n).exists()]
+
+    def hook_state():
+        p = grok_home / "hooks" / rg.HOOK_FILENAME
+        if not p.exists():
+            return False
+        try:
+            data = json.loads(p.read_text(encoding="utf-8-sig"))   # BOM-tolerant read
+        except json.JSONDecodeError:
+            return "malformed"
+        for dfn in data.get("hooks", {}).get("Stop", []):
+            for h in dfn.get("hooks", []):
+                if rg.HOOK_SCRIPT_MARKER in str(h.get("command", "")):
+                    return True
+        return False
+
+    supported = version is not None and version >= rg.MIN_GROK_VERSION
+
+    # --fix runs ONLY the safe registrar (no network/auth) once, then re-checks.
+    fixed = False
+    if fix and (not profile_ok() or missing_skills()
+                or (supported and hook_state() is not True)):
+        rg.main()
+        fixed = True
+
+    if version is None:
+        rep.add("F1-grok", "WARN", "installed, but `grok --version` unreadable")
+    elif version < rg.MIN_GROK_VERSION:
+        rep.add("F1-grok", "WARN",
+                f"grok {'.'.join(map(str, version))} < "
+                f"{'.'.join(map(str, rg.MIN_GROK_VERSION))} (GRK-00 contract unproven below this)")
+    else:
+        rep.add("F1-grok", "PASS", f"grok {'.'.join(map(str, version))}")
+
+    if profile_ok():
+        rep.add("F2-grok-profile", "FIXED" if fixed else "PASS",
+                f"managed AGENTS.md block present in {grok_home}")
+    else:
+        rep.add("F2-grok-profile", "WARN", "managed AGENTS.md block missing",
+                fix="python install/register_grok.py")
+
+    miss = missing_skills()
+    if not miss:
+        rep.add("F3-grok-skills", "FIXED" if fixed else "PASS",
+                f"{len(rg.GROK_SKILLS)} portable skills deployed")
+    else:
+        rep.add("F3-grok-skills", "WARN", f"skills not deployed: {', '.join(miss)}",
+                fix="python install/register_grok.py")
+
+    # Runtime capability: the Stop capture nudge (GRK-04). Dynamic SessionStart
+    # recall stays a documented NO-GO (GRK-00: no context-injection channel) —
+    # the static AGENTS.md instruction covered by F2 is the recall path.
+    h = hook_state()
+    if h == "malformed":
+        rep.add("F4-grok-capture", "FAIL",
+                f"{grok_home / 'hooks' / rg.HOOK_FILENAME} unparseable",
+                fix="repair or remove the file" + (
+                    ", then mb doctor --fix" if supported else
+                    " (re-registration needs grok >= "
+                    f"{'.'.join(map(str, rg.MIN_GROK_VERSION))})"))
+    elif not supported:
+        rep.add("F4-grok-capture", "SKIP",
+                f"Stop capture hook requires grok >= {'.'.join(map(str, rg.MIN_GROK_VERSION))} "
+                "(stop-gate contract unproven below)")
+    elif h is True:
+        rep.add("F4-grok-capture", "FIXED" if fixed else "PASS",
+                "Stop capture hook registered")
+    else:
+        rep.add("F4-grok-capture", "WARN", "Stop capture hook not registered",
+                fix="python install/register_grok.py")
+
+
 def run(cfg: Config, fix: bool = False, heavy: bool = False,
         as_json: bool = False) -> int:
     rep = Report(quiet=as_json)
@@ -576,6 +670,9 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     # ---- Block E: Gemini CLI integration (GCLI-05) --------------------
     _guard(rep, "E-gemini", lambda: gemini_block(rep, fix))
+
+    # ---- Block F: Grok Build CLI integration (GRK-03/04) --------------
+    _guard(rep, "F-grok", lambda: grok_block(rep, fix))
 
     # ---- summary -------------------------------------------------------
     counts = rep.counts()
