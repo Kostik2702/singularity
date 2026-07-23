@@ -1,0 +1,9 @@
+{
+  "hookEventName": "session_start",
+  "sessionId": "019f9016-edf9-7bc0-afac-f3113c2d197e",
+  "cwd": "D:\\iso\\proj",
+  "workspaceRoot": "D:\\iso\\proj",
+  "timestamp": "2026-07-23T17:47:29.892391100+00:00",
+  "permissionMode": "default",
+  "source": "new"
+}

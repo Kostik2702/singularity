@@ -1,0 +1,66 @@
+{
+  "grokVersion": "0.2.111",
+  "projectInstructions": [
+    {
+      "path": "D:\\iso\\grokhome\\Agents.md",
+      "scope": "global",
+      "fileType": "agents_md",
+      "sizeBytes": 75,
+      "approxTokens": 18
+    },
+    {
+      "path": "D:\\iso\\grokhome\\rules\\probe-rule.md",
+      "scope": "global",
+      "fileType": "rules",
+      "sizeBytes": 31,
+      "approxTokens": 7
+    },
+    {
+      "path": "[REAL_PROFILE]\\.claude\\Claude.md",
+      "scope": "global",
+      "fileType": "agents_md",
+      "sizeBytes": 11502,
+      "approxTokens": 2875,
+      "vendor": "claude",
+      "compatibilityStatus": "enabled"
+    }
+  ],
+  "skills": [
+    {
+      "name": "probe-dupe",
+      "description": "SENTINEL-DUPE-GROKHOME",
+      "source": { "type": "user", "path": "D:\\iso\\grokhome\\skills\\probe-dupe\\SKILL.md" },
+      "userInvocable": true
+    },
+    {
+      "name": "probe-linked",
+      "description": "junction-linked sentinel skill",
+      "source": { "type": "user", "path": "D:\\iso\\grokhome\\skills\\probe-linked\\SKILL.md" },
+      "userInvocable": true
+    },
+    {
+      "name": "probe-claude-only",
+      "description": "claude-only sentinel skill",
+      "source": { "type": "user", "path": "D:\\iso\\home\\.claude\\skills\\probe-claude-only\\SKILL.md" },
+      "userInvocable": true,
+      "vendor": "claude",
+      "compatibilityStatus": "enabled"
+    }
+  ],
+  "hooks": [
+    {
+      "event": "SessionStart",
+      "hookType": "command",
+      "target": "[REAL_PROFILE python hook command from ~/.claude/settings.json]",
+      "source": { "type": "user", "path": "[REAL_PROFILE]\\.claude" },
+      "matcher": null
+    },
+    {
+      "event": "SessionStart",
+      "hookType": "command",
+      "target": "echo grokhome-sessionstart",
+      "source": { "type": "user", "path": "D:\\iso\\grokhome\\hooks" },
+      "matcher": null
+    }
+  ]
+}

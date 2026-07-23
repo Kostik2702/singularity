@@ -1,0 +1,8 @@
+{
+  "CLAUDE_PROJECT_DIR": "D:\\iso\\proj",
+  "GROK_HOME": "D:\\iso\\grokhome",
+  "GROK_HOOK_EVENT": "stop",
+  "GROK_HOOK_NAME": "global/probe:stop[0].hooks[0]",
+  "GROK_SESSION_ID": "019f9016-edf9-7bc0-afac-f3113c2d197e",
+  "GROK_WORKSPACE_ROOT": "D:\\iso\\proj"
+}
