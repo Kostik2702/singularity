@@ -1,8 +1,8 @@
 # 🧠 Singularity
 
-**A personal AI memory system for Claude Code, Codex, and Gemini CLI** — your assistant remembers what matters, finds it in milliseconds, and gets smarter with every mistake.
+**A personal AI memory system for Claude Code, Codex, Gemini CLI, and Grok Build CLI** — your assistant remembers what matters, finds it in milliseconds, and gets smarter with every mistake.
 
-Singularity turns an [Obsidian](https://obsidian.md) vault into a living, self-maintaining memory for your AI assistant: knowledge is **captured automatically where the client supports hooks**, **indexed on save**, **retrieved semantically** (Russian & English, ~15–70 ms), and **fed back into new Claude/Gemini sessions**. All three clients share the same vault, CLI, and portable skills; Codex support currently has no runtime hook. A set of disciplined skills, agents, and multi-agent councils keeps the assistant's reasoning honest.
+Singularity turns an [Obsidian](https://obsidian.md) vault into a living, self-maintaining memory for your AI assistant: knowledge is **captured automatically where the client supports hooks**, **indexed on save**, **retrieved semantically** (Russian & English, ~15–70 ms), and **fed back into new Claude/Gemini sessions**. All four clients share the same vault, CLI, and portable skills; Grok gets the capture nudge but static (not injected) recall, and Codex support currently has no runtime hook. A set of disciplined skills, agents, and multi-agent councils keeps the assistant's reasoning honest.
 
 Since **v0.3.0** the same engine also ships **[Website Factory](#website-factory--reference-to-release-pipeline)** — a reference-to-release pipeline that compiles a brief into a released motion/3D site, letting no unvetted external code into your project without passing a deterministic quarantine and QA gates.
 
@@ -31,7 +31,7 @@ Everything lives in **plain Markdown inside your Obsidian vault** — no proprie
 
 ```mermaid
 graph TB
-    subgraph CC["Claude Code / Codex / Gemini"]
+    subgraph CC["Claude Code / Codex / Gemini / Grok"]
         MAIN["session"]
         SK["29 manifest-managed skills<br/>12 portable, 17 Claude-only"]
         AG["8 agents + 3 councils<br/>(Claude-only)"]
@@ -109,7 +109,7 @@ The wrappers are ~20 lines each; all logic lives in `install/install.py`, which 
 1. **Python env** — creates `.venv` and installs dependencies.
 2. **Vault** — asks for your vault path, creates the memory folder tree (`learnings/`, `decisions/`, `howto/`, `incidents/`, `rules/`, `reference/`, `changelog/`, `templates/`, `_moc/`), binds it via `~/.singularity.json`.
 3. **Local model + first index + daemon** — explicitly adopts or downloads the embedding snapshot once (~470 MB) into the configured `hf_cache`, writes a pinned local manifest, starts the daemon, and builds the first index inside that warm process. Search/index runtime opens only that local snapshot (`local_files_only`); it never silently falls back to Hugging Face.
-4. **Client wiring** — registers four managed hook entries in `~/.claude/settings.json`: SessionStart, Stop, and two opt-in PreToolUse checks (module context and vault guard). Your existing settings are backed up and preserved; every entry we own is marked `"_mb": true` for clean uninstall. Then, **if they are installed**, the installer wires OpenAI Codex and Google Gemini to the same memory (see [Other CLI clients](#other-cli-clients--codex--gemini)).
+4. **Client wiring** — registers four managed hook entries in `~/.claude/settings.json`: SessionStart, Stop, and two opt-in PreToolUse checks (module context and vault guard). Your existing settings are backed up and preserved; every entry we own is marked `"_mb": true` for clean uninstall. Then, **if they are installed**, the installer wires OpenAI Codex, Google Gemini and xAI Grok Build to the same memory (see [Other CLI clients](#other-cli-clients--codex-gemini--grok)).
 5. **Scheduler + verify** — registers the nightly index rebuild and the on-save watcher with your OS scheduler (Task Scheduler / launchd / systemd — all with missed-run catch-up), then finishes with `mb doctor`.
 
 Re-running the installer is safe — it refreshes and re-verifies instead of breaking things. To remove everything (hooks, scheduled jobs, daemon) **without touching your vault**: `mb uninstall`. Already have Singularity installed? See [docs/UPGRADE.md](docs/UPGRADE.md) for exactly what changes on upgrade, and [docs/ROLLBACK.md](docs/ROLLBACK.md) to turn any specific new feature back off.
@@ -122,9 +122,9 @@ mb doctor
 
 You want a summary with `PASS` well into the double digits and no `FAIL` (real example from this repo's own dev machine: `PASS 19 | WARN 3` — the WARNs were "nightly job not yet migrated", "watcher not currently running", "vault guard disabled by default", all benign). Anything broken gets a status (`FAIL`/`WARN`/`AUTH`/`SKIP`), a reason, and a fix hint; `mb doctor --fix` repairs the light stuff. `mb doctor --fix --heavy` may adopt/download a missing embedding model, restart the daemon, and rebuild the index — the recovery path for an existing installation that predates the local-model manifest.
 
-### Other CLI clients — Codex & Gemini
+### Other CLI clients — Codex, Gemini & Grok
 
-Singularity is native to Claude Code, but the installer also wires **OpenAI Codex CLI** and **Google Gemini CLI** to the same memory — the same vault, `mb` CLI, SEM-FIRST rule, and skills. Each client is detected and configured **only if it is already installed**; Singularity never installs a third-party CLI for you. Exactly which skills go to which client is declared in one place, `install/skill_manifest.py` — every installer computes its list from it (so Claude/Codex/Gemini cannot drift apart into three independently-maintained lists), and every skill excluded from a client carries a recorded, human-readable reason (e.g. the three council skills stay Claude-only because they spawn Claude subagents via the Agent/Task tool that Codex/Gemini have no equivalent for — not a silent omission).
+Singularity is native to Claude Code, but the installer also wires **OpenAI Codex CLI**, **Google Gemini CLI** and **xAI Grok Build CLI** to the same memory — the same vault, `mb` CLI, SEM-FIRST rule, and skills. Each client is detected and configured **only if it is already installed**; Singularity never installs a third-party CLI for you. Exactly which skills go to which client is declared in one place, `install/skill_manifest.py` — every installer computes its list from it (so the clients cannot drift apart into independently-maintained lists), and every skill excluded from a client carries a recorded, human-readable reason (e.g. the three council skills stay Claude-only because they spawn Claude subagent personas via the Agent/Task tool — Codex/Gemini have no subagent executor, and Grok's `spawn_subagent` has not been adapted for them — not a silent omission).
 
 **Codex** gets a managed profile block in `~/.codex/AGENTS.md` (identity, vault path, `mb` CLI, SEM-FIRST, shortcuts — marker-delimited, your own text untouched) plus the portable skills junctioned into `~/.codex/skills/`. **Codex currently has no runtime hook and no `mb doctor` health check of its own** (unlike Gemini's `E*-gemini` block) — this is an honest, current limitation, not an oversight: verify a Codex install by checking `~/.codex/AGENTS.md` and `~/.codex/skills/` directly, or `mb hooks status --json` (which reports Codex as `supported: false` for the capture hook specifically, since Codex never receives one).
 
@@ -154,6 +154,21 @@ gemini -p "summarise the vault" --output-format json   # headless: clean JSON, h
 **Good to know:** activating a skill may ask for one-time consent, and Gemini may prompt to trust the workspace — both are Gemini's own security, not something Singularity bypasses. The capture nudge is a reminder only (no retry, no extra model turn); opt out with `"auto_capture": false` in `<vault>/.mb/config.json`. Gemini's own experimental *Auto Memory* is separate and does not replace vault capture.
 
 **Lifecycle:** re-run the installer (or `mb doctor --fix`) any time to refresh; `mb doctor` reports Gemini health under the `E*-gemini` checks; `mb uninstall` removes **only** Singularity-owned artifacts (the managed block, our two named hooks, and skill links that resolve back into the engine) — foreign content, credentials, Node, the Gemini CLI and your vault are untouched, and every settings mutation leaves a timestamped backup.
+
+**Grok Build CLI (xAI)** — supported at the capability tier its contract actually proves (grok **0.2.111**, pinned by `tests/fixtures/grok/`):
+
+- **Prerequisites (you install these yourself):** the official CLI — `curl -fsSL https://x.ai/cli/install.sh | bash` (macOS/Linux/Git Bash) or `irm https://x.ai/cli/install.ps1 | iex` (Windows PowerShell); auth is Grok's own (`grok login` / `XAI_API_KEY`, see [x.ai docs](https://docs.x.ai)). Singularity never installs, updates or authenticates Grok.
+- **What the installer does** (idempotent; config root is `$GROK_HOME` when set, else `~/.grok` — the CLI's own resolution order): a managed `SINGULARITY:BEGIN/END` block in `<grok-home>/AGENTS.md` (identity, vault path, SEM-FIRST, capture rule, shortcuts — Grok loads it into every session); the same 12 portable skills junctioned into `<grok-home>/skills/` (a native skill wins name-dedup over any `~/.claude` compat copy, so this is the one effective source); and one Singularity-owned hook file `<grok-home>/hooks/singularity.json` with the **Stop capture nudge** — registered only when the probed version is ≥ 0.2.111, where the stop-gate contract is proven.
+- **Capability truth** (each observed on the real CLI, not promised): **capture nudge — yes**, block-mode like Claude, at most once per substantial session, honors `auto_capture`; when it fires it costs one extra model round (`num_turns` +1 in headless JSON — schema otherwise identical, stderr clean). **Dynamic session-start recall — no**: Grok ignores hook stdout and `additionalContext` on SessionStart/UserPromptSubmit, so recall is a *static instruction* in the managed AGENTS.md block (the agent runs `mb search` itself) rather than injected live context. **`mb reflect` analytics — yes**: top-level Grok sessions are counted (subagent children excluded via their `session_kind` marker); skill invocations are not measurable in Grok transcripts and honestly stay 0.
+
+```bash
+grok inspect          # verify: managed AGENTS.md block + 12 skills discovered
+grok                  # interactive session — AGENTS.md instructions loaded
+grok -p "summarise the vault" --output-format json   # headless: clean JSON
+mb hooks status       # grok: mode=block, installed/effective state
+```
+
+**Lifecycle:** `mb doctor` reports Grok health under `F1..F4-grok` (version, profile, skills, capture hook; default path is offline and never starts a session); `mb doctor --fix` re-runs only the safe registrar; `mb uninstall` removes exactly the managed AGENTS.md block, the `singularity.json` hook file (only if it is ours) and skill links resolving into the engine — sessions, `config.toml`, credentials and the Grok CLI itself are never touched.
 
 ---
 
@@ -373,7 +388,7 @@ mb reflect --days 30
   skill_invocation   19/43  (44%)
 excluded: codex (no runtime hook / no discoverable transcript in this integration)
 ```
-(real output — this repo's own dev machine, 43 actual Claude/Gemini sessions from the last 30 days)
+(real output — this repo's own dev machine, 43 actual Claude/Gemini sessions from the last 30 days; Grok sessions are counted the same way once they exist — `grok=N` appears in the by-client line, with subagent child sessions excluded)
 
 Reading it: **43 top-level sessions** is the denominator every rate below is measured against — regardless of whether they touched Singularity at all, so a session that searched, read, and captured is never excluded from its own denominator. `search_then_read` (40%) — a search was followed by actually reading something, not fired and ignored. `vault_touch` (42%) — the vault was read or written at all. `code_edits` (28%) — a successful edit happened outside the vault. `eligible_research` (21%) — real search/read activity with **zero** code edits: pure investigation sessions, which a naive "did they edit code" metric would completely miss. `skill_invocation` (44%) — an engine-owned skill fired at least once.
 
@@ -392,7 +407,7 @@ watcher: alive (heartbeat 4.2s ago)
 scheduler[nightly]: registered=True
 scheduler[watch]: registered=True
 disk(.mb): 41.2 MB
-capture hooks: enabled (source: explicit); installed: claude=yes, gemini=yes, codex=no
+capture hooks: enabled (source: explicit); installed: claude=yes, gemini=yes, codex=no, grok=yes
 ```
 (real output — index/daemon/watcher/scheduler/disk/hooks in one snapshot; `mb status --json` adds `backlog` (digest actionable count) and `cache_age` (hours since each nightly snapshot last refreshed))
 
@@ -457,7 +472,7 @@ This binds the selected vault in `~/.singularity.json`, creates the standard fol
 | `memory-curator` | *curator, проверь память* | Vault health: broken links, orphans, semantic link suggestions, **chunk-level near-duplicates, supersession candidates, context-budget issues** (approval required, never auto-writes) |
 | `compaction-plan` | *cp, сохрани состояние* | Snapshots session state (≤120 lines) to the vault before a context clear; next session offers to resume, git-reconciles, then deletes the plan |
 | `report` / `error-reports` | *ты ошибся / process reports* | Mistake → PENDING note → preventive rule embedded where it will actually fire → `LEARNED` |
-| `council` | *council, X vs Y, trade-off* | Architectural decision by adversarial multi-agent rounds (**Claude-only** — spawns subagents Codex/Gemini have no equivalent for, see `install/skill_manifest.py`) |
+| `council` | *council, X vs Y, trade-off* | Architectural decision by adversarial multi-agent rounds (**Claude-only** — spawns Claude subagent personas; Codex/Gemini have no subagent executor and Grok's `spawn_subagent` is not adapted for them, see `install/skill_manifest.py`) |
 | `planning-council` | *plc, разбей задачу* | Decomposition + Klein pre-mortem + three-point estimation (Claude-only) |
 | `observation-council` | *oc, why is X happening* | Hypothesis-driven root cause hunt: every hypothesis must survive a falsification attempt (Claude-only) |
 
@@ -731,6 +746,7 @@ singularity/
 │   ├── session_start.py       # inject memory context into every session (Claude + Gemini share this)
 │   ├── stop_capture.py        # auto-capture gate (blocks stop once, BOM-proof)
 │   ├── gemini_session_start.py / gemini_after_agent.py   # Gemini adapters over the shared cores
+│   ├── grok_stop_capture.py   # Grok Stop-gate capture adapter (camelCase wire, GRK-04)
 │   ├── module_context.py      # PreToolUse module-context adapter (Claude)
 │   ├── vault_guard.py          # PreToolUse vault-guard adapter (Claude)
 │   └── capture_decision.py     # shared per-session capture marker helper
@@ -795,7 +811,7 @@ Logs: `<vault>/.mb/daemon.log`, `watch.log`, `mb.log`. Last doctor run: `.mb/doc
 
 ## Roadmap
 
-- [x] **CI matrix** — Windows / macOS / Linux × Python 3.10/3.11/3.12, `.github/workflows/ci.yml` (fast gate on every push; opt-in heavy ML smoke and real-Gemini-CLI E2E via `workflow_dispatch`)
+- [x] **CI matrix** — Windows / macOS / Linux × Python 3.10/3.11/3.12, `.github/workflows/ci.yml` (fast gate on every push; opt-in heavy ML smoke and real-Gemini-CLI / real-Grok-CLI E2E via `workflow_dispatch`)
 - [x] **Website Factory** (v0.3.0) — reference-to-release motion/3D pipeline: deterministic trust-layer CLIs (`imgqa`/`design-scout`/`pattern-scout`/`component-intake`), 14 skills + 2 loop agents, E09 state graph with hard owner gates (see [Website Factory](#website-factory--reference-to-release-pipeline))
 - [ ] **Codex health checks** — Codex gets an install phase (profile + skill junctions) but no `mb doctor` block and no runtime hook yet, unlike Gemini's `E*-gemini` checks (see "Other CLI clients" above) — verify manually for now
 - [ ] **Code index** — semantic search over your source repos, merged with memory results (`code_repos_dir`)

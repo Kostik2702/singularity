@@ -59,10 +59,13 @@ def iso(tmp_path, monkeypatch):
 
 
 def _inspect_json(iso):
+    # encoding pinned to utf-8: inspect output is UTF-8 and CI Windows'
+    # locale codec (cp1252) crashes the text-mode reader thread otherwise
     proc = subprocess.run(["grok", "inspect", "--json"], cwd=iso["proj"],
-                          capture_output=True, text=True, timeout=180,
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=180,
                           env=os.environ.copy(), shell=False)
-    assert proc.returncode == 0, proc.stderr[-2000:]
+    assert proc.returncode == 0, (proc.stderr or "")[-2000:]
     return json.loads(proc.stdout)
 
 
@@ -152,9 +155,10 @@ def test_grok_home_with_spaces(tmp_path, monkeypatch):
 
     assert rg.main() == 0
     proc = subprocess.run(["grok", "inspect", "--json"], cwd=proj,
-                          capture_output=True, text=True, timeout=180,
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=180,
                           env=os.environ.copy())
-    assert proc.returncode == 0, proc.stderr[-2000:]
+    assert proc.returncode == 0, (proc.stderr or "")[-2000:]
     report = json.loads(proc.stdout)
     skills = {s["name"] for s in report.get("skills", [])}
     assert set(rg.GROK_SKILLS) <= skills
