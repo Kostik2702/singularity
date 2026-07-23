@@ -105,6 +105,27 @@ See `hooks_windows_example.json` for the two safe shapes.
   toolCallCount, toolsUsed, modelsUsed, contextTokensUsed…) — prefer it for metrics before
   parsing transcripts.
 
+## GRK-06 test matrix
+
+- **Unit/contract tests** (default CI, 3 OS × py3.10–3.12): every `test_grok_*`
+  file runs fully isolated (env `GROK_HOME` + patched `Path.home`; a leaked
+  developer `GROK_HOME` is explicitly `delenv`-ed in fixtures). No network, no
+  auth, no real profile mutation.
+- **grok-e2e** (`pytest -m grok_e2e`, opt-in `workflow_dispatch` job in
+  `.github/workflows/ci.yml`): installs the official stable CLI
+  (`curl -fsSL https://x.ai/cli/install.sh | bash` on POSIX,
+  `irm https://x.ai/cli/install.ps1 | iex` on Windows), then drives
+  version-probe → register → real `grok inspect --json` discovery → doctor →
+  exact-owned uninstall in an isolated `GROK_HOME`, plus a spaces-in-path root.
+  **No xAI credentials anywhere** — sessions are never started; authenticated
+  headless checks are deliberately absent from CI (they run only via
+  `tools/grok_contract_probe.py` against a local fake endpoint).
+- **Windows-only scenarios**: junction removal preserves the engine target;
+  the registered hook command uses the call-operator shape (`& "..."`).
+- **Real Windows smoke** (2026-07-23, grok 0.2.111, this machine): 5/5
+  `grok_e2e` tests passed against the real binary; platform capability
+  downgrade: none beyond the documented compat-scanner env-isolation limit.
+
 ## Known gaps / residual risks
 
 1. Real-credential smoke (OAuth/`XAI_API_KEY`) not run — deliberately (no-network rule).
