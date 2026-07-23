@@ -28,6 +28,18 @@ successful invocations):
       Gemini CLI (0.50.0, per tests/fixtures/gemini/README.md) has no
       subagent/sidechain concept in its transcript format at all -- nothing
       to exclude beyond the glob itself.
+    - Grok: every <grok-home>/sessions/<encoded-cwd>/<session-id>/ directory
+      (grok-home = $GROK_HOME else ~/.grok, the CLI's own resolution order)
+      holding a chat_history.jsonl AND a parseable summary.json WITHOUT a
+      `session_kind` field. Subagent children are real session dirs in the
+      same tree carrying `"session_kind": "subagent"` (verified live on
+      grok 0.2.111, tests/fixtures/grok/session_summary_subagent.json) --
+      that marker is the exclusion signal. Forked/resumed sessions get their
+      own session-id directory (summary carries parent_session_id) and are
+      counted once each, like any other top-level session. A session dir
+      whose summary.json is missing/unreadable cannot PROVE top-level
+      identity -- it is skipped and counted as malformed, never guessed
+      into the population.
     - Codex: excluded entirely. Confirmed (T15 investigation, corroborated
       by hooks_state.py's own "Codex never receives a runtime capture hook"
       comment) that Codex has no hook registration and no discoverable
@@ -67,6 +79,7 @@ skipped with a count, never silently dropped without trace.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -85,6 +98,14 @@ _READ_TOOLS = {"Read", "Grep", "Glob"}
 _SHELL_TOOLS = {"Bash", "PowerShell"}
 
 _GEMINI_WRITE_TOOLS = {"write_file", "replace", "edit", "create_file"}
+
+_GROK_WRITE_TOOLS = {"write", "search_replace"}
+_GROK_READ_TOOLS = {"read_file", "grep", "list_dir"}
+_GROK_SHELL_TOOLS = {"run_terminal_command"}
+# grok wraps every tool error in a fixed content prefix (verified live,
+# tests/fixtures/grok/chat_history_edit_results.jsonl) -- the ONLY success
+# signal chat_history.jsonl offers for non-shell tools.
+_GROK_FAILURE_PREFIXES = ("Failed to parse arguments",)
 
 # same anchoring convention as session_activity._SANCTIONED_CAPTURE_RE: a
 # preceding shell-separator/start-of-string boundary and a following
@@ -145,6 +166,13 @@ def gemini_transcript_root() -> Path:
     return Path.home() / ".gemini" / "tmp"
 
 
+def grok_session_root() -> Path:
+    """$GROK_HOME else ~/.grok -- the same resolution order the Grok CLI and
+    install/register_grok.py use."""
+    env = os.environ.get("GROK_HOME", "").strip()
+    return (Path(env) if env else Path.home() / ".grok") / "sessions"
+
+
 def _claude_session_paths(root: Path, since: float) -> list[Path]:
     """Top-level (non-subagent) transcripts: *.jsonl files directly under a
     project dir. Never descends into a sibling <session-id>/subagents/ dir
@@ -175,6 +203,42 @@ def _gemini_session_paths(root: Path, since: float) -> list[Path]:
         except OSError:
             continue
     return out
+
+
+def _grok_session_paths(root: Path, since: float) -> tuple[list[Path], int]:
+    """(top-level session DIRS, malformed count). A dir is in the population
+    iff its chat_history.jsonl is inside the window AND its summary.json
+    parses AND carries no `session_kind` (subagent children carry
+    session_kind="subagent"; anything else unexpected is excluded the same
+    conservative way). An unreadable summary is counted as malformed --
+    top-level identity is proven, never assumed."""
+    out: list[Path] = []
+    malformed = 0
+    if not root.is_dir():
+        return out, malformed
+    for group in root.iterdir():
+        if not group.is_dir():
+            continue
+        for sdir in group.iterdir():
+            if not sdir.is_dir():
+                continue
+            history = sdir / "chat_history.jsonl"
+            if not history.is_file():
+                continue
+            try:
+                if history.stat().st_mtime < since:
+                    continue
+            except OSError:
+                continue
+            try:
+                meta = json.loads((sdir / "summary.json").read_text(encoding="utf-8-sig"))
+            except (OSError, json.JSONDecodeError):
+                malformed += 1
+                continue
+            if not isinstance(meta, dict) or meta.get("session_kind") is not None:
+                continue   # subagent child (or unknown kind): excluded, not malformed
+            out.append(sdir)
+    return out, malformed
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +397,104 @@ def _parse_gemini_session(path: Path, vault: Path, known_skills: set[str],
     return activity
 
 
+def _grok_result_failed(name: str, content: str) -> bool:
+    return content.startswith(_GROK_FAILURE_PREFIXES) or (
+        content.startswith("Tool `") and "` failed:" in content[:80])
+
+
+def _parse_grok_session(sdir: Path, vault: Path, known_skills: set[str],
+                        registry: Optional[dict[str, Any]] = None) -> ReflectSession:
+    """Parse one top-level Grok session dir (chat_history.jsonl + summary.json,
+    shapes pinned by tests/fixtures/grok/). project_id comes ONLY from the
+    verified summary.json info.cwd field resolved through the shared project
+    registry -- never from the URL-encoded directory name. Skill invocations
+    stay 0: grok 0.2.111 exposes no skill tool call in chat_history (skills
+    are injected as instructions), so there is nothing deterministic to count
+    -- documented limitation, never guessed from text."""
+    activity = ReflectSession(client="grok", session_id=sdir.name)
+    cwd_path: Optional[Path] = None
+    del known_skills  # no deterministic skill-invocation signal in this format
+
+    try:
+        meta = json.loads((sdir / "summary.json").read_text(encoding="utf-8-sig"))
+        cwd_val = meta.get("info", {}).get("cwd") if isinstance(meta, dict) else None
+        if isinstance(cwd_val, str) and cwd_val.strip():
+            cwd_path = Path(cwd_val)
+            from . import projects as projects_mod
+            activity.project_id = projects_mod.detect_project(registry, cwd_val)
+    except (OSError, json.JSONDecodeError, ValueError):
+        activity.parse_warnings.append("summary unreadable")
+
+    pending: dict[str, tuple[str, dict]] = {}
+    try:
+        with open(sdir / "chat_history.jsonl", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(row, dict):
+                    continue
+                if row.get("type") == "assistant":
+                    for call in row.get("tool_calls") or []:
+                        if not isinstance(call, dict):
+                            continue
+                        name = call.get("name")
+                        cid = call.get("id")
+                        if not isinstance(cid, str) or name not in (
+                                _GROK_WRITE_TOOLS | _GROK_READ_TOOLS | _GROK_SHELL_TOOLS):
+                            continue
+                        try:
+                            args = json.loads(call.get("arguments") or "{}")
+                        except json.JSONDecodeError:
+                            activity.parse_warnings.append(f"unparseable arguments, id={cid}")
+                            continue
+                        if isinstance(args, dict):
+                            pending[cid] = (name, args)
+                elif row.get("type") == "tool_result":
+                    cid = row.get("tool_call_id")
+                    if not isinstance(cid, str) or cid not in pending:
+                        continue
+                    name, args = pending.pop(cid)
+                    content = row.get("content")
+                    if not isinstance(content, str) or _grok_result_failed(name, content):
+                        continue   # failed call never counts
+
+                    if name in _GROK_WRITE_TOOLS:
+                        fp = args.get("file_path")
+                        abs_path = _resolve_arg_path(fp, cwd_path, sdir)
+                        if abs_path is None:
+                            if isinstance(fp, str):
+                                continue
+                            activity.parse_warnings.append(f"{name} missing file_path")
+                            continue
+                        if sa.is_vault_write_path(abs_path, vault):
+                            activity.vault_writes += 1
+                        elif cwd_path is not None and sa.is_code_edit_path(abs_path, cwd_path, vault):
+                            activity.code_edits += 1
+                    elif name in _GROK_READ_TOOLS:
+                        if activity.searched:
+                            activity.search_then_read = True
+                        fp = (args.get("file_path") or args.get("path")
+                              or args.get("absolute_path"))
+                        abs_path = _resolve_arg_path(fp, cwd_path, sdir)
+                        if abs_path is not None and sa.is_vault_write_path(abs_path, vault):
+                            activity.vault_reads += 1
+                    elif name in _GROK_SHELL_TOOLS:
+                        # a shell success is confirmed ONLY by the exit: 0 echo
+                        if not content.startswith("exit: 0"):
+                            continue
+                        command = args.get("command")
+                        if isinstance(command, str) and is_search_command(command):
+                            activity.searched = True
+    except OSError:
+        activity.parse_warnings.append("transcript unreadable")
+    return activity
+
+
 def _resolve_arg_path(raw: Any, cwd: Optional[Path], fallback_base: Path) -> Optional[Path]:
     if not isinstance(raw, str) or not raw.strip():
         return None
@@ -378,6 +540,17 @@ def reflect(cfg: Config, days: int) -> dict[str, Any]:
     for p in _gemini_session_paths(gemini_transcript_root(), since):
         try:
             s = _parse_gemini_session(p, vault, known_skills, registry)
+        except Exception:  # noqa: BLE001
+            malformed += 1
+            continue
+        sessions.append(s)
+        parse_warnings += len(s.parse_warnings)
+
+    grok_dirs, grok_malformed = _grok_session_paths(grok_session_root(), since)
+    malformed += grok_malformed
+    for sdir in grok_dirs:
+        try:
+            s = _parse_grok_session(sdir, vault, known_skills, registry)
         except Exception:  # noqa: BLE001
             malformed += 1
             continue

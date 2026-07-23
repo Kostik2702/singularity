@@ -30,6 +30,9 @@ def _isolate_home(monkeypatch, tmp_path):
     home = tmp_path / "home"
     home.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(reflect.Path, "home", classmethod(lambda cls: home))
+    # GRK-05: the grok walker honors $GROK_HOME -- a leaked developer env var
+    # would point tests at a REAL Grok sessions tree.
+    monkeypatch.delenv("GROK_HOME", raising=False)
     return home
 
 
@@ -491,3 +494,163 @@ def test_run_explicit_days_overrides_config(_isolate_home, cfg):
     cfg.data["reflect_window_days"] = 7
     result = reflect.run(cfg, days=14)
     assert result["window_days"] == 14
+
+
+# --- GRK-05: Grok session walker (fixture shapes = tests/fixtures/grok/) --------
+
+def _grok_summary(session_id, cwd, kind=None, parent=None):
+    meta = {"info": {"id": session_id, "cwd": cwd}, "created_at": "2026-07-23T18:00:00Z",
+            "num_messages": 3, "current_model_id": "m", "chat_format_version": 1}
+    if kind:
+        meta["session_kind"] = kind
+    if parent:
+        meta["parent_session_id"] = parent
+    return meta
+
+
+def _grok_call(cid, name, args):
+    return json.dumps({"type": "assistant", "content": "", "model_id": "m",
+                       "tool_calls": [{"id": cid, "name": name,
+                                       "arguments": json.dumps(args)}]})
+
+
+def _grok_result(cid, content):
+    return json.dumps({"type": "tool_result", "tool_call_id": cid, "content": content})
+
+
+def _write_grok_session(home, session_id, lines, cwd=r"C:\proj", kind=None,
+                        parent=None, summary_raw=None):
+    d = home / ".grok" / "sessions" / "C%3A%5Cproj" / session_id
+    d.mkdir(parents=True, exist_ok=True)
+    if summary_raw is not None:
+        (d / "summary.json").write_text(summary_raw, encoding="utf-8")
+    else:
+        (d / "summary.json").write_text(
+            json.dumps(_grok_summary(session_id, cwd, kind, parent)), encoding="utf-8")
+    (d / "chat_history.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return d
+
+
+def test_grok_walker_excludes_subagent_sessions(_isolate_home, cfg):
+    _write_grok_session(_isolate_home, "sid-top", [_grok_call("c1", "write", {})])
+    _write_grok_session(_isolate_home, "sid-child", [_grok_call("c1", "write", {})],
+                        kind="subagent")
+    result = reflect.reflect(cfg, days=7)
+    assert result["by_client"].get("grok") == 1
+    assert result["total_sessions"] == 1
+
+
+def test_grok_fork_counts_as_its_own_top_level_session(_isolate_home, cfg):
+    _write_grok_session(_isolate_home, "sid-a", ['{"type":"assistant","content":"hi"}'])
+    _write_grok_session(_isolate_home, "sid-b", ['{"type":"assistant","content":"hi"}'],
+                        parent="sid-a")
+    result = reflect.reflect(cfg, days=7)
+    assert result["by_client"].get("grok") == 2
+
+
+def test_grok_malformed_summary_counts_malformed_not_population(_isolate_home, cfg):
+    _write_grok_session(_isolate_home, "sid-bad", ['{"type":"assistant","content":"x"}'],
+                        summary_raw="{ broken json")
+    result = reflect.reflect(cfg, days=7)
+    assert result["by_client"].get("grok") is None
+    assert result["malformed_transcripts"] == 1
+
+
+def test_grok_walker_honors_grok_home_env(_isolate_home, cfg, monkeypatch, tmp_path):
+    custom = tmp_path / "custom-grok"
+    d = custom / "sessions" / "grp" / "sid-env"
+    d.mkdir(parents=True)
+    (d / "summary.json").write_text(json.dumps(_grok_summary("sid-env", r"C:\proj")),
+                                    encoding="utf-8")
+    (d / "chat_history.jsonl").write_text('{"type":"assistant","content":"hi"}\n',
+                                          encoding="utf-8")
+    monkeypatch.setenv("GROK_HOME", str(custom))
+    result = reflect.reflect(cfg, days=7)
+    assert result["by_client"].get("grok") == 1
+
+
+def test_grok_window_excludes_old_sessions(_isolate_home, cfg):
+    d = _write_grok_session(_isolate_home, "sid-old",
+                            ['{"type":"assistant","content":"hi"}'])
+    old = time.time() - 30 * 86400
+    os.utime(d / "chat_history.jsonl", (old, old))
+    result = reflect.reflect(cfg, days=7)
+    assert result["by_client"].get("grok") is None
+
+
+def test_grok_code_edit_and_vault_write_boundaries(_isolate_home, cfg):
+    vault = str(cfg.vault / "note.md")
+    lines = [
+        _grok_call("c1", "write", {"file_path": r"C:\proj\a.py", "content": "x"}),
+        _grok_result("c1", "The file C:\\proj\\a.py has been created."),
+        _grok_call("c2", "write", {"file_path": vault, "content": "x"}),
+        _grok_result("c2", "The file has been created."),
+    ]
+    _write_grok_session(_isolate_home, "sid-1", lines)
+    result = reflect.reflect(cfg, days=7)
+    assert result["metrics"]["code_edits"]["count"] == 1
+    assert result["metrics"]["vault_touch"]["count"] == 1
+
+
+def test_grok_failed_tool_calls_not_counted(_isolate_home, cfg):
+    lines = [
+        _grok_call("c1", "write", {"file_path": r"C:\proj\a.py", "content": "x"}),
+        _grok_result("c1", "Tool `write` failed: IO Error: failed to create whole tree"),
+        _grok_call("c2", "write", {"file_path": r"C:\proj\b.py", "content": "x"}),
+        _grok_result("c2", "Failed to parse arguments for tool `write`: missing field"),
+    ]
+    _write_grok_session(_isolate_home, "sid-1", lines)
+    result = reflect.reflect(cfg, days=7)
+    assert result["metrics"]["code_edits"]["count"] == 0
+
+
+def test_grok_search_then_read_requires_exit0_and_order(_isolate_home, cfg):
+    vault_file = str(cfg.vault / "n.md")
+    ok = [
+        _grok_call("c1", "run_terminal_command", {"command": "mb search \"q\"", "description": "d"}),
+        _grok_result("c1", "exit: 0\nresults\n"),
+        _grok_call("c2", "read_file", {"file_path": vault_file}),
+        _grok_result("c2", "note content"),
+    ]
+    _write_grok_session(_isolate_home, "sid-ok", ok)
+    bad = [
+        _grok_call("c1", "run_terminal_command", {"command": "mb search \"q\"", "description": "d"}),
+        _grok_result("c1", "exit: 1\nboom\n"),
+        _grok_call("c2", "read_file", {"file_path": vault_file}),
+        _grok_result("c2", "note content"),
+    ]
+    _write_grok_session(_isolate_home, "sid-bad", bad)
+    result = reflect.reflect(cfg, days=7)
+    assert result["metrics"]["search_then_read"]["count"] == 1
+    assert result["metrics"]["vault_touch"]["count"] == 2   # vault READS still count
+
+
+def test_grok_project_id_from_verified_summary_cwd(_isolate_home, cfg):
+    cfg.data["projects"] = {"proj-x": {"roots": [r"C:\proj"]}}
+    _write_grok_session(_isolate_home, "sid-1", ['{"type":"assistant","content":"hi"}'])
+    result = reflect.reflect(cfg, days=7)
+    assert "proj-x" in result["by_project"] or "general" in result["by_project"]
+
+
+def test_grok_skill_invocations_never_counted_documented_limitation(_isolate_home, cfg):
+    lines = ['{"type":"assistant","content":"using mb-search skill now"}']
+    _write_grok_session(_isolate_home, "sid-1", lines)
+    result = reflect.reflect(cfg, days=7)
+    assert result["metrics"]["skill_invocation"]["count"] == 0
+
+
+def test_grok_secret_prompt_text_never_in_snapshot(_isolate_home, cfg):
+    lines = [
+        json.dumps({"type": "user", "content": [{"type": "text", "text": SECRET}],
+                    "prompt_index": 0}),
+        _grok_call("c1", "write", {"file_path": r"C:\proj\a.py", "content": SECRET}),
+        _grok_result("c1", "The file has been created."),
+    ]
+    _write_grok_session(_isolate_home, "sid-1", lines)
+    result = reflect.run(cfg, days=7)
+    snapshot = (cfg.mb_dir / reflect.SNAPSHOT_NAME).read_text(encoding="utf-8")
+    history = (cfg.mb_dir / reflect.HISTORY_NAME).read_text(encoding="utf-8")
+    for blob in (json.dumps(result), snapshot, history):
+        assert SECRET not in blob
+        assert "sid-1" not in blob            # session ids never serialized
+        assert "C%3A%5Cproj" not in blob      # encoded paths never serialized
