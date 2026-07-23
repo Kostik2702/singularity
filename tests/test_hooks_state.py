@@ -157,7 +157,7 @@ def test_status_shape_default(home, vault):
     assert data["configured"] is True
     assert data["default"] is True
     assert data["source"] == "default"
-    assert set(data["clients"]) == {"claude", "gemini", "codex"}
+    assert set(data["clients"]) == {"claude", "gemini", "codex", "grok"}
     assert data["warnings"] == []
     json.dumps(data)   # JSON-serializable
 

@@ -168,6 +168,67 @@ def gemini_block(rep: Report, fix: bool) -> None:
                 fix="python install/register_gemini.py")
 
 
+def grok_block(rep: Report, fix: bool) -> None:
+    """Block F: verify the Grok Build CLI integration on a WORKING path (version,
+    managed AGENTS.md block, portable skill targets), not mere file presence.
+    Default path is local, read-only, auth-free and network-free: the probe is
+    `grok --version` — never a session (GRK-00: sessions auto-connect real MCP
+    servers even from an isolated GROK_HOME). `--fix` runs ONLY the safe
+    registrar. Absent client is a single SKIP. Runtime capture hooks are not
+    deployed for Grok yet (GRK-04) — reported as SKIP, never a false PASS.
+    Module-level (not a run() closure) so it is unit-testable."""
+    rg = _load_install("register_grok")
+    grok_home = rg._grok_home()
+    if not rg._grok_present():
+        rep.add("F1-grok", "SKIP", "Grok CLI not installed on this machine")
+        return
+    version = rg._grok_version()
+
+    def profile_ok() -> bool:
+        p = grok_home / "AGENTS.md"
+        return p.exists() and rg.BEGIN in p.read_text(encoding="utf-8", errors="ignore")
+
+    def missing_skills() -> list[str]:
+        d = grok_home / "skills"
+        return [n for n in rg.GROK_SKILLS if not (d / n).exists()]
+
+    # --fix runs ONLY the safe registrar (no network/auth) once, then re-checks.
+    fixed = False
+    if fix and (not profile_ok() or missing_skills()):
+        rg.main()
+        fixed = True
+
+    if version is None:
+        rep.add("F1-grok", "WARN", "installed, but `grok --version` unreadable")
+    elif version < rg.MIN_GROK_VERSION:
+        rep.add("F1-grok", "WARN",
+                f"grok {'.'.join(map(str, version))} < "
+                f"{'.'.join(map(str, rg.MIN_GROK_VERSION))} (GRK-00 contract unproven below this)")
+    else:
+        rep.add("F1-grok", "PASS", f"grok {'.'.join(map(str, version))}")
+
+    if profile_ok():
+        rep.add("F2-grok-profile", "FIXED" if fixed else "PASS",
+                f"managed AGENTS.md block present in {grok_home}")
+    else:
+        rep.add("F2-grok-profile", "WARN", "managed AGENTS.md block missing",
+                fix="python install/register_grok.py")
+
+    miss = missing_skills()
+    if not miss:
+        rep.add("F3-grok-skills", "FIXED" if fixed else "PASS",
+                f"{len(rg.GROK_SKILLS)} portable skills deployed")
+    else:
+        rep.add("F3-grok-skills", "WARN", f"skills not deployed: {', '.join(miss)}",
+                fix="python install/register_grok.py")
+
+    # Honest capability state: no runtime capture/recall hook exists for Grok
+    # until GRK-04 lands (dynamic recall is NO-GO per GRK-00; the capture nudge
+    # is GO but not yet implemented). SKIP — a PASS here would be a false claim.
+    rep.add("F4-grok-capture", "SKIP",
+            "runtime capture hook not implemented for Grok yet (GRK-04)")
+
+
 def run(cfg: Config, fix: bool = False, heavy: bool = False,
         as_json: bool = False) -> int:
     rep = Report(quiet=as_json)
@@ -576,6 +637,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     # ---- Block E: Gemini CLI integration (GCLI-05) --------------------
     _guard(rep, "E-gemini", lambda: gemini_block(rep, fix))
+    _guard(rep, "F-grok", lambda: grok_block(rep, fix))
 
     # ---- summary -------------------------------------------------------
     counts = rep.counts()

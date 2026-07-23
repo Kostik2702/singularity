@@ -122,6 +122,11 @@ def client_states(vault: Path) -> dict[str, dict[str, Any]]:
         # Codex never receives a runtime capture hook (install/register_codex.py
         # deploys only AGENTS.md + skill junctions) — always unsupported, not probed.
         "codex": {"installed": False, "supported": False, "mode": "none", "effective": False},
+        # Grok: the Stop-gate capture nudge is proven possible (GRK-00) but not
+        # implemented yet — honest supported:false until GRK-04 ships a runtime
+        # hook. enable/disable only moves desired auto_capture state and must
+        # never fabricate support here.
+        "grok": {"installed": False, "supported": False, "mode": "none", "effective": False},
     }
 
 

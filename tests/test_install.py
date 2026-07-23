@@ -59,6 +59,7 @@ def _wire_happy_dependencies(monkeypatch, tmp_path, *, doctor_rc=0):
     # them don't ImportError OR touch the real ~/.gemini on the host.
     monkeypatch.setitem(sys.modules, "register_agents", _fake_module("register_agents", 0))
     monkeypatch.setitem(sys.modules, "register_gemini", _fake_module("register_gemini", 0))
+    monkeypatch.setitem(sys.modules, "register_grok", _fake_module("register_grok", 0))
 
 
 def test_install_succeeds_when_all_phases_pass(tmp_path, monkeypatch):
@@ -73,11 +74,11 @@ def test_install_succeeds_when_all_phases_pass(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("failing",
                          ["register_hooks", "register_skills", "register_codex",
-                          "register_agents", "register_gemini"])
+                          "register_agents", "register_gemini", "register_grok"])
 def test_install_fails_when_a_required_phase_fails(tmp_path, monkeypatch, capsys, failing):
     _wire_happy_dependencies(monkeypatch, tmp_path)
     rcs = {"register_hooks": 0, "register_skills": 0, "register_codex": 0,
-           "register_agents": 0, "register_gemini": 0, failing: 1}
+           "register_agents": 0, "register_gemini": 0, "register_grok": 0, failing: 1}
     for name, rc in rcs.items():
         monkeypatch.setitem(sys.modules, name, _fake_module(name, rc))
 
