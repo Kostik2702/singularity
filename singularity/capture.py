@@ -20,6 +20,7 @@ _SECTION_RE = re.compile(r"^## (.+)$", re.MULTILINE)
 _WS_RE = re.compile(r"\s+")
 _PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
 _FM_PROJECT_RE = re.compile(r"(?m)^project:")
+_FM_SOURCES_LINE_RE = re.compile(r"(?m)^sources:[ \t]*(.*)$")
 
 
 def normalize_gist(text: str) -> str:
@@ -126,6 +127,32 @@ def resolve_capture_project(cfg: Any, explicit: Optional[str],
 
     detected = projects.detect_project(registry, str(Path.cwd()))
     return detected, None
+
+
+def with_sources_frontmatter(body: str, source_ids: Optional[list]) -> str:
+    """Insert `sources: [id, ...]` into an already-built frontmatter block —
+    the provenance contract (WIKI-LOOP W04): a note derived from an ingested
+    document must say which one, or the claim is unverifiable.
+
+    An EMPTY `sources:` already present (the templates ship `sources: []` to
+    document the contract) is filled in rather than left alone -- otherwise
+    `mb note new --from-source X` would silently produce a note with no
+    provenance, which is the exact failure this contract exists to prevent.
+    A non-empty value is never clobbered."""
+    if not source_ids or not body.startswith("---\n"):
+        return body
+    end = body.find("\n---", 4)
+    if end == -1:
+        return body
+    block = body[4:end]
+    rendered = "[" + ", ".join(f'"{str(s)}"' for s in source_ids) + "]"
+    match = _FM_SOURCES_LINE_RE.search(block)
+    if match is None:
+        return body[:end] + f"\nsources: {rendered}" + body[end:]
+    if match.group(1).strip() not in ("", "[]", "''", '""', "~", "null"):
+        return body
+    return body[:4] + block[:match.start()] + f"sources: {rendered}" \
+        + block[match.end():] + body[end:]
 
 
 def with_project_frontmatter(body: str, project: Optional[str]) -> str:

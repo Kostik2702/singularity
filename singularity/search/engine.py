@@ -28,32 +28,57 @@ class SearchEngine:
         self.mem_chunks: list[dict[str, Any]] = []
         self.code_embs: np.ndarray | None = None
         self.code_chunks: list[dict[str, Any]] = []
+        # W03: ingested raw sources — a third corpus, opted into per query
+        self.src_embs: np.ndarray | None = None
+        self.src_chunks: list[dict[str, Any]] = []
+        self.sources_warning: str | None = None
         self.reload()
 
     # ------------------------------------------------------------------
-    def _load_one(self, index_dir: Path) -> tuple[Optional[np.ndarray], list[dict]]:
+    def _load_one(self, index_dir: Path
+                  ) -> tuple[Optional[np.ndarray], list[dict], Optional[str]]:
+        """(normalized embeddings, chunks, model name). The model name is read
+        here rather than in a second pass because metadata.json holds every
+        chunk and is megabytes on a real vault — reading it twice per reload
+        would be pure waste on daemon start."""
         from . import indexer
         files = indexer.index_files(index_dir)   # committed generation or legacy flat
         if files is None:
-            return None, []
+            return None, [], None
         emb_path, meta_path = files
         try:
             embs = np.load(emb_path, allow_pickle=False).astype(np.float32)
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
             chunks = meta.get("chunks", [])
             if embs.shape[0] != len(chunks):
-                return None, []
+                return None, [], None
             # normalize defensively (indexes built elsewhere may be unnormalized)
             norms = np.linalg.norm(embs, axis=1, keepdims=True)
             norms[norms == 0] = 1.0
-            return embs / norms, chunks
+            return embs / norms, chunks, meta.get("model")
         except (OSError, ValueError, json.JSONDecodeError):
-            return None, []
+            return None, [], None
 
     def reload(self) -> dict[str, int]:
-        self.mem_embs, self.mem_chunks = self._load_one(self.cfg.memory_index_dir)
-        self.code_embs, self.code_chunks = self._load_one(self.cfg.code_index_dir)
-        return {"memory": len(self.mem_chunks), "code": len(self.code_chunks)}
+        self.mem_embs, self.mem_chunks, mem_model = self._load_one(self.cfg.memory_index_dir)
+        self.code_embs, self.code_chunks, _ = self._load_one(self.cfg.code_index_dir)
+        self.src_embs, self.src_chunks, self.sources_warning = None, [], None
+
+        if self.cfg.get("ingest_index_sources"):
+            src_embs, src_chunks, src_model = self._load_one(self.cfg.sources_index_dir)
+            if src_embs is not None and mem_model and src_model and src_model != mem_model:
+                # Cosine between two different embedding spaces is meaningless.
+                # Serving quiet nonsense here is strictly worse than refusing:
+                # the caller cannot tell a bad match from a mis-built index.
+                self.sources_warning = (
+                    f"sources index was built with model {src_model!r} but the vault "
+                    f"index with {mem_model!r}; source search is disabled until they "
+                    f"match — run `mb ingest index --rebuild`")
+            else:
+                self.src_embs, self.src_chunks = src_embs, src_chunks
+
+        return {"memory": len(self.mem_chunks), "code": len(self.code_chunks),
+                "sources": len(self.src_chunks)}
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -148,6 +173,9 @@ class SearchEngine:
         loc = meta.get("file", "?")
         if meta.get("line"):
             loc = f"{loc}:{meta['line']}"
+        # corpus label: source chunks carry type="source" (pinned by
+        # chunking.extract_source_chunks), so a raw hit is never mistaken for
+        # a wiki note in the compact line.
         tag = meta.get("type") or meta.get("kind") or item["source"]
         if meta.get("project"):
             tag = f"{tag}@{meta['project']}"
@@ -175,6 +203,12 @@ class SearchEngine:
         if not req.get("memory_only"):
             results += self._search_source(q_emb, self.code_embs, self.code_chunks,
                                            "code", req)
+            sources += 1
+        # W03: raw sources are OPT-IN per query. They are never in the default
+        # result set — the wiki is the answer, the raw layer is the escalation.
+        if req.get("include_sources"):
+            results += self._search_source(q_emb, self.src_embs, self.src_chunks,
+                                           "sources", req)
             sources += 1
         results.sort(key=lambda r: r["score"], reverse=True)
 
@@ -205,6 +239,22 @@ class SearchEngine:
             return out
 
         trimmed = [_one(r) for r in results]
-        if req.get("format", "compact") == "json":
-            return {"results": trimmed}
-        return {"lines": [self._compact_line(r) for r in trimmed]}
+        out = ({"results": trimmed} if req.get("format", "compact") == "json"
+               else {"lines": [self._compact_line(r) for r in trimmed]})
+        if req.get("include_sources"):
+            if self.sources_warning:
+                out["sources_warning"] = self.sources_warning
+            elif not self.src_chunks:
+                out["sources_warning"] = (
+                    "no sources indexed — run `mb ingest add <file>` then "
+                    "`mb ingest index`")
+        # `code_index` is loaded here but nothing in the engine builds it — the
+        # code corpus is an unimplemented roadmap item. `--code-only` used to
+        # return an empty result set indistinguishable from "no matches", which
+        # reads as a broken search rather than an absent feature.
+        if req.get("code_only") and not self.code_chunks:
+            out["code_warning"] = (
+                "no code index exists — the code corpus is not implemented yet "
+                "(roadmap); `--code-only` therefore has nothing to search. Use "
+                "`mb search` without it to query the vault.")
+        return out

@@ -37,6 +37,9 @@ CLIENTS = ["claude", "codex", "gemini", "grok"]
 # manifest order. Codex/Gemini golden regression AND the Grok launch set.
 PORTABLE_BASELINE = [
     "mb-search", "mb-memory", "mb-llm-delegate", "mb-onboard", "mb-triage",
+    # W09: mb-ingest is Bash-only (it drives the `mb ingest` CLI) and carries no
+    # Claude-specific machinery, so it ships to every client like its siblings.
+    "mb-ingest",
     "workflow-helper", "grill", "confidence-calibration", "memory-curator",
     "error-reports", "report", "compaction-plan",
 ]

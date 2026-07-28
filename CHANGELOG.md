@@ -8,6 +8,87 @@ specification, not ported line-for-line. Full task-by-task detail, decisions,
 and real-machine verification evidence live in the project vault; this file
 is the repo-facing summary. Commit hashes refer to `master`.
 
+---
+
+# v0.5.0 — WIKI-LOOP: raw sources, ingest fan-out, intel lint (W00–W12)
+
+Closes the gap with the LLM-wiki method: an external document is stored
+immutably with provenance, and its knowledge is deliberately spread across the
+existing pages it actually touches. Full spec, decisions and real-machine
+evidence live in the vault (`03_Tasks/SINGULARITY_WIKI_LOOP_IMPLEMENTATION.md`,
+`decisions/WIKI-LOOP D1…D7`); the user-facing guide is
+[`docs/wiki-loop.md`](docs/wiki-loop.md).
+
+## R1 — the source layer (W00–W04)
+
+- **Decisions D1–D7 recorded before any code** (owner-signed): raw lives in
+  `.mb/sources/` outside the vault tree, indexed as its own corpus, no network
+  in the engine, semantics in skills, hard-deny immutability, fan-out ceiling 15.
+- `singularity/sources.py` — content-addressed ids, atomic registry, write-once
+  storage, Windows-safe slugs, tolerant read / strict write.
+- `mb ingest add|list|show|export` with a contract exit-code scheme, zero-side-effect
+  `--dry-run`, and an explicit refusal (plus the working command) for `http(s)` URLs.
+- **`Corpus` abstraction in the indexer**: scanning, chunking, committing and
+  locking are parameterized by (root, index_dir) instead of hardcoding the vault.
+  Writer locks became per-corpus, so indexing sources never blocks the watcher.
+  `mb search --with-sources` reaches the raw layer; nothing reaches it without
+  the flag.
+- Provenance contract: `sources:` frontmatter, `mb note new --from-source`,
+  two new non-fatal `mb curator` checks, `immutable_roots` denied even in the
+  guard's `audit` mode.
+
+## R2 — the working cycle (W05, W06, W09)
+
+- `mb ingest plan` — deterministic fan-out with mandatory `why` evidence per
+  proposed page, `new_pages`, cross-corpus `conflicts`, and a refusal (rather
+  than nonsense) when the two corpora were built by different models.
+- Shared vector math extracted to `search/similarity.py`; proven bit-identical
+  to the previous inline implementations on the live 3083-chunk index.
+- `mb ingest mark` / `mb ingest log` + `.mb/ingest-log.jsonl`. A handled page
+  stops resurfacing; a re-ingested (re-hashed) document brings it back.
+- Skills: new `mb-ingest` (9 gated steps), `memory-curator` extended with
+  adjudication and the research agenda.
+
+## R3 — intelligence (W07, W08)
+
+- `mb curator contradictions` — cosine band (0.72, 0.90) plus five lexical
+  divergence signals, each producing evidence tokens; verdict journal so a
+  dismissed false positive never returns. **Tuned on real data**: the first
+  run produced 8762 candidates in 27.5 s; requiring an asserting signal,
+  keying numeric mismatches, excluding file:line citations and caching
+  per-chunk features brought it to 653 candidates in 1.4 s with no cap.
+- `mb curator gaps` — six deterministic signals answering "what is missing",
+  with true totals plus a per-signal ceiling so one broad signal cannot bury
+  the rest.
+
+## R4 — migrations, integration, release (W10–W12)
+
+- `mb ingest backfill` — idempotent retro-provenance from `source:` frontmatter
+  and URLs in `reference/` bodies.
+- `schema_version` 1 → 2: 11 additive keys, no value rewriting, `.bak` before
+  the migrating save.
+- **`mb backup` now covers the ingest layer** — registry and every raw file with
+  sha256; `restore` is strictly additive and never overwrites. This is the
+  compensation the D1 storage decision owed: `.mb/sources/` is the only
+  non-reconstructible data in the vault.
+- `mb doctor` block W (FAIL when the registry outlives its files; `--fix` never
+  deletes raw), nightly steps + trend fields, SessionStart ingest nag, sources
+  sections in `mb status` / `mb stats`.
+- E2E on a clean vault, and an R8 regression proving `mb uninstall`,
+  `mb doctor --fix`, the documented rollback and a full reindex all leave every
+  raw file byte-identical.
+
+### Also fixed on the way
+
+- `encoder.resolve_device()` now probes CUDA with a real kernel launch and falls
+  back to CPU. `torch.cuda.is_available()` returning True on a GPU the installed
+  torch has no kernels for took the whole search daemon down; the config key
+  `encoder_device` overrides the probe.
+- `sentence-transformers` pinned `<5` — the 5.x line imports `torchcodec`
+  unconditionally, which needs FFmpeg shared libraries this project has no use for.
+
+---
+
 ## R1 — Hook control MVP (T00–T02)
 
 - `mb hooks status|enable|disable`, natural-language capture-hook mapping,

@@ -112,6 +112,63 @@ client on the next install / `mb doctor --fix` run:
   recall instruction instead), `mb reflect` counts Grok sessions.
   See `tests/fixtures/grok/README.md` for the full evidence matrix.
 
+## WIKI-LOOP: the raw source layer (`schema_version` 1 → 2)
+
+The ingest epic (`W00`–`W12`) adds a layer that stores external documents with
+provenance. Upgrading to it is additive; the one thing you genuinely must read
+is the backup note.
+
+- **The main vault index is NOT rebuilt.** `CHUNK_SCHEMA_VERSION` stays at 3
+  because raw sources live in their own corpus (decision D2), so `mb index
+  update` after the upgrade does exactly what it did before — no multi-minute
+  re-embed of your whole vault. Verified on a 3083-chunk vault: the
+  `memory_index` `CURRENT` generation pointer was byte-identical before and
+  after ingesting a document.
+- **One new index gets built on demand**: `.mb/sources_index/`, by
+  `mb ingest index --rebuild`. It costs proportionally to how much you have
+  ingested, and it is empty until you ingest something (measured: 1 document /
+  18 chunks in 0.34 s).
+- **`.mb/config.json` gains 11 keys with safe defaults** and `schema_version`
+  bumps 1 → 2. Nothing is rewritten: the new keys resolve through
+  `DEFAULT_CONFIG`, so a v1 config keeps every value you set and gains only
+  defaults. A timestamped `config.json.bak-<ts>` is taken before the migrating
+  save, as always.
+- **New files appear only when their command first runs**: `.mb/sources.json`
+  (registry), `.mb/sources/<YYYY>/*.md` (raw copies), `.mb/ingest-log.jsonl`
+  (cycle history), `.mb/lint.json` (contradiction verdicts),
+  `.mb/rebuild-sources.lock` (per-corpus writer lock).
+- **`mb curator` output gains two non-fatal issue keys**
+  (`source_not_in_registry`, `orphan_source`) and two optional subcommands
+  (`contradictions`, `gaps`). Bare `mb curator` behaves exactly as before —
+  the exit code still depends on `broken_links` alone.
+- **Retro-provenance is opt-in**: `mb ingest backfill` (dry run by default,
+  `--apply` to write) registers the external documents your existing notes
+  already cite in `source:` frontmatter and `reference/` bodies, as
+  `stored: false` records. Without it `mb curator gaps` believes the vault has
+  no sources at all.
+
+### ⚠️ `.mb/sources/` is the only thing here a rebuild cannot recreate
+
+Everything else under `.mb/` is derived state — delete it and the next index
+run restores it. Raw sources are not: they are the evidence your notes cite,
+and the copy in `.mb/sources/` is the only one. Consequences you should act on:
+
+- **`mb backup create` now covers them** (registry + every raw file, with
+  sha256 in the manifest). Large collections are skipped with a warning past
+  `backup_max_sources_mb` (default 200 MB) — force with
+  `mb backup create --with-sources`, or evacuate once with
+  `mb ingest export <dir>`.
+- **`mb backup restore` is additive**: it adds missing raw files and merges
+  missing registry entries, and never overwrites or deletes what is on disk.
+- **If `.mb` is in `.gitignore` or excluded from your sync**, moving the vault
+  to another machine leaves the sources behind. `mb doctor` warns when the
+  vault is a git repo and `.mb/sources` is ignored, but the fix is yours:
+  either un-ignore `.mb/sources/`, or keep an `mb ingest export` copy
+  somewhere that is synced.
+- **`mb ingest add` is write-once**: an existing stored file is never
+  rewritten, on any code path. Re-ingesting a changed document creates a new
+  record linked by `supersedes`/`superseded_by` instead.
+
 ## Foreign hooks and settings
 
 Every settings mutation (Claude `~/.claude/settings.json`, Gemini

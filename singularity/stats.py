@@ -58,7 +58,31 @@ def compute(cfg: Config) -> dict[str, Any]:
         unindexed = sorted(scanned)
     indexed_meta["vault_notes"] = len(scanned)
     indexed_meta["unindexed"] = len(unindexed)
+    indexed_meta["sources"] = _sources_stats(cfg)
     return indexed_meta
+
+
+def _sources_stats(cfg: Config) -> dict[str, Any]:
+    """Ingest layer counts (W11). Metadata only, like the rest of this module:
+    never note content, never a model load."""
+    from . import sources as sources_mod
+    from .search import indexer
+
+    records = [r for r in sources_mod.read_registry(cfg)["sources"].values()
+               if isinstance(r, dict)]
+    by_status: dict[str, int] = {}
+    for record in records:
+        by_status[str(record.get("status", "?"))] = \
+            by_status.get(str(record.get("status", "?")), 0) + 1
+    summary = indexer.index_summary(cfg.sources_index_dir) or {}
+    return {
+        "documents": len(records),
+        "stored": sum(1 for r in records if r.get("stored")),
+        "by_status": dict(sorted(by_status.items())),
+        "derived_notes": sum(len(r.get("derived_notes") or []) for r in records),
+        "chunks": summary.get("chunk_count", 0),
+        "indexed_at": summary.get("indexed_at"),
+    }
 
 
 def run(cfg: Config, as_json: bool = False) -> int:
@@ -77,4 +101,9 @@ def run(cfg: Config, as_json: bool = False) -> int:
     print(f"text indexed  : {s['chars_indexed']} chars")
     print(f"by type       : " + ", ".join(f"{k}={v}" for k, v in s["by_type"].items()))
     print(f"chunk schema  : {s['chunk_schema']}")
+    src = s.get("sources") or {}
+    if src.get("documents"):
+        print(f"sources       : {src['documents']} documents "
+              f"({', '.join(f'{k}={v}' for k, v in src['by_status'].items())}), "
+              f"{src['chunks']} chunks, {src['derived_notes']} derived notes")
     return 0

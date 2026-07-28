@@ -69,13 +69,14 @@ def mark(cfg: Config, identities: list[tuple[str, str]]) -> int:
 
 
 def _pool(embs: np.ndarray, idxs: list[int]) -> Optional[np.ndarray]:
-    """Mean-pooled, re-normalized vector over the given chunk rows (same
-    aggregation curator._note_embeddings uses for note-level vectors)."""
-    v = embs[idxs].mean(axis=0)
-    norm = np.linalg.norm(v)
-    if norm == 0:
-        return None
-    return v / norm
+    """Mean-pooled, re-normalized vector over the given chunk rows.
+
+    W05: the implementation moved to `search.similarity.mean_pool`, shared with
+    curator's note vectors and `ingest_plan` — `mb ingest plan` scores source
+    chunks against exactly these vectors, so two copies of the aggregation
+    would mean two different notions of 'similar'."""
+    from .search.similarity import mean_pool
+    return mean_pool(embs, idxs)
 
 
 # ---------------------------------------------------------------------------

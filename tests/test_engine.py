@@ -11,7 +11,30 @@ def _engine(tmp_path, chunks, embs):
     eng.cfg = Config(vault=tmp_path, data={"min_score": 0.30, "excerpt_chars": 150})
     eng.mem_embs, eng.mem_chunks = embs, chunks
     eng.code_embs, eng.code_chunks = None, []
+    eng.src_embs, eng.src_chunks = None, []      # W03: third corpus, opt-in
+    eng.sources_warning = None
     return eng
+
+
+class _StubEncoder:
+    def encode(self, texts, progress=False):
+        return np.ones((len(texts), 3), dtype=np.float32)
+
+
+def _searchable(tmp_path):
+    eng = _engine(tmp_path, [], None)
+    eng.encoder = _StubEncoder()          # _engine skips __init__, so no model
+    return eng
+
+
+def test_code_only_says_the_corpus_does_not_exist(tmp_path):
+    """An unimplemented feature must not look like a failed search."""
+    out = _searchable(tmp_path).search({"query": "anything", "code_only": True})
+    assert "not implemented yet" in out["code_warning"]
+
+
+def test_no_code_warning_for_a_normal_search(tmp_path):
+    assert "code_warning" not in _searchable(tmp_path).search({"query": "anything"})
 
 
 def test_match_filters_type_and_tags():

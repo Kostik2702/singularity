@@ -9,8 +9,15 @@ Vault resolution order (first hit wins):
      message; with nothing configured resolve_vault now returns None and
      callers show actionable guidance instead)
 
-All runtime state lives inside the vault under `.mb/` so the vault is
+Runtime state lives inside the vault under `.mb/` so the vault is
 self-contained and portable across machines.
+
+EXCEPTION (WIKI-LOOP D1, 2026-07-28): `.mb/sources/` + `.mb/sources.json` hold
+ingested raw documents and are the ONLY data under `.mb/` that a rebuild
+cannot reconstruct. "Delete .mb and re-index" destroys them irreversibly.
+They are covered by `mb backup` (with checksums), guarded by `mb doctor`
+(FAIL when the registry is non-empty but the directory is gone), and can be
+evacuated with `mb ingest export <dir>`.
 """
 from __future__ import annotations
 
@@ -33,7 +40,7 @@ def machine_id() -> str:
 DEFAULT_VAULT_WINDOWS = r"D:\obsidian\memory brain"
 POINTER_FILE = Path.home() / ".singularity.json"
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2   # v2 (WIKI-LOOP W10): ingest/gap/lint keys + immutable_roots
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "schema_version": SCHEMA_VERSION,
@@ -42,6 +49,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "daemon_port": 0,          # 0 = OS picks a free port; actual port -> .mb/daemon.port
     "excerpt_chars": 150,
     "batch_size": 64,
+    "encoder_device": None,     # None = probe (cuda if a kernel actually launches, else cpu)
     "code_repos_dir": None,     # optional code index root
     "auto_capture": True,
     "brain_max_lines": 40,             # T06: per-project brain note truncation
@@ -59,6 +67,17 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "nightly_trend_retention_days": 180,    # T12: nightly-history.jsonl row retention
     "reflect_window_days": 30,              # T14: default `mb reflect` lookback window
     "reflect_retention_days": 90,           # T14: reflect-history.jsonl row retention (Open Decision)
+    # --- WIKI-LOOP (W01-W12): raw source layer, ingest fan-out, intel lint ---
+    "ingest_index_sources": True,       # D2 kill-switch for the .mb/sources_index/ corpus
+    "ingest_max_source_chars": 400_000,  # W01: oversize source is REFUSED, never truncated
+    "ingest_fanout_top_k": 15,          # D7: ceiling on `mb ingest plan` suggestions
+    "ingest_fanout_threshold": 0.45,    # W05: min cosine, symmetric to digest_score_threshold
+    "ingest_log_retention_days": 365,   # D3: .mb/ingest-log.jsonl row retention
+    "immutable_roots": [".mb/sources"],  # D6: guard denies Write/Edit here even in audit mode
+    "gap_link_min_inbound": 2,          # W08: inbound links before a broken link is a missing page
+    "gap_learning_age_days": 30,        # W08: age at which an un-digested learning is a gap
+    "lint_llm_adjudication": False,     # W09: optional batch adjudication via `mb llm`
+    "backup_max_sources_mb": 200,       # W10.4: warn threshold before backing raw sources up
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -130,6 +149,20 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     _int("nightly_trend_retention_days", 1, 3650)
     _int("reflect_window_days", 1, 3650)
     _int("reflect_retention_days", 1, 3650)
+    # WIKI-LOOP
+    _int("ingest_max_source_chars", 1, 10_000_000)
+    _int("ingest_fanout_top_k", 1, 100)
+    _num("ingest_fanout_threshold", 0.0, 1.0)
+    _int("ingest_log_retention_days", 1, 3650)
+    _int("gap_link_min_inbound", 1, 100)
+    _int("gap_learning_age_days", 1, 3650)
+    _int("backup_max_sources_mb", 1, 100_000)
+    for key in ("ingest_index_sources", "lint_llm_adjudication"):
+        if key in data and not isinstance(data[key], bool):
+            errors.append(f"{key}: must be a boolean")
+    if "immutable_roots" in data and (not isinstance(data["immutable_roots"], list)
+                                      or not all(isinstance(x, str) for x in data["immutable_roots"])):
+        errors.append("immutable_roots: must be a list of strings")
     if "nightly_schedule_time" in data:
         v = data["nightly_schedule_time"]
         if not (isinstance(v, str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v)):
@@ -151,6 +184,9 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
         errors.append("personal_roots: must be a list of strings")
     if "connectors" in data and not isinstance(data["connectors"], dict):
         errors.append("connectors: must be an object")
+    if ("encoder_device" in data and data["encoder_device"] is not None
+            and not isinstance(data["encoder_device"], str)):
+        errors.append("encoder_device: must be a device string (e.g. 'cpu', 'cuda') or null")
     for key in _PATH_KEYS:
         if key in data and data[key] is not None and not isinstance(data[key], str):
             errors.append(f"{key}: must be a path string or null")
@@ -173,7 +209,11 @@ def migrate_config(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     if data.get("schema_version") != SCHEMA_VERSION:
         data["schema_version"] = SCHEMA_VERSION
         changed = True
-    # future version-keyed migrations go here
+    # v1 -> v2 (WIKI-LOOP W10) needs no value rewriting: every new key is
+    # additive and resolves through DEFAULT_CONFIG, so a v1 config keeps every
+    # user value and gains the defaults. The bump exists so `mb doctor` and
+    # backups can tell the generations apart; `load_config` takes a timestamped
+    # .bak via _backup_config before persisting it.
     return data, changed
 
 
@@ -198,6 +238,23 @@ class Config:
     @property
     def code_index_dir(self) -> Path:
         return self.mb_dir / "code_index"
+
+    @property
+    def sources_dir(self) -> Path:
+        # WIKI-LOOP D1: immutable raw documents, deliberately OUTSIDE the vault
+        # note tree so Obsidian/curator/digest never see them. The only
+        # non-reconstructible data under .mb/ — see this module's docstring.
+        return self.mb_dir / "sources"
+
+    @property
+    def sources_index_dir(self) -> Path:
+        # WIKI-LOOP D2: second search corpus over sources_dir, physically
+        # separate from memory_index so wiki analytics cannot be polluted.
+        return self.mb_dir / "sources_index"
+
+    @property
+    def sources_registry_path(self) -> Path:
+        return self.mb_dir / "sources.json"
 
     @property
     def hf_cache(self) -> Path:
@@ -244,6 +301,21 @@ class Config:
     def lock_dir(self) -> Path:
         # rebuild lock guards the SHARED index -> stays in .mb (not per-machine)
         return self.mb_dir / "rebuild.lock"
+
+    def corpus_lock_dir(self, corpus: str) -> Path:
+        """Per-corpus writer lock (W03). The memory corpus keeps the historic
+        `rebuild.lock` path verbatim so an in-flight lock from an older build
+        is still honored; every other corpus gets its own, so indexing sources
+        never blocks indexing the vault (and vice versa)."""
+        if corpus == "memory":
+            return self.lock_dir
+        return self.mb_dir / f"rebuild-{corpus}.lock"
+
+    @property
+    def ingest_lock_dir(self) -> Path:
+        """Serializes registry/journal mutations (`mb ingest add|mark`) so two
+        concurrent writers cannot lose an entry (W01/W06)."""
+        return self.mb_dir / "ingest.lock"
 
     # --- config values --------------------------------------------------
     def get(self, key: str, default: Any = None) -> Any:

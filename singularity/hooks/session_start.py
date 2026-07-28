@@ -33,6 +33,43 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 STALE_CACHE_HOURS = 48   # T12: older digest-last.json -> one bounded line, no action nag
+# W11: how many recorded open questions before the ingest nag mentions them.
+# A constant rather than a config key — it tunes one line of prose, and the
+# vault already carries ten knobs.
+OPEN_QUESTIONS_NAG_THRESHOLD = 5
+
+
+def _nag_due(state_path, key: str, rate_limit_h: float) -> bool:
+    """Shared rate gate. Each nag owns its own key in `.mb/nag-state.json` so
+    showing one never resets the other's clock."""
+    if not state_path.exists():
+        return True
+    try:
+        last = json.loads(state_path.read_text(encoding="utf-8")).get(key)
+    except (OSError, json.JSONDecodeError):
+        return True
+    if not last:
+        return True
+    try:
+        age_h = (datetime.now() - datetime.fromisoformat(last)).total_seconds() / 3600
+    except (TypeError, ValueError):
+        return True
+    return age_h >= rate_limit_h
+
+
+def _stamp_nag(state_path, key: str) -> None:
+    """Merge-and-write, never clobber: two nags share this file."""
+    state = {}
+    if state_path.exists():
+        try:
+            loaded = json.loads(state_path.read_text(encoding="utf-8"))
+            state = loaded if isinstance(loaded, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            state = {}
+    state[key] = datetime.now().isoformat(timespec="seconds")
+    tmp = state_path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(state_path)
 
 
 def build_context(event_cwd: str | None = None) -> str:
@@ -142,35 +179,56 @@ def build_context(event_cwd: str | None = None) -> str:
                              "suppressed until nightly runs again.")
             elif actionable:
                 nag_state_path = vault / ".mb" / "nag-state.json"
-                last_shown = None
-                if nag_state_path.exists():
-                    try:
-                        last_shown = json.loads(
-                            nag_state_path.read_text(encoding="utf-8")).get("last_shown_at")
-                    except json.JSONDecodeError:
-                        last_shown = None
                 rate_limit_h = float(light_cfg.get("nightly_nag_rate_limit_hours", 72))
-                due = True
-                if last_shown:
-                    try:
-                        shown_age_h = ((datetime.now() - datetime.fromisoformat(last_shown))
-                                      .total_seconds() / 3600)
-                        due = shown_age_h >= rate_limit_h
-                    except ValueError:
-                        due = True
-                if due:
+                if _nag_due(nag_state_path, "last_shown_at", rate_limit_h):
                     top = sorted(actionable, key=lambda e: -e["candidates"][0]["score"])[:3]
                     actions = "; ".join(
                         f"{e['file']}#{e['section']} -> {e['candidates'][0]['file']} "
                         f"({e['candidates'][0]['score']:.2f})" for e in top)
                     lines.append(f"digest backlog ({len(actionable)} actionable): {actions} "
                                 "— `mb digest plan` / `mb digest mark`")
-                    nag_tmp = nag_state_path.with_suffix(".json.tmp")
-                    nag_tmp.write_text(json.dumps(
-                        {"last_shown_at": datetime.now().isoformat(timespec="seconds")}),
-                        encoding="utf-8")
-                    nag_tmp.replace(nag_state_path)
+                    _stamp_nag(nag_state_path, "last_shown_at")
     except Exception:  # noqa: BLE001 — a broken digest cache must never break the session
+        pass
+
+    # W11: ingest nag — un-swallowed sources and recorded open questions.
+    # Reads `.mb/sources.json` directly (small, always current) rather than the
+    # nightly snapshot, so a machine that has never run nightly still gets the
+    # reminder; open-question counts DO come from the snapshot because they
+    # need a vault scan this hook must not do.
+    try:
+        unprocessed = 0
+        registry_path = vault / ".mb" / "sources.json"
+        if registry_path.exists():
+            data = json.loads(registry_path.read_text(encoding="utf-8-sig"))
+            entries = data.get("sources") if isinstance(data, dict) else None
+            if isinstance(entries, dict):
+                unprocessed = sum(1 for r in entries.values()
+                                  if isinstance(r, dict) and r.get("status") == "new")
+        open_questions = 0
+        gaps_last = vault / ".mb" / "gaps-last.json"
+        if gaps_last.exists() and \
+                (time.time() - gaps_last.stat().st_mtime) / 3600 <= STALE_CACHE_HOURS:
+            gaps_data = json.loads(gaps_last.read_text(encoding="utf-8"))
+            counts = gaps_data.get("counts") if isinstance(gaps_data, dict) else None
+            if isinstance(counts, dict):
+                open_questions = int(counts.get("open_questions") or 0)
+
+        if unprocessed > 0 or open_questions > OPEN_QUESTIONS_NAG_THRESHOLD:
+            nag_state_path = vault / ".mb" / "nag-state.json"
+            rate_limit_h = float(light_cfg.get("nightly_nag_rate_limit_hours", 72))
+            if _nag_due(nag_state_path, "ingest_last_shown_at", rate_limit_h):
+                parts = []
+                if unprocessed:
+                    parts.append(f"{unprocessed} ingested source(s) not turned into "
+                                 f"notes yet — `mb ingest list --status new` then "
+                                 f"`mb ingest plan <id>`")
+                if open_questions > OPEN_QUESTIONS_NAG_THRESHOLD:
+                    parts.append(f"{open_questions} recorded open question(s) — "
+                                 f"`mb curator gaps`")
+                lines.append("ingest backlog: " + "; ".join(parts))
+                _stamp_nag(nag_state_path, "ingest_last_shown_at")
+    except Exception:  # noqa: BLE001 — a broken registry must never break the session
         pass
 
     # T06: total injection budget on top of each block's own truncation.

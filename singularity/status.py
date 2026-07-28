@@ -73,6 +73,24 @@ def _backlog(cfg: Config) -> dict[str, Any]:
             "index_status": data.get("index_status")}
 
 
+def _sources(cfg: Config) -> dict[str, Any]:
+    """Ingest layer at a glance (W11), including the one number worth acting
+    on: how many documents are still waiting to be turned into notes."""
+    from . import sources as sources_mod
+    from .search import indexer
+
+    records = [r for r in sources_mod.read_registry(cfg)["sources"].values()
+               if isinstance(r, dict)]
+    if not records:
+        return {"present": False}
+    summary = indexer.index_summary(cfg.sources_index_dir) or {}
+    return {"present": True, "documents": len(records),
+            "unprocessed": sum(1 for r in records if r.get("status") == "new"),
+            "chunks": summary.get("chunk_count", 0),
+            "indexed_at": summary.get("indexed_at"),
+            "corpus_enabled": bool(cfg.get("ingest_index_sources"))}
+
+
 def _cache_age(cfg: Config) -> dict[str, Any]:
     from . import nightly
     from . import reflect
@@ -116,6 +134,7 @@ def snapshot(cfg: Config) -> dict[str, Any]:
         "disk": _guard(lambda: _disk(cfg)),
         "hooks": _guard(lambda: hooks_state.status(cfg.vault)),
         "backlog": _guard(lambda: _backlog(cfg)),
+        "sources": _guard(lambda: _sources(cfg)),
         "cache_age": _guard(lambda: _cache_age(cfg)),
     }
 
@@ -141,6 +160,11 @@ def run(cfg: Config, as_json: bool = False) -> int:
     for name, s in (snap["scheduler"].items() if isinstance(snap["scheduler"], dict)
                     and "error" not in snap["scheduler"] else []):
         print(f"scheduler[{name}]: registered={s.get('registered')}")
+    src = snap["sources"]
+    if src.get("present"):
+        print(f"sources: {src['documents']} documents "
+              f"({src['unprocessed']} unprocessed), {src['chunks']} chunks"
+              + ("" if src.get("corpus_enabled") else ", corpus DISABLED"))
     print(f"disk(.mb): {snap['disk'].get('mb_dir_mb')} MB")
     h = snap["hooks"]
     if "error" not in h:

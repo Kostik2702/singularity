@@ -32,6 +32,7 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
     "mb-llm-delegate":        {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
     "mb-onboard":             {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
     "mb-triage":              {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
+    "mb-ingest":              {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
     "workflow-helper":        {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
     "grill":                  {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
     "confidence-calibration": {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},

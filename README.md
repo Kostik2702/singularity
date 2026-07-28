@@ -33,7 +33,7 @@ Everything lives in **plain Markdown inside your Obsidian vault** — no proprie
 graph TB
     subgraph CC["Claude Code / Codex / Gemini / Grok"]
         MAIN["session"]
-        SK["29 manifest-managed skills<br/>12 portable, 17 Claude-only"]
+        SK["30 manifest-managed skills<br/>13 portable, 17 Claude-only"]
         AG["8 agents + 3 councils<br/>(Claude-only)"]
     end
     subgraph HOOKS["Hooks (deterministic)"]
@@ -192,6 +192,7 @@ That is the everyday loop: **check → search → work → capture → curate**.
 | Find or save knowledge | [Search](#search-your-memory-the-command-youll-use-constantly) · [Capture](#capture-knowledge) · [Auto-indexing](#everything-indexes-itself) |
 | Separate several codebases | [Projects](#multi-project-memory) · [Project brain & module context](#project-brain--module-context) |
 | Turn journals into durable knowledge | [Digest & nightly](#digest-and-nightly-orchestration) · [Curator](#curator-vault-health-and-semantic-lint) |
+| Swallow an external document into the wiki | [Ingest cycle](#ingest-cycle--from-a-document-to-an-updated-wiki) |
 | Keep assistant writes safe | [Vault guard](#vault-guard) · [Health, backup & config](#health-stats-backup--config) |
 | Use the assistant workflows | [Skills](#skills--say-the-trigger-word-in-any-session) · [Agents](#agents--spawned-for-heavy-lifting) · [Solo workflow](#the-solo-workflow-optional-but-recommended) |
 | Inspect adoption or use Obsidian | [Reflect](#adoption-telemetry-with-mb-reflect) · [Obsidian](#obsidian-side) |
@@ -210,6 +211,7 @@ mb search "..." --path-prefix rules/                   # scope to a folder
 mb search "..." --project myproj                       # scope to one project, a group, general, or personal
 mb search "..." --memory-only --max-per-file 1         # diversify results across memory notes
 mb search "..." --explain                              # show how filtering/scoring was applied
+mb search "..." --with-sources                         # also search ingested raw documents
 mb search "..." --json --full                          # machine-readable / untruncated
 ```
 
@@ -600,6 +602,33 @@ If `router` is configured, `mb llm start` health-checks and supervises both proc
 **Cross-machine:** only the paths inside `llm` change (`server_bin`, each model's `gguf`, maybe ports) — the commands are identical on every machine, since all runtime state (`llm.state.json`, `llm-server.log`, `llm-router.log`) lives under the vault's `.mb/`.
 
 ---
+
+## Ingest cycle — from a document to an updated wiki
+
+Capturing a document as one more note is nearly worthless. The value is in the **fan-out**: an article about retention policy should touch the retention rule, the nightly howto and two design docs — each gaining a line with a citation. That is what makes knowledge compound instead of pile up.
+
+```bash
+mb ingest add "D:\docs\article.md" --title "Retention policy" --json
+mb ingest index                       # the watcher does NOT see .mb/ — catch the corpus up
+mb ingest plan <source_id> --json     # up to 15 pages, each with WHY it was proposed
+mb note new reference "Retention policy" --from-source <source_id>
+mb ingest mark <source_id> --notes "rules/retention.md,howto/nightly.md"
+mb ingest log --limit 10
+```
+
+* **The raw document is kept byte-for-byte** under `.mb/sources/`, outside the Obsidian tree — the vault graph, `mb search`, `mb curator` and `mb digest` never see it by construction, not by filter. `mb search --with-sources` is the deliberate escalation.
+* **Every proposed edit carries evidence** (`why`: which passage matches which section). No evidence → no edit. "Nothing to add here" is a legitimate, recorded outcome.
+* **The engine never writes a note.** Storage, provenance, candidates and journals are deterministic; the retelling and the edits belong to the `mb-ingest` skill.
+* **No network in the engine**: `mb ingest add` reads a file or stdin and refuses URLs with the command that works (`--stdin --origin <url>`).
+
+Two report-only commands come with it:
+
+```bash
+mb curator contradictions      # same subject, opposite claim — CANDIDATES with evidence tokens
+mb curator gaps                # what is missing: unprocessed sources, open questions, pages nobody wrote
+```
+
+> ⚠️ `.mb/sources/` is the only data in the vault a rebuild cannot recreate. `mb backup create` covers it with checksums, `mb doctor` FAILs if the registry outlives its files, and `mb ingest export <dir>` copies everything out. Full guide: **[docs/wiki-loop.md](docs/wiki-loop.md)**.
 
 ## Website Factory — reference-to-release pipeline
 

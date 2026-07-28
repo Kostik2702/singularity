@@ -51,18 +51,28 @@ class SearchDaemon:
 
             action = req.get("action")
             files = req.get("files")
+            corpus = req.get("corpus") or "memory"
             if action not in {"update", "rebuild"}:
                 return {"error": f"unknown index action: {action}"}
+            if corpus not in indexer.CORPUS_BUILDERS:
+                return {"error": f"unknown corpus: {corpus}"}
+            if corpus == "sources" and not self.cfg.get("ingest_index_sources"):
+                # single gate for every remote path (CLI, nightly, add catch-up)
+                return {"error": "sources indexing is disabled "
+                                 "(config ingest_index_sources=false)",
+                        "error_type": "SourcesIndexDisabled"}
             if files is not None and (not isinstance(files, list)
                                       or not all(isinstance(f, str) for f in files)):
                 return {"error": "index files must be a list of vault-relative strings"}
             try:
-                stats = (indexer.rebuild(self.cfg) if action == "rebuild"
-                         else indexer.update(self.cfg, only_files=files or None))
+                stats = (indexer.rebuild(self.cfg, corpus=corpus) if action == "rebuild"
+                         else indexer.update(self.cfg, only_files=files or None,
+                                             corpus=corpus))
             except indexer.IndexLockedError as exc:
                 return {"error": str(exc), "error_type": "IndexLockedError"}
             counts = self.engine.reload()
-            return {"status": "indexed", "stats": stats, "index": counts}
+            return {"status": "indexed", "stats": stats, "index": counts,
+                    "corpus": corpus}
         return {"error": f"unknown cmd: {cmd}"}
 
     def _serve_conn(self, conn: socket.socket) -> None:

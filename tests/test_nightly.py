@@ -42,7 +42,10 @@ def _commit(cfg, pairs):
 
 
 def _no_index_update(monkeypatch):
-    monkeypatch.setattr(client, "run_index", lambda cfg, action, files=None: {"added": 0})
+    # `corpus` accepted since W03: the sources step routes through the same
+    # client call, and a stub with the old signature would TypeError there.
+    monkeypatch.setattr(client, "run_index",
+                        lambda cfg, action, files=None, corpus=None: {"added": 0})
 
 
 # --- index step: lock handling ------------------------------------------------

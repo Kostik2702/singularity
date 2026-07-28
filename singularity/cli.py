@@ -17,6 +17,8 @@ mb hooks status|enable|disable [--json]
 mb project list|add|remove|detect
 mb digest plan [--project X] [--json]
 mb digest mark <file> <section> | --all [--json]
+mb ingest add <path>|--stdin [--title T] [--origin U] [--dry-run] [--json]
+mb ingest list|show <id>|export <dir>|index [--rebuild]
 mb nightly [--json]   # index update -> digest/curator/config snapshot -> trend -> markers sweep
 mb reflect [--days N] [--json]   # privacy-safe adoption telemetry (offline transcript walk)
 mb llm start|stop|status|list|logs|code|setup
@@ -56,6 +58,9 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("--path-prefix")
     s.add_argument("--memory-only", action="store_true")
     s.add_argument("--code-only", action="store_true")
+    s.add_argument("--with-sources", action="store_true", dest="with_sources",
+                   help="also search ingested raw sources (.mb/sources_index/) — "
+                        "escalation when the wiki has no answer")
     s.add_argument("--full", action="store_true", help="full content, no excerpt cut")
     s.add_argument("--explain", action="store_true", help="include component scores")
     s.add_argument("--max-per-file", type=int, default=2,
@@ -89,6 +94,34 @@ def _build_parser() -> argparse.ArgumentParser:
 
     cur = sub.add_parser("curator", help="vault health: validation, orphans, link suggestions")
     cur.add_argument("--json", action="store_true")
+    # OPTIONAL subcommands: bare `mb curator` must keep working, byte for byte.
+    # Sub-flags use SUPPRESS so `mb curator --json contradictions` does not have
+    # the subparser's default silently overwrite the parent's value.
+    cursub = cur.add_subparsers(dest="curator_action")
+    curc = cursub.add_parser("contradictions",
+                             help="contradiction CANDIDATES (cosine band + lexical "
+                                  "divergence signals) — not verdicts")
+    curc.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    curc.add_argument("--limit", type=int, default=argparse.SUPPRESS)
+    curc.add_argument("--same-file", action="store_true", dest="same_file",
+                      help="also compare sections WITHIN one note (noisy: mostly "
+                           "comparison tables and versioned recipes)")
+    curg = cursub.add_parser("gaps", help="research agenda: what is MISSING "
+                                          "(unprocessed sources, open questions, ...)")
+    curg.add_argument("--top", type=int, default=argparse.SUPPRESS)
+    curg.add_argument("--per-signal", type=int, dest="per_signal",
+                      help="max items shown per signal (0 = no ceiling); "
+                           "counts always report the true totals")
+    curg.add_argument("--heuristic", action="store_true",
+                      help="add frequency-based term guesses (off by default)")
+    curg.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    curv = cursub.add_parser("verdict", help="record a verdict so a pair stops "
+                                             "resurfacing (.mb/lint.json)")
+    curv.add_argument("key", help="pair key from the contradictions report")
+    curv.add_argument("--verdict", required=True,
+                      choices=["false_positive", "resolved", "accepted"])
+    curv.add_argument("--note", default="")
+    curv.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
 
     st = sub.add_parser("selftest", help="end-to-end pipeline check (create/index/find/delete)")
     st.add_argument("--json", action="store_true")
@@ -106,7 +139,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
     bk = sub.add_parser("backup", help="backup/restore config + index pointer")
     bksub = bk.add_subparsers(dest="backup_action", required=True)
-    bksub.add_parser("create", help="create a checksummed backup")
+    bkc = bksub.add_parser("create", help="create a checksummed backup "
+                                          "(config + ingest registry + raw sources)")
+    bkc.add_argument("--with-sources", dest="with_sources", action="store_true",
+                     default=None, help="always include raw sources, ignoring "
+                                        "backup_max_sources_mb")
+    bkc.add_argument("--no-sources", dest="with_sources", action="store_false",
+                     help="never include raw sources")
     bkl = bksub.add_parser("list", help="list backups")
     bkl.add_argument("--json", action="store_true")
     bkv = bksub.add_parser("verify", help="verify a backup's checksums")
@@ -159,6 +198,71 @@ def _build_parser() -> argparse.ArgumentParser:
     dgm.add_argument("--all", action="store_true", help="mark every entry in the current plan")
     dgm.add_argument("--json", action="store_true")
 
+    ing = sub.add_parser("ingest", help="raw source layer: store external documents "
+                                        "with provenance, plan wiki fan-out")
+    ingsub = ing.add_subparsers(dest="ingest_action", required=True)
+    inga = ingsub.add_parser("add", help="store one raw document (write-once, idempotent)")
+    inga.add_argument("path", nargs="?", help="local file to ingest (or use --stdin)")
+    inga.add_argument("--stdin", action="store_true", help="read the document from stdin")
+    inga.add_argument("--title", help="explicit title (default: first H1 / first line)")
+    inga.add_argument("--origin", help="where the document came from (URL or path) — "
+                                       "recorded as provenance")
+    inga.add_argument("--project", help="explicit project id/general/personal (else cwd-detected)")
+    inga.add_argument("--tags", help="comma-separated tags")
+    inga.add_argument("--content-type", default=None, help="MIME type (default: text/markdown)")
+    inga.add_argument("--dry-run", action="store_true", help="print the intent, write nothing")
+    inga.add_argument("--json", action="store_true")
+    ingl = ingsub.add_parser("list", help="list registered sources (newest first)")
+    ingl.add_argument("--status", choices=list(("new", "partial", "processed")))
+    ingl.add_argument("--limit", type=int)
+    ingl.add_argument("--json", action="store_true")
+    ings = ingsub.add_parser("show", help="metadata + a bounded excerpt of one source")
+    ings.add_argument("source_id")
+    ings.add_argument("--excerpt", type=int, help="excerpt length in chars "
+                                                  "(default: excerpt_chars config)")
+    ings.add_argument("--json", action="store_true")
+    inge = ingsub.add_parser("export", help="COPY raw sources + registry out of .mb/ "
+                                            "(disaster escape hatch, never moves)")
+    inge.add_argument("dir", help="destination directory")
+    inge.add_argument("--id", dest="source_id", help="export a single source")
+    inge.add_argument("--force", action="store_true", help="allow a non-empty destination")
+    inge.add_argument("--json", action="store_true")
+    ingi = ingsub.add_parser("index", help="build/catch up the sources corpus "
+                                           "(the watcher does NOT see .mb/)")
+    ingi.add_argument("--rebuild", action="store_true", help="full rebuild instead of update")
+    ingi.add_argument("--json", action="store_true")
+    ingb = ingsub.add_parser("backfill", help="retro-provenance: register the external "
+                                              "documents existing notes already cite")
+    ingb.add_argument("--apply", action="store_true",
+                      help="write to the registry (default is a dry run)")
+    ingb.add_argument("--json", action="store_true")
+    ingp = ingsub.add_parser("plan", help="deterministic fan-out: which wiki pages "
+                                          "this source should touch")
+    ingp.add_argument("source_id")
+    ingp.add_argument("--top-k", type=int, dest="top_k",
+                      help="max pages to propose (default: ingest_fanout_top_k)")
+    ingp.add_argument("--threshold", type=float,
+                      help="min cosine (default: ingest_fanout_threshold)")
+    ingp.add_argument("--summary-type", dest="summary_type", default="reference",
+                      choices=["reference", "howto", "rule", "decision", "incident"],
+                      help="note type proposed for the summary page")
+    ingp.add_argument("--json", action="store_true")
+    ingm = ingsub.add_parser("mark", help="record which notes a source produced "
+                                          "(they stop resurfacing in plan)")
+    ingm.add_argument("source_id")
+    ingm.add_argument("--notes", help="comma-separated vault-relative note paths; "
+                                      "omit for the legitimate 'nothing to add' outcome")
+    ingm.add_argument("--status", choices=["new", "partial", "processed"],
+                      default="processed")
+    ingm.add_argument("--actor", default="manual", help="skill|manual (journal field)")
+    ingm.add_argument("--json", action="store_true")
+    ingg = ingsub.add_parser("log", help="read the machine history "
+                                         "(.mb/ingest-log.jsonl)")
+    ingg.add_argument("--since", help="ISO date/timestamp lower bound (YYYY-MM-DD)")
+    ingg.add_argument("--op", help="filter by operation (ingest|query|lint)")
+    ingg.add_argument("--limit", type=int, help="most recent N rows")
+    ingg.add_argument("--json", action="store_true")
+
     nt = sub.add_parser("nightly", help="orchestrated nightly run: index update -> "
                                         "digest/curator/config snapshot -> trend line -> markers sweep")
     nt.add_argument("--json", action="store_true")
@@ -169,6 +273,9 @@ def _build_parser() -> argparse.ArgumentParser:
     nn.add_argument("type")
     nn.add_argument("title")
     nn.add_argument("--project", help="explicit project id/general/personal (else cwd-detected)")
+    nn.add_argument("--from-source", dest="from_source", action="append",
+                    help="source_id this note is derived from (repeatable) — writes "
+                         "`sources:` frontmatter and the registry back-link")
 
     ll = sub.add_parser("llm", help="local inference server (llama-server + router)")
     llsub = ll.add_subparsers(dest="llm_action", required=True)
@@ -221,12 +328,20 @@ def cmd_search(cfg, args) -> int:
                 return 1
         filter_project = sorted(expanded)
 
+    if args.with_sources and not cfg.get("ingest_index_sources"):
+        print("[mb] --with-sources: the sources corpus is disabled "
+              "(ingest_index_sources=false)", file=sys.stderr)
+        print("[mb] enable it with `mb config set ingest_index_sources true`, "
+              "then `mb ingest index --rebuild`", file=sys.stderr)
+        return 2
+
     payload = {
         "cmd": "search",
         "query": args.query,
         "top_k": args.top,
         "memory_only": args.memory_only,
         "code_only": args.code_only,
+        "include_sources": args.with_sources,
         "filter_type": args.filter_type,
         "filter_tags": args.filter_tags,
         "filter_wikilinks": args.filter_wikilinks,
@@ -241,6 +356,9 @@ def cmd_search(cfg, args) -> int:
     if "error" in resp:
         print(f"[mb] error: {resp['error']}", file=sys.stderr)
         return 1
+    for key in ("sources_warning", "code_warning"):
+        if resp.get(key) and not args.json:
+            print(f"[mb] warning: {resp[key]}", file=sys.stderr)
     if args.json:
         print(json.dumps(resp, ensure_ascii=False, indent=1))
     else:
@@ -338,8 +456,10 @@ def cmd_backup(cfg, args) -> int:
     from . import backup
 
     if args.backup_action == "create":
-        mf = backup.create(cfg)
+        mf = backup.create(cfg, with_sources=args.with_sources)
         print(json.dumps(mf, ensure_ascii=False, indent=1))
+        for warning in mf.get("warnings", []):
+            print(f"[mb] warning: {warning}", file=sys.stderr)
         return 0
     if args.backup_action == "list":
         items = backup.list_backups(cfg)
@@ -553,6 +673,330 @@ def cmd_digest(cfg, args) -> int:
     return 1
 
 
+def _ingest_read_input(args) -> tuple[str, str, str]:
+    """(text, origin_kind, origin_ref).
+
+    Network never enters the core (WIKI-LOOP D4): a URL passed as <path> is
+    refused with the exact command that does work, instead of being silently
+    fetched by an engine that is meant to be offline and deterministic."""
+    from pathlib import Path as _P
+
+    from . import sources as sources_mod
+
+    if args.stdin and args.path:
+        raise ValueError("pass either <path> or --stdin, not both")
+    if not args.stdin and not args.path:
+        raise ValueError("nothing to ingest: pass a file path or --stdin")
+
+    if args.stdin:
+        raw = sys.stdin.buffer.read()
+        text = raw.decode("utf-8-sig", errors="replace")
+        return text, "stdin", str(args.origin or "")
+
+    if sources_mod.is_url(args.path):
+        raise ValueError(
+            f"`mb ingest add` does not download: {args.path}\n"
+            f"       the engine stays offline by design (decision D4). Fetch the "
+            f"content yourself and pipe it in:\n"
+            f"         <fetch the url> | mb ingest add --stdin --origin {args.path}")
+
+    path = _P(args.path)
+    if not path.is_file():
+        raise OSError(f"not a file: {path}")
+    # newline="" so CRLF documents are stored byte-for-byte as they arrived
+    with open(path, "r", encoding="utf-8-sig", errors="replace", newline="") as fh:
+        text = fh.read()
+    return text, "file", str(args.origin or path.resolve())
+
+
+def _ingest_catch_up_index(cfg, stored_path: str) -> str:
+    """Best-effort incremental index of ONE freshly stored source.
+
+    The watcher does not see `.mb/` (a direct consequence of D1), so nothing
+    else would pick the document up until nightly. A cold daemon is left cold
+    on purpose: paying a 10-20s model load inside `mb ingest add` would make
+    the command unusable — the caller gets `pending` and runs `mb ingest index`."""
+    if not cfg.get("ingest_index_sources"):
+        return "disabled"
+    from .search import client
+
+    if not client.ping(cfg):
+        return "pending"
+    try:
+        client.run_index(cfg, "update", files=[stored_path], corpus="sources")
+    except (client.RemoteIndexError, ValueError):
+        return "pending"
+    return "indexed"
+
+
+def cmd_ingest(cfg, args) -> int:
+    from . import capture
+    from . import sources as sources_mod
+
+    try:
+        if args.ingest_action == "add":
+            try:
+                text, origin_kind, origin_ref = _ingest_read_input(args)
+            except ValueError as exc:
+                print(f"[mb] {exc}", file=sys.stderr)
+                return 2
+            except OSError as exc:
+                print(f"[mb] {exc}", file=sys.stderr)
+                return 1
+
+            project, err = capture.resolve_capture_project(cfg, args.project, None)
+            if err:
+                print(f"[mb] {err}", file=sys.stderr)
+                return 2
+            tags = [t.strip() for t in (args.tags or "").split(",") if t.strip()]
+
+            result = sources_mod.add(
+                cfg, text, title=args.title, origin_kind=origin_kind,
+                origin_ref=origin_ref, project=project, tags=tags,
+                content_type=args.content_type or sources_mod.DEFAULT_CONTENT_TYPE,
+                dry_run=args.dry_run)
+
+            if result["dry_run"] or result["duplicate"]:
+                result["indexed"] = "skipped"
+            else:
+                result["indexed"] = _ingest_catch_up_index(cfg, result["stored_path"])
+
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False))
+            else:
+                what = "would store" if result["dry_run"] else \
+                       "duplicate" if result["duplicate"] else "stored"
+                print(f"{what}: {result['source_id']}  {result['stored_path']}")
+                print(f"title: {result['title']}")
+                if result.get("supersedes"):
+                    print(f"supersedes: {result['supersedes']}")
+                if result["indexed"] == "pending":
+                    print("indexed: pending — run `mb ingest index` to make it searchable")
+                elif result["indexed"] == "indexed":
+                    print("indexed: yes")
+            return 0
+
+        if args.ingest_action == "index":
+            if not cfg.get("ingest_index_sources"):
+                print("[mb] sources indexing is disabled (ingest_index_sources=false); "
+                      "enable it with `mb config set ingest_index_sources true`",
+                      file=sys.stderr)
+                return 2
+            from .search import client
+            try:
+                stats = client.run_index(cfg, "rebuild" if args.rebuild else "update",
+                                         corpus="sources")
+            except client.RemoteIndexError as exc:
+                if exc.error_type == "IndexLockedError":
+                    print("[mb] another sources-index writer in progress (lock present)",
+                          file=sys.stderr)
+                else:
+                    print(f"[mb] sources index failed: {exc}", file=sys.stderr)
+                return 1
+            print(json.dumps({"corpus": "sources", **stats}, ensure_ascii=False))
+            return 0
+
+        if args.ingest_action == "list":
+            rows = sources_mod.list_sources(cfg, status=args.status, limit=args.limit)
+            if args.json:
+                print(json.dumps({"sources": rows}, ensure_ascii=False))
+            elif not rows:
+                print("(no sources)")
+            else:
+                for r in rows:
+                    notes = len(r.get("derived_notes") or [])
+                    print(f"{r['source_id']}  {r.get('status', '?'):9s} "
+                          f"notes={notes:<3d} {r.get('ingested_at', '?')}  "
+                          f"{r.get('title', '')}")
+            return 0
+
+        if args.ingest_action == "show":
+            record = sources_mod.get(cfg, args.source_id)
+            if record is None:
+                print(f"[mb] unknown source_id: {args.source_id}", file=sys.stderr)
+                return 2
+            limit = args.excerpt if args.excerpt is not None else int(cfg.get("excerpt_chars"))
+            body = sources_mod.read_source_text(cfg, args.source_id) or ""
+            excerpt = body[:limit] + ("..." if len(body) > limit else "")
+            if args.json:
+                print(json.dumps({**record, "excerpt": excerpt,
+                                  "excerpt_chars": limit}, ensure_ascii=False))
+            else:
+                print(f"id      : {record['source_id']}")
+                print(f"title   : {record.get('title')}")
+                print(f"status  : {record.get('status')}")
+                print(f"origin  : {(record.get('origin') or {}).get('kind')} "
+                      f"{(record.get('origin') or {}).get('ref')}")
+                print(f"stored  : {record.get('stored_path')} "
+                      f"({record.get('chars')} chars, {record.get('bytes')} bytes)")
+                print(f"notes   : {', '.join(record.get('derived_notes') or []) or '(none)'}")
+                print(f"--- excerpt ({limit} chars) ---")
+                print(excerpt)
+            return 0
+
+        if args.ingest_action == "backfill":
+            result = sources_mod.backfill(cfg, apply=args.apply)
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False))
+            else:
+                mode = "applied" if result["applied"] else "dry-run (nothing written)"
+                print(f"== mb ingest backfill — {mode} ==")
+                print(f"notes scanned : {result['notes_scanned']}")
+                print(f"refs found    : {result['discovered']}")
+                print(f"to create     : {result['created']}")
+                print(f"to update     : {result['updated']}")
+                for entry in result["entries"][:15]:
+                    print(f"   {entry['source_id']}  {entry['ref'][:100]}")
+                if result["capped_notes"]:
+                    print(f"[warn] {len(result['capped_notes'])} note(s) hit the "
+                          f"{sources_mod.BACKFILL_MAX_URLS_PER_NOTE}-URL cap: "
+                          f"{', '.join(result['capped_notes'][:5])}")
+                if not result["applied"] and (result["created"] or result["updated"]):
+                    print("\nrun again with --apply to write these to the registry")
+            return 0
+
+        if args.ingest_action == "plan":
+            from . import ingest_plan
+
+            result = ingest_plan.plan(cfg, args.source_id, top_k=args.top_k,
+                                      threshold=args.threshold,
+                                      summary_type=args.summary_type)
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False))
+            else:
+                if result["error"]:
+                    print(f"[mb] {result['error']}", file=sys.stderr)
+                elif result["skipped"]:
+                    print(f"[mb] skipped — {result['skipped']}")
+                elif result["index_status"] != "ok" or result["sources_index_status"] != "ok":
+                    print(f"[mb] index not ready — vault:{result['index_status']} "
+                          f"sources:{result['sources_index_status']}", file=sys.stderr)
+                else:
+                    print(f"== mb ingest plan {result['source_id']} — "
+                          f"{result['title']} ==")
+                    st = result["summary_target"]
+                    print(f"summary: {st['file']} "
+                          f"({'exists' if st['exists'] else 'new'})")
+                    print(f"         {st['command']}")
+                    print(f"\ntouch ({len(result['touch'])}/{result['top_k']}, "
+                          f"cosine>={result['threshold']}):")
+                    if not result["touch"]:
+                        print("   (no page above threshold — a legitimate outcome)")
+                    for t in result["touch"]:
+                        tag = f"@{t['project']}" if t["project"] else ""
+                        print(f"   {t['score']:.2f}  {t['file']}  [{t['type']}{tag}]")
+                        print(f"         why: «{t['why']['source_section']}» -> "
+                              f"«{t['why']['note_section']}» ({t['why']['pair_score']:.2f})")
+                    if result["new_pages"]:
+                        print(f"\nnew pages ({len(result['new_pages'])}):")
+                        for p in result["new_pages"]:
+                            print(f"   [{p['reason']}] {p['name']}")
+                    if result["conflicts"]:
+                        print(f"\nconflict candidates ({len(result['conflicts'])}) "
+                              f"— candidates, not verdicts:")
+                        for c in result["conflicts"]:
+                            print(f"   {c['score']:.2f}  {c['b']['file']} :: "
+                                  f"{c['b']['section']}")
+                            for sig, tokens in sorted(c["evidence"].items()):
+                                print(f"         {sig}: {', '.join(tokens[:4])}")
+            if result["error"]:
+                return 2
+            return 0
+
+        if args.ingest_action == "mark":
+            notes = [n.strip() for n in (args.notes or "").split(",") if n.strip()]
+            result = sources_mod.attach_notes(
+                cfg, args.source_id, notes, status=args.status,
+                actor=args.actor, log=True)
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False))
+            else:
+                print(f"marked {result['source_id']}: status={result['status']}, "
+                      f"+{len(result['added'])} note(s), "
+                      f"{len(result['derived_notes'])} total")
+                if not notes:
+                    print("recorded outcome: nothing to add (a legitimate result)")
+            return 0
+
+        if args.ingest_action == "log":
+            rows = sources_mod.read_log(cfg, since=args.since, op=args.op,
+                                        limit=args.limit)
+            if args.json:
+                print(json.dumps({"rows": rows}, ensure_ascii=False))
+            elif not rows:
+                print("(empty log)")
+            else:
+                for row in rows:
+                    notes = ", ".join(row.get("notes") or []) or "(none)"
+                    print(f"{row.get('ts')}  {row.get('op')}  {row.get('source_id')}  "
+                          f"[{row.get('actor')}] {row.get('status')}  {notes}")
+            return 0
+
+        if args.ingest_action == "export":
+            from pathlib import Path as _P
+            result = sources_mod.export(cfg, _P(args.dir),
+                                        source_id=args.source_id, force=args.force)
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False))
+            else:
+                print(f"exported {result['exported']} source(s) -> {result['dest']}")
+                if result["missing"]:
+                    print(f"[warn] {len(result['missing'])} registry entries had no raw "
+                          f"file: {', '.join(result['missing'])}")
+            return 0
+
+    except sources_mod.SourceStateError as exc:
+        print(f"[mb] {exc}", file=sys.stderr)
+        return 1
+    except sources_mod.SourceError as exc:
+        print(f"[mb] {exc}", file=sys.stderr)
+        return 2
+    except OSError as exc:
+        print(f"[mb] i/o error: {exc}", file=sys.stderr)
+        return 1
+    return 2
+
+
+def cmd_curator(cfg, args) -> int:
+    """`mb curator` (unchanged) plus optional W07/W08 subcommands. The bare
+    form must stay byte-identical — it is what nightly snapshots and what
+    people have in their heads."""
+    action = getattr(args, "curator_action", None)
+
+    if action == "contradictions":
+        from . import contradictions
+        return contradictions.run(cfg, as_json=args.json,
+                                  limit=getattr(args, "limit", None)
+                                  or contradictions.DEFAULT_LIMIT,
+                                  include_same_file=getattr(args, "same_file", False))
+
+    if action == "gaps":
+        from . import gaps
+        per_signal = getattr(args, "per_signal", None)
+        return gaps.run(cfg, as_json=args.json, top=getattr(args, "top", None),
+                        heuristic=getattr(args, "heuristic", False),
+                        per_signal=gaps.DEFAULT_PER_SIGNAL if per_signal is None
+                        else per_signal)
+
+    if action == "verdict":
+        from . import contradictions
+        try:
+            result = contradictions.record_verdict(cfg, args.key, args.verdict,
+                                                   note=args.note)
+        except ValueError as exc:
+            print(f"[mb] {exc}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        else:
+            print(f"verdict recorded: {result['verdict']} for {result['key']} "
+                  f"({result['total']} total)")
+        return 0
+
+    from . import curator
+    return curator.run(cfg, as_json=args.json)
+
+
 def cmd_nightly(cfg, args) -> int:
     from . import nightly
 
@@ -591,6 +1035,7 @@ def cmd_reflect(cfg, args) -> int:
 
 def cmd_note(cfg, args) -> int:
     from . import capture
+    from . import sources as sources_mod
 
     folder_by_type = {"learning": "learnings/active", "decision": "decisions",
                       "howto": "howto", "incident": "incidents", "rule": "rules",
@@ -600,6 +1045,15 @@ def cmd_note(cfg, args) -> int:
         print(f"[mb] unknown type: {args.type} (use {', '.join(folder_by_type)})",
               file=sys.stderr)
         return 1
+
+    # W04 provenance: validate every id BEFORE creating the file, so a typo
+    # never leaves a note claiming a source that does not exist.
+    from_sources = list(getattr(args, "from_source", None) or [])
+    for sid in from_sources:
+        if sources_mod.get(cfg, sid) is None:
+            print(f"[mb] unknown source_id: {sid} (see `mb ingest list`)",
+                  file=sys.stderr)
+            return 2
     safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in args.title).strip()
     path = cfg.vault / folder / f"{safe}.md"
     if path.exists():
@@ -623,8 +1077,11 @@ def cmd_note(cfg, args) -> int:
                 f"created: {today}\nstatus: active\nsource: \"\"\nowner: user\n---\n\n"
                 f"# {args.title}\n\n## Контекст\n\n\n## Суть\n\n")
     body = capture.with_project_frontmatter(body, project)
+    body = capture.with_sources_frontmatter(body, from_sources)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body, encoding="utf-8")
+    for sid in from_sources:
+        sources_mod.attach_notes(cfg, sid, [dest_rel])
     print(str(path))
     return 0
 
@@ -790,8 +1247,7 @@ def main(argv: list[str] | None = None) -> int:
         from . import doctor
         return doctor.run(cfg, fix=args.fix, heavy=args.heavy, as_json=args.json)
     if args.command == "curator":
-        from . import curator
-        return curator.run(cfg, as_json=args.json)
+        return cmd_curator(cfg, args)
     if args.command == "selftest":
         from . import selftest
         return selftest.run(cfg, as_json=args.json)
@@ -811,6 +1267,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_project(cfg, args)
     if args.command == "digest":
         return cmd_digest(cfg, args)
+    if args.command == "ingest":
+        return cmd_ingest(cfg, args)
     if args.command == "nightly":
         return cmd_nightly(cfg, args)
     if args.command == "reflect":
