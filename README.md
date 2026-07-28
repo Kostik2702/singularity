@@ -212,6 +212,7 @@ mb search "..." --project myproj                       # scope to one project, a
 mb search "..." --memory-only --max-per-file 1         # diversify results across memory notes
 mb search "..." --explain                              # show how filtering/scoring was applied
 mb search "..." --with-sources                         # also search ingested raw documents
+mb search "..." --with-code --repos api,web            # also search your source repos
 mb search "..." --json --full                          # machine-readable / untruncated
 ```
 
@@ -630,6 +631,25 @@ mb curator gaps                # what is missing: unprocessed sources, open ques
 
 > ⚠️ `.mb/sources/` is the only data in the vault a rebuild cannot recreate. `mb backup create` covers it with checksums, `mb doctor` FAILs if the registry outlives its files, and `mb ingest export <dir>` copies everything out. Full guide: **[docs/wiki-loop.md](docs/wiki-loop.md)**.
 
+## Search your code
+
+*New in **v0.5.0**.* A third corpus over your source repositories, so "how did we implement retry" is answerable from the code as fast as "why did we choose X" is answerable from memory.
+
+```bash
+mb config set code_repos_dir "<path/to/your/repos>"   # the PARENT of your repos
+mb index rebuild --code                               # first build
+mb search "how is retry implemented" --with-code
+mb search "retry" --code-only --repos api,web
+```
+
+* **Code is never in the default result set.** `mb search` without flags returns exactly what it returned before this feature existed — verified against a recorded 10-query baseline, 0/10 drift ([docs/code-index-baseline.md](docs/code-index-baseline.md)). `--with-code` is the deliberate escalation, the same shape as `--with-sources`.
+* **Chunks are symbols, not files or lines.** A hit is one function/class/method with its signature and docstring: `api/retry.py | 0.61 | [function] | retry_with_backoff | …`. Regex boundaries, not an AST — no parser dependency, and unknown code degrades into overlapping windows instead of failing. Measured on a real 416-file root: **1.6%** of chunks fell back.
+* **Unset `code_repos_dir` is the off switch**, and every entry point refuses rather than building an empty index you would read as "no matches".
+* **Nothing about it can touch your memory index.** Separate directory, separate generation pointer, separate writer lock, separate chunk-schema version; `mb curator` and `mb digest` cannot see it. Delete `.mb/code_index/` any time — unlike `.mb/sources/`, it is 100% derived and one command rebuilds it, which is why `mb doctor` never FAILs over it.
+* **No watcher, on purpose.** `mb nightly` catches it up and `mb doctor` WARNs past `code_index_max_age_days` (default 7).
+
+Full guide, constants, budgets and the privacy audit: **[docs/code-index.md](docs/code-index.md)**.
+
 ## Website Factory — reference-to-release pipeline
 
 *New in **v0.3.0**.* The same engine that runs your memory also ships a pipeline for building motion/3D websites. Its premise: the best components already exist in external ecosystems (React Bits, Motion Primitives, three.js examples, GSAP, Remotion, 21st) — the hard part is getting one into *your* project without importing an unknown dependency, a hostile install script, or an effect that tanks your frame budget. Website Factory is that missing middle: external code brings the variety, and a **deterministic trust layer** (quarantine, license classification, perf/a11y gates) decides what is allowed to land.
@@ -843,7 +863,7 @@ Logs: `<vault>/.mb/daemon.log`, `watch.log`, `mb.log`. Last doctor run: `.mb/doc
 - [x] **CI matrix** — Windows / macOS / Linux × Python 3.10/3.11/3.12, `.github/workflows/ci.yml` (fast gate on every push; opt-in heavy ML smoke and real-Gemini-CLI / real-Grok-CLI E2E via `workflow_dispatch`)
 - [x] **Website Factory** (v0.3.0) — reference-to-release motion/3D pipeline: deterministic trust-layer CLIs (`imgqa`/`design-scout`/`pattern-scout`/`component-intake`), 14 skills + 2 loop agents, E09 state graph with hard owner gates (see [Website Factory](#website-factory--reference-to-release-pipeline))
 - [ ] **Codex health checks** — Codex gets an install phase (profile + skill junctions) but no `mb doctor` block and no runtime hook yet, unlike Gemini's `E*-gemini` checks (see "Other CLI clients" above) — verify manually for now
-- [ ] **Code index** — semantic search over your source repos, merged with memory results (`code_repos_dir`)
+- [x] **Code index** (v0.5.0) — semantic search over your source repos, opt-in per query via `--with-code` (see [Search your code](#search-your-code))
 - [ ] **RU score calibration** — tuned `min_score` from a bilingual query→note benchmark
 - [ ] **Connectors** — optional pluggable integrations (issue trackers, logs, chat), secrets via OS keyring, off by default
 

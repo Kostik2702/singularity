@@ -32,6 +32,7 @@ class SearchEngine:
         self.src_embs: np.ndarray | None = None
         self.src_chunks: list[dict[str, Any]] = []
         self.sources_warning: str | None = None
+        self.code_warning: str | None = None
         self.reload()
 
     # ------------------------------------------------------------------
@@ -59,22 +60,36 @@ class SearchEngine:
         except (OSError, ValueError, json.JSONDecodeError):
             return None, [], None
 
+    def _model_mismatch(self, corpus: str, mem_model: str | None,
+                        other_model: str | None, fix: str) -> str | None:
+        """Cosine between two different embedding spaces is meaningless. Serving
+        quiet nonsense is strictly worse than refusing: the caller cannot tell a
+        bad match from a mis-built index. Shared by sources (W05) and code (C04)
+        so a third corpus cannot forget to check."""
+        if mem_model and other_model and other_model != mem_model:
+            return (f"{corpus} index was built with model {other_model!r} but the "
+                    f"vault index with {mem_model!r}; {corpus} search is disabled "
+                    f"until they match — run `{fix}`")
+        return None
+
     def reload(self) -> dict[str, int]:
         self.mem_embs, self.mem_chunks, mem_model = self._load_one(self.cfg.memory_index_dir)
-        self.code_embs, self.code_chunks, _ = self._load_one(self.cfg.code_index_dir)
+        self.code_embs, self.code_chunks, self.code_warning = None, [], None
         self.src_embs, self.src_chunks, self.sources_warning = None, [], None
+
+        code_embs, code_chunks, code_model = self._load_one(self.cfg.code_index_dir)
+        if code_embs is not None:
+            self.code_warning = self._model_mismatch(
+                "code", mem_model, code_model, "mb index rebuild --code")
+            if self.code_warning is None:
+                self.code_embs, self.code_chunks = code_embs, code_chunks
 
         if self.cfg.get("ingest_index_sources"):
             src_embs, src_chunks, src_model = self._load_one(self.cfg.sources_index_dir)
-            if src_embs is not None and mem_model and src_model and src_model != mem_model:
-                # Cosine between two different embedding spaces is meaningless.
-                # Serving quiet nonsense here is strictly worse than refusing:
-                # the caller cannot tell a bad match from a mis-built index.
-                self.sources_warning = (
-                    f"sources index was built with model {src_model!r} but the vault "
-                    f"index with {mem_model!r}; source search is disabled until they "
-                    f"match — run `mb ingest index --rebuild`")
-            else:
+            if src_embs is not None:
+                self.sources_warning = self._model_mismatch(
+                    "sources", mem_model, src_model, "mb ingest index --rebuild")
+            if self.sources_warning is None:
                 self.src_embs, self.src_chunks = src_embs, src_chunks
 
         return {"memory": len(self.mem_chunks), "code": len(self.code_chunks),
@@ -106,9 +121,16 @@ class SearchEngine:
             if not wanted_links & have_links:
                 return False
         repos = req.get("repos")
-        if repos:
-            wanted_repos = set(repos if isinstance(repos, list) else str(repos).split(","))
-            if meta.get("repo") not in wanted_repos:
+        if repos and meta.get("repo") is not None:
+            # `repo` is a code-corpus field. A note simply has no repository, so
+            # it is not "in the wrong one" — it is outside the concept. Applying
+            # the filter to it anyway would make `--repos api` silently return
+            # zero notes, i.e. exactly the empty-result-that-looks-like-no-match
+            # this epic refuses everywhere else.
+            wanted_repos = {r.strip() for r in
+                            (repos if isinstance(repos, list) else str(repos).split(","))
+                            if str(r).strip()}
+            if meta["repo"] not in wanted_repos:
                 return False
         proj = req.get("filter_project")
         if proj:
@@ -194,22 +216,22 @@ class SearchEngine:
         top_k = int(req.get("top_k", 5))
         q_emb = self.encoder.encode([query])[0]
 
+        # Both extra corpora are OPT-IN per query (W03 D2 for sources, C04 D2
+        # for code): the wiki is the answer, code and raw documents are the
+        # escalation. Opt-in also makes the default result set provably
+        # unchanged by this epic, which is what the C00 baseline is compared
+        # against.
+        want_code = bool(req.get("code_only") or req.get("include_code"))
         results: list[dict[str, Any]] = []
-        sources = 0
         if not req.get("code_only"):
             results += self._search_source(q_emb, self.mem_embs, self.mem_chunks,
                                            "memory", req)
-            sources += 1
-        if not req.get("memory_only"):
+        if want_code and not req.get("memory_only"):
             results += self._search_source(q_emb, self.code_embs, self.code_chunks,
                                            "code", req)
-            sources += 1
-        # W03: raw sources are OPT-IN per query. They are never in the default
-        # result set — the wiki is the answer, the raw layer is the escalation.
         if req.get("include_sources"):
             results += self._search_source(q_emb, self.src_embs, self.src_chunks,
                                            "sources", req)
-            sources += 1
         results.sort(key=lambda r: r["score"], reverse=True)
 
         # Per-file diversity: cap chunks per file so one long note's many windows
@@ -248,13 +270,13 @@ class SearchEngine:
                 out["sources_warning"] = (
                     "no sources indexed — run `mb ingest add <file>` then "
                     "`mb ingest index`")
-        # `code_index` is loaded here but nothing in the engine builds it — the
-        # code corpus is an unimplemented roadmap item. `--code-only` used to
-        # return an empty result set indistinguishable from "no matches", which
-        # reads as a broken search rather than an absent feature.
-        if req.get("code_only") and not self.code_chunks:
-            out["code_warning"] = (
-                "no code index exists — the code corpus is not implemented yet "
-                "(roadmap); `--code-only` therefore has nothing to search. Use "
-                "`mb search` without it to query the vault.")
+        # Only ever raised for a query that ASKED for code: a plain `mb search`
+        # must stay silent about a corpus the user has not opted into.
+        if want_code:
+            if self.code_warning:
+                out["code_warning"] = self.code_warning
+            elif not self.code_chunks:
+                out["code_warning"] = (
+                    "no code index exists — set `code_repos_dir` and run "
+                    "`mb index rebuild --code`")
         return out

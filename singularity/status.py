@@ -91,6 +91,27 @@ def _sources(cfg: Config) -> dict[str, Any]:
             "corpus_enabled": bool(cfg.get("ingest_index_sources"))}
 
 
+def _code(cfg: Config) -> dict[str, Any]:
+    """Code corpus at a glance (C05). `age_hours` is the number that matters:
+    with no watcher over repositories (D4) this corpus goes stale silently, and
+    a stale code index answers with yesterday's implementation."""
+    from .search import indexer
+
+    if cfg.code_repos_dir is None:
+        return {"present": False, "configured": False}
+    summary = indexer.index_summary(cfg.code_index_dir)
+    if summary is None:
+        return {"present": False, "configured": True,
+                "root": str(cfg.code_repos_dir)}
+    files = indexer.index_files(cfg.code_index_dir)
+    age_h = None
+    if files is not None:
+        age_h = round((time.time() - files[0].stat().st_mtime) / 3600, 1)
+    return {"present": True, "configured": True, "root": str(cfg.code_repos_dir),
+            "chunks": summary.get("chunk_count"), "files": summary.get("file_count"),
+            "model": summary.get("model"), "age_hours": age_h}
+
+
 def _cache_age(cfg: Config) -> dict[str, Any]:
     from . import nightly
     from . import reflect
@@ -135,6 +156,7 @@ def snapshot(cfg: Config) -> dict[str, Any]:
         "hooks": _guard(lambda: hooks_state.status(cfg.vault)),
         "backlog": _guard(lambda: _backlog(cfg)),
         "sources": _guard(lambda: _sources(cfg)),
+        "code": _guard(lambda: _code(cfg)),
         "cache_age": _guard(lambda: _cache_age(cfg)),
     }
 
@@ -165,6 +187,13 @@ def run(cfg: Config, as_json: bool = False) -> int:
         print(f"sources: {src['documents']} documents "
               f"({src['unprocessed']} unprocessed), {src['chunks']} chunks"
               + ("" if src.get("corpus_enabled") else ", corpus DISABLED"))
+    code = snap["code"]
+    if code.get("configured"):
+        if code.get("present"):
+            print(f"code: {code['chunks']} chunks from {code['files']} files, "
+                  f"age {code['age_hours']}h")
+        else:
+            print("code: configured but not built (`mb index rebuild --code`)")
     print(f"disk(.mb): {snap['disk'].get('mb_dir_mb')} MB")
     h = snap["hooks"]
     if "error" not in h:

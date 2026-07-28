@@ -136,6 +136,31 @@ def _step_ingest_index(cfg: Config) -> dict[str, Any]:
     return {"status": "ok", "stats": stats}
 
 
+def _step_code_index(cfg: Config) -> dict[str, Any]:
+    """Catch the code corpus up (C05).
+
+    Code has no watcher by design (CODE-INDEX D4): re-indexing needs the
+    encoder inside the daemon, and code changes precisely when the machine is
+    busy doing the work. Nightly is therefore the ONLY thing that keeps this
+    corpus fresh, which is also why `mb doctor` warns when it goes stale."""
+    from .search import client
+
+    if cfg.code_repos_dir is None:
+        return {"status": "skipped", "reason": "code_repos_dir not set"}
+    if not cfg.code_repos_dir.exists():
+        # a configured-but-absent root is a mistake worth surfacing, but not one
+        # worth failing a nightly over (external drive, moved checkout)
+        return {"status": "skipped",
+                "reason": f"code_repos_dir does not exist: {cfg.code_repos_dir}"}
+    try:
+        stats = client.run_index(cfg, "update", corpus="code")
+    except client.RemoteIndexError as exc:
+        if exc.error_type == "IndexLockedError":
+            return {"status": "skipped", "reason": "locked"}
+        raise
+    return {"status": "ok", "stats": stats}
+
+
 def _step_gaps(cfg: Config, now: str) -> dict[str, Any]:
     from . import gaps
 
@@ -209,6 +234,9 @@ def _step_trend(cfg: Config, now: str, steps: dict[str, Any]) -> dict[str, Any]:
         "unprocessed_sources": gaps_step.get("unprocessed_sources"),
         "open_questions": gaps_step.get("open_questions"),
         "contradiction_candidates": steps.get("contradictions", {}).get("candidates"),
+        # C05: code corpus freshness in the same trend line, so "the index
+        # stopped growing" is visible without opening the corpus
+        "code_chunks": (steps.get("code_index", {}).get("stats") or {}).get("chunks"),
     }
 
     old_lines: list[str] = []
@@ -244,6 +272,7 @@ def run(cfg: Config) -> dict[str, Any]:
     steps: dict[str, Any] = {}
     steps["index"] = _guard(lambda: _step_index(cfg))
     steps["ingest_index"] = _guard(lambda: _step_ingest_index(cfg))
+    steps["code_index"] = _guard(lambda: _step_code_index(cfg))
     steps["digest"] = _guard(lambda: _step_digest(cfg, now))
     steps["curator"] = _guard(lambda: _step_curator(cfg, now))
     steps["gaps"] = _guard(lambda: _step_gaps(cfg, now))

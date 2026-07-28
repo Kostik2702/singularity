@@ -36,7 +36,8 @@ def _commit(cfg, pairs):
     embs = np.array([v for _, v in pairs], dtype=np.float32)
     indexer._commit_generation(
         cfg.memory_index_dir, embs,
-        {"model": "m", "file_meta": {}, "chunks": chunks})
+        {"model": "m", "file_meta": {}, "chunks": chunks},
+        chunk_schema=indexer.chunking.CHUNK_SCHEMA_VERSION)
 
 
 # --- index status handling ---------------------------------------------------

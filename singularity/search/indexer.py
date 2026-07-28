@@ -11,9 +11,12 @@ JSON round-trip (Genevra), size guards against cloud-sync mtime jitter (ours).
 from __future__ import annotations
 
 import contextlib
+import fnmatch
+import functools
 import itertools
 import json
 import os
+import re
 import shutil
 import time
 from dataclasses import dataclass, field
@@ -24,7 +27,7 @@ from typing import Any, Callable
 import numpy as np
 
 from ..config import Config
-from . import chunking
+from . import chunking, code_chunking
 from .chunking import extract_chunks, extract_source_chunks, should_skip
 from .encoder import shared_encoder
 
@@ -59,14 +62,37 @@ class IndexLockedError(RuntimeError):
 
 @dataclass(frozen=True)
 class Corpus:
-    """One indexable body of markdown: where to scan, where to commit, how to
+    """One indexable body of files: where to scan, where to commit, how to
     chunk, and what to skip.
 
     `rel_prefix` is prepended to every scanned path so a chunk's `file` stays
     VAULT-relative (`.mb/sources/2026/x.md`) even though scanning is rooted at
     the corpus root. Skip rules are evaluated on the UN-prefixed sub-path:
     the sources prefix itself starts with `.mb`, which the vault's own
-    `skip_dirs` would otherwise reject wholesale."""
+    `skip_dirs` would otherwise reject wholesale.
+
+    C01 added the four fields below so a NON-markdown body (the code corpus)
+    can reuse this writer instead of growing a parallel indexer. Every default
+    reproduces the pre-C01 markdown behavior exactly, so the two live corpora
+    are untouched:
+
+    * `patterns`      — filename globs to collect (was a hardcoded `*.md`).
+    * `prune_dirs`    — directory NAMES cut at ANY depth while walking. Distinct
+      from `skip_dirs`, which (per `chunking.should_skip`) only ever matched the
+      FIRST path segment: correct for a vault rooted at its own notes, useless
+      for a root holding many repositories where `node_modules` sits three
+      levels down. Pruning happens during traversal, so the subtree is never
+      descended at all — measured on a real repositories root, that is the
+      difference between visiting ~500 files and ~56 000 (epic §2 recon).
+    * `skip_file_patterns` — globs matched against the whole rel-path, applied
+      AFTER the cheap directory cuts and BEFORE any `stat()`.
+    * `max_file_bytes`— size ceiling; `None` disables the check entirely (and
+      with it the only `stat()` the scan would otherwise perform).
+    * `chunk_schema`  — the chunk-format version of THIS corpus. Used to be a
+      single global constant stamped onto every corpus (D3): bumping the
+      markdown chunker forced a needless rebuild of the code index, and bumping
+      the code chunker forced nothing at all.
+    """
     name: str
     root: Path
     index_dir: Path
@@ -74,22 +100,63 @@ class Corpus:
     skip_parts: tuple[str, ...] = ()
     rel_prefix: str = ""
     chunker: Callable[..., list[dict[str, Any]]] = field(default=extract_chunks)
+    patterns: tuple[str, ...] = ("*.md",)
+    prune_dirs: tuple[str, ...] = ()
+    skip_file_patterns: tuple[str, ...] = ()
+    max_file_bytes: int | None = None
+    chunk_schema: int = chunking.CHUNK_SCHEMA_VERSION
 
 
 def memory_corpus(cfg: Config) -> Corpus:
     return Corpus(name="memory", root=cfg.vault, index_dir=cfg.memory_index_dir,
                   skip_dirs=tuple(cfg.get("skip_dirs") or ()),
                   skip_parts=tuple(cfg.get("skip_path_parts") or ()),
-                  chunker=extract_chunks)
+                  chunker=extract_chunks,
+                  chunk_schema=chunking.CHUNK_SCHEMA_VERSION)
 
 
 def sources_corpus(cfg: Config) -> Corpus:
     return Corpus(name="sources", root=cfg.sources_dir,
                   index_dir=cfg.sources_index_dir,
-                  rel_prefix=".mb/sources/", chunker=extract_source_chunks)
+                  rel_prefix=".mb/sources/", chunker=extract_source_chunks,
+                  chunk_schema=chunking.CHUNK_SCHEMA_VERSION)
 
 
-CORPUS_BUILDERS = {"memory": memory_corpus, "sources": sources_corpus}
+class CodeCorpusNotConfigured(RuntimeError):
+    """`code_repos_dir` is unset, so there is no code corpus to act on.
+
+    Raised instead of returning a corpus rooted at nothing: an empty index is
+    indistinguishable from "your code has no matches", and the user would have
+    to guess which of the two they are looking at."""
+
+
+def code_corpus(cfg: Config) -> Corpus:
+    """Third corpus (C03): source files under `cfg.code_repos_dir`.
+
+    Scanning, generations, locking, atomic commit and the incremental
+    (mtime, size) diff are all inherited from the shared writer — the ONLY
+    things specific to code are the policy constants and the chunker."""
+    root = cfg.code_repos_dir
+    if root is None:
+        raise CodeCorpusNotConfigured(
+            "code_repos_dir is not set — the code corpus is off. Point it at "
+            "the directory that HOLDS your repositories: "
+            '`mb config set code_repos_dir "<path/to/your/repos>"`')
+    return Corpus(
+        name="code", root=root, index_dir=cfg.code_index_dir,
+        # first-segment match == repository name, which is exactly what
+        # `should_skip` already does; no new mechanism needed for D1
+        skip_dirs=code_chunking.SKIP_REPOS,
+        prune_dirs=code_chunking.SKIP_DIRS,
+        patterns=code_chunking.CODE_PATTERNS,
+        skip_file_patterns=code_chunking.SKIP_FILE_PATTERNS,
+        max_file_bytes=code_chunking.MAX_FILE_BYTES,
+        chunker=code_chunking.extract_code_chunks,
+        chunk_schema=code_chunking.CODE_CHUNK_SCHEMA_VERSION)
+
+
+CORPUS_BUILDERS = {"memory": memory_corpus, "sources": sources_corpus,
+                   "code": code_corpus}
 
 
 def resolve_corpus(cfg: Config, corpus: "str | Corpus | None") -> Corpus:
@@ -217,12 +284,19 @@ def _prune_generations(index_dir: Path, keep_current: str) -> None:
         shutil.rmtree(gd, ignore_errors=True)
 
 
-def _commit_generation(index_dir: Path, embs: np.ndarray, meta: dict[str, Any]) -> None:
+def _commit_generation(index_dir: Path, embs: np.ndarray, meta: dict[str, Any],
+                       *, chunk_schema: int) -> None:
     """Write a new generation and atomically make it current. Refuses to commit
-    a torn pair (embeddings rows != chunk count)."""
+    a torn pair (embeddings rows != chunk count).
+
+    `chunk_schema` is keyword-only and REQUIRED (D3). It used to be read from
+    the global `chunking.CHUNK_SCHEMA_VERSION` right here, which silently
+    stamped the markdown chunk format onto every corpus; a writer must now
+    state which format it just produced instead of letting this function
+    guess."""
     meta["indexed_at"] = datetime.now().isoformat(timespec="seconds")
     meta["chunk_count"] = len(meta["chunks"])
-    meta["chunk_schema"] = chunking.CHUNK_SCHEMA_VERSION
+    meta["chunk_schema"] = chunk_schema
     if embs.shape[0] != len(meta["chunks"]):
         raise ValueError(
             f"refusing to commit torn index: {embs.shape[0]} embeddings vs "
@@ -293,19 +367,70 @@ def _file_stat(path: Path) -> list[int]:
     return [int(st.st_mtime * 1000), st.st_size]
 
 
+@functools.lru_cache(maxsize=64)
+def _glob_matcher(globs: tuple[str, ...]) -> Callable[[str], Any] | None:
+    """One anchored, case-insensitive regex for a whole glob set, or None when
+    the set is empty (so the caller can skip the check outright).
+
+    Case-insensitive on every platform on purpose: `fnmatch` folds case only on
+    Windows, and a skip rule that silently stops working when the same vault is
+    opened on Linux is the kind of divergence nobody notices until a `.MIN.JS`
+    shows up in search results."""
+    if not globs:
+        return None
+    return re.compile(
+        "|".join(f"(?:{fnmatch.translate(g)})" for g in globs),
+        re.IGNORECASE).match
+
+
 def _scan_corpus(corpus: Corpus) -> dict[str, Path]:
     """rel_path (forward slashes, `rel_prefix` applied) -> absolute Path for
-    every indexable .md file of this corpus."""
+    every indexable file of this corpus.
+
+    Walked with `os.walk` rather than `rglob` because only `os.walk` lets us
+    PRUNE (`dirnames[:] = ...`): `rglob` descends into `node_modules` and
+    discards the results afterwards, which on a repositories root is the whole
+    cost of the scan. Filter order is load-bearing, cheapest first (R4):
+
+        1. directory prune   — during traversal, subtree never entered
+        2. filename patterns — string match, no syscall
+        3. skip_dirs/parts   — rel-path match, no syscall
+        4. skip_file_patterns— rel-path regex, no syscall
+        5. stat()            — the only syscall, and only for survivors
+
+    Reversing 4 and 5 would cost one `stat()` per candidate — on a measured
+    repositories root, ~56 000 syscalls to keep ~500 files."""
     files: dict[str, Path] = {}
     if not corpus.root.exists():
         return files
+    root = corpus.root
     skip_dirs = list(corpus.skip_dirs)
     skip_parts = list(corpus.skip_parts)
-    for path in corpus.root.rglob("*.md"):
-        sub = path.relative_to(corpus.root).as_posix()
-        if should_skip(sub, skip_dirs, skip_parts):
-            continue
-        files[corpus.rel_prefix + sub] = path
+    prune = set(corpus.prune_dirs)
+    match_name = _glob_matcher(tuple(corpus.patterns))
+    match_skip = _glob_matcher(tuple(corpus.skip_file_patterns))
+    max_bytes = corpus.max_file_bytes
+
+    for dirpath, dirnames, filenames in os.walk(root):
+        if prune:
+            dirnames[:] = [d for d in dirnames if d not in prune]
+        base = Path(dirpath)
+        for name in filenames:
+            if match_name is not None and not match_name(name):
+                continue
+            path = base / name
+            sub = path.relative_to(root).as_posix()
+            if should_skip(sub, skip_dirs, skip_parts):
+                continue
+            if match_skip is not None and match_skip(sub):
+                continue
+            if max_bytes is not None:
+                try:
+                    if path.stat().st_size > max_bytes:
+                        continue
+                except OSError:
+                    continue      # vanished/unreadable between walk and stat
+            files[corpus.rel_prefix + sub] = path
     return files
 
 
@@ -331,8 +456,9 @@ def _load_index(index_dir: Path) -> tuple[np.ndarray, dict[str, Any]] | None:
         return None
 
 
-def _save_index(index_dir: Path, embs: np.ndarray, meta: dict[str, Any]) -> None:
-    _commit_generation(index_dir, embs, meta)
+def _save_index(corpus: Corpus, embs: np.ndarray, meta: dict[str, Any]) -> None:
+    _commit_generation(corpus.index_dir, embs, meta,
+                       chunk_schema=corpus.chunk_schema)
 
 
 def rebuild(cfg: Config, progress: bool = True,
@@ -363,7 +489,7 @@ def _rebuild(cfg: Config, progress: bool = True,
     else:
         embs = np.zeros((0, 384), dtype=np.float32)
 
-    _save_index(corp.index_dir, embs,
+    _save_index(corp, embs,
                 {"model": cfg.model, "file_meta": file_meta, "chunks": chunks})
     size_mb = embs.nbytes / 1e6
     return {"files": len(files), "chunks": len(chunks), "size_mb": round(size_mb, 1)}
@@ -404,7 +530,14 @@ def _update(cfg: Config, only_files: list[str] | None = None,
     embs, meta = loaded
     if meta.get("model") != cfg.model:
         return _rebuild(cfg, progress=False, corpus=corp)
-    if meta.get("chunk_schema") != chunking.CHUNK_SCHEMA_VERSION:
+    if meta.get("chunk_schema") != corp.chunk_schema:
+        # D3: compared against THIS corpus's format, not a global constant.
+        # Zero-downtime migration falls out of the numbers rather than a special
+        # case: every generation already on disk was stamped with the old global
+        # `chunking.CHUNK_SCHEMA_VERSION`, and that is exactly what the memory
+        # and sources corpora now declare — so the upgrade is a no-op for them.
+        # A genuinely stale generation (older markdown format, or an absent
+        # stamp) still forces the full rebuild it always did.
         return _rebuild(cfg, progress=False, corpus=corp)  # old chunk format -> full rebuild
 
     files = _scan_corpus(corp)
@@ -449,6 +582,6 @@ def _update(cfg: Config, only_files: list[str] | None = None,
         meta["chunks"].extend(new_chunks)
 
     meta["file_meta"] = old_meta
-    _save_index(corp.index_dir, embs, meta)
+    _save_index(corp, embs, meta)
     return {"added": len(added_or_changed), "deleted": len(deleted),
             "chunks": len(meta["chunks"])}

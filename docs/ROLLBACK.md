@@ -18,6 +18,52 @@ and running `mb config validate` afterward.
 | Vault guard (PreToolUse) | `vault_guard_enabled` / `vault_guard_mode` | `mb config set vault_guard_enabled false` — default already `false`. To keep it on but stop it from blocking, set `vault_guard_mode audit` (warn-only) instead of `deny` |
 | Digest nag on SessionStart | `nightly_nag_rate_limit_hours` | Not a hard off-switch by design (it's a rate limit, not a toggle) — set a very large value (e.g. `87600` = 10 years) to effectively silence it, or stop running `mb nightly` (see below) so `.mb/digest-last.json` never refreshes |
 | Nightly orchestration | — | `mb doctor --fix` only registers the job if it's missing/drifted; to stop it running at all, remove the scheduled task directly (Windows: `schtasks /Delete /TN Singularity-nightly`; macOS: unload `~/Library/LaunchAgents/com.singularity.nightly.plist`; Linux: `systemctl --user disable --now singularity-nightly.timer`) — `mb nightly` still works fine run manually |
+| Code corpus (`--with-code`) | `code_repos_dir` | `mb config set code_repos_dir null` — see below; the unset key IS the off switch (D1) |
+
+## Rolling back the code corpus
+
+The easiest rollback in this repo, and deliberately so: `.mb/code_index/` is
+**100% derived** from files that live in your repositories. Nothing there is
+data — delete it and one command recreates it byte-for-byte equivalent.
+
+```bash
+mb config set code_repos_dir null        # corpus off: no nightly step, no search, no doctor block
+rm -rf "<vault>/.mb/code_index"          # optional, reclaims ~30 MB per corpus (2 generations kept)
+mb daemon stop && mb daemon start        # drop the loaded code embeddings from memory
+```
+
+What each step turns off:
+
+- **`code_repos_dir null`** — `mb search --with-code` / `--code-only` refuse
+  with exit 2, `mb index rebuild --code` refuses with exit 2, the nightly
+  `code_index` step reports `skipped`, `mb doctor` reports `K1-code-index:
+  SKIP`, and `mb stats` / `mb status` stop printing the code line. No other
+  behavior changes anywhere.
+- **Deleting `.mb/code_index/`** — reclaims disk. Safe at any time, including
+  with the corpus still configured: the next `mb index update --code` sees no
+  index and does a full rebuild.
+- **Restarting the daemon** — the engine keeps the code embeddings resident
+  until it reloads. Purely a memory concern; searches already stopped
+  returning code the moment the config key went away.
+
+### What rolling this back does NOT touch
+
+- **Your vault index.** Separate directory, separate generation pointer,
+  separate writer lock, separate `chunk_schema`. `memory_index/CURRENT` is not
+  read or written by any code-corpus path — regression:
+  `tests/test_code_index_e2e.py::test_building_code_changes_neither_the_memory_pointer_nor_its_analytics`.
+- **`mb curator` / `mb digest` / `mb ingest plan`.** They never saw the code
+  corpus in the first place; their output is byte-identical with it present,
+  absent, or half-built.
+- **Your source files.** The indexer only ever reads them. No code path in
+  `singularity/search/` moves, renames or writes anything under
+  `code_repos_dir`.
+
+### Reverting `code_index_max_age_days`
+
+`mb config set code_index_max_age_days 7` restores the default. This key only
+controls when `mb doctor` starts WARNing about staleness; it has no effect on
+indexing or search, and no value of it can make `mb doctor` FAIL.
 
 ## Rolling back the WIKI-LOOP ingest layer
 

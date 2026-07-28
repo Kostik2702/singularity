@@ -10,6 +10,72 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.5.0 — CODE-INDEX: the third corpus (C00–C07)
+
+Closes **MB-05** (`TASK-05_Code_Indexer`, open since 2026-07-02): semantic
+search over source repositories, alongside memory. Ships in the same release as
+WIKI-LOOP. Full spec, decisions (`decisions/CODE-INDEX D1…D6`) and
+real-machine evidence live in the vault
+(`03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md`); the user-facing guide is
+[`docs/code-index.md`](docs/code-index.md).
+
+The original 2026-07-02 spec wanted a standalone `search/code_indexer.py` with
+its own scanning, mtime increment and npy+json format. WIKI-LOOP's `Corpus`
+already provides all of that, so this epic **extended the shared writer instead
+of duplicating it** — and in doing so surfaced two seams the spec never had.
+
+## What shipped
+
+- **`Corpus` is genuinely corpus-agnostic** (C01): `patterns`, `prune_dirs`,
+  `skip_file_patterns`, `max_file_bytes` and a per-corpus `chunk_schema`.
+  `_scan_corpus` moved from `rglob` to `os.walk` so `node_modules` is *pruned
+  during traversal* rather than walked and discarded. Filter order is now a
+  tested contract — directory → filename → path → `stat()` — because the real
+  root offers ~111 extension-matching candidates per file actually wanted.
+- **Defect fixed: `chunk_schema` was global** (D3). `_commit_generation`
+  stamped `chunking.CHUNK_SCHEMA_VERSION` onto *every* corpus and `_update`
+  compared against it, so bumping the markdown chunker forced a pointless full
+  rebuild of the code index — and bumping the code chunker forced nothing. It
+  is now a required keyword-only argument; no writer can inherit a format it
+  did not produce. **Migration is a no-op by construction**: every generation on
+  disk already carries the old global number, which is exactly what memory and
+  sources now declare.
+- **`search/code_chunking.py`** (C02): regex symbol boundaries, Python-first
+  (69% of the codebase, and the one language Genevra had no chunker for) —
+  methods as their own chunks, decorators pulled in, docstrings read forward
+  from the signature. TS/JS/JSX ported. Ruby deliberately *not* implemented
+  (D6: zero `.rb` files exist; it falls back rather than pretending).
+- **`code_corpus` + `mb index rebuild|update|inspect --code`** (C03). Unset
+  `code_repos_dir` is the off switch and every entry point refuses with an
+  actionable message instead of writing an empty index.
+- **`mb search --with-code` and `--repos`** (C04), plumbed and tested at every
+  link including the cold fallback. `--code-only` stopped being a stub. Code is
+  opt-in (D2), so the default result set is provably unchanged.
+- **`mb nightly` step `code_index`, plus `mb stats` / `mb status` / `mb doctor`
+  block `K1`** (C05). Doctor never FAILs over code — the corpus is fully
+  derived, unlike `.mb/sources/` — and `mb doctor --fix --heavy` builds it.
+- New config key `code_index_max_age_days` (default 7); `code_repos_dir` gained
+  a `~`-expanding accessor.
+
+## Evidence
+
+- Live vault, C01 gate: `mb index update` after the upgrade did **not** rebuild
+  (`added: 0`), `memory_index/CURRENT` unchanged, `mb curator --json` and
+  `mb digest plan --json` byte-identical by SHA-256.
+- Real root `D:\Project`: 13 repos, **416 files → 5775 chunks**, 8.9 MB
+  embeddings, 68 s cold build, 0.5 s no-op update, warm search 15.3 ms
+  (default) vs 16.8 ms (`--with-code`). Fallback share **1.6%**.
+- Privacy (D5 layer three — the only layer that checks a fact): grep of the
+  built `metadata.json` for `AKIA`, PEM headers, `password=`, `api_key`,
+  `token=`, `Bearer`, `sk-`, `ghp_` → **0 hits**; zero `.env`/`.pem`/dump files
+  indexed.
+- D2 by the numbers: `--with-code` took 10 of 50 result slots and displaced
+  4 notes; **top-1 changed on 0 of 10 queries**. `mb search` without flags
+  matched the pre-feature baseline on all 10 queries.
+- Tests **1492 → 1605**.
+
+---
+
 # v0.5.0 — WIKI-LOOP: raw sources, ingest fan-out, intel lint (W00–W12)
 
 Closes the gap with the LLM-wiki method: an external document is stored

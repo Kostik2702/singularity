@@ -58,6 +58,11 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("--path-prefix")
     s.add_argument("--memory-only", action="store_true")
     s.add_argument("--code-only", action="store_true")
+    s.add_argument("--with-code", action="store_true", dest="with_code",
+                   help="also search the code corpus (.mb/code_index/) — code is "
+                        "never in the default result set (CODE-INDEX D2)")
+    s.add_argument("--repos", help="comma-separated repository names to keep, "
+                                   "e.g. --repos api,web (code corpus only)")
     s.add_argument("--with-sources", action="store_true", dest="with_sources",
                    help="also search ingested raw sources (.mb/sources_index/) — "
                         "escalation when the wiki has no answer")
@@ -73,6 +78,9 @@ def _build_parser() -> argparse.ArgumentParser:
     i = sub.add_parser("index", help="index management")
     i.add_argument("action", choices=["rebuild", "update", "inspect"])
     i.add_argument("--files", nargs="*", help="update only these vault-relative files")
+    i.add_argument("--code", action="store_true",
+                   help="act on the code corpus (.mb/code_index/) instead of "
+                        "the vault — requires code_repos_dir")
     i.add_argument("path", nargs="?", help="file to inspect (index inspect <path>)")
 
     mdl = sub.add_parser("model", help="local embedding-model lifecycle")
@@ -335,12 +343,22 @@ def cmd_search(cfg, args) -> int:
               "then `mb ingest index --rebuild`", file=sys.stderr)
         return 2
 
+    if (args.with_code or args.code_only) and cfg.code_repos_dir is None:
+        print("[mb] the code corpus is off (code_repos_dir is not set)",
+              file=sys.stderr)
+        print('[mb] enable it with `mb config set code_repos_dir '
+              '"<path/to/your/repos>"`, then `mb index rebuild --code`',
+              file=sys.stderr)
+        return 2
+
     payload = {
         "cmd": "search",
         "query": args.query,
         "top_k": args.top,
         "memory_only": args.memory_only,
         "code_only": args.code_only,
+        "include_code": args.with_code,
+        "repos": args.repos,
         "include_sources": args.with_sources,
         "filter_type": args.filter_type,
         "filter_tags": args.filter_tags,
@@ -397,24 +415,35 @@ def cmd_daemon(cfg, args) -> int:
 def cmd_index(cfg, args) -> int:
     from .search import client, indexer
 
+    corpus = "code" if getattr(args, "code", False) else None
+    if corpus == "code" and cfg.code_repos_dir is None:
+        # refuse BEFORE anything creates .mb/code_index/: an empty index reads
+        # as "your code has no matches", which is a worse answer than an error
+        print("[mb] --code: the code corpus is off (code_repos_dir is not set)",
+              file=sys.stderr)
+        print('[mb] point it at the directory that HOLDS your repositories: '
+              '`mb config set code_repos_dir "<path/to/your/repos>"`',
+              file=sys.stderr)
+        return 2
+
     if args.action == "inspect":
         target = args.path or (args.files[0] if args.files else None)
         if not target:
             print("[mb] usage: mb index inspect <vault-relative-file>", file=sys.stderr)
             return 1
-        rows = indexer.inspect(cfg, target)
+        rows = indexer.inspect(cfg, target, corpus=corpus)
         print(json.dumps({"file": target, "chunks": rows}, ensure_ascii=False, indent=1))
         return 0
 
     try:
-        stats = client.run_index(cfg, args.action, args.files or None)
+        stats = client.run_index(cfg, args.action, args.files or None, corpus=corpus)
     except client.RemoteIndexError as exc:
         if exc.error_type == "IndexLockedError":
             print("[mb] another index writer in progress (lock present)", file=sys.stderr)
         else:
             print(f"[mb] index failed: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps(stats, ensure_ascii=False))
+    print(json.dumps({"corpus": corpus or "memory", **stats}, ensure_ascii=False))
     return 0
 
 

@@ -119,6 +119,176 @@ def test_update_falls_back_to_rebuild_on_chunk_schema_mismatch(tmp_path, monkeyp
         chunking.CHUNK_SCHEMA_VERSION
 
 
+# --- C01: a Corpus can describe a NON-markdown body -------------------------
+
+def _code_tree(tmp_path: Path) -> Path:
+    """A miniature repositories root with one file per filter rule."""
+    root = tmp_path / "repos"
+    (root / "api" / "node_modules" / "pkg").mkdir(parents=True)
+    (root / "api" / "db" / "migrations").mkdir(parents=True)
+    (root / "api" / "app.py").write_text("x = 1\n", encoding="utf-8")
+    (root / "api" / "widget.ts").write_text("export const a = 1\n", encoding="utf-8")
+    (root / "api" / "widget.test.ts").write_text("it('x', () => {})\n", encoding="utf-8")
+    (root / "api" / "bundle.min.js").write_text("var a=1\n", encoding="utf-8")
+    (root / "api" / "types.d.ts").write_text("declare const a: number\n", encoding="utf-8")
+    (root / "api" / "db" / "migrations" / "001.py").write_text("pass\n", encoding="utf-8")
+    (root / "api" / "README.md").write_text("# doc\n", encoding="utf-8")
+    (root / "api" / "node_modules" / "pkg" / "index.js").write_text("1\n", encoding="utf-8")
+    return root
+
+
+def _code_corpus(root: Path, index_dir: Path, **over) -> "indexer_mod.Corpus":
+    kwargs = dict(
+        name="code", root=root, index_dir=index_dir,
+        patterns=("*.py", "*.ts", "*.js"),
+        prune_dirs=("node_modules",),
+        skip_file_patterns=("*.test.*", "*.min.js", "*.d.ts", "*/migrations/*"),
+        chunk_schema=1,
+    )
+    kwargs.update(over)
+    return indexer_mod.Corpus(**kwargs)
+
+
+def test_scan_collects_only_the_declared_patterns(tmp_path):
+    root = _code_tree(tmp_path)
+    scanned = indexer_mod._scan_corpus(_code_corpus(root, tmp_path / "idx"))
+    assert set(scanned) == {"api/app.py", "api/widget.ts"}
+    assert not [k for k in scanned if k.endswith(".md")]
+
+
+def test_scan_default_patterns_are_still_markdown_only(tmp_path):
+    """The two live corpora must not notice C01 at all."""
+    root = _code_tree(tmp_path)
+    scanned = indexer_mod._scan_corpus(
+        indexer_mod.Corpus(name="md", root=root, index_dir=tmp_path / "idx"))
+    assert set(scanned) == {"api/README.md"}
+
+
+def test_max_file_bytes_is_inclusive_at_the_boundary(tmp_path):
+    root = tmp_path / "repos"
+    root.mkdir()
+    (root / "exact.py").write_text("a" * 100, encoding="utf-8")
+    (root / "over.py").write_text("a" * 101, encoding="utf-8")
+    corpus = indexer_mod.Corpus(name="code", root=root, index_dir=tmp_path / "idx",
+                                patterns=("*.py",), max_file_bytes=100)
+    assert set(indexer_mod._scan_corpus(corpus)) == {"exact.py"}
+
+
+def test_skip_file_patterns_cut_only_what_they_name(tmp_path):
+    root = _code_tree(tmp_path)
+    corpus = _code_corpus(root, tmp_path / "idx", prune_dirs=())
+    scanned = set(indexer_mod._scan_corpus(corpus))
+    for cut in ("api/widget.test.ts", "api/bundle.min.js", "api/types.d.ts",
+                "api/db/migrations/001.py"):
+        assert cut not in scanned
+    assert "api/widget.ts" in scanned and "api/app.py" in scanned
+
+
+def test_prune_dirs_are_cut_at_any_depth(tmp_path):
+    """`skip_dirs` only ever matched the FIRST path segment (chunking.should_skip),
+    which cannot express "node_modules, wherever it is" on a root that holds
+    many repositories."""
+    root = _code_tree(tmp_path)
+    scanned = set(indexer_mod._scan_corpus(_code_corpus(root, tmp_path / "idx")))
+    assert not [k for k in scanned if "node_modules" in k]
+
+
+def test_scan_never_stats_a_file_it_already_rejected(tmp_path, monkeypatch):
+    """R4: the repositories root offers ~111 candidates per file actually wanted,
+    so a `stat()` before the string filters is 111x the syscalls. The order is a
+    contract, not a style choice — assert it directly."""
+    root = _code_tree(tmp_path)
+    statted: list[Path] = []
+    real_stat = Path.stat
+
+    def spy(self, *a, **kw):
+        statted.append(Path(self))
+        return real_stat(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "stat", spy)
+    scanned = indexer_mod._scan_corpus(
+        _code_corpus(root, tmp_path / "idx", max_file_bytes=10_000))
+    monkeypatch.undo()
+
+    interesting = {p.as_posix() for p in statted
+                   if p.suffix in {".py", ".ts", ".js", ".md"}}
+    survivors = {(root / rel).as_posix() for rel in scanned}
+    assert interesting == survivors, "a rejected file was stat()ed anyway"
+
+
+def test_scan_skips_a_file_that_vanishes_between_walk_and_stat(tmp_path, monkeypatch):
+    root = tmp_path / "repos"
+    root.mkdir()
+    (root / "gone.py").write_text("x = 1\n", encoding="utf-8")
+    real_stat = Path.stat
+
+    def spy(self, *a, **kw):
+        if Path(self).name == "gone.py":
+            raise OSError("vanished")
+        return real_stat(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "stat", spy)
+    corpus = indexer_mod.Corpus(name="code", root=root, index_dir=tmp_path / "idx",
+                                patterns=("*.py",), max_file_bytes=10_000)
+    assert indexer_mod._scan_corpus(corpus) == {}
+
+
+# --- C01/D3: chunk_schema belongs to the corpus, not to markdown -------------
+
+def test_bumping_the_markdown_schema_leaves_a_foreign_corpus_alone(tmp_path, monkeypatch):
+    """The D3 defect in one assertion: `_commit_generation` stamped the global
+    markdown constant onto EVERY corpus and `_update` compared against it, so a
+    markdown-chunker bump forced a pointless full rebuild of an unrelated
+    corpus (and a bump of THAT corpus's own chunker forced nothing)."""
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
+    root = tmp_path / "repos"
+    root.mkdir()
+    (root / "a.py").write_text("x = 1\n", encoding="utf-8")
+    cfg = Config(vault=tmp_path / "vault", data={"model": "fake"})
+    cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+
+    def one_chunk(path, rel, personal_roots=None):
+        return [{"file": rel, "text": f"code {rel}", "content": "x = 1"}]
+
+    corpus = indexer_mod.Corpus(name="code", root=root,
+                                index_dir=cfg.mb_dir / "code_index",
+                                patterns=("*.py",), chunker=one_chunk,
+                                chunk_schema=1)
+    indexer_mod.rebuild(cfg, progress=False, corpus=corpus)
+    current = (corpus.index_dir / "CURRENT").read_text(encoding="utf-8")
+
+    from singularity.search import chunking
+    monkeypatch.setattr(chunking, "CHUNK_SCHEMA_VERSION",
+                        chunking.CHUNK_SCHEMA_VERSION + 1)
+    stats = indexer_mod.update(cfg, corpus=corpus)
+
+    assert stats == {"added": 0, "deleted": 0, "chunks": 1}     # no rebuild
+    assert (corpus.index_dir / "CURRENT").read_text(encoding="utf-8") == current
+
+
+def test_a_generation_stamped_by_the_old_global_schema_does_not_rebuild(tmp_path, monkeypatch):
+    """Zero-downtime migration (D3): every generation already on disk carries the
+    old GLOBAL number, and that is exactly what memory/sources now declare — so
+    the first `mb index update` after the upgrade is an ordinary no-op diff, not
+    a two-minute rebuild of the live vault."""
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
+    cfg = make_vault(tmp_path)
+    indexer_mod.rebuild(cfg, progress=False)
+    current = (cfg.memory_index_dir / "CURRENT").read_text(encoding="utf-8")
+
+    import json
+
+    from singularity.search import chunking
+    _, meta_path = indexer_mod.index_files(cfg.memory_index_dir)
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert meta["chunk_schema"] == chunking.CHUNK_SCHEMA_VERSION
+    assert meta["chunk_schema"] == indexer_mod.memory_corpus(cfg).chunk_schema
+
+    stats = indexer_mod.update(cfg)
+    assert stats == {"added": 0, "deleted": 0, "chunks": 2}
+    assert (cfg.memory_index_dir / "CURRENT").read_text(encoding="utf-8") == current
+
+
 def test_only_files_scope(tmp_path, monkeypatch):
     monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
     cfg = make_vault(tmp_path)

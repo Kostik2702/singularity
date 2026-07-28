@@ -61,6 +61,12 @@ class SearchDaemon:
                 return {"error": "sources indexing is disabled "
                                  "(config ingest_index_sources=false)",
                         "error_type": "SourcesIndexDisabled"}
+            if corpus == "code" and self.cfg.code_repos_dir is None:
+                # same shape as the sources gate: the CLI checks this too, but
+                # the daemon is the only choke point EVERY caller passes through
+                return {"error": "the code corpus is off (config code_repos_dir "
+                                 "is not set)",
+                        "error_type": "CodeCorpusNotConfigured"}
             if files is not None and (not isinstance(files, list)
                                       or not all(isinstance(f, str) for f in files)):
                 return {"error": "index files must be a list of vault-relative strings"}

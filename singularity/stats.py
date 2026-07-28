@@ -59,7 +59,50 @@ def compute(cfg: Config) -> dict[str, Any]:
     indexed_meta["vault_notes"] = len(scanned)
     indexed_meta["unindexed"] = len(unindexed)
     indexed_meta["sources"] = _sources_stats(cfg)
+    indexed_meta["code"] = _code_stats(cfg)
     return indexed_meta
+
+
+def _code_stats(cfg: Config) -> dict[str, Any]:
+    """Code corpus counts (C05), read from the cheap `summary.json` sidecar
+    plus one pass over the chunk metadata for the per-repo breakdown.
+
+    `configured` is reported separately from `present`: "you never turned this
+    on" and "you turned it on but never built it" are different situations and
+    only the second one is a problem."""
+    from .search import indexer
+
+    configured = cfg.code_repos_dir is not None
+    out: dict[str, Any] = {"configured": configured, "present": False}
+    if not configured:
+        return out
+    out["root"] = str(cfg.code_repos_dir)
+    summary = indexer.index_summary(cfg.code_index_dir)
+    if summary is None:
+        return out
+    files = indexer.index_files(cfg.code_index_dir)
+    repos: dict[str, int] = {}
+    by_kind: dict[str, int] = {}
+    if files is not None:
+        try:
+            meta = json.loads(files[1].read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            meta = {}
+        for c in meta.get("chunks", []):
+            repo = str(c.get("repo") or "-")
+            repos[repo] = repos.get(repo, 0) + 1
+            kind = str(c.get("kind") or "?")
+            by_kind[kind] = by_kind.get(kind, 0) + 1
+    out.update({
+        "present": True,
+        "files": summary.get("file_count", 0),
+        "chunks": summary.get("chunk_count", 0),
+        "chunk_schema": summary.get("chunk_schema"),
+        "indexed_at": summary.get("indexed_at"),
+        "repos": dict(sorted(repos.items())),
+        "by_kind": dict(sorted(by_kind.items())),
+    })
+    return out
 
 
 def _sources_stats(cfg: Config) -> dict[str, Any]:
@@ -106,4 +149,14 @@ def run(cfg: Config, as_json: bool = False) -> int:
         print(f"sources       : {src['documents']} documents "
               f"({', '.join(f'{k}={v}' for k, v in src['by_status'].items())}), "
               f"{src['chunks']} chunks, {src['derived_notes']} derived notes")
+    code = s.get("code") or {}
+    if code.get("configured"):
+        # shown only when the corpus was switched on: a user who never set
+        # code_repos_dir should not have a permanent empty line about it
+        if code.get("present"):
+            print(f"code          : {len(code['repos'])} repos, {code['files']} files, "
+                  f"{code['chunks']} chunks, built {code['indexed_at']}")
+        else:
+            print("code          : configured but not built — "
+                  "run `mb index rebuild --code`")
     return 0

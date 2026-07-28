@@ -13,6 +13,7 @@ def _engine(tmp_path, chunks, embs):
     eng.code_embs, eng.code_chunks = None, []
     eng.src_embs, eng.src_chunks = None, []      # W03: third corpus, opt-in
     eng.sources_warning = None
+    eng.code_warning = None
     return eng
 
 
@@ -27,13 +28,21 @@ def _searchable(tmp_path):
     return eng
 
 
-def test_code_only_says_the_corpus_does_not_exist(tmp_path):
-    """An unimplemented feature must not look like a failed search."""
+def test_code_only_says_the_corpus_is_not_built_yet(tmp_path):
+    """An absent index must not look like a failed search. C04 replaced the
+    "not implemented (roadmap)" wording with an actionable one — the corpus
+    exists now, it just has not been built on this machine."""
     out = _searchable(tmp_path).search({"query": "anything", "code_only": True})
-    assert "not implemented yet" in out["code_warning"]
+    assert "mb index rebuild --code" in out["code_warning"]
+
+
+def test_with_code_on_an_unbuilt_corpus_warns_too(tmp_path):
+    out = _searchable(tmp_path).search({"query": "anything", "include_code": True})
+    assert "no code index exists" in out["code_warning"]
 
 
 def test_no_code_warning_for_a_normal_search(tmp_path):
+    """A user who never asked for code must not be told anything about it."""
     assert "code_warning" not in _searchable(tmp_path).search({"query": "anything"})
 
 

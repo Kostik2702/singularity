@@ -392,6 +392,80 @@ def wiki_loop_block(rep: Report, cfg: Config, fix: bool) -> None:
     _guard(rep, "W3", w3)
 
 
+def code_index_block(rep: Report, cfg: Config, fix: bool, heavy: bool) -> None:
+    """Block K — the code corpus (CODE-INDEX C05).
+
+    Deliberately the LEAST strict block in this file, the mirror image of
+    block W. `.mb/sources/` holds the only copy of raw documents, so its
+    failures are FAIL; `.mb/code_index/` is 100% derived from files that live
+    in git — delete it and one command rebuilds it. Nothing here can therefore
+    justify failing `mb doctor`, and no scenario returns FAIL.
+
+    Staleness is the interesting signal: with no watcher over repositories
+    (decision D4), this corpus only moves when nightly runs or when someone
+    asks. A stale code index answers with yesterday's implementation, which is
+    worse than answering nothing."""
+    from .search import indexer
+
+    def k1():
+        if cfg.code_repos_dir is None:
+            rep.add("K1-code-index", "SKIP",
+                    "code corpus off (code_repos_dir not set)")
+            return
+        root = cfg.code_repos_dir
+        if not root.exists():
+            rep.add("K1-code-index", "WARN",
+                    f"code_repos_dir points at a path that does not exist: {root}",
+                    fix='mb config set code_repos_dir "<path to your repositories>"')
+            return
+        summary = indexer.index_summary(cfg.code_index_dir)
+        if summary is None:
+            msg = "code corpus configured but never built — `--with-code` has " \
+                  "nothing to search"
+            # gated behind --heavy like the model/index repairs: building this
+            # loads the encoder and takes minutes, which is not what a bare
+            # `mb doctor --fix` should silently start
+            if fix and heavy:
+                try:
+                    from .search import client
+                    client.run_index(cfg, "rebuild", corpus="code")
+                    rep.add("K1-code-index", "FIXED", "built the code corpus")
+                    return
+                except Exception as exc:  # noqa: BLE001 — reported, never fatal
+                    rep.add("K1-code-index", "WARN", f"{msg} ({exc})",
+                            fix="mb index rebuild --code")
+                    return
+            rep.add("K1-code-index", "WARN", msg,
+                    fix="mb index rebuild --code  (or mb doctor --fix --heavy)")
+            return
+        memory = indexer.index_summary(cfg.memory_index_dir) or {}
+        if memory.get("model") and summary.get("model") \
+                and memory["model"] != summary["model"]:
+            rep.add("K1-code-index", "WARN",
+                    f"corpora built by different models "
+                    f"(vault {memory['model']!r} vs code {summary['model']!r}); "
+                    f"code search refuses rather than compare across embedding "
+                    f"spaces",
+                    fix="mb index rebuild --code")
+            return
+        files = indexer.index_files(cfg.code_index_dir)
+        age_h = None
+        if files is not None:
+            age_h = (time.time() - files[0].stat().st_mtime) / 3600
+        max_age_h = 24 * float(cfg.get("code_index_max_age_days") or 7)
+        if age_h is not None and age_h > max_age_h:
+            rep.add("K1-code-index", "WARN",
+                    f"code corpus is {age_h / 24:.1f} days old — code changes far "
+                    f"more often than notes and has no watcher (D4)",
+                    fix="mb index update --code  (nightly does this automatically)")
+            return
+        rep.add("K1-code-index", "PASS",
+                f"{summary.get('chunk_count')} chunk(s) from "
+                f"{summary.get('file_count')} file(s), model matches the vault index")
+
+    _guard(rep, "K1", k1)
+
+
 def run(cfg: Config, fix: bool = False, heavy: bool = False,
         as_json: bool = False) -> int:
     rep = Report(quiet=as_json)
@@ -806,6 +880,9 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     # ---- Block W: WIKI-LOOP ingest layer (W11) ------------------------
     _guard(rep, "W-wiki-loop", lambda: wiki_loop_block(rep, cfg, fix))
+
+    # ---- Block K: CODE-INDEX corpus (C05) -----------------------------
+    _guard(rep, "K-code-index", lambda: code_index_block(rep, cfg, fix, heavy))
 
     # ---- summary -------------------------------------------------------
     counts = rep.counts()

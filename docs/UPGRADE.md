@@ -169,6 +169,57 @@ and the copy in `.mb/sources/` is the only one. Consequences you should act on:
   rewritten, on any code path. Re-ingesting a changed document creates a new
   record linked by `supersedes`/`superseded_by` instead.
 
+## CODE-INDEX: the code corpus (no migration required)
+
+The code epic (`C00`–`C07`) adds a third search corpus. **Nothing on your
+machine needs migrating, and this is true by construction rather than by
+luck** — the three claims below are each backed by a test and by a run on a
+live 3216-chunk vault.
+
+- **Your vault index is NOT rebuilt.** `chunk_schema` became per-corpus
+  (decision D3, fixing a real defect — see the CHANGELOG). Every generation
+  already on disk carries the old *global* number, and that is exactly what the
+  memory and sources corpora now declare, so the first `mb index update` after
+  the upgrade is an ordinary no-op diff. Verified on a live vault: `added: 0`,
+  `memory_index/CURRENT` unchanged, `mb curator --json` and `mb digest plan
+  --json` byte-identical by SHA-256. Regression:
+  `tests/test_indexer.py::test_a_generation_stamped_by_the_old_global_schema_does_not_rebuild`.
+- **The corpus is off until you switch it on.** No `code_repos_dir`, no code
+  corpus — that unset key IS the switch (D1), and there is deliberately no
+  second boolean that could disagree with it. `mb nightly` reports the step as
+  `skipped` with a reason, `mb doctor` as `SKIP`, and `mb stats`/`mb status`
+  say nothing at all.
+- **`schema_version` does NOT bump.** `code_repos_dir` already shipped in
+  `DEFAULT_CONFIG` before this epic; the only genuinely new key is
+  `code_index_max_age_days` (default 7), which resolves through
+  `DEFAULT_CONFIG` like every other additive key. `migrate_config()` is
+  untouched.
+
+### If you DO want it
+
+```powershell
+mb config set code_repos_dir "<path/to/your/repos>"   # the PARENT of your repos
+mb index rebuild --code                               # or: mb doctor --fix --heavy
+```
+
+The first build loads the encoder and takes minutes on a large root (measured:
+416 files → 5775 chunks in 68 s including daemon start). After that, `mb
+nightly` keeps it current — there is no watcher over repositories by design
+(D4), which is also why `mb doctor` WARNs once the corpus is older than
+`code_index_max_age_days`.
+
+`.mb/code_index/` costs roughly 30 MB for that corpus (two generations kept:
+current + last-good). It is **fully derived state** — deleting it loses
+nothing, which is why no `mb doctor` scenario FAILs because of it.
+
+### One case worth knowing about
+
+If you had already set `code_repos_dir` speculatively before upgrading, the
+nightly `code_index` step will start building that corpus on its next run.
+That is the feature working as intended, but it is the one way this upgrade
+does something you did not explicitly ask for after the fact. To opt back out:
+`mb config set code_repos_dir null`.
+
 ## Foreign hooks and settings
 
 Every settings mutation (Claude `~/.claude/settings.json`, Gemini
