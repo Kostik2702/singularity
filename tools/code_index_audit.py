@@ -109,6 +109,11 @@ def main(argv=None) -> int:
     report = audit(load_config())
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=1))
+        # same exit vocabulary as the human path: 2 = nothing to audit, 1 = a
+        # marker was found. Returning 0 for "there is no index" would let a CI
+        # gate read an absent corpus as a clean one.
+        if "error" in report:
+            return 2
         return 1 if report.get("secret_marker_total") else 0
     if "error" in report:
         print(f"[audit] {report['error']}", file=sys.stderr)

@@ -98,7 +98,7 @@ client on the next install / `mb doctor --fix` run:
   `~/.grok` — the same resolution order the CLI itself uses; install,
   doctor and uninstall all share that one resolver.
 - **What appears**: the managed `SINGULARITY:BEGIN/END` block in
-  `<grok-home>/AGENTS.md`, 12 portable skill junctions in
+  `<grok-home>/AGENTS.md`, 13 portable skill junctions in
   `<grok-home>/skills/`, and the owned Stop-capture hook file
   `<grok-home>/hooks/singularity.json`.
 - **Safe re-registration**: re-running the installer (or
@@ -190,10 +190,12 @@ live 3216-chunk vault.
   `skipped` with a reason, `mb doctor` as `SKIP`, and `mb stats`/`mb status`
   say nothing at all.
 - **`schema_version` does NOT bump.** `code_repos_dir` already shipped in
-  `DEFAULT_CONFIG` before this epic; the only genuinely new key is
-  `code_index_max_age_days` (default 7), which resolves through
-  `DEFAULT_CONFIG` like every other additive key. `migrate_config()` is
-  untouched.
+  `DEFAULT_CONFIG` before this epic. Two genuinely new keys arrive —
+  `code_index_max_age_days` (default 7, when `mb doctor` starts warning that the
+  corpus is stale) and `code_skip_dirs` (default `[]`, extra directory names
+  pruned at any depth) — and both resolve through `DEFAULT_CONFIG` like every
+  other additive key, so a config you never touch keeps every value it has.
+  `migrate_config()` is untouched.
 
 ### If you DO want it
 
@@ -203,7 +205,7 @@ mb index rebuild --code                               # or: mb doctor --fix --he
 ```
 
 The first build loads the encoder and takes minutes on a large root (measured:
-416 files → 5775 chunks in 68 s including daemon start). After that, `mb
+440 files → 3666 chunks in 71 s including daemon start). After that, `mb
 nightly` keeps it current — there is no watcher over repositories by design
 (D4), which is also why `mb doctor` WARNs once the corpus is older than
 `code_index_max_age_days`.

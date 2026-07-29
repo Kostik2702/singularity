@@ -471,10 +471,29 @@ def _scan_corpus(corpus: Corpus, report: dict[str, Any] | None = None
     max_bytes = corpus.max_file_bytes
 
     def _on_walk_error(exc: OSError) -> None:
-        if report is not None:
-            report["walk_errors"].append(
-                {"path": str(getattr(exc, "filename", "") or root),
-                 "error": f"{type(exc).__name__}: {exc}"})
+        """Record only errors that could actually have HIDDEN indexable content.
+
+        An unreadable directory is treated as possible data loss, so it blocks
+        the write. That must not extend to directories the corpus already
+        declares uninteresting: the vault walks into `.git/`, `.obsidian/` and
+        `.mb/` (they are filtered per-file by `should_skip`, not pruned), so one
+        mode-700 directory inside `.git` used to freeze the vault index — both
+        `update` AND `rebuild`, i.e. including the documented escape hatch —
+        over a subtree guaranteed to contribute zero chunks."""
+        if report is None:
+            return
+        path = str(getattr(exc, "filename", "") or root)
+        try:
+            rel = Path(path).relative_to(root).as_posix()
+        except ValueError:
+            rel = ""
+        if rel:
+            if any(part in prune for part in rel.split("/")):
+                return
+            if should_skip(rel, skip_dirs, skip_parts):
+                return
+        report["walk_errors"].append(
+            {"path": path, "error": f"{type(exc).__name__}: {exc}"})
 
     # Every visited directory is keyed by its REAL path. Following links makes
     # a cycle reachable (a link pointing at an ancestor), and `os.walk` has no

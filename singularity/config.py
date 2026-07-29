@@ -490,8 +490,15 @@ def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:
         except (json.JSONDecodeError, OSError):
             pass
     for candidate in default_vault_candidates():
-        if candidate.exists():
-            return candidate
+        # `.exists()` is not merely False on a path we may not stat: macOS TCC
+        # raises EPERM for `~/Documents` until the terminal is granted access,
+        # which would surface as a traceback instead of the actionable
+        # "no vault configured" message this function exists to enable.
+        try:
+            if candidate.exists():
+                return candidate
+        except OSError:
+            continue
     return None
 
 

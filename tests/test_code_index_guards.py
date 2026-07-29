@@ -110,6 +110,86 @@ def test_a_walk_error_is_not_treated_as_a_deletion(built, monkeypatch):
     assert len(_chunks(built)) == before
 
 
+def test_an_unreadable_skipped_directory_does_not_block_the_vault_index(
+        tmp_path, monkeypatch):
+    """The refusal must not extend to subtrees the corpus already discards.
+
+    The vault WALKS into `.git/`, `.obsidian/` and `.mb/` — they are filtered
+    per file by `should_skip`, not pruned — so before this was scoped, one
+    mode-700 directory inside `.git` froze the vault index permanently: both
+    `mb index update` and `mb index rebuild`, i.e. including the documented
+    escape hatch, over a subtree guaranteed to contribute zero chunks."""
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
+    vault = tmp_path / "vault"
+    (vault / "howto").mkdir(parents=True)
+    (vault / "howto" / "a.md").write_text(
+        "# N\n\n## S\n" + "real note content goes here " * 5, encoding="utf-8")
+    (vault / ".git" / "objects").mkdir(parents=True)
+    cfg = Config(vault=vault, data={
+        "model": "fake",
+        "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"]})
+    cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+    indexer_mod.rebuild(cfg, progress=False)
+
+    real_walk = indexer_mod.os.walk
+
+    def walk_denying_git(top, onerror=None, followlinks=False):
+        for dirpath, dirnames, filenames in real_walk(
+                top, onerror=onerror, followlinks=followlinks):
+            if Path(dirpath).name == ".git" and onerror is not None:
+                onerror(PermissionError(13, "Access is denied",
+                                        str(Path(dirpath) / "objects")))
+            yield dirpath, dirnames, filenames
+
+    monkeypatch.setattr(indexer_mod.os, "walk", walk_denying_git)
+    assert indexer_mod.update(cfg) == {"added": 0, "deleted": 0, "chunks": 1}
+    assert indexer_mod.rebuild(cfg, progress=False)["chunks"] == 1
+
+
+def test_an_unreadable_INDEXABLE_directory_still_blocks(tmp_path, monkeypatch):
+    """The scoping must not defeat the guard for content that counts."""
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
+    vault = tmp_path / "vault"
+    (vault / "howto").mkdir(parents=True)
+    (vault / "howto" / "a.md").write_text(
+        "# N\n\n## S\n" + "real note content goes here " * 5, encoding="utf-8")
+    cfg = Config(vault=vault, data={"model": "fake", "skip_dirs": [".git"]})
+    cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+    indexer_mod.rebuild(cfg, progress=False)
+
+    real_walk = indexer_mod.os.walk
+
+    def walk_denying_howto(top, onerror=None, followlinks=False):
+        for dirpath, dirnames, filenames in real_walk(
+                top, onerror=onerror, followlinks=followlinks):
+            if Path(dirpath).name == "howto" and onerror is not None:
+                onerror(PermissionError(13, "Access is denied", str(dirpath)))
+            yield dirpath, dirnames, filenames
+
+    monkeypatch.setattr(indexer_mod.os, "walk", walk_denying_howto)
+    with pytest.raises(indexer_mod.CorpusRootUnavailable):
+        indexer_mod.update(cfg)
+
+
+def test_a_pruned_directory_error_is_ignored_for_the_code_corpus(built, monkeypatch):
+    real_walk = indexer_mod.os.walk
+
+    def walk_denying_pruned(top, onerror=None, followlinks=False):
+        first = True
+        for dirpath, dirnames, filenames in real_walk(
+                top, onerror=onerror, followlinks=followlinks):
+            if first and onerror is not None:
+                onerror(PermissionError(13, "denied",
+                                        str(Path(dirpath) / "api" / "node_modules")))
+                first = False
+            yield dirpath, dirnames, filenames
+
+    monkeypatch.setattr(indexer_mod.os, "walk", walk_denying_pruned)
+    report: dict = {}
+    indexer_mod._scan_corpus(indexer_mod.code_corpus(built), report)
+    assert report["walk_errors"] == []
+
+
 def test_scan_records_walk_errors_in_the_report(built, monkeypatch):
     def exploding_walk(top, onerror=None, **kw):
         if onerror is not None:

@@ -83,6 +83,7 @@ def _code_stats(cfg: Config) -> dict[str, Any]:
     files = indexer.index_files(cfg.code_index_dir)
     repos: dict[str, int] = {}
     by_kind: dict[str, int] = {}
+    meta: dict[str, Any] = {}      # read below only when `files` is present
     if files is not None:
         try:
             meta = json.loads(files[1].read_text(encoding="utf-8"))

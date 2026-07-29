@@ -10,6 +10,69 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.5.0 — CODE-INDEX release hardening (C10)
+
+Everything here came out of two adversarial reviews — one of a proposed design
+before it was written, one of the branch's release readiness — plus the first
+cross-platform run this work ever had.
+
+- **Scoped the incomplete-scan refusal to subtrees that can actually hold
+  content.** C09's guard recorded EVERY `os.walk` error, but the vault corpus
+  walks into `.git/`, `.obsidian/` and `.mb/` (they are filtered per file by
+  `should_skip`, not pruned). One unreadable directory inside `.git` therefore
+  froze the vault index permanently — `mb index update` AND `mb index rebuild`,
+  i.e. including the documented escape hatch — over a subtree guaranteed to
+  contribute zero chunks. Errors under pruned/skipped paths are now ignored;
+  an unreadable INDEXABLE directory still refuses, pinned by its own test.
+- **Directory links are followed by the code corpus, with cycle protection.**
+  Verified with both link kinds in one `os.walk`: a Windows junction is
+  traversed (Python reports `islink=False`), a POSIX symlink is not. The
+  documented way to index a repository living outside the root therefore worked
+  on Windows and silently indexed nothing on macOS/Linux. Every visited
+  directory is now keyed by realpath, closing a loop that was already reachable
+  on Windows through a junction with no opt-in at all. The vault and sources
+  corpora deliberately do NOT follow links out of themselves.
+- **Machine-specific literals became defaults.** `resolve_vault`'s built-in
+  fallback is a candidate list (`~/memory brain`, `~/Documents/memory brain`,
+  then the historic path), replaceable with `MB_DEFAULT_VAULT`; the vault path
+  inside `singularity/agents/*.md` is a template default that
+  `install/register_agents.py` substitutes only when this machine's vault
+  differs, so the symlink fast path — edit the repo, every agent updates — is
+  preserved where it applies.
+- **`mb selftest` no longer fails on a healthy system.** It searched for a
+  random token and required it in the top-5 of the whole vault: a SEMANTIC
+  search for a string with no semantics, which degraded as the vault grew.
+  Confirmed by attribution — failing at 3244 chunks on the previous commit
+  after passing at 3216. The probe now carries the note's own wording and is
+  scoped to the throwaway folder. This was a live v0.4.0-era defect.
+- **CI ran on a release branch for the first time.** The push trigger listed
+  only `master` and `feat/**`, so the one kind of branch whose purpose is
+  pre-tag verification was never covered; `release/**` and `fix/**` added.
+- Uniform unavailability handling in `mb nightly`: the memory and sources steps
+  now report `skipped` for an unreachable root like the code step already did.
+- Hardening: the vault-candidate probe tolerates `OSError` (macOS TCC raises
+  EPERM for `~/Documents` until granted, which would have surfaced as a
+  traceback instead of the actionable "no vault configured" message).
+
+**Cross-platform evidence.** GitHub Actions could not run (account billing), so
+the suite was executed on real Linux in Docker: **1630 passed, 28 skipped** on
+Python 3.10.20 and 3.12.13, on a case-sensitive filesystem. The link-traversal
+tests ran rather than skipped — same 34 in that file as on Windows — so POSIX
+symlink behaviour is verified by execution, not inferred. macOS remains
+unverified.
+
+**Decision D2 re-measured and CONFIRMED, not relaxed.** With the corpus
+recomposed (vendored SDK out, this project's own 204 files in), `--with-code`
+took 18/50 slots, displaced 13/50 notes and changed top-1 on 4/10 queries —
+against 10/50, 4/50 and 0/10 before. The earlier permission to merge code into
+the default result set was a property of that corpus, not of the design: it
+collapsed on the addition of a single first-party repository. Code stays
+opt-in.
+
+Tests **1636 → 1656**.
+
+---
+
 # v0.5.0 — CODE-INDEX hardening: scan guards + vendored exclusion (C09)
 
 Follow-up to C00–C07, driven by an adversarial design review of a proposed
@@ -127,6 +190,9 @@ of duplicating it** — and in doing so surfaced two seams the spec never had.
 - D2 by the numbers: `--with-code` took 10 of 50 result slots and displaced
   4 notes; **top-1 changed on 0 of 10 queries**. `mb search` without flags
   matched the pre-feature baseline on all 10 queries.
+  **⚠ Superseded** — re-measured after the corpus composition changed (see the
+  C09/C10 section above): 18/50, 13/50 and 4/10. The favourable numbers were a
+  property of that corpus, not of the design.
 - Tests **1492 → 1605**.
 
 ---

@@ -72,6 +72,10 @@ def _step_index(cfg: Config) -> dict[str, Any]:
     except client.RemoteIndexError as exc:
         if exc.error_type == "IndexLockedError":
             return {"status": "skipped", "reason": "locked"}
+        if exc.error_type == "CorpusRootUnavailable":
+            # uniform with the code and sources steps: a root we cannot read is
+            # a skip, never a failure — the index was deliberately left intact
+            return {"status": "skipped", "reason": str(exc)}
         raise
     return {"status": "ok", "stats": stats}
 
@@ -132,6 +136,8 @@ def _step_ingest_index(cfg: Config) -> dict[str, Any]:
     except client.RemoteIndexError as exc:
         if exc.error_type == "IndexLockedError":
             return {"status": "skipped", "reason": "locked"}
+        if exc.error_type == "CorpusRootUnavailable":
+            return {"status": "skipped", "reason": str(exc)}
         raise
     return {"status": "ok", "stats": stats}
 
