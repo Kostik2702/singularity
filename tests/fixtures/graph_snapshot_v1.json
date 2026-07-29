@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "snapshotId": "sha256:5c529e1998d6171657fb3c23af737172832a0f58ce08bcdd85059ba9dd0ff52f",
+  "generatedAt": "2026-07-29T00:00:00Z",
+  "counts": {
+    "nodes": 4,
+    "edges": 3,
+    "brokenLinks": 1
+  },
+  "nodes": [
+    {
+      "id": "decisions/Gamma.md",
+      "title": "Гамма — решение",
+      "type": "decision",
+      "status": "superseded",
+      "project": "demo",
+      "tags": [
+        "fixture",
+        "unicode"
+      ],
+      "aliases": [
+        "The Choice"
+      ]
+    },
+    {
+      "id": "reference/Alpha.md",
+      "title": "Alpha",
+      "type": "reference",
+      "status": "active",
+      "project": "demo",
+      "tags": [
+        "graph",
+        "fixture"
+      ],
+      "aliases": [
+        "The First One"
+      ]
+    },
+    {
+      "id": "reference/Beta.md",
+      "title": "Beta Note",
+      "type": "reference",
+      "status": "active",
+      "project": null,
+      "tags": [
+        "fixture"
+      ],
+      "aliases": []
+    },
+    {
+      "id": "reference/Orphan.md",
+      "title": "Orphan",
+      "type": null,
+      "status": null,
+      "project": null,
+      "tags": [],
+      "aliases": []
+    }
+  ],
+  "edges": [
+    {
+      "source": "reference/Alpha.md",
+      "target": "decisions/Gamma.md",
+      "kind": "wikilink"
+    },
+    {
+      "source": "reference/Alpha.md",
+      "target": "reference/Beta.md",
+      "kind": "wikilink"
+    },
+    {
+      "source": "reference/Beta.md",
+      "target": "reference/Alpha.md",
+      "kind": "wikilink"
+    }
+  ],
+  "diagnostics": {
+    "brokenLinks": [
+      {
+        "source": "reference/Alpha.md",
+        "target": "Missing Target"
+      }
+    ]
+  }
+}
