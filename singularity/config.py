@@ -4,7 +4,8 @@ Vault resolution order (first hit wins):
   1. explicit --vault CLI argument
   2. env MB_HOME
   3. pointer file ~/.singularity.json  -> {"vault_path": "..."}
-  4. built-in dev-machine default — ONLY if that path exists on this machine
+  4. built-in default candidates (`default_vault_candidates`, overridable with
+     env MB_DEFAULT_VAULT) — each tried ONLY if that path exists on this machine
      (github#1: on macOS the bare Windows default leaked into the error
      message; with nothing configured resolve_vault now returns None and
      callers show actionable guidance instead)
@@ -37,8 +38,35 @@ def machine_id() -> str:
     node = platform.node() or "unknown"
     return re.sub(r"[^A-Za-z0-9_.-]", "_", node)[:64] or "unknown"
 
+# Last-resort vault location, tried only when --vault, MB_HOME and the pointer
+# file all came up empty, and only if the path actually exists.
+#
+# This literal is one machine's layout, which is fine for a LAST resort but not
+# fine as the only one: `MB_DEFAULT_VAULT` overrides the whole candidate list
+# (os.pathsep-separated), and two home-relative locations are tried before it so
+# a fresh install on someone else's machine has a sane default at all. The
+# hardcode stays as the final fallback rather than being deleted, because it is
+# what the dev machine has resolved through for the project's whole history.
 DEFAULT_VAULT_WINDOWS = r"D:\obsidian\memory brain"
+DEFAULT_VAULT_DIRNAME = "memory brain"
 POINTER_FILE = Path.home() / ".singularity.json"
+
+
+def default_vault_candidates() -> list[Path]:
+    """Ordered built-in guesses for the vault, most portable first.
+
+    `MB_DEFAULT_VAULT` replaces the list entirely (unlike `MB_HOME`, which
+    short-circuits resolution above this step): it configures where to LOOK,
+    not which vault to use, so a machine with several candidate layouts can
+    state its own order without editing the source."""
+    env = os.environ.get("MB_DEFAULT_VAULT")
+    if env:
+        return [Path(p.strip()).expanduser() for p in env.split(os.pathsep)
+                if p.strip()]
+    home = Path.home()
+    return [home / DEFAULT_VAULT_DIRNAME,
+            home / "Documents" / DEFAULT_VAULT_DIRNAME,
+            Path(DEFAULT_VAULT_WINDOWS)]
 
 SCHEMA_VERSION = 2   # v2 (WIKI-LOOP W10): ingest/gap/lint keys + immutable_roots
 
@@ -461,9 +489,9 @@ def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:
                 return Path(data["vault_path"])
         except (json.JSONDecodeError, OSError):
             pass
-    default = Path(DEFAULT_VAULT_WINDOWS)
-    if default.exists():
-        return default
+    for candidate in default_vault_candidates():
+        if candidate.exists():
+            return candidate
     return None
 
 

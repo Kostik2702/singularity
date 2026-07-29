@@ -220,6 +220,33 @@ That is the feature working as intended, but it is the one way this upgrade
 does something you did not explicitly ask for after the fact. To opt back out:
 `mb config set code_repos_dir null`.
 
+## Machine-specific paths became defaults, not requirements
+
+Two literals belonging to the original dev machine were baked into the source.
+Both still work exactly as before — they are now the LAST fallback rather than
+the only possibility, so nothing changes on a machine that was already working.
+
+- **The built-in fallback vault.** Resolution order is unchanged (`--vault` →
+  `MB_HOME` → `~/.singularity.json` → built-in), but the last step is now a
+  LIST of candidates: `~/memory brain`, `~/Documents/memory brain`, then the
+  historic `D:\obsidian\memory brain`. Each is still tried only if it exists.
+  Set **`MB_DEFAULT_VAULT`** (one path, or several separated by the platform's
+  path separator) to replace that list entirely. Note the difference from
+  `MB_HOME`: `MB_HOME` says *which vault to use*, `MB_DEFAULT_VAULT` says
+  *where to look when nothing was configured*.
+- **The vault path inside the agent definitions.** `singularity/agents/*.md`
+  tell the model to read rules out of the vault and name a concrete path, so
+  they stay readable as documents. That literal is now a template default: if
+  this machine's vault resolves elsewhere, `install/register_agents.py` writes
+  a substituted copy instead of a symlink and says so. If the vault matches the
+  template — the historic case — nothing changes and the files stay symlinked,
+  which preserves the property that matters: edit the repo, every deployed
+  agent updates at once. A local file you edited yourself is still backed up,
+  never overwritten.
+
+Nothing to run: the candidate list applies on the next command, and the agent
+substitution on the next installer / `mb doctor --fix` run.
+
 ## Foreign hooks and settings
 
 Every settings mutation (Claude `~/.claude/settings.json`, Gemini
