@@ -38,11 +38,15 @@ def _commit(cfg, pairs):
     embs = np.array([v for _, v in pairs], dtype=np.float32)
     indexer._commit_generation(
         cfg.memory_index_dir, embs,
-        {"model": "m", "file_meta": {}, "chunks": chunks})
+        {"model": "m", "file_meta": {}, "chunks": chunks},
+        chunk_schema=indexer.chunking.CHUNK_SCHEMA_VERSION)
 
 
 def _no_index_update(monkeypatch):
-    monkeypatch.setattr(client, "run_index", lambda cfg, action, files=None: {"added": 0})
+    # `corpus` accepted since W03: the sources step routes through the same
+    # client call, and a stub with the old signature would TypeError there.
+    monkeypatch.setattr(client, "run_index",
+                        lambda cfg, action, files=None, corpus=None: {"added": 0})
 
 
 # --- index step: lock handling ------------------------------------------------

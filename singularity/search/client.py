@@ -157,17 +157,23 @@ def reload_daemon(cfg: Config) -> Optional[dict[str, Any]]:
 
 
 def run_index(cfg: Config, action: str = "update",
-              files: list[str] | None = None) -> dict[str, Any]:
+              files: list[str] | None = None,
+              corpus: str | None = None) -> dict[str, Any]:
     """Run an index write inside the warm daemon process.
 
     There is deliberately no local fallback: a one-off CLI process would load
     another copy of the embedding model and defeat the daemon-resident contract.
+
+    `corpus` selects which body to index (W03); omitted == the vault corpus,
+    so every pre-W03 call site keeps its exact behavior.
     """
     if action not in {"update", "rebuild"}:
         raise ValueError(f"unknown index action: {action}")
     payload: dict[str, Any] = {"cmd": "index", "action": action}
     if files:
         payload["files"] = files
+    if corpus:
+        payload["corpus"] = corpus
     port = _read_port(cfg)
     resp = (_request(port, payload, read_timeout=INDEX_READ_TIMEOUT)
             if port is not None else None)

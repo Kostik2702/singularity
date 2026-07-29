@@ -36,20 +36,78 @@ def _current_generation(cfg: Config) -> str | None:
     return cur.read_text(encoding="utf-8").strip() if cur.exists() else None
 
 
-def create(cfg: Config, now: str | None = None) -> dict[str, Any]:
+def _raw_source_files(cfg: Config) -> list[Path]:
+    root = cfg.sources_dir
+    if not root.exists():
+        return []
+    return sorted(p for p in root.rglob("*") if p.is_file())
+
+
+def _sources_bytes(cfg: Config) -> int:
+    total = 0
+    for path in _raw_source_files(cfg):
+        try:
+            total += path.stat().st_size
+        except OSError:
+            pass
+    return total
+
+
+def create(cfg: Config, now: str | None = None,
+           with_sources: bool | None = None) -> dict[str, Any]:
+    """Snapshot config + the ingest layer.
+
+    WIKI-LOOP D1 makes `.mb/sources/` the ONLY non-reconstructible data in the
+    vault: every other thing under `.mb/` can be rebuilt from the notes, raw
+    sources cannot. Before W10 this function copied `config.json` and nothing
+    else, so the one irreplaceable directory was the one directory not backed
+    up. Now the registry and every raw document travel with checksums.
+
+    `with_sources=None` (default) includes raw while it fits under
+    `backup_max_sources_mb`, and otherwise SKIPS it with a warning rather than
+    silently writing hundreds of megabytes into `.mb/backups/` on every run —
+    pass `with_sources=True` to force it."""
     ts = now or datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     dest = _backups_dir(cfg) / ts
     dest.mkdir(parents=True, exist_ok=True)
     files: dict[str, str] = {}
+    warnings: list[str] = []
     if cfg.config_path.exists():
         shutil.copy2(cfg.config_path, dest / "config.json")
         files["config.json"] = _sha256(dest / "config.json")
+
+    if cfg.sources_registry_path.exists():
+        shutil.copy2(cfg.sources_registry_path, dest / "sources.json")
+        files["sources.json"] = _sha256(dest / "sources.json")
+
+    raw_files = _raw_source_files(cfg)
+    raw_bytes = _sources_bytes(cfg)
+    limit_mb = float(cfg.get("backup_max_sources_mb"))
+    include_raw = with_sources if with_sources is not None else \
+        (raw_bytes <= limit_mb * 1e6)
+    if raw_files and not include_raw:
+        warnings.append(
+            f"raw sources NOT backed up: {raw_bytes / 1e6:.1f} MB exceeds "
+            f"backup_max_sources_mb={limit_mb:.0f}. Re-run with --with-sources, "
+            f"or evacuate them once with `mb ingest export <dir>`.")
+    if include_raw:
+        for path in raw_files:
+            rel = path.relative_to(cfg.sources_dir).as_posix()
+            out = dest / "sources" / rel
+            out.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, out)
+            files[f"sources/{rel}"] = _sha256(out)
+
     manifest = {
         "id": ts,
         "created_at": ts,
         "machine_id": machine_id(),
         "schema_version": SCHEMA_VERSION,
         "index_generation": _current_generation(cfg),
+        "sources_included": bool(include_raw and raw_files),
+        "sources_count": len(raw_files) if include_raw else 0,
+        "sources_bytes": raw_bytes if include_raw else 0,
+        "warnings": warnings,
         "files": files,
     }
     (dest / MANIFEST).write_text(json.dumps(manifest, ensure_ascii=False, indent=1),
@@ -106,6 +164,45 @@ def restore(cfg: Config, backup_id: str) -> dict[str, Any]:
         tmp.replace(cfg.config_path)
         restored.append("config.json")
 
+    # --- ingest layer -----------------------------------------------------
+    # Additive ONLY. Raw sources are immutable evidence (D6) and the one thing
+    # here with no second copy, so a restore may fill gaps but must never
+    # overwrite or delete what is already on disk.
+    raw_restored, raw_skipped = 0, 0
+    for path in sorted((d / "sources").rglob("*")) if (d / "sources").is_dir() else []:
+        if not path.is_file():
+            continue
+        rel = path.relative_to(d / "sources").as_posix()
+        target = cfg.sources_dir / rel
+        if target.exists():
+            raw_skipped += 1
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
+        raw_restored += 1
+    if raw_restored:
+        restored.append(f"sources/ (+{raw_restored})")
+
+    registry_added = 0
+    src_registry = d / "sources.json"
+    if src_registry.is_file():
+        from .config import atomic_write_json
+        try:
+            backed_up = json.loads(src_registry.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError):
+            backed_up = {}
+        entries = backed_up.get("sources") if isinstance(backed_up, dict) else None
+        if isinstance(entries, dict):
+            from . import sources as sources_mod
+            current = sources_mod.read_registry(cfg)
+            for sid, record in entries.items():
+                if sid not in current["sources"]:
+                    current["sources"][sid] = record
+                    registry_added += 1
+            if registry_added or not cfg.sources_registry_path.exists():
+                atomic_write_json(cfg.sources_registry_path, current)
+                restored.append(f"sources.json (+{registry_added})")
+
     gen = manifest.get("index_generation")
     index_rolled = False
     if gen and (cfg.memory_index_dir / gen).is_dir():
@@ -116,7 +213,8 @@ def restore(cfg: Config, backup_id: str) -> dict[str, Any]:
         index_rolled = True
 
     return {"ok": True, "restored": restored, "index_rolled_back": index_rolled,
-            "id": backup_id}
+            "sources_restored": raw_restored, "sources_kept": raw_skipped,
+            "registry_entries_added": registry_added, "id": backup_id}
 
 
 def _prune(cfg: Config, keep: int = RETENTION) -> None:

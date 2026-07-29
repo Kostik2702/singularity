@@ -2,7 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [master, "feat/**"]
+    # `release/**` was missing, so a release branch — the one branch whose whole
+    # purpose is to be verified before a tag — was the only kind of work the
+    # three-OS matrix never ran on. Everything on release/v0.5.0 had been
+    # validated on one Windows machine and one Python version until this landed.
+    branches: [master, "feat/**", "fix/**", "release/**"]
   pull_request:
   workflow_dispatch:
 

@@ -262,6 +262,210 @@ def grok_block(rep: Report, fix: bool) -> None:
                 fix="python install/register_grok.py")
 
 
+def wiki_loop_block(rep: Report, cfg: Config, fix: bool) -> None:
+    """Block W — the ingest layer (WIKI-LOOP W11).
+
+    Deliberately the strictest block in this file. Everything else under
+    `.mb/` is derived state that a rebuild recreates; `.mb/sources/` is the
+    only content there, and the failure mode it guards against — "delete .mb
+    and re-index" — is a habit, not an accident. So "the registry lists
+    documents whose files are gone" is a FAIL, not a WARN.
+
+    `--fix` here is strictly additive: it may recreate an empty registry or
+    catch the corpus up, and it NEVER deletes a raw file."""
+    from . import sources as sources_mod
+
+    registry = sources_mod.read_registry(cfg)["sources"]
+    stored = {sid: rec for sid, rec in registry.items()
+              if isinstance(rec, dict) and rec.get("stored")}
+    on_disk = {p.relative_to(cfg.vault).as_posix()
+               for p in cfg.sources_dir.rglob("*.md")} if cfg.sources_dir.exists() else set()
+
+    def w1():
+        if not registry:
+            if on_disk:
+                rep.add("W1-sources-integrity", "WARN",
+                        f"{len(on_disk)} raw file(s) present but the registry is empty",
+                        fix="mb ingest backfill --apply, or restore .mb/sources.json "
+                            "from `mb backup list`")
+            else:
+                rep.add("W1-sources-integrity", "PASS", "no sources ingested yet")
+            return
+        if stored and not cfg.sources_dir.exists():
+            rep.add("W1-sources-integrity", "FAIL",
+                    f"registry lists {len(stored)} stored source(s) but "
+                    f"{cfg.sources_dir} does not exist — raw data is the one thing "
+                    f"a rebuild cannot recreate",
+                    fix="mb backup list && mb backup restore <id>  (restore only ADDS files)")
+            return
+        missing = sorted(sid for sid, rec in stored.items()
+                         if str(rec.get("stored_path") or "") not in on_disk)
+        if missing:
+            rep.add("W1-sources-integrity", "FAIL",
+                    f"{len(missing)} registry entr(ies) have no raw file: "
+                    f"{', '.join(missing[:5])}",
+                    fix="mb backup restore <id>, or `mb ingest export` a surviving copy")
+            return
+        orphans = sorted(on_disk - {str(rec.get("stored_path")) for rec in stored.values()})
+        if orphans:
+            rep.add("W1-sources-integrity", "WARN",
+                    f"{len(orphans)} raw file(s) with no registry entry: "
+                    f"{', '.join(orphans[:3])}",
+                    fix="re-add them with `mb ingest add` (write-once: the existing "
+                        "file is kept, only the record is recreated)")
+        else:
+            rep.add("W1-sources-integrity", "PASS",
+                    f"{len(stored)} source(s), registry and disk agree")
+
+    def w2():
+        from .search import indexer
+
+        if not cfg.get("ingest_index_sources"):
+            rep.add("W2-sources-index", "SKIP", "ingest_index_sources=false")
+            return
+        if not stored:
+            rep.add("W2-sources-index", "PASS", "nothing to index yet")
+            return
+        summary = indexer.index_summary(cfg.sources_index_dir)
+        if summary is None:
+            msg = "sources corpus not built — raw documents are not searchable"
+            if fix:
+                try:
+                    from .search import client
+                    client.run_index(cfg, "rebuild", corpus="sources")
+                    rep.add("W2-sources-index", "FIXED", "built the sources corpus")
+                    return
+                except Exception as exc:  # noqa: BLE001 — reported, never fatal
+                    rep.add("W2-sources-index", "WARN", f"{msg} ({exc})",
+                            fix="mb ingest index --rebuild")
+                    return
+            rep.add("W2-sources-index", "WARN", msg, fix="mb ingest index --rebuild")
+            return
+        memory = indexer.index_summary(cfg.memory_index_dir) or {}
+        if memory.get("model") and summary.get("model") \
+                and memory["model"] != summary["model"]:
+            rep.add("W2-sources-index", "WARN",
+                    f"corpora built by different models "
+                    f"(vault {memory['model']!r} vs sources {summary['model']!r}); "
+                    f"source search and `mb ingest plan` refuse rather than compare "
+                    f"across embedding spaces",
+                    fix="mb ingest index --rebuild")
+            return
+        indexed_at = str(summary.get("indexed_at") or "")
+        newest = max((str(rec.get("ingested_at") or "") for rec in stored.values()),
+                     default="")
+        if newest and indexed_at and newest > indexed_at:
+            rep.add("W2-sources-index", "WARN",
+                    f"corpus is older than the registry (indexed {indexed_at}, "
+                    f"newest source {newest}) — the watcher does not see .mb/",
+                    fix="mb ingest index")
+            return
+        rep.add("W2-sources-index", "PASS",
+                f"{summary.get('chunk_count')} chunk(s), model matches the vault index")
+
+    def w3():
+        if not (cfg.vault / ".git").exists():
+            rep.add("W3-sources-portability", "SKIP", "vault is not a git repo")
+            return
+        git = shutil.which("git")
+        if git is None:
+            rep.add("W3-sources-portability", "SKIP", "git not on PATH")
+            return
+        try:
+            proc = subprocess.run(
+                [git, "check-ignore", "-q", ".mb/sources"],
+                cwd=str(cfg.vault), capture_output=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            rep.add("W3-sources-portability", "SKIP", "git check-ignore unavailable")
+            return
+        if proc.returncode == 0:
+            rep.add("W3-sources-portability", "WARN",
+                    ".mb/sources is git-ignored — moving this vault to another "
+                    "machine would leave every ingested document behind",
+                    fix="un-ignore .mb/sources/, or keep an `mb ingest export <dir>` "
+                        "copy somewhere that IS synced")
+        else:
+            rep.add("W3-sources-portability", "PASS", ".mb/sources travels with the vault")
+
+    _guard(rep, "W1", w1)
+    _guard(rep, "W2", w2)
+    _guard(rep, "W3", w3)
+
+
+def code_index_block(rep: Report, cfg: Config, fix: bool, heavy: bool) -> None:
+    """Block K — the code corpus (CODE-INDEX C05).
+
+    Deliberately the LEAST strict block in this file, the mirror image of
+    block W. `.mb/sources/` holds the only copy of raw documents, so its
+    failures are FAIL; `.mb/code_index/` is 100% derived from files that live
+    in git — delete it and one command rebuilds it. Nothing here can therefore
+    justify failing `mb doctor`, and no scenario returns FAIL.
+
+    Staleness is the interesting signal: with no watcher over repositories
+    (decision D4), this corpus only moves when nightly runs or when someone
+    asks. A stale code index answers with yesterday's implementation, which is
+    worse than answering nothing."""
+    from .search import indexer
+
+    def k1():
+        if cfg.code_repos_dir is None:
+            rep.add("K1-code-index", "SKIP",
+                    "code corpus off (code_repos_dir not set)")
+            return
+        root = cfg.code_repos_dir
+        if not root.exists():
+            rep.add("K1-code-index", "WARN",
+                    f"code_repos_dir points at a path that does not exist: {root}",
+                    fix='mb config set code_repos_dir "<path to your repositories>"')
+            return
+        summary = indexer.index_summary(cfg.code_index_dir)
+        if summary is None:
+            msg = "code corpus configured but never built — `--with-code` has " \
+                  "nothing to search"
+            # gated behind --heavy like the model/index repairs: building this
+            # loads the encoder and takes minutes, which is not what a bare
+            # `mb doctor --fix` should silently start
+            if fix and heavy:
+                try:
+                    from .search import client
+                    client.run_index(cfg, "rebuild", corpus="code")
+                    rep.add("K1-code-index", "FIXED", "built the code corpus")
+                    return
+                except Exception as exc:  # noqa: BLE001 — reported, never fatal
+                    rep.add("K1-code-index", "WARN", f"{msg} ({exc})",
+                            fix="mb index rebuild --code")
+                    return
+            rep.add("K1-code-index", "WARN", msg,
+                    fix="mb index rebuild --code  (or mb doctor --fix --heavy)")
+            return
+        memory = indexer.index_summary(cfg.memory_index_dir) or {}
+        if memory.get("model") and summary.get("model") \
+                and memory["model"] != summary["model"]:
+            rep.add("K1-code-index", "WARN",
+                    f"corpora built by different models "
+                    f"(vault {memory['model']!r} vs code {summary['model']!r}); "
+                    f"code search refuses rather than compare across embedding "
+                    f"spaces",
+                    fix="mb index rebuild --code")
+            return
+        files = indexer.index_files(cfg.code_index_dir)
+        age_h = None
+        if files is not None:
+            age_h = (time.time() - files[0].stat().st_mtime) / 3600
+        max_age_h = 24 * float(cfg.get("code_index_max_age_days") or 7)
+        if age_h is not None and age_h > max_age_h:
+            rep.add("K1-code-index", "WARN",
+                    f"code corpus is {age_h / 24:.1f} days old — code changes far "
+                    f"more often than notes and has no watcher (D4)",
+                    fix="mb index update --code  (nightly does this automatically)")
+            return
+        rep.add("K1-code-index", "PASS",
+                f"{summary.get('chunk_count')} chunk(s) from "
+                f"{summary.get('file_count')} file(s), model matches the vault index")
+
+    _guard(rep, "K1", k1)
+
+
 def run(cfg: Config, fix: bool = False, heavy: bool = False,
         as_json: bool = False) -> int:
     rep = Report(quiet=as_json)
@@ -673,6 +877,12 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     # ---- Block F: Grok Build CLI integration (GRK-03/04) --------------
     _guard(rep, "F-grok", lambda: grok_block(rep, fix))
+
+    # ---- Block W: WIKI-LOOP ingest layer (W11) ------------------------
+    _guard(rep, "W-wiki-loop", lambda: wiki_loop_block(rep, cfg, fix))
+
+    # ---- Block K: CODE-INDEX corpus (C05) -----------------------------
+    _guard(rep, "K-code-index", lambda: code_index_block(rep, cfg, fix, heavy))
 
     # ---- summary -------------------------------------------------------
     counts = rep.counts()

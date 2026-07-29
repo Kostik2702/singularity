@@ -73,6 +73,45 @@ def _backlog(cfg: Config) -> dict[str, Any]:
             "index_status": data.get("index_status")}
 
 
+def _sources(cfg: Config) -> dict[str, Any]:
+    """Ingest layer at a glance (W11), including the one number worth acting
+    on: how many documents are still waiting to be turned into notes."""
+    from . import sources as sources_mod
+    from .search import indexer
+
+    records = [r for r in sources_mod.read_registry(cfg)["sources"].values()
+               if isinstance(r, dict)]
+    if not records:
+        return {"present": False}
+    summary = indexer.index_summary(cfg.sources_index_dir) or {}
+    return {"present": True, "documents": len(records),
+            "unprocessed": sum(1 for r in records if r.get("status") == "new"),
+            "chunks": summary.get("chunk_count", 0),
+            "indexed_at": summary.get("indexed_at"),
+            "corpus_enabled": bool(cfg.get("ingest_index_sources"))}
+
+
+def _code(cfg: Config) -> dict[str, Any]:
+    """Code corpus at a glance (C05). `age_hours` is the number that matters:
+    with no watcher over repositories (D4) this corpus goes stale silently, and
+    a stale code index answers with yesterday's implementation."""
+    from .search import indexer
+
+    if cfg.code_repos_dir is None:
+        return {"present": False, "configured": False}
+    summary = indexer.index_summary(cfg.code_index_dir)
+    if summary is None:
+        return {"present": False, "configured": True,
+                "root": str(cfg.code_repos_dir)}
+    files = indexer.index_files(cfg.code_index_dir)
+    age_h = None
+    if files is not None:
+        age_h = round((time.time() - files[0].stat().st_mtime) / 3600, 1)
+    return {"present": True, "configured": True, "root": str(cfg.code_repos_dir),
+            "chunks": summary.get("chunk_count"), "files": summary.get("file_count"),
+            "model": summary.get("model"), "age_hours": age_h}
+
+
 def _cache_age(cfg: Config) -> dict[str, Any]:
     from . import nightly
     from . import reflect
@@ -116,6 +155,8 @@ def snapshot(cfg: Config) -> dict[str, Any]:
         "disk": _guard(lambda: _disk(cfg)),
         "hooks": _guard(lambda: hooks_state.status(cfg.vault)),
         "backlog": _guard(lambda: _backlog(cfg)),
+        "sources": _guard(lambda: _sources(cfg)),
+        "code": _guard(lambda: _code(cfg)),
         "cache_age": _guard(lambda: _cache_age(cfg)),
     }
 
@@ -141,6 +182,18 @@ def run(cfg: Config, as_json: bool = False) -> int:
     for name, s in (snap["scheduler"].items() if isinstance(snap["scheduler"], dict)
                     and "error" not in snap["scheduler"] else []):
         print(f"scheduler[{name}]: registered={s.get('registered')}")
+    src = snap["sources"]
+    if src.get("present"):
+        print(f"sources: {src['documents']} documents "
+              f"({src['unprocessed']} unprocessed), {src['chunks']} chunks"
+              + ("" if src.get("corpus_enabled") else ", corpus DISABLED"))
+    code = snap["code"]
+    if code.get("configured"):
+        if code.get("present"):
+            print(f"code: {code['chunks']} chunks from {code['files']} files, "
+                  f"age {code['age_hours']}h")
+        else:
+            print("code: configured but not built (`mb index rebuild --code`)")
     print(f"disk(.mb): {snap['disk'].get('mb_dir_mb')} MB")
     h = snap["hooks"]
     if "error" not in h:

@@ -8,6 +8,274 @@ specification, not ported line-for-line. Full task-by-task detail, decisions,
 and real-machine verification evidence live in the project vault; this file
 is the repo-facing summary. Commit hashes refer to `master`.
 
+---
+
+# v0.5.0 — CODE-INDEX release hardening (C10)
+
+Everything here came out of two adversarial reviews — one of a proposed design
+before it was written, one of the branch's release readiness — plus the first
+cross-platform run this work ever had.
+
+- **Scoped the incomplete-scan refusal to subtrees that can actually hold
+  content.** C09's guard recorded EVERY `os.walk` error, but the vault corpus
+  walks into `.git/`, `.obsidian/` and `.mb/` (they are filtered per file by
+  `should_skip`, not pruned). One unreadable directory inside `.git` therefore
+  froze the vault index permanently — `mb index update` AND `mb index rebuild`,
+  i.e. including the documented escape hatch — over a subtree guaranteed to
+  contribute zero chunks. Errors under pruned/skipped paths are now ignored;
+  an unreadable INDEXABLE directory still refuses, pinned by its own test.
+- **Directory links are followed by the code corpus, with cycle protection.**
+  Verified with both link kinds in one `os.walk`: a Windows junction is
+  traversed (Python reports `islink=False`), a POSIX symlink is not. The
+  documented way to index a repository living outside the root therefore worked
+  on Windows and silently indexed nothing on macOS/Linux. Every visited
+  directory is now keyed by realpath, closing a loop that was already reachable
+  on Windows through a junction with no opt-in at all. The vault and sources
+  corpora deliberately do NOT follow links out of themselves.
+- **Machine-specific literals became defaults.** `resolve_vault`'s built-in
+  fallback is a candidate list (`~/memory brain`, `~/Documents/memory brain`,
+  then the historic path), replaceable with `MB_DEFAULT_VAULT`; the vault path
+  inside `singularity/agents/*.md` is a template default that
+  `install/register_agents.py` substitutes only when this machine's vault
+  differs, so the symlink fast path — edit the repo, every agent updates — is
+  preserved where it applies.
+- **`mb selftest` no longer fails on a healthy system.** It searched for a
+  random token and required it in the top-5 of the whole vault: a SEMANTIC
+  search for a string with no semantics, which degraded as the vault grew.
+  Confirmed by attribution — failing at 3244 chunks on the previous commit
+  after passing at 3216. The probe now carries the note's own wording and is
+  scoped to the throwaway folder. This was a live v0.4.0-era defect.
+- **CI ran on a release branch for the first time.** The push trigger listed
+  only `master` and `feat/**`, so the one kind of branch whose purpose is
+  pre-tag verification was never covered; `release/**` and `fix/**` added.
+- Uniform unavailability handling in `mb nightly`: the memory and sources steps
+  now report `skipped` for an unreachable root like the code step already did.
+- Hardening: the vault-candidate probe tolerates `OSError` (macOS TCC raises
+  EPERM for `~/Documents` until granted, which would have surfaced as a
+  traceback instead of the actionable "no vault configured" message).
+
+**Cross-platform evidence.** GitHub Actions could not run (account billing), so
+the suite was executed on real Linux in Docker: **1630 passed, 28 skipped** on
+Python 3.10.20 and 3.12.13, on a case-sensitive filesystem. The link-traversal
+tests ran rather than skipped — same 34 in that file as on Windows — so POSIX
+symlink behaviour is verified by execution, not inferred. macOS remains
+unverified.
+
+**Decision D2 re-measured and CONFIRMED, not relaxed.** With the corpus
+recomposed (vendored SDK out, this project's own 204 files in), `--with-code`
+took 18/50 slots, displaced 13/50 notes and changed top-1 on 4/10 queries —
+against 10/50, 4/50 and 0/10 before. The earlier permission to merge code into
+the default result set was a property of that corpus, not of the design: it
+collapsed on the addition of a single first-party repository. Code stays
+opt-in.
+
+Tests **1636 → 1659**.
+
+---
+
+# v0.5.0 — CODE-INDEX hardening: scan guards + vendored exclusion (C09)
+
+Follow-up to C00–C07, driven by an adversarial design review of a proposed
+multi-root `code_repos_dir`. **The multi-root change was dropped** — the review
+showed it silently breaks `SKIP_REPOS` and `*/migrations/*` (both match the
+FIRST segment of the un-prefixed sub-path, which a per-repo root moves into the
+prefix), needs a schema migration to avoid re-keying a live corpus, and cannot
+be expressed through `mb config set` on Windows at all (`json.loads` rejects a
+backslash path inside a JSON list and silently stores the bracket text). A
+directory junction reaches the same goal in one command with no code.
+
+Two of that review's blockers turned out to be **live bugs in the shipped
+single-root code**, and those are fixed here:
+
+- **An unavailable corpus root silently purged the index.** `_scan_corpus`
+  returns `{}` for a missing root, `_update` classifies every known file as
+  deleted and the keep-mask drops their chunks; `_rebuild` committed the empty
+  generation outright. An unmounted drive or a synced folder mid-reconnect
+  destroyed a corpus that costs minutes to rebuild. Now `CorpusRootUnavailable`
+  refuses and leaves the index untouched — but only when there is something to
+  lose, so bootstrapping an empty corpus over a missing root still works.
+- **`os.walk` had no `onerror`,** so a denied ACL or a locked subtree yielded
+  nothing and took the same purge path, with no signal anywhere. Walk errors
+  are now collected and trigger the same refusal.
+
+Both are surfaced end to end: `error_type: CorpusRootUnavailable` from the
+daemon, exit 2 from `mb index`, and a `skipped` (never `error`) nightly step —
+an unreachable repository root at 03:00 must not be a reason to purge anything.
+
+**Vendored third-party trees are no longer indexed** (`VENDORED_DIR_PATTERN`):
+a directory whose name carries a version of three or more numeric components
+(`renpy-8.5.2-sdk`, `node-v18.17.1-win-x64`, `jdk-17.0.2`) is an unpacked
+distribution, and `SKIP_DIRS` cannot enumerate versions. Three components, not
+two, because two also match hand-written `core-2.0`, `sd-1.5`, `lr-0.001`,
+`api-v2` — and this rule errs *silently* when it over-matches while a miss is
+visible in search results and fixed by one `code_skip_dirs` entry. Known misses
+(`boost_1_82_0`, `node-v20`, `Qt5.15`) are pinned by test so the gap is not
+rediscovered as a bug. Exclusions are reported **by name** — in the rebuild
+stats, `mb stats`, the generation metadata and the audit tool — and written by
+both the rebuild and the update path, since `_update` re-commits the loaded
+metadata verbatim and a rebuild-only field would go stale forever.
+
+New key `code_skip_dirs` (default `[]`): extra directory names pruned at any
+depth, so a vendored tree the regex misses is one config entry away.
+
+Measured on the same real root, now including this repository through a
+junction: **13 repos, 440 files, 3666 chunks, 5.6 MB** (was 416 / 5775 / 8.9 MB
+— the delta is 4776 SDK chunks out, ~2600 first-party chunks in), fallback
+share 1.7%, 0 secret markers. `mb search "atomic commit of an index generation"
+--code-only` now returns this project's own `_commit_generation` first.
+
+Tests **1605 → 1636**.
+
+---
+
+# v0.5.0 — CODE-INDEX: the third corpus (C00–C07)
+
+Closes **MB-05** (`TASK-05_Code_Indexer`, open since 2026-07-02): semantic
+search over source repositories, alongside memory. Ships in the same release as
+WIKI-LOOP. Full spec, decisions (`decisions/CODE-INDEX D1…D6`) and
+real-machine evidence live in the vault
+(`03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md`); the user-facing guide is
+[`docs/code-index.md`](docs/code-index.md).
+
+The original 2026-07-02 spec wanted a standalone `search/code_indexer.py` with
+its own scanning, mtime increment and npy+json format. WIKI-LOOP's `Corpus`
+already provides all of that, so this epic **extended the shared writer instead
+of duplicating it** — and in doing so surfaced two seams the spec never had.
+
+## What shipped
+
+- **`Corpus` is genuinely corpus-agnostic** (C01): `patterns`, `prune_dirs`,
+  `skip_file_patterns`, `max_file_bytes` and a per-corpus `chunk_schema`.
+  `_scan_corpus` moved from `rglob` to `os.walk` so `node_modules` is *pruned
+  during traversal* rather than walked and discarded. Filter order is now a
+  tested contract — directory → filename → path → `stat()` — because the real
+  root offers ~111 extension-matching candidates per file actually wanted.
+- **Defect fixed: `chunk_schema` was global** (D3). `_commit_generation`
+  stamped `chunking.CHUNK_SCHEMA_VERSION` onto *every* corpus and `_update`
+  compared against it, so bumping the markdown chunker forced a pointless full
+  rebuild of the code index — and bumping the code chunker forced nothing. It
+  is now a required keyword-only argument; no writer can inherit a format it
+  did not produce. **Migration is a no-op by construction**: every generation on
+  disk already carries the old global number, which is exactly what memory and
+  sources now declare.
+- **`search/code_chunking.py`** (C02): regex symbol boundaries, Python-first
+  (69% of the codebase, and the one language Genevra had no chunker for) —
+  methods as their own chunks, decorators pulled in, docstrings read forward
+  from the signature. TS/JS/JSX ported. Ruby deliberately *not* implemented
+  (D6: zero `.rb` files exist; it falls back rather than pretending).
+- **`code_corpus` + `mb index rebuild|update|inspect --code`** (C03). Unset
+  `code_repos_dir` is the off switch and every entry point refuses with an
+  actionable message instead of writing an empty index.
+- **`mb search --with-code` and `--repos`** (C04), plumbed and tested at every
+  link including the cold fallback. `--code-only` stopped being a stub. Code is
+  opt-in (D2), so the default result set is provably unchanged.
+- **`mb nightly` step `code_index`, plus `mb stats` / `mb status` / `mb doctor`
+  block `K1`** (C05). Doctor never FAILs over code — the corpus is fully
+  derived, unlike `.mb/sources/` — and `mb doctor --fix --heavy` builds it.
+- New config key `code_index_max_age_days` (default 7); `code_repos_dir` gained
+  a `~`-expanding accessor.
+
+## Evidence
+
+- Live vault, C01 gate: `mb index update` after the upgrade did **not** rebuild
+  (`added: 0`), `memory_index/CURRENT` unchanged, `mb curator --json` and
+  `mb digest plan --json` byte-identical by SHA-256.
+- Real root `D:\Project`: 13 repos, **416 files → 5775 chunks**, 8.9 MB
+  embeddings, 68 s cold build, 0.5 s no-op update, warm search 15.3 ms
+  (default) vs 16.8 ms (`--with-code`). Fallback share **1.6%**.
+- Privacy (D5 layer three — the only layer that checks a fact): grep of the
+  built `metadata.json` for `AKIA`, PEM headers, `password=`, `api_key`,
+  `token=`, `Bearer`, `sk-`, `ghp_` → **0 hits**; zero `.env`/`.pem`/dump files
+  indexed.
+- D2 by the numbers: `--with-code` took 10 of 50 result slots and displaced
+  4 notes; **top-1 changed on 0 of 10 queries**. `mb search` without flags
+  matched the pre-feature baseline on all 10 queries.
+  **⚠ Superseded** — re-measured after the corpus composition changed (see the
+  C09/C10 section above): 18/50, 13/50 and 4/10. The favourable numbers were a
+  property of that corpus, not of the design.
+- Tests **1492 → 1605**.
+
+---
+
+# v0.5.0 — WIKI-LOOP: raw sources, ingest fan-out, intel lint (W00–W12)
+
+Closes the gap with the LLM-wiki method: an external document is stored
+immutably with provenance, and its knowledge is deliberately spread across the
+existing pages it actually touches. Full spec, decisions and real-machine
+evidence live in the vault (`03_Tasks/SINGULARITY_WIKI_LOOP_IMPLEMENTATION.md`,
+`decisions/WIKI-LOOP D1…D7`); the user-facing guide is
+[`docs/wiki-loop.md`](docs/wiki-loop.md).
+
+## R1 — the source layer (W00–W04)
+
+- **Decisions D1–D7 recorded before any code** (owner-signed): raw lives in
+  `.mb/sources/` outside the vault tree, indexed as its own corpus, no network
+  in the engine, semantics in skills, hard-deny immutability, fan-out ceiling 15.
+- `singularity/sources.py` — content-addressed ids, atomic registry, write-once
+  storage, Windows-safe slugs, tolerant read / strict write.
+- `mb ingest add|list|show|export` with a contract exit-code scheme, zero-side-effect
+  `--dry-run`, and an explicit refusal (plus the working command) for `http(s)` URLs.
+- **`Corpus` abstraction in the indexer**: scanning, chunking, committing and
+  locking are parameterized by (root, index_dir) instead of hardcoding the vault.
+  Writer locks became per-corpus, so indexing sources never blocks the watcher.
+  `mb search --with-sources` reaches the raw layer; nothing reaches it without
+  the flag.
+- Provenance contract: `sources:` frontmatter, `mb note new --from-source`,
+  two new non-fatal `mb curator` checks, `immutable_roots` denied even in the
+  guard's `audit` mode.
+
+## R2 — the working cycle (W05, W06, W09)
+
+- `mb ingest plan` — deterministic fan-out with mandatory `why` evidence per
+  proposed page, `new_pages`, cross-corpus `conflicts`, and a refusal (rather
+  than nonsense) when the two corpora were built by different models.
+- Shared vector math extracted to `search/similarity.py`; proven bit-identical
+  to the previous inline implementations on the live 3083-chunk index.
+- `mb ingest mark` / `mb ingest log` + `.mb/ingest-log.jsonl`. A handled page
+  stops resurfacing; a re-ingested (re-hashed) document brings it back.
+- Skills: new `mb-ingest` (9 gated steps), `memory-curator` extended with
+  adjudication and the research agenda.
+
+## R3 — intelligence (W07, W08)
+
+- `mb curator contradictions` — cosine band (0.72, 0.90) plus five lexical
+  divergence signals, each producing evidence tokens; verdict journal so a
+  dismissed false positive never returns. **Tuned on real data**: the first
+  run produced 8762 candidates in 27.5 s; requiring an asserting signal,
+  keying numeric mismatches, excluding file:line citations and caching
+  per-chunk features brought it to 653 candidates in 1.4 s with no cap.
+- `mb curator gaps` — six deterministic signals answering "what is missing",
+  with true totals plus a per-signal ceiling so one broad signal cannot bury
+  the rest.
+
+## R4 — migrations, integration, release (W10–W12)
+
+- `mb ingest backfill` — idempotent retro-provenance from `source:` frontmatter
+  and URLs in `reference/` bodies.
+- `schema_version` 1 → 2: 11 additive keys, no value rewriting, `.bak` before
+  the migrating save.
+- **`mb backup` now covers the ingest layer** — registry and every raw file with
+  sha256; `restore` is strictly additive and never overwrites. This is the
+  compensation the D1 storage decision owed: `.mb/sources/` is the only
+  non-reconstructible data in the vault.
+- `mb doctor` block W (FAIL when the registry outlives its files; `--fix` never
+  deletes raw), nightly steps + trend fields, SessionStart ingest nag, sources
+  sections in `mb status` / `mb stats`.
+- E2E on a clean vault, and an R8 regression proving `mb uninstall`,
+  `mb doctor --fix`, the documented rollback and a full reindex all leave every
+  raw file byte-identical.
+
+### Also fixed on the way
+
+- `encoder.resolve_device()` now probes CUDA with a real kernel launch and falls
+  back to CPU. `torch.cuda.is_available()` returning True on a GPU the installed
+  torch has no kernels for took the whole search daemon down; the config key
+  `encoder_device` overrides the probe.
+- `sentence-transformers` pinned `<5` — the 5.x line imports `torchcodec`
+  unconditionally, which needs FFmpeg shared libraries this project has no use for.
+
+---
+
 ## R1 — Hook control MVP (T00–T02)
 
 - `mb hooks status|enable|disable`, natural-language capture-hook mapping,

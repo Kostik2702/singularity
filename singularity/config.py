@@ -4,13 +4,21 @@ Vault resolution order (first hit wins):
   1. explicit --vault CLI argument
   2. env MB_HOME
   3. pointer file ~/.singularity.json  -> {"vault_path": "..."}
-  4. built-in dev-machine default — ONLY if that path exists on this machine
+  4. built-in default candidates (`default_vault_candidates`, overridable with
+     env MB_DEFAULT_VAULT) — each tried ONLY if that path exists on this machine
      (github#1: on macOS the bare Windows default leaked into the error
      message; with nothing configured resolve_vault now returns None and
      callers show actionable guidance instead)
 
-All runtime state lives inside the vault under `.mb/` so the vault is
+Runtime state lives inside the vault under `.mb/` so the vault is
 self-contained and portable across machines.
+
+EXCEPTION (WIKI-LOOP D1, 2026-07-28): `.mb/sources/` + `.mb/sources.json` hold
+ingested raw documents and are the ONLY data under `.mb/` that a rebuild
+cannot reconstruct. "Delete .mb and re-index" destroys them irreversibly.
+They are covered by `mb backup` (with checksums), guarded by `mb doctor`
+(FAIL when the registry is non-empty but the directory is gone), and can be
+evacuated with `mb ingest export <dir>`.
 """
 from __future__ import annotations
 
@@ -30,10 +38,37 @@ def machine_id() -> str:
     node = platform.node() or "unknown"
     return re.sub(r"[^A-Za-z0-9_.-]", "_", node)[:64] or "unknown"
 
+# Last-resort vault location, tried only when --vault, MB_HOME and the pointer
+# file all came up empty, and only if the path actually exists.
+#
+# This literal is one machine's layout, which is fine for a LAST resort but not
+# fine as the only one: `MB_DEFAULT_VAULT` overrides the whole candidate list
+# (os.pathsep-separated), and two home-relative locations are tried before it so
+# a fresh install on someone else's machine has a sane default at all. The
+# hardcode stays as the final fallback rather than being deleted, because it is
+# what the dev machine has resolved through for the project's whole history.
 DEFAULT_VAULT_WINDOWS = r"D:\obsidian\memory brain"
+DEFAULT_VAULT_DIRNAME = "memory brain"
 POINTER_FILE = Path.home() / ".singularity.json"
 
-SCHEMA_VERSION = 1
+
+def default_vault_candidates() -> list[Path]:
+    """Ordered built-in guesses for the vault, most portable first.
+
+    `MB_DEFAULT_VAULT` replaces the list entirely (unlike `MB_HOME`, which
+    short-circuits resolution above this step): it configures where to LOOK,
+    not which vault to use, so a machine with several candidate layouts can
+    state its own order without editing the source."""
+    env = os.environ.get("MB_DEFAULT_VAULT")
+    if env:
+        return [Path(p.strip()).expanduser() for p in env.split(os.pathsep)
+                if p.strip()]
+    home = Path.home()
+    return [home / DEFAULT_VAULT_DIRNAME,
+            home / "Documents" / DEFAULT_VAULT_DIRNAME,
+            Path(DEFAULT_VAULT_WINDOWS)]
+
+SCHEMA_VERSION = 2   # v2 (WIKI-LOOP W10): ingest/gap/lint keys + immutable_roots
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "schema_version": SCHEMA_VERSION,
@@ -42,6 +77,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "daemon_port": 0,          # 0 = OS picks a free port; actual port -> .mb/daemon.port
     "excerpt_chars": 150,
     "batch_size": 64,
+    "encoder_device": None,     # None = probe (cuda if a kernel actually launches, else cpu)
     "code_repos_dir": None,     # optional code index root
     "auto_capture": True,
     "brain_max_lines": 40,             # T06: per-project brain note truncation
@@ -59,6 +95,27 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "nightly_trend_retention_days": 180,    # T12: nightly-history.jsonl row retention
     "reflect_window_days": 30,              # T14: default `mb reflect` lookback window
     "reflect_retention_days": 90,           # T14: reflect-history.jsonl row retention (Open Decision)
+    # --- WIKI-LOOP (W01-W12): raw source layer, ingest fan-out, intel lint ---
+    "ingest_index_sources": True,       # D2 kill-switch for the .mb/sources_index/ corpus
+    "ingest_max_source_chars": 400_000,  # W01: oversize source is REFUSED, never truncated
+    "ingest_fanout_top_k": 15,          # D7: ceiling on `mb ingest plan` suggestions
+    "ingest_fanout_threshold": 0.45,    # W05: min cosine, symmetric to digest_score_threshold
+    "ingest_log_retention_days": 365,   # D3: .mb/ingest-log.jsonl row retention
+    "immutable_roots": [".mb/sources"],  # D6: guard denies Write/Edit here even in audit mode
+    "gap_link_min_inbound": 2,          # W08: inbound links before a broken link is a missing page
+    "gap_learning_age_days": 30,        # W08: age at which an un-digested learning is a gap
+    "lint_llm_adjudication": False,     # W09: optional batch adjudication via `mb llm`
+    "backup_max_sources_mb": 200,       # W10.4: warn threshold before backing raw sources up
+    # --- CODE-INDEX (C00-C07): the code corpus. `code_repos_dir` above is the
+    # on/off switch (D1); this is the only other key the epic introduces.
+    "code_index_max_age_days": 7,       # C05: `mb doctor` WARNs past this (no watcher, D4)
+    "code_skip_dirs": [],               # C09: extra directory names pruned at any depth
+    # C10: directory-name regex for vendored distributions. null = the built-in
+    # `code_chunking.VENDORED_DIR_PATTERN`; "" disables the rule entirely. It is
+    # configurable because the rule can over-match a first-party directory
+    # (`schema-1.0.0`, `proto-3.21.12`) and `code_skip_dirs` can only ADD
+    # prunes — without this key such a directory had no remedy but a source edit.
+    "code_vendored_pattern": None,
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -130,11 +187,37 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     _int("nightly_trend_retention_days", 1, 3650)
     _int("reflect_window_days", 1, 3650)
     _int("reflect_retention_days", 1, 3650)
+    # WIKI-LOOP
+    _int("ingest_max_source_chars", 1, 10_000_000)
+    _int("ingest_fanout_top_k", 1, 100)
+    _num("ingest_fanout_threshold", 0.0, 1.0)
+    _int("ingest_log_retention_days", 1, 3650)
+    _int("gap_link_min_inbound", 1, 100)
+    _int("gap_learning_age_days", 1, 3650)
+    _int("backup_max_sources_mb", 1, 100_000)
+    # CODE-INDEX
+    _int("code_index_max_age_days", 1, 3650)
+    if "code_vendored_pattern" in data and data["code_vendored_pattern"] is not None:
+        value = data["code_vendored_pattern"]
+        if not isinstance(value, str):
+            errors.append("code_vendored_pattern: must be a regex string, "
+                          '"" to disable the rule, or null for the built-in')
+        else:
+            try:
+                re.compile(value)
+            except re.error as exc:
+                errors.append(f"code_vendored_pattern: invalid regex ({exc})")
+    for key in ("ingest_index_sources", "lint_llm_adjudication"):
+        if key in data and not isinstance(data[key], bool):
+            errors.append(f"{key}: must be a boolean")
+    if "immutable_roots" in data and (not isinstance(data["immutable_roots"], list)
+                                      or not all(isinstance(x, str) for x in data["immutable_roots"])):
+        errors.append("immutable_roots: must be a list of strings")
     if "nightly_schedule_time" in data:
         v = data["nightly_schedule_time"]
         if not (isinstance(v, str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v)):
             errors.append("nightly_schedule_time: must be 'HH:MM' 24h string")
-    for key in ("skip_dirs", "skip_path_parts"):
+    for key in ("skip_dirs", "skip_path_parts", "code_skip_dirs"):
         if key in data and (not isinstance(data[key], list)
                             or not all(isinstance(x, str) for x in data[key])):
             errors.append(f"{key}: must be a list of strings")
@@ -151,6 +234,9 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
         errors.append("personal_roots: must be a list of strings")
     if "connectors" in data and not isinstance(data["connectors"], dict):
         errors.append("connectors: must be an object")
+    if ("encoder_device" in data and data["encoder_device"] is not None
+            and not isinstance(data["encoder_device"], str)):
+        errors.append("encoder_device: must be a device string (e.g. 'cpu', 'cuda') or null")
     for key in _PATH_KEYS:
         if key in data and data[key] is not None and not isinstance(data[key], str):
             errors.append(f"{key}: must be a path string or null")
@@ -173,7 +259,11 @@ def migrate_config(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     if data.get("schema_version") != SCHEMA_VERSION:
         data["schema_version"] = SCHEMA_VERSION
         changed = True
-    # future version-keyed migrations go here
+    # v1 -> v2 (WIKI-LOOP W10) needs no value rewriting: every new key is
+    # additive and resolves through DEFAULT_CONFIG, so a v1 config keeps every
+    # user value and gains the defaults. The bump exists so `mb doctor` and
+    # backups can tell the generations apart; `load_config` takes a timestamped
+    # .bak via _backup_config before persisting it.
     return data, changed
 
 
@@ -198,6 +288,38 @@ class Config:
     @property
     def code_index_dir(self) -> Path:
         return self.mb_dir / "code_index"
+
+    @property
+    def code_repos_dir(self) -> "Path | None":
+        """Root holding the repositories the code corpus indexes, or None when
+        the corpus is switched off.
+
+        CODE-INDEX D1: an unset key IS the off switch — a separate boolean
+        would be a second source of truth that can disagree with this one.
+        `~` is expanded because `config.example.json` deliberately stores this
+        key home-relative for portability (`_EXAMPLE_HOME_RELATIVE_KEYS`), so a
+        config seeded from that example arrives as `~/code`."""
+        raw = self.data.get("code_repos_dir")
+        if raw is None or not str(raw).strip():
+            return None
+        return Path(str(raw).strip()).expanduser()
+
+    @property
+    def sources_dir(self) -> Path:
+        # WIKI-LOOP D1: immutable raw documents, deliberately OUTSIDE the vault
+        # note tree so Obsidian/curator/digest never see them. The only
+        # non-reconstructible data under .mb/ — see this module's docstring.
+        return self.mb_dir / "sources"
+
+    @property
+    def sources_index_dir(self) -> Path:
+        # WIKI-LOOP D2: second search corpus over sources_dir, physically
+        # separate from memory_index so wiki analytics cannot be polluted.
+        return self.mb_dir / "sources_index"
+
+    @property
+    def sources_registry_path(self) -> Path:
+        return self.mb_dir / "sources.json"
 
     @property
     def hf_cache(self) -> Path:
@@ -244,6 +366,21 @@ class Config:
     def lock_dir(self) -> Path:
         # rebuild lock guards the SHARED index -> stays in .mb (not per-machine)
         return self.mb_dir / "rebuild.lock"
+
+    def corpus_lock_dir(self, corpus: str) -> Path:
+        """Per-corpus writer lock (W03). The memory corpus keeps the historic
+        `rebuild.lock` path verbatim so an in-flight lock from an older build
+        is still honored; every other corpus gets its own, so indexing sources
+        never blocks indexing the vault (and vice versa)."""
+        if corpus == "memory":
+            return self.lock_dir
+        return self.mb_dir / f"rebuild-{corpus}.lock"
+
+    @property
+    def ingest_lock_dir(self) -> Path:
+        """Serializes registry/journal mutations (`mb ingest add|mark`) so two
+        concurrent writers cannot lose an entry (W01/W06)."""
+        return self.mb_dir / "ingest.lock"
 
     # --- config values --------------------------------------------------
     def get(self, key: str, default: Any = None) -> Any:
@@ -368,9 +505,16 @@ def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:
                 return Path(data["vault_path"])
         except (json.JSONDecodeError, OSError):
             pass
-    default = Path(DEFAULT_VAULT_WINDOWS)
-    if default.exists():
-        return default
+    for candidate in default_vault_candidates():
+        # `.exists()` is not merely False on a path we may not stat: macOS TCC
+        # raises EPERM for `~/Documents` until the terminal is granted access,
+        # which would surface as a traceback instead of the actionable
+        # "no vault configured" message this function exists to enable.
+        try:
+            if candidate.exists():
+                return candidate
+        except OSError:
+            continue
     return None
 
 

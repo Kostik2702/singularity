@@ -25,6 +25,11 @@ from typing import Optional
 MANAGED_ROOTS = ["learnings/active", "learnings/archive", "decisions", "howto",
                  "incidents", "rules", "reference", "changelog", "_moc", "daily"]
 EXEMPT_ROOTS = ["templates", "compaction-plans"]
+# WIKI-LOOP D6: roots whose contents are immutable by contract. Unlike every
+# other check here, a hit is denied even in `vault_guard_mode: audit` — the
+# other checks are about conventions (breakable, with a warning), this one is
+# about destroying data that has no second copy (D1/R8).
+DEFAULT_IMMUTABLE_ROOTS = [".mb/sources"]
 
 
 def vault_relative(vault: Path, abs_path: Path) -> Optional[str]:
@@ -39,6 +44,27 @@ def vault_relative(vault: Path, abs_path: Path) -> Optional[str]:
 
 def is_config_json(vault: Path, abs_path: Path) -> bool:
     return vault_relative(vault, abs_path) == ".mb/config.json"
+
+
+def immutable_root(vault: Path, abs_path: Path,
+                   roots: Optional[list] = None) -> Optional[str]:
+    """The matched immutable-root prefix if `abs_path` falls inside one, else
+    None. Applies to EXISTING files as well as new ones — the whole point is
+    that an ingested source can never be edited (D6).
+
+    Matching goes through `vault_relative`, which resolves the path first, so
+    `.mb/sources/../../x` and a symlink into the tree both normalize before
+    comparison instead of sneaking past a string prefix test."""
+    rel = vault_relative(vault, abs_path)
+    if rel is None:
+        return None
+    for root in (roots if roots is not None else DEFAULT_IMMUTABLE_ROOTS):
+        if not isinstance(root, str):
+            continue
+        norm = root.replace("\\", "/").strip("/")
+        if norm and (rel == norm or rel.startswith(norm + "/")):
+            return norm
+    return None
 
 
 def new_file_managed_root(vault: Path, abs_path: Path) -> Optional[str]:

@@ -33,7 +33,7 @@ Everything lives in **plain Markdown inside your Obsidian vault** — no proprie
 graph TB
     subgraph CC["Claude Code / Codex / Gemini / Grok"]
         MAIN["session"]
-        SK["29 manifest-managed skills<br/>12 portable, 17 Claude-only"]
+        SK["30 manifest-managed skills<br/>13 portable, 17 Claude-only"]
         AG["8 agents + 3 councils<br/>(Claude-only)"]
     end
     subgraph HOOKS["Hooks (deterministic)"]
@@ -136,7 +136,7 @@ Singularity is native to Claude Code, but the installer also wires **OpenAI Code
 **What the installer does for Gemini** (idempotent; re-running refreshes):
 
 - A managed block in `~/.gemini/GEMINI.md` (engine + vault paths, SEM-FIRST, capture rule, shortcuts) — delimited by `SINGULARITY:BEGIN/END`; your own text outside it is never touched.
-- The 12 portable skills (of 15 total — the three council skills stay Claude-only, see `install/skill_manifest.py`) junctioned into `~/.gemini/skills/`. Foreign skills you added are left alone.
+- The 13 portable skills (of 16 total — the three council skills stay Claude-only, see `install/skill_manifest.py`) junctioned into `~/.gemini/skills/`. Foreign skills you added are left alone.
 - Two named hooks in `~/.gemini/settings.json` (backed up as `settings.json.bak-<ts>` before every change; foreign hooks/keys preserved): `singularity-session-start` injects the same live memory context Claude gets, and `singularity-after-agent` nudges you once per substantial session to capture insights — a passive `systemMessage`, so it never disturbs `--output-format json` automation.
 
 An absent client is a clean skip; an old version keeps the profile but warns that skills/hooks may be ignored.
@@ -158,7 +158,7 @@ gemini -p "summarise the vault" --output-format json   # headless: clean JSON, h
 **Grok Build CLI (xAI)** — supported at the capability tier its contract actually proves (grok **0.2.111**, pinned by `tests/fixtures/grok/`):
 
 - **Prerequisites (you install these yourself):** the official CLI — `curl -fsSL https://x.ai/cli/install.sh | bash` (macOS/Linux/Git Bash) or `irm https://x.ai/cli/install.ps1 | iex` (Windows PowerShell); auth is Grok's own (`grok login` / `XAI_API_KEY`, see [x.ai docs](https://docs.x.ai)). Singularity never installs, updates or authenticates Grok.
-- **What the installer does** (idempotent; config root is `$GROK_HOME` when set, else `~/.grok` — the CLI's own resolution order): a managed `SINGULARITY:BEGIN/END` block in `<grok-home>/AGENTS.md` (identity, vault path, SEM-FIRST, capture rule, shortcuts — Grok loads it into every session); the same 12 portable skills junctioned into `<grok-home>/skills/` (a native skill wins name-dedup over any `~/.claude` compat copy, so this is the one effective source); and one Singularity-owned hook file `<grok-home>/hooks/singularity.json` with the **Stop capture nudge** — registered only when the probed version is ≥ 0.2.111, where the stop-gate contract is proven.
+- **What the installer does** (idempotent; config root is `$GROK_HOME` when set, else `~/.grok` — the CLI's own resolution order): a managed `SINGULARITY:BEGIN/END` block in `<grok-home>/AGENTS.md` (identity, vault path, SEM-FIRST, capture rule, shortcuts — Grok loads it into every session); the same 13 portable skills junctioned into `<grok-home>/skills/` (a native skill wins name-dedup over any `~/.claude` compat copy, so this is the one effective source); and one Singularity-owned hook file `<grok-home>/hooks/singularity.json` with the **Stop capture nudge** — registered only when the probed version is ≥ 0.2.111, where the stop-gate contract is proven.
 - **Capability truth** (each observed on the real CLI, not promised): **capture nudge — yes**, block-mode like Claude, at most once per substantial session, honors `auto_capture`; when it fires it costs one extra model round (`num_turns` +1 in headless JSON — schema otherwise identical, stderr clean). **Dynamic session-start recall — no**: Grok ignores hook stdout and `additionalContext` on SessionStart/UserPromptSubmit, so recall is a *static instruction* in the managed AGENTS.md block (the agent runs `mb search` itself) rather than injected live context. **`mb reflect` analytics — yes**: top-level Grok sessions are counted (subagent children excluded via their `session_kind` marker); skill invocations are not measurable in Grok transcripts and honestly stay 0.
 
 ```bash
@@ -192,6 +192,7 @@ That is the everyday loop: **check → search → work → capture → curate**.
 | Find or save knowledge | [Search](#search-your-memory-the-command-youll-use-constantly) · [Capture](#capture-knowledge) · [Auto-indexing](#everything-indexes-itself) |
 | Separate several codebases | [Projects](#multi-project-memory) · [Project brain & module context](#project-brain--module-context) |
 | Turn journals into durable knowledge | [Digest & nightly](#digest-and-nightly-orchestration) · [Curator](#curator-vault-health-and-semantic-lint) |
+| Swallow an external document into the wiki | [Ingest cycle](#ingest-cycle--from-a-document-to-an-updated-wiki) |
 | Keep assistant writes safe | [Vault guard](#vault-guard) · [Health, backup & config](#health-stats-backup--config) |
 | Use the assistant workflows | [Skills](#skills--say-the-trigger-word-in-any-session) · [Agents](#agents--spawned-for-heavy-lifting) · [Solo workflow](#the-solo-workflow-optional-but-recommended) |
 | Inspect adoption or use Obsidian | [Reflect](#adoption-telemetry-with-mb-reflect) · [Obsidian](#obsidian-side) |
@@ -210,6 +211,8 @@ mb search "..." --path-prefix rules/                   # scope to a folder
 mb search "..." --project myproj                       # scope to one project, a group, general, or personal
 mb search "..." --memory-only --max-per-file 1         # diversify results across memory notes
 mb search "..." --explain                              # show how filtering/scoring was applied
+mb search "..." --with-sources                         # also search ingested raw documents
+mb search "..." --with-code --repos api,web            # also search your source repos
 mb search "..." --json --full                          # machine-readable / untruncated
 ```
 
@@ -601,6 +604,52 @@ If `router` is configured, `mb llm start` health-checks and supervises both proc
 
 ---
 
+## Ingest cycle — from a document to an updated wiki
+
+Capturing a document as one more note is nearly worthless. The value is in the **fan-out**: an article about retention policy should touch the retention rule, the nightly howto and two design docs — each gaining a line with a citation. That is what makes knowledge compound instead of pile up.
+
+```bash
+mb ingest add "D:\docs\article.md" --title "Retention policy" --json
+mb ingest index                       # the watcher does NOT see .mb/ — catch the corpus up
+mb ingest plan <source_id> --json     # up to 15 pages, each with WHY it was proposed
+mb note new reference "Retention policy" --from-source <source_id>
+mb ingest mark <source_id> --notes "rules/retention.md,howto/nightly.md"
+mb ingest log --limit 10
+```
+
+* **The raw document is kept byte-for-byte** under `.mb/sources/`, outside the Obsidian tree — the vault graph, `mb search`, `mb curator` and `mb digest` never see it by construction, not by filter. `mb search --with-sources` is the deliberate escalation.
+* **Every proposed edit carries evidence** (`why`: which passage matches which section). No evidence → no edit. "Nothing to add here" is a legitimate, recorded outcome.
+* **The engine never writes a note.** Storage, provenance, candidates and journals are deterministic; the retelling and the edits belong to the `mb-ingest` skill.
+* **No network in the engine**: `mb ingest add` reads a file or stdin and refuses URLs with the command that works (`--stdin --origin <url>`).
+
+Two report-only commands come with it:
+
+```bash
+mb curator contradictions      # same subject, opposite claim — CANDIDATES with evidence tokens
+mb curator gaps                # what is missing: unprocessed sources, open questions, pages nobody wrote
+```
+
+> ⚠️ `.mb/sources/` is the only data in the vault a rebuild cannot recreate. `mb backup create` covers it with checksums, `mb doctor` FAILs if the registry outlives its files, and `mb ingest export <dir>` copies everything out. Full guide: **[docs/wiki-loop.md](docs/wiki-loop.md)**.
+
+## Search your code
+
+*New in **v0.5.0**.* A third corpus over your source repositories, so "how did we implement retry" is answerable from the code as fast as "why did we choose X" is answerable from memory.
+
+```bash
+mb config set code_repos_dir "<path/to/your/repos>"   # the PARENT of your repos
+mb index rebuild --code                               # first build
+mb search "how is retry implemented" --with-code
+mb search "retry" --code-only --repos api,web
+```
+
+* **Code is never in the default result set.** `mb search` without flags returns exactly what it returned before this feature existed — verified against a recorded 10-query baseline, 0/10 drift ([docs/code-index-baseline.md](docs/code-index-baseline.md)). `--with-code` is the deliberate escalation, the same shape as `--with-sources`.
+* **Chunks are symbols, not files or lines.** A hit is one function/class/method with its signature and docstring: `api/retry.py | 0.61 | [function] | retry_with_backoff | …`. Regex boundaries, not an AST — no parser dependency, and unknown code degrades into overlapping windows instead of failing. Measured on a real 440-file root: **1.7%** of chunks fell back.
+* **Unset `code_repos_dir` is the off switch**, and every entry point refuses rather than building an empty index you would read as "no matches".
+* **Nothing about it can touch your memory index.** Separate directory, separate generation pointer, separate writer lock, separate chunk-schema version; `mb curator` and `mb digest` cannot see it. Delete `.mb/code_index/` any time — unlike `.mb/sources/`, it is 100% derived and one command rebuilds it, which is why `mb doctor` never FAILs over it.
+* **No watcher, on purpose.** `mb nightly` catches it up and `mb doctor` WARNs past `code_index_max_age_days` (default 7).
+
+Full guide, constants, budgets and the privacy audit: **[docs/code-index.md](docs/code-index.md)**.
+
 ## Website Factory — reference-to-release pipeline
 
 *New in **v0.3.0**.* The same engine that runs your memory also ships a pipeline for building motion/3D websites. Its premise: the best components already exist in external ecosystems (React Bits, Motion Primitives, three.js examples, GSAP, Remotion, 21st) — the hard part is getting one into *your* project without importing an unknown dependency, a hostile install script, or an effect that tanks your frame budget. Website Factory is that missing middle: external code brings the variety, and a **deterministic trust layer** (quarantine, license classification, perf/a11y gates) decides what is allowed to land.
@@ -814,7 +863,7 @@ Logs: `<vault>/.mb/daemon.log`, `watch.log`, `mb.log`. Last doctor run: `.mb/doc
 - [x] **CI matrix** — Windows / macOS / Linux × Python 3.10/3.11/3.12, `.github/workflows/ci.yml` (fast gate on every push; opt-in heavy ML smoke and real-Gemini-CLI / real-Grok-CLI E2E via `workflow_dispatch`)
 - [x] **Website Factory** (v0.3.0) — reference-to-release motion/3D pipeline: deterministic trust-layer CLIs (`imgqa`/`design-scout`/`pattern-scout`/`component-intake`), 14 skills + 2 loop agents, E09 state graph with hard owner gates (see [Website Factory](#website-factory--reference-to-release-pipeline))
 - [ ] **Codex health checks** — Codex gets an install phase (profile + skill junctions) but no `mb doctor` block and no runtime hook yet, unlike Gemini's `E*-gemini` checks (see "Other CLI clients" above) — verify manually for now
-- [ ] **Code index** — semantic search over your source repos, merged with memory results (`code_repos_dir`)
+- [x] **Code index** (v0.5.0) — semantic search over your source repos, opt-in per query via `--with-code` (see [Search your code](#search-your-code))
 - [ ] **RU score calibration** — tuned `min_score` from a bilingual query→note benchmark
 - [ ] **Connectors** — optional pluggable integrations (issue trackers, logs, chat), secrets via OS keyring, off by default
 

@@ -24,6 +24,8 @@ from .config import Config, atomic_write_json
 DIGEST_SNAPSHOT_NAME = "digest-last.json"
 CURATOR_SNAPSHOT_NAME = "curator-last.json"
 CONFIG_SNAPSHOT_NAME = "config-last.json"
+GAPS_SNAPSHOT_NAME = "gaps-last.json"                     # W11
+CONTRADICTIONS_SNAPSHOT_NAME = "contradictions-last.json"  # W11
 TREND_HISTORY_NAME = "nightly-history.jsonl"
 
 JOB_NAME = "nightly"
@@ -70,6 +72,10 @@ def _step_index(cfg: Config) -> dict[str, Any]:
     except client.RemoteIndexError as exc:
         if exc.error_type == "IndexLockedError":
             return {"status": "skipped", "reason": "locked"}
+        if exc.error_type == "CorpusRootUnavailable":
+            # uniform with the code and sources steps: a root we cannot read is
+            # a skip, never a failure — the index was deliberately left intact
+            return {"status": "skipped", "reason": str(exc)}
         raise
     return {"status": "ok", "stats": stats}
 
@@ -111,6 +117,96 @@ def _step_config(cfg: Config, now: str) -> dict[str, Any]:
             "warnings": len(result["warnings"])}
 
 
+def _step_ingest_index(cfg: Config) -> dict[str, Any]:
+    """Catch the sources corpus up. It needs its own step because the watcher
+    does NOT see `.mb/` (a direct consequence of decision D1) — without this,
+    a document ingested while the daemon was cold stays unsearchable until
+    someone runs `mb ingest index` by hand."""
+    from . import sources as sources_mod
+    from .search import client
+
+    if not cfg.get("ingest_index_sources"):
+        return {"status": "skipped", "reason": "ingest_index_sources=false"}
+    if not any(rec.get("stored") for rec in
+               sources_mod.read_registry(cfg)["sources"].values()
+               if isinstance(rec, dict)):
+        return {"status": "skipped", "reason": "no sources"}
+    try:
+        stats = client.run_index(cfg, "update", corpus="sources")
+    except client.RemoteIndexError as exc:
+        if exc.error_type == "IndexLockedError":
+            return {"status": "skipped", "reason": "locked"}
+        if exc.error_type == "CorpusRootUnavailable":
+            return {"status": "skipped", "reason": str(exc)}
+        raise
+    return {"status": "ok", "stats": stats}
+
+
+def _step_code_index(cfg: Config) -> dict[str, Any]:
+    """Catch the code corpus up (C05).
+
+    Code has no watcher by design (CODE-INDEX D4): re-indexing needs the
+    encoder inside the daemon, and code changes precisely when the machine is
+    busy doing the work. Nightly is therefore the ONLY thing that keeps this
+    corpus fresh, which is also why `mb doctor` warns when it goes stale."""
+    from .search import client
+
+    if cfg.code_repos_dir is None:
+        return {"status": "skipped", "reason": "code_repos_dir not set"}
+    if not cfg.code_repos_dir.exists():
+        # a configured-but-absent root is a mistake worth surfacing, but not one
+        # worth failing a nightly over (external drive, moved checkout)
+        return {"status": "skipped",
+                "reason": f"code_repos_dir does not exist: {cfg.code_repos_dir}"}
+    try:
+        stats = client.run_index(cfg, "update", corpus="code")
+    except client.RemoteIndexError as exc:
+        if exc.error_type == "IndexLockedError":
+            return {"status": "skipped", "reason": "locked"}
+        if exc.error_type == "CorpusRootUnavailable":
+            # the corpus was left intact on purpose; an unreachable repository
+            # root at 03:00 is a skip, never a reason to purge the index
+            return {"status": "skipped", "reason": str(exc)}
+        raise
+    return {"status": "ok", "stats": stats}
+
+
+def _step_gaps(cfg: Config, now: str) -> dict[str, Any]:
+    from . import gaps
+
+    result = gaps.report(cfg)
+    atomic_write_json(cfg.mb_dir / GAPS_SNAPSHOT_NAME, {"generated_at": now, **result})
+    return {"status": "ok", "total": result["total"], **result["counts"]}
+
+
+def _step_contradictions(cfg: Config, now: str) -> dict[str, Any]:
+    from . import contradictions
+
+    report = contradictions.scan(cfg)
+    atomic_write_json(cfg.mb_dir / CONTRADICTIONS_SNAPSHOT_NAME,
+                      {"generated_at": now, **report})
+    return {"status": "ok", "candidates": report["total"],
+            "suppressed": report["suppressed"], "capped": report["capped"]}
+
+
+def _step_ingest_log(cfg: Config) -> dict[str, Any]:
+    from . import sources as sources_mod
+
+    return {"status": "ok", **sources_mod.sweep_log(cfg)}
+
+
+def _step_sources(cfg: Config) -> dict[str, Any]:
+    from . import sources as sources_mod
+
+    records = [r for r in sources_mod.read_registry(cfg)["sources"].values()
+               if isinstance(r, dict)]
+    by_status: dict[str, int] = {}
+    for record in records:
+        key = str(record.get("status", "?"))
+        by_status[key] = by_status.get(key, 0) + 1
+    return {"status": "ok", "total": len(records), "by_status": by_status}
+
+
 def _step_markers(cfg: Config) -> dict[str, Any]:
     markers_dir = cfg.markers_dir
     if not markers_dir.exists():
@@ -134,6 +230,7 @@ def _step_trend(cfg: Config, now: str, steps: dict[str, Any]) -> dict[str, Any]:
     """Append one row per run; prune rows older than the retention window on
     every write so the history file never grows unbounded."""
     path = cfg.mb_dir / TREND_HISTORY_NAME
+    gaps_step = steps.get("gaps", {})
     row = {
         "ts": now,
         "index_status": steps.get("digest", {}).get("index_status"),
@@ -142,6 +239,14 @@ def _step_trend(cfg: Config, now: str, steps: dict[str, Any]) -> dict[str, Any]:
         "curator_notes": steps.get("curator", {}).get("notes"),
         "config_errors": steps.get("config", {}).get("errors"),
         "markers_swept": steps.get("markers", {}).get("swept"),
+        # W11: the ingest cycle's own trend line
+        "sources": steps.get("sources", {}).get("total"),
+        "unprocessed_sources": gaps_step.get("unprocessed_sources"),
+        "open_questions": gaps_step.get("open_questions"),
+        "contradiction_candidates": steps.get("contradictions", {}).get("candidates"),
+        # C05: code corpus freshness in the same trend line, so "the index
+        # stopped growing" is visible without opening the corpus
+        "code_chunks": (steps.get("code_index", {}).get("stats") or {}).get("chunks"),
     }
 
     old_lines: list[str] = []
@@ -176,10 +281,16 @@ def run(cfg: Config) -> dict[str, Any]:
     now = datetime.now().isoformat(timespec="seconds")
     steps: dict[str, Any] = {}
     steps["index"] = _guard(lambda: _step_index(cfg))
+    steps["ingest_index"] = _guard(lambda: _step_ingest_index(cfg))
+    steps["code_index"] = _guard(lambda: _step_code_index(cfg))
     steps["digest"] = _guard(lambda: _step_digest(cfg, now))
     steps["curator"] = _guard(lambda: _step_curator(cfg, now))
+    steps["gaps"] = _guard(lambda: _step_gaps(cfg, now))
+    steps["contradictions"] = _guard(lambda: _step_contradictions(cfg, now))
+    steps["sources"] = _guard(lambda: _step_sources(cfg))
     steps["config"] = _guard(lambda: _step_config(cfg, now))
     steps["markers"] = _guard(lambda: _step_markers(cfg))
+    steps["ingest_log"] = _guard(lambda: _step_ingest_log(cfg))
     steps["trend"] = _guard(lambda: _step_trend(cfg, now, steps))
     return {"started_at": now, "steps": steps}
 

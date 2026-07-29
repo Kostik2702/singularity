@@ -12,6 +12,11 @@ import pytest
 
 from singularity.platform import scheduler
 
+# This file IS the scheduler's own contract test: it calls the public
+# register/unregister on purpose, with the subprocess layer (`_run`) stubbed,
+# so it opts out of the conftest guard that protects every other test file.
+pytestmark = pytest.mark.real_scheduler
+
 VAULT = r"D:\obsidian\memory brain"          # the space that broke everything
 UNICODE = r"C:\Пользователи\хранилище данных"  # non-ASCII path
 ARGS = ["-m", "singularity", "--vault", VAULT, "index", "update"]

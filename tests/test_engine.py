@@ -11,7 +11,42 @@ def _engine(tmp_path, chunks, embs):
     eng.cfg = Config(vault=tmp_path, data={"min_score": 0.30, "excerpt_chars": 150})
     eng.mem_embs, eng.mem_chunks = embs, chunks
     eng.code_embs, eng.code_chunks = None, []
+    eng.src_embs, eng.src_chunks = None, []      # W03: third corpus, opt-in
+    eng.sources_warning = None
+    eng.code_warning = None
     return eng
+
+
+class _StubEncoder:
+    def encode(self, texts, progress=False):
+        return np.ones((len(texts), 3), dtype=np.float32)
+
+
+def _searchable(tmp_path):
+    eng = _engine(tmp_path, [], None)
+    eng.encoder = _StubEncoder()          # _engine skips __init__, so no model
+    return eng
+
+
+def test_code_only_says_the_corpus_is_not_built_yet(tmp_path):
+    """An absent index must not look like a failed search. C04 replaced the
+    "not implemented (roadmap)" wording with an actionable one — the corpus
+    exists now, it just has not been built on this machine."""
+    out = _searchable(tmp_path).search({"query": "anything", "code_only": True})
+    assert "mb index rebuild --code" in out["code_warning"]
+
+
+def test_with_code_on_an_unbuilt_corpus_warns_too(tmp_path):
+    out = _searchable(tmp_path).search({"query": "anything", "include_code": True})
+    # wording must not claim the corpus was never configured: with a configured
+    # but unreachable root the index exists and is simply empty
+    assert "code index is empty or its configured root is unreachable" \
+        in out["code_warning"]
+
+
+def test_no_code_warning_for_a_normal_search(tmp_path):
+    """A user who never asked for code must not be told anything about it."""
+    assert "code_warning" not in _searchable(tmp_path).search({"query": "anything"})
 
 
 def test_match_filters_type_and_tags():

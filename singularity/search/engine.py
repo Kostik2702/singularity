@@ -28,32 +28,72 @@ class SearchEngine:
         self.mem_chunks: list[dict[str, Any]] = []
         self.code_embs: np.ndarray | None = None
         self.code_chunks: list[dict[str, Any]] = []
+        # W03: ingested raw sources — a third corpus, opted into per query
+        self.src_embs: np.ndarray | None = None
+        self.src_chunks: list[dict[str, Any]] = []
+        self.sources_warning: str | None = None
+        self.code_warning: str | None = None
         self.reload()
 
     # ------------------------------------------------------------------
-    def _load_one(self, index_dir: Path) -> tuple[Optional[np.ndarray], list[dict]]:
+    def _load_one(self, index_dir: Path
+                  ) -> tuple[Optional[np.ndarray], list[dict], Optional[str]]:
+        """(normalized embeddings, chunks, model name). The model name is read
+        here rather than in a second pass because metadata.json holds every
+        chunk and is megabytes on a real vault — reading it twice per reload
+        would be pure waste on daemon start."""
         from . import indexer
         files = indexer.index_files(index_dir)   # committed generation or legacy flat
         if files is None:
-            return None, []
+            return None, [], None
         emb_path, meta_path = files
         try:
             embs = np.load(emb_path, allow_pickle=False).astype(np.float32)
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
             chunks = meta.get("chunks", [])
             if embs.shape[0] != len(chunks):
-                return None, []
+                return None, [], None
             # normalize defensively (indexes built elsewhere may be unnormalized)
             norms = np.linalg.norm(embs, axis=1, keepdims=True)
             norms[norms == 0] = 1.0
-            return embs / norms, chunks
+            return embs / norms, chunks, meta.get("model")
         except (OSError, ValueError, json.JSONDecodeError):
-            return None, []
+            return None, [], None
+
+    def _model_mismatch(self, corpus: str, mem_model: str | None,
+                        other_model: str | None, fix: str) -> str | None:
+        """Cosine between two different embedding spaces is meaningless. Serving
+        quiet nonsense is strictly worse than refusing: the caller cannot tell a
+        bad match from a mis-built index. Shared by sources (W05) and code (C04)
+        so a third corpus cannot forget to check."""
+        if mem_model and other_model and other_model != mem_model:
+            return (f"{corpus} index was built with model {other_model!r} but the "
+                    f"vault index with {mem_model!r}; {corpus} search is disabled "
+                    f"until they match — run `{fix}`")
+        return None
 
     def reload(self) -> dict[str, int]:
-        self.mem_embs, self.mem_chunks = self._load_one(self.cfg.memory_index_dir)
-        self.code_embs, self.code_chunks = self._load_one(self.cfg.code_index_dir)
-        return {"memory": len(self.mem_chunks), "code": len(self.code_chunks)}
+        self.mem_embs, self.mem_chunks, mem_model = self._load_one(self.cfg.memory_index_dir)
+        self.code_embs, self.code_chunks, self.code_warning = None, [], None
+        self.src_embs, self.src_chunks, self.sources_warning = None, [], None
+
+        code_embs, code_chunks, code_model = self._load_one(self.cfg.code_index_dir)
+        if code_embs is not None:
+            self.code_warning = self._model_mismatch(
+                "code", mem_model, code_model, "mb index rebuild --code")
+            if self.code_warning is None:
+                self.code_embs, self.code_chunks = code_embs, code_chunks
+
+        if self.cfg.get("ingest_index_sources"):
+            src_embs, src_chunks, src_model = self._load_one(self.cfg.sources_index_dir)
+            if src_embs is not None:
+                self.sources_warning = self._model_mismatch(
+                    "sources", mem_model, src_model, "mb ingest index --rebuild")
+            if self.sources_warning is None:
+                self.src_embs, self.src_chunks = src_embs, src_chunks
+
+        return {"memory": len(self.mem_chunks), "code": len(self.code_chunks),
+                "sources": len(self.src_chunks)}
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -81,9 +121,16 @@ class SearchEngine:
             if not wanted_links & have_links:
                 return False
         repos = req.get("repos")
-        if repos:
-            wanted_repos = set(repos if isinstance(repos, list) else str(repos).split(","))
-            if meta.get("repo") not in wanted_repos:
+        if repos and meta.get("repo") is not None:
+            # `repo` is a code-corpus field. A note simply has no repository, so
+            # it is not "in the wrong one" — it is outside the concept. Applying
+            # the filter to it anyway would make `--repos api` silently return
+            # zero notes, i.e. exactly the empty-result-that-looks-like-no-match
+            # this epic refuses everywhere else.
+            wanted_repos = {r.strip() for r in
+                            (repos if isinstance(repos, list) else str(repos).split(","))
+                            if str(r).strip()}
+            if meta["repo"] not in wanted_repos:
                 return False
         proj = req.get("filter_project")
         if proj:
@@ -148,6 +195,9 @@ class SearchEngine:
         loc = meta.get("file", "?")
         if meta.get("line"):
             loc = f"{loc}:{meta['line']}"
+        # corpus label: source chunks carry type="source" (pinned by
+        # chunking.extract_source_chunks), so a raw hit is never mistaken for
+        # a wiki note in the compact line.
         tag = meta.get("type") or meta.get("kind") or item["source"]
         if meta.get("project"):
             tag = f"{tag}@{meta['project']}"
@@ -166,16 +216,22 @@ class SearchEngine:
         top_k = int(req.get("top_k", 5))
         q_emb = self.encoder.encode([query])[0]
 
+        # Both extra corpora are OPT-IN per query (W03 D2 for sources, C04 D2
+        # for code): the wiki is the answer, code and raw documents are the
+        # escalation. Opt-in also makes the default result set provably
+        # unchanged by this epic, which is what the C00 baseline is compared
+        # against.
+        want_code = bool(req.get("code_only") or req.get("include_code"))
         results: list[dict[str, Any]] = []
-        sources = 0
         if not req.get("code_only"):
             results += self._search_source(q_emb, self.mem_embs, self.mem_chunks,
                                            "memory", req)
-            sources += 1
-        if not req.get("memory_only"):
+        if want_code and not req.get("memory_only"):
             results += self._search_source(q_emb, self.code_embs, self.code_chunks,
                                            "code", req)
-            sources += 1
+        if req.get("include_sources"):
+            results += self._search_source(q_emb, self.src_embs, self.src_chunks,
+                                           "sources", req)
         results.sort(key=lambda r: r["score"], reverse=True)
 
         # Per-file diversity: cap chunks per file so one long note's many windows
@@ -205,6 +261,23 @@ class SearchEngine:
             return out
 
         trimmed = [_one(r) for r in results]
-        if req.get("format", "compact") == "json":
-            return {"results": trimmed}
-        return {"lines": [self._compact_line(r) for r in trimmed]}
+        out = ({"results": trimmed} if req.get("format", "compact") == "json"
+               else {"lines": [self._compact_line(r) for r in trimmed]})
+        if req.get("include_sources"):
+            if self.sources_warning:
+                out["sources_warning"] = self.sources_warning
+            elif not self.src_chunks:
+                out["sources_warning"] = (
+                    "no sources indexed — run `mb ingest add <file>` then "
+                    "`mb ingest index`")
+        # Only ever raised for a query that ASKED for code: a plain `mb search`
+        # must stay silent about a corpus the user has not opted into.
+        if want_code:
+            if self.code_warning:
+                out["code_warning"] = self.code_warning
+            elif not self.code_chunks:
+                out["code_warning"] = (
+                    "the code index is empty or its configured root is "
+                    "unreachable — check `code_repos_dir`, then run "
+                    "`mb index rebuild --code`")
+        return out

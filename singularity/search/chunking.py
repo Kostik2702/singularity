@@ -246,6 +246,35 @@ def extract_chunks(path: Path, rel_path: str,
     return chunks
 
 
+def extract_source_chunks(path: Path, rel_path: str,
+                          personal_roots: Optional[list[str]] = None
+                          ) -> list[dict[str, Any]]:
+    """Chunker for the ingested-source corpus (WIKI-LOOP D2).
+
+    Identical windowing to the vault chunker — the two corpora must be
+    comparable by cosine, so they cannot chunk differently — with two
+    additions: `type` is pinned to "source" (a raw document whose own
+    frontmatter says `type: reference` must never masquerade as a note), and
+    the owning `source_id` is copied from the wrapper frontmatter onto every
+    chunk so `mb ingest plan` can select one document's rows without a second
+    pass over disk."""
+    chunks = extract_chunks(path, rel_path, personal_roots)
+    if not chunks:
+        return chunks
+    try:
+        raw = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return chunks
+    fm, _ = parse_frontmatter(raw)
+    sid = fm.get("source_id")
+    sid = str(sid) if sid not in (None, "") else ""
+    for chunk in chunks:
+        chunk["type"] = "source"
+        if sid:
+            chunk["source_id"] = sid
+    return chunks
+
+
 def should_skip(rel_path: str, skip_dirs: list[str], skip_parts: list[str]) -> bool:
     p = rel_path.replace("\\", "/")
     first = p.split("/", 1)[0]

@@ -12,6 +12,12 @@ checking every Write/Edit immediately). When enabled, `vault_guard_mode`
 never blocks. "deny" (explicit opt-in) sets permissionDecision="deny" with an
 actionable reason; this is NOT the default per the resolved Open Decision
 (2026-07-12): audit first, deny only once explicitly configured.
+
+ONE exception (WIKI-LOOP D6, 2026-07-28): `immutable_roots` (default
+`[".mb/sources"]`) always denies, audit or not. Honest scope note — the hook
+is still a no-op while `vault_guard_enabled` is false (the default), so the
+real immutability guarantee is the write-once check in `singularity/sources.py`;
+this is the second line, not the first.
 """
 from __future__ import annotations
 
@@ -55,6 +61,24 @@ def evaluate(event: dict) -> dict | None:
         return None
 
     from singularity import vault_guard
+
+    # WIKI-LOOP D6: immutable roots are checked FIRST and are NOT softened by
+    # `vault_guard_mode: audit`. Every other check below keeps the 2026-07-12
+    # resolution ("audit first"); this one guards the only data under .mb/ that
+    # a rebuild cannot reconstruct, so a warning would be useless after the fact.
+    imm_root = vault_guard.immutable_root(
+        vault, abs_file, light_cfg.get("immutable_roots",
+                                       vault_guard.DEFAULT_IMMUTABLE_ROOTS))
+    if imm_root is not None:
+        return {"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": (
+                f"'{imm_root}/' is immutable: ingested sources are the evidence "
+                f"other notes cite, and there is no second copy. To record a new "
+                f"version run `mb ingest add` (it stores a new source and links "
+                f"supersedes/superseded_by); to get the text out use "
+                f"`mb ingest export <dir>`.")}}
 
     if vault_guard.is_config_json(vault, abs_file):
         reason = ("Direct edit of .mb/config.json bypasses validation — use "

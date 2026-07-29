@@ -47,6 +47,15 @@ SUPERSESSION_GAP_DAYS = 60   # same magnitude as STALE_DAYS, distinct concept --
 SUPERSESSION_LIMIT = 15
 _BLOCK_SIZE = 512            # tile size for blockwise cosine -- bounds peak memory to O(block^2)
 
+# W04 provenance contract: a note derived from an ingested source carries
+# `sources: [<source_id>]`. Two failure modes are worth reporting (never
+# fatal -- the exit code still depends on broken_links alone):
+#   * a note cites an id the registry does not have (renamed/lost provenance);
+#   * a source sits at status "new" long enough that nobody is going to
+#     process it without a nudge.
+ORPHAN_SOURCE_DAYS = 30
+_SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
+
 
 def _scan_notes(cfg: Config) -> dict[str, dict[str, Any]]:
     """rel_path -> {frontmatter, title, aliases, outlinks, mtime} for all vault notes."""
@@ -78,6 +87,11 @@ def _scan_notes(cfg: Config) -> dict[str, dict[str, Any]]:
         notes[rel] = {
             "fm": fm, "title": str(title).strip('"'), "aliases": aliases,
             "outlinks": outlinks, "mtime": path.stat().st_mtime,
+            # W08 needs section headings (open questions, un-digested learning
+            # sections). Collected here because the body is already in memory —
+            # a second full pass over the vault for this would double the cost
+            # of every `mb curator gaps` run.
+            "headings": _SECTION_RE.findall(body),
         }
     return notes
 
@@ -97,11 +111,53 @@ def _name_index(notes: dict[str, dict[str, Any]]) -> dict[str, str]:
 # Layer 1 — mechanics
 # ---------------------------------------------------------------------------
 
+def note_source_ids(frontmatter: dict[str, Any]) -> list[str]:
+    """`sources:` frontmatter as a list of ids. Accepts a YAML list, a bare
+    string, or an inline `[a, b]` written as text by a template."""
+    value = frontmatter.get("sources")
+    if value in (None, "", [], {}):
+        return []
+    if isinstance(value, str):
+        value = value.strip()
+        if value.startswith("[") and value.endswith("]"):
+            value = value[1:-1]
+        return [v.strip().strip("'\"") for v in value.split(",") if v.strip()]
+    if isinstance(value, (list, tuple)):
+        return [str(v).strip().strip("'\"") for v in value if str(v).strip()]
+    return [str(value)]
+
+
+def _provenance_issues(cfg: Config, notes: dict[str, dict[str, Any]]
+                       ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """(source_not_in_registry, orphan_source). Tolerant: no registry at all
+    means no provenance issues, not an error -- ingest is opt-in."""
+    from . import sources as sources_mod
+
+    registry = sources_mod.read_registry(cfg)["sources"]
+    dangling: list[dict[str, Any]] = []
+    for rel, info in sorted(notes.items()):
+        for sid in note_source_ids(info["fm"]):
+            if sid not in registry:
+                dangling.append({"file": rel, "source_id": sid})
+
+    orphans: list[dict[str, Any]] = []
+    cutoff = time.time() - ORPHAN_SOURCE_DAYS * 86400
+    for sid, record in sorted(registry.items()):
+        if not isinstance(record, dict) or record.get("status") != "new":
+            continue
+        ingested = _frontmatter_date(str(record.get("ingested_at", ""))[:10])
+        if ingested is not None and ingested < cutoff:
+            orphans.append({"source_id": sid, "title": record.get("title"),
+                            "ingested_at": record.get("ingested_at")})
+    return dangling, orphans
+
+
 def validate(cfg: Config) -> dict[str, list]:
     notes = _scan_notes(cfg)
     names = _name_index(notes)
     issues: dict[str, list] = {"broken_links": [], "missing_frontmatter": [],
-                               "decision_no_owner": [], "duplicate_titles": []}
+                               "decision_no_owner": [], "duplicate_titles": [],
+                               "source_not_in_registry": [], "orphan_source": []}
 
     titles: dict[str, list[str]] = defaultdict(list)
     for rel, info in notes.items():
@@ -124,6 +180,10 @@ def validate(cfg: Config) -> dict[str, list]:
     for title, files in titles.items():
         if len(files) > 1:
             issues["duplicate_titles"].append({"title": title, "files": files})
+
+    dangling, orphans = _provenance_issues(cfg, notes)
+    issues["source_not_in_registry"] = dangling
+    issues["orphan_source"] = orphans
     return issues
 
 
@@ -138,31 +198,28 @@ def _note_embeddings(cfg: Config) -> tuple[list[str], np.ndarray]:
     # to be, not the current generation). load_committed_index() resolves
     # the actual CURRENT generation the same way digest.plan() already does.
     from .search import indexer
+    from .search.similarity import group_indices, pooled_vectors
 
     embs, chunks, status = indexer.load_committed_index(cfg.memory_index_dir)
     if status != "ok":
         return [], np.zeros((0, 1))
-    by_file: dict[str, list[int]] = defaultdict(list)
-    for i, chunk in enumerate(chunks):
-        by_file[chunk["file"]].append(i)
-    files, vectors = [], []
-    for rel, idxs in by_file.items():
-        if rel.startswith(EXCLUDED_PREFIXES):
-            continue
-        v = embs[idxs].mean(axis=0)
-        norm = np.linalg.norm(v)
-        if norm > 0:
-            files.append(rel)
-            vectors.append(v / norm)
-    return files, (np.vstack(vectors) if vectors else np.zeros((0, embs.shape[1])))
+    # W05: pooling now lives in search.similarity (one implementation shared
+    # with digest and ingest_plan). Grouping order is unchanged -- first
+    # appearance in the chunk list -- because the caller's output ordering
+    # depends on it.
+    groups = group_indices(
+        chunks, key=lambda c: c["file"],
+        predicate=lambda c: not str(c["file"]).startswith(EXCLUDED_PREFIXES))
+    return pooled_vectors(embs, groups)
 
 
-def analyze(cfg: Config) -> dict[str, Any]:
-    """Orphans, stale notes, and wikilink suggestions."""
+def link_graph(cfg: Config) -> tuple[dict[str, dict[str, Any]], dict[str, str],
+                                     dict[str, set[str]], dict[str, set[str]]]:
+    """(notes, name_index, outgoing, incoming) with links RESOLVED to real
+    files. Factored out of `analyze()` so `gaps.py` reaches the same graph
+    instead of rebuilding it (W08) — one vault scan, two consumers."""
     notes = _scan_notes(cfg)
     names = _name_index(notes)
-
-    # link graph (resolved)
     outgoing: dict[str, set[str]] = {rel: set() for rel in notes}
     incoming: dict[str, set[str]] = {rel: set() for rel in notes}
     for rel, info in notes.items():
@@ -171,6 +228,12 @@ def analyze(cfg: Config) -> dict[str, Any]:
             if target and target != rel:
                 outgoing[rel].add(target)
                 incoming[target].add(rel)
+    return notes, names, outgoing, incoming
+
+
+def analyze(cfg: Config) -> dict[str, Any]:
+    """Orphans, stale notes, and wikilink suggestions."""
+    notes, names, outgoing, incoming = link_graph(cfg)
 
     orphans = [rel for rel in notes
                if not outgoing[rel] and not incoming[rel]
@@ -226,30 +289,13 @@ def _eligible_chunk_rows(chunks: list[dict[str, Any]],
 
 def _blockwise_pairs(embs: np.ndarray, threshold: float,
                      block_size: int = _BLOCK_SIZE) -> list[tuple[int, int, float]]:
-    """(i, j, score) for every i<j pair with cosine similarity > threshold,
-    computed tile-by-tile so peak memory is O(block_size^2), never O(n^2) --
-    required for a vault with thousands of indexed chunks (a full n x n
-    matrix at n=20000 would be ~3GB of float64)."""
-    n = embs.shape[0]
-    pairs: list[tuple[int, int, float]] = []
-    for bi in range(0, n, block_size):
-        a = embs[bi:bi + block_size]
-        for bj in range(bi, n, block_size):
-            b = embs[bj:bj + block_size]
-            sim = a @ b.T
-            if bi == bj:
-                # restrict to i<j by INDEX, not by zeroing-then-thresholding --
-                # a zeroed self/lower-triangle entry would itself satisfy a
-                # negative threshold (0.0 > -1.0) and leak as a bogus pair.
-                li_idx, lj_idx = np.triu_indices(sim.shape[0], k=1)
-                scores = sim[li_idx, lj_idx]
-                mask = scores > threshold
-                for li, lj, score in zip(li_idx[mask], lj_idx[mask], scores[mask]):
-                    pairs.append((bi + int(li), bj + int(lj), float(score)))
-            else:
-                for li, lj in np.argwhere(sim > threshold):
-                    pairs.append((bi + int(li), bj + int(lj), float(sim[li, lj])))
-    return pairs
+    """(i, j, score) for every i<j pair with cosine similarity > threshold.
+
+    W05: the implementation moved to `search.similarity.blockwise_pairs`,
+    shared with the contradiction detector — both need the same O(block^2)
+    memory bound and the same i<j-by-index rule."""
+    from .search.similarity import blockwise_pairs
+    return blockwise_pairs(embs, threshold, block_size)
 
 
 def _duplicate_pairs(cfg: Config) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
@@ -422,7 +468,9 @@ def run(cfg: Config, as_json: bool = False) -> int:
     for key, label in (("broken_links", "Broken wikilinks"),
                        ("missing_frontmatter", "Missing mandatory frontmatter"),
                        ("decision_no_owner", "Decisions without owner/source"),
-                       ("duplicate_titles", "Duplicate titles")):
+                       ("duplicate_titles", "Duplicate titles"),
+                       ("source_not_in_registry", "Notes citing an unknown source_id"),
+                       ("orphan_source", f"Sources unprocessed >{ORPHAN_SOURCE_DAYS}d")):
         items = issues[key]
         print(f"\n[{'FAIL' if items and key == 'broken_links' else 'WARN' if items else 'PASS'}] "
               f"{label}: {len(items)}")

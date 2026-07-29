@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "singularity"
-version = "0.4.0"
+version = "0.5.0"
 description = "Singularity — personal AI memory system: Obsidian-native automatic memory + semantic search (Memory Brain engine)"
 requires-python = ">=3.10"
 dependencies = [
@@ -15,7 +15,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ml = ["sentence-transformers>=2.6"]
+# Upper bound is deliberate: sentence-transformers 5.x imports `torchcodec`
+# unconditionally (multimodal support), and torchcodec needs FFmpeg *shared
+# libraries* on the host — a system dependency this project has no use for, it
+# only embeds text. On a Windows box without the "full-shared" FFmpeg build the
+# 5.x import dies with `RuntimeError: Could not load libtorchcodec`, taking the
+# search daemon down with it (observed 2026-07-28).
+ml = ["sentence-transformers>=2.6,<5"]
 secrets = ["keyring>=24"]
 # imgqa: deterministic image-QA CLI (WSF-01). Pillow/scipy only — heavy ML
 # (rembg/onnxruntime) intentionally lives in a separate venv (D:\venvs\imgqa-ml,
@@ -41,4 +47,5 @@ markers = [
     "gemini_e2e: end-to-end test needing a real @google/gemini-cli on PATH (opt-in; auto-skips when absent)",
     "grok_e2e: end-to-end test needing a real Grok Build CLI on PATH (opt-in; auto-skips when absent; no xAI credentials)",
     "imgqa_gt: full-image imgqa ground-truth tests against the NIKA tree (auto-skips unless IMGQA_GT_ROOT is set)",
+    "real_scheduler: test genuinely drives singularity.platform.scheduler — opts out of the conftest guard that otherwise fails a test for touching the real OS scheduler",
 ]

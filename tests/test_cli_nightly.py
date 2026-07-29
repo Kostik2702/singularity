@@ -27,8 +27,17 @@ def test_nightly_json_shape(wired, capsys):
     rc = cli.main(["nightly", "--json"])
     assert rc == 0
     data = json.loads(capsys.readouterr().out.strip())
-    assert set(data["steps"]) == {"index", "digest", "curator", "config", "markers", "trend"}
-    assert all(s.get("status") == "ok" for s in data["steps"].values())
+    # W11 added the ingest-cycle steps; ingest_index legitimately reports
+    # "skipped" on a vault with no sources, so the status assertion allows it.
+    assert set(data["steps"]) == {"index", "ingest_index", "code_index", "digest",
+                                  "curator", "gaps", "contradictions", "sources",
+                                  "config", "markers", "ingest_log", "trend"}
+    assert all(s.get("status") in ("ok", "skipped") for s in data["steps"].values())
+    assert data["steps"]["ingest_index"]["status"] == "skipped"
+    # C05: no code_repos_dir on this fixture vault -> skipped with a reason,
+    # never an error (a corpus nobody switched on is not a failure)
+    assert data["steps"]["code_index"]["status"] == "skipped"
+    assert "code_repos_dir" in data["steps"]["code_index"]["reason"]
 
 
 def test_nightly_human_output(wired, capsys):

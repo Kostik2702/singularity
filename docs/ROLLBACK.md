@@ -18,6 +18,98 @@ and running `mb config validate` afterward.
 | Vault guard (PreToolUse) | `vault_guard_enabled` / `vault_guard_mode` | `mb config set vault_guard_enabled false` — default already `false`. To keep it on but stop it from blocking, set `vault_guard_mode audit` (warn-only) instead of `deny` |
 | Digest nag on SessionStart | `nightly_nag_rate_limit_hours` | Not a hard off-switch by design (it's a rate limit, not a toggle) — set a very large value (e.g. `87600` = 10 years) to effectively silence it, or stop running `mb nightly` (see below) so `.mb/digest-last.json` never refreshes |
 | Nightly orchestration | — | `mb doctor --fix` only registers the job if it's missing/drifted; to stop it running at all, remove the scheduled task directly (Windows: `schtasks /Delete /TN Singularity-nightly`; macOS: unload `~/Library/LaunchAgents/com.singularity.nightly.plist`; Linux: `systemctl --user disable --now singularity-nightly.timer`) — `mb nightly` still works fine run manually |
+| Code corpus (`--with-code`) | `code_repos_dir` | `mb config set code_repos_dir null` — see below; the unset key IS the off switch (D1) |
+
+## Rolling back the code corpus
+
+The easiest rollback in this repo, and deliberately so: `.mb/code_index/` is
+**100% derived** from files that live in your repositories. Nothing there is
+data — delete it and one command recreates it byte-for-byte equivalent.
+
+```bash
+mb config set code_repos_dir null        # corpus off: no nightly step, no search, no doctor block
+rm -rf "<vault>/.mb/code_index"          # optional, reclaims ~30 MB per corpus (2 generations kept)
+mb daemon stop && mb daemon start        # drop the loaded code embeddings from memory
+```
+
+What each step turns off:
+
+- **`code_repos_dir null`** — `mb search --with-code` / `--code-only` refuse
+  with exit 2, `mb index rebuild --code` refuses with exit 2, the nightly
+  `code_index` step reports `skipped`, `mb doctor` reports `K1-code-index:
+  SKIP`, and `mb stats` / `mb status` stop printing the code line. No other
+  behavior changes anywhere.
+- **Deleting `.mb/code_index/`** — reclaims disk. Safe at any time, including
+  with the corpus still configured: the next `mb index update --code` sees no
+  index and does a full rebuild.
+- **Restarting the daemon** — the engine keeps the code embeddings resident
+  until it reloads. Purely a memory concern; searches already stopped
+  returning code the moment the config key went away.
+
+### What rolling this back does NOT touch
+
+- **Your vault index.** Separate directory, separate generation pointer,
+  separate writer lock, separate `chunk_schema`. `memory_index/CURRENT` is not
+  read or written by any code-corpus path — regression:
+  `tests/test_code_index_e2e.py::test_building_code_changes_neither_the_memory_pointer_nor_its_analytics`.
+- **`mb curator` / `mb digest` / `mb ingest plan`.** They never saw the code
+  corpus in the first place; their output is byte-identical with it present,
+  absent, or half-built.
+- **Your source files.** The indexer only ever reads them. No code path in
+  `singularity/search/` moves, renames or writes anything under
+  `code_repos_dir`.
+
+### Reverting `code_index_max_age_days`
+
+`mb config set code_index_max_age_days 7` restores the default. This key only
+controls when `mb doctor` starts WARNing about staleness; it has no effect on
+indexing or search, and no value of it can make `mb doctor` FAIL.
+
+## Rolling back the WIKI-LOOP ingest layer
+
+```bash
+mb config set ingest_index_sources false   # stop building/searching the sources corpus
+rm -r "<vault>/.mb/sources_index"          # drop the derived index (rebuildable)
+```
+
+That is the whole rollback of the search side. Additional switches:
+
+| Feature | Flag | Rollback |
+|---|---|---|
+| Sources corpus (second index) | `ingest_index_sources` | `mb config set ingest_index_sources false` — `mb ingest index` and `mb search --with-sources` then refuse with an actionable message instead of silently doing nothing |
+| Raw immutability guard | `immutable_roots` | `mb config set immutable_roots []` — only meaningful while `vault_guard_enabled` is `true` (default `false`, i.e. already a no-op). The engine-level write-once check is NOT a flag and does not turn off |
+| Contradiction/gap reports | — | Nothing to disable: `mb curator contradictions` / `mb curator gaps` are opt-in subcommands. Bare `mb curator` never runs them |
+| LLM adjudication of lint | `lint_llm_adjudication` | Default `false`; `mb config set lint_llm_adjudication false` to be explicit |
+| Fan-out size | `ingest_fanout_top_k` / `ingest_fanout_threshold` | Lower `top_k` or raise the threshold; setting `top_k 1` effectively stops fan-out without disabling ingest |
+
+### 🚫 What a rollback must never do
+
+**`.mb/sources/` and `.mb/sources.json` are content, not state.** No rollback
+step above touches them, and none should be added that does — deleting them
+destroys the only copy of every ingested document (decision D1, risk R8). The
+same holds for `mb uninstall` and `mb doctor --fix`: neither removes or
+modifies anything under `.mb/sources/`, and a regression test asserts it by
+comparing file hashes before and after all three operations
+(`tests/test_release_gate.py::test_sources_survive_uninstall_doctor_fix_and_rollback`).
+
+If you genuinely want them gone, that is a deliberate manual act — and take
+`mb ingest export <dir>` first.
+
+### Reverting `schema_version` 2 → 1
+
+Rarely needed (v2 adds only defaulted keys, and an older build ignores unknown
+keys with a warning). If you must:
+
+```bash
+mb backup list                    # find a pre-upgrade backup id
+mb backup restore <id>            # restores config.json; raw sources are only ADDED, never removed
+```
+
+or hand-edit `schema_version` back to `1` and run `mb config validate`. The
+new keys can stay — an older build treats them as unknown and ignores them.
+
+After rolling back, `mb doctor` and `mb selftest` must both come back green;
+if they don't, the report names the exact next command.
 
 ## Reverting to the narrower skill set
 

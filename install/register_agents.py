@@ -22,6 +22,14 @@ from pathlib import Path
 ENGINE = Path(__file__).resolve().parents[1]
 AGENTS_SRC = ENGINE / "singularity" / "agents"
 
+# The agent sources tell the model to read rules out of the vault, and they name
+# a concrete path so they stay readable as documents. That path is one machine's
+# layout, so it is treated as a TEMPLATE DEFAULT: when this machine's vault
+# resolves elsewhere, the installer renders a substituted copy instead of
+# linking. Same path -> plain symlink, i.e. the historic behavior and the
+# property that matters most (edit the repo, every agent updates at once).
+TEMPLATE_VAULT = r"D:\obsidian\memory brain"
+
 # Engine-owned council/workflow agents (source of truth in singularity/agents/).
 AGENTS = [
     "investigator",
@@ -87,9 +95,46 @@ def _install_file(src: Path, dst: Path) -> str:
         return status if status == "backed-up" else "copied"
 
 
+def _resolved_vault() -> Path | None:
+    """This machine's vault, through the engine's own resolution order. Import
+    is local and guarded: registration must still work from a checkout whose
+    dependencies are not importable yet."""
+    try:
+        sys.path.insert(0, str(ENGINE))
+        from singularity.config import resolve_vault
+        return resolve_vault()
+    except Exception:                      # noqa: BLE001 — fall back to linking
+        return None
+
+
+def _render(src: Path, dst: Path, vault: Path) -> str:
+    """Write `dst` with the template vault path replaced by the real one.
+    Returns 'copied' / 'backed-up', mirroring `_install_file`'s vocabulary."""
+    text = src.read_text(encoding="utf-8").replace(TEMPLATE_VAULT, str(vault))
+    status = "copied"
+    if dst.is_symlink():
+        dst.unlink()
+    elif dst.exists():
+        if dst.read_text(encoding="utf-8", errors="replace") == text:
+            return "ok"                    # already rendered for this vault
+        if _files_equal(src, dst):
+            dst.unlink()                   # stale verbatim copy: safe to replace
+        else:
+            _backup_file(dst, "content differs from engine-owned agent source; "
+                              "preserved instead of being overwritten by "
+                              "register_agents")
+            status = "backed-up"
+    dst.write_text(text, encoding="utf-8")
+    return status
+
+
 def main() -> int:
     dest_root = Path.home() / ".claude" / "agents"
     dest_root.mkdir(parents=True, exist_ok=True)
+    vault = _resolved_vault()
+    # Only render when substitution would actually change something; otherwise
+    # keep the symlink, so the common case stays exactly as it was.
+    retarget = vault is not None and str(vault) != TEMPLATE_VAULT
     counts = {"ok": 0, "linked": 0, "copied": 0, "backed-up": 0, "missing": 0}
     for name in AGENTS:
         src = AGENTS_SRC / f"{name}.md"
@@ -97,11 +142,18 @@ def main() -> int:
             print(f"[agents] MISSING in repo: {name}", file=sys.stderr)
             counts["missing"] += 1
             continue
-        status = _install_file(src, dest_root / f"{name}.md")
+        dst = dest_root / f"{name}.md"
+        if retarget and TEMPLATE_VAULT in src.read_text(encoding="utf-8"):
+            status = _render(src, dst, vault)
+        else:
+            status = _install_file(src, dst)
         counts[status] += 1
         if status == "backed-up":
             print(f"[agents] {name}: differing local copy preserved as backup, "
                   f"now points to repo source", file=sys.stderr)
+    if retarget:
+        print(f"[agents] vault path rewritten to {vault} in rendered copies "
+              f"(re-run the installer after editing an agent source)")
     print(f"[agents] {len(AGENTS)} owned: {counts['linked']} linked, "
           f"{counts['ok']} already ok, {counts['copied']} copied, "
           f"{counts['backed-up']} backed up, {counts['missing']} missing")
