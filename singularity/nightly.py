@@ -157,6 +157,10 @@ def _step_code_index(cfg: Config) -> dict[str, Any]:
     except client.RemoteIndexError as exc:
         if exc.error_type == "IndexLockedError":
             return {"status": "skipped", "reason": "locked"}
+        if exc.error_type == "CorpusRootUnavailable":
+            # the corpus was left intact on purpose; an unreachable repository
+            # root at 03:00 is a skip, never a reason to purge the index
+            return {"status": "skipped", "reason": str(exc)}
         raise
     return {"status": "ok", "stats": stats}
 

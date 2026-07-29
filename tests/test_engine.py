@@ -38,7 +38,10 @@ def test_code_only_says_the_corpus_is_not_built_yet(tmp_path):
 
 def test_with_code_on_an_unbuilt_corpus_warns_too(tmp_path):
     out = _searchable(tmp_path).search({"query": "anything", "include_code": True})
-    assert "no code index exists" in out["code_warning"]
+    # wording must not claim the corpus was never configured: with a configured
+    # but unreachable root the index exists and is simply empty
+    assert "code index is empty or its configured root is unreachable" \
+        in out["code_warning"]
 
 
 def test_no_code_warning_for_a_normal_search(tmp_path):

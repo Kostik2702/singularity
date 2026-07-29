@@ -10,6 +10,61 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.5.0 — CODE-INDEX hardening: scan guards + vendored exclusion (C09)
+
+Follow-up to C00–C07, driven by an adversarial design review of a proposed
+multi-root `code_repos_dir`. **The multi-root change was dropped** — the review
+showed it silently breaks `SKIP_REPOS` and `*/migrations/*` (both match the
+FIRST segment of the un-prefixed sub-path, which a per-repo root moves into the
+prefix), needs a schema migration to avoid re-keying a live corpus, and cannot
+be expressed through `mb config set` on Windows at all (`json.loads` rejects a
+backslash path inside a JSON list and silently stores the bracket text). A
+directory junction reaches the same goal in one command with no code.
+
+Two of that review's blockers turned out to be **live bugs in the shipped
+single-root code**, and those are fixed here:
+
+- **An unavailable corpus root silently purged the index.** `_scan_corpus`
+  returns `{}` for a missing root, `_update` classifies every known file as
+  deleted and the keep-mask drops their chunks; `_rebuild` committed the empty
+  generation outright. An unmounted drive or a synced folder mid-reconnect
+  destroyed a corpus that costs minutes to rebuild. Now `CorpusRootUnavailable`
+  refuses and leaves the index untouched — but only when there is something to
+  lose, so bootstrapping an empty corpus over a missing root still works.
+- **`os.walk` had no `onerror`,** so a denied ACL or a locked subtree yielded
+  nothing and took the same purge path, with no signal anywhere. Walk errors
+  are now collected and trigger the same refusal.
+
+Both are surfaced end to end: `error_type: CorpusRootUnavailable` from the
+daemon, exit 2 from `mb index`, and a `skipped` (never `error`) nightly step —
+an unreachable repository root at 03:00 must not be a reason to purge anything.
+
+**Vendored third-party trees are no longer indexed** (`VENDORED_DIR_PATTERN`):
+a directory whose name carries a version of three or more numeric components
+(`renpy-8.5.2-sdk`, `node-v18.17.1-win-x64`, `jdk-17.0.2`) is an unpacked
+distribution, and `SKIP_DIRS` cannot enumerate versions. Three components, not
+two, because two also match hand-written `core-2.0`, `sd-1.5`, `lr-0.001`,
+`api-v2` — and this rule errs *silently* when it over-matches while a miss is
+visible in search results and fixed by one `code_skip_dirs` entry. Known misses
+(`boost_1_82_0`, `node-v20`, `Qt5.15`) are pinned by test so the gap is not
+rediscovered as a bug. Exclusions are reported **by name** — in the rebuild
+stats, `mb stats`, the generation metadata and the audit tool — and written by
+both the rebuild and the update path, since `_update` re-commits the loaded
+metadata verbatim and a rebuild-only field would go stale forever.
+
+New key `code_skip_dirs` (default `[]`): extra directory names pruned at any
+depth, so a vendored tree the regex misses is one config entry away.
+
+Measured on the same real root, now including this repository through a
+junction: **13 repos, 440 files, 3666 chunks, 5.6 MB** (was 416 / 5775 / 8.9 MB
+— the delta is 4776 SDK chunks out, ~2600 first-party chunks in), fallback
+share 1.7%, 0 secret markers. `mb search "atomic commit of an index generation"
+--code-only` now returns this project's own `_commit_generation` first.
+
+Tests **1605 → 1636**.
+
+---
+
 # v0.5.0 — CODE-INDEX: the third corpus (C00–C07)
 
 Closes **MB-05** (`TASK-05_Code_Indexer`, open since 2026-07-02): semantic

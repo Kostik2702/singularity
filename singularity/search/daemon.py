@@ -76,6 +76,10 @@ class SearchDaemon:
                                              corpus=corpus))
             except indexer.IndexLockedError as exc:
                 return {"error": str(exc), "error_type": "IndexLockedError"}
+            except indexer.CorpusRootUnavailable as exc:
+                # the index was deliberately left untouched — this is a refusal,
+                # not a failed write
+                return {"error": str(exc), "error_type": "CorpusRootUnavailable"}
             counts = self.engine.reload()
             return {"status": "indexed", "stats": stats, "index": counts,
                     "corpus": corpus}

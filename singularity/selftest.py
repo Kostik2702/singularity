@@ -45,8 +45,18 @@ def run(cfg: Config, as_json: bool = False) -> int:
         return status == "PASS"
 
     def _found() -> bool:
-        resp = client.search(cfg, {"cmd": "search", "query": token,
-                                   "top_k": 5, "format": "json"})
+        # The query carries the note's own wording, not just the opaque token,
+        # and is scoped to the throwaway folder. Searching for a random token
+        # alone made this a SEMANTIC search for a string with no semantics: the
+        # embedding of `mbselftk34444505896` is near-noise, so as the vault grew
+        # the note's own chunk stopped reaching the top-5 and the gate started
+        # failing on a healthy system (observed at ~3.2k chunks, passing at 3216
+        # and failing at 3244). Scoping also widens the candidate pool, since
+        # `_search_source` uses top_k*20 once any filter is present.
+        resp = client.search(cfg, {
+            "cmd": "search",
+            "query": f"selftest probe unique token {token}",
+            "path_prefix": f"{SELFTEST_DIR}/", "top_k": 5, "format": "json"})
         return any(r.get("file") == rel or token in json.dumps(r, ensure_ascii=False)
                    for r in resp.get("results", []))
 

@@ -113,6 +113,24 @@ SKIP_REPOS = ("test-project", "genevra-portable")
 # code; embedding it costs real time and returns noise.
 MAX_FILE_BYTES = 100_000
 
+# A vendored third-party distribution unpacked inside a project: an engine SDK,
+# a bundled runtime, an extracted release. `SKIP_DIRS` cannot express these —
+# they are named after the dependency and its VERSION, and no fixed list can
+# enumerate versions. The shape is the signal.
+#
+# Deliberately requires THREE or more numeric components (`8.5.2`, not `2.0`).
+# Two would also match a hand-written `core-2.0`, `sd-1.5`, `lr-0.001`,
+# `api-v2` — i.e. the owner's own code — and this rule errs in the SILENT
+# direction: an over-exclusion removes real code and says nothing, while an
+# under-exclusion is visible in the search results and fixed by one line in
+# `code_skip_dirs`. When the two error directions are not symmetric, the rule
+# must lean toward the loud one.
+#
+# Measured on a real repositories root: fires exactly once, on an unpacked
+# engine SDK holding 100% of that project's indexable files; zero matches
+# anywhere else across two roots.
+VENDORED_DIR_PATTERN = r"^.+[-_]v?\d+(?:\.\d+){2,}(?:[-_.].*)?$"
+
 _PY_BOUNDARY_RE = re.compile(r"^([ \t]*)(?:async\s+)?(def|class)\s+(\w+)")
 _TS_BOUNDARY_RE = re.compile(
     r"^[ \t]*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:abstract\s+)?"

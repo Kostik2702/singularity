@@ -101,6 +101,8 @@ def _code_stats(cfg: Config) -> dict[str, Any]:
         "indexed_at": summary.get("indexed_at"),
         "repos": dict(sorted(repos.items())),
         "by_kind": dict(sorted(by_kind.items())),
+        "excluded": [e.get("path") for e in (meta.get("excluded") or [])
+                     if isinstance(e, dict)],
     })
     return out
 
@@ -156,6 +158,15 @@ def run(cfg: Config, as_json: bool = False) -> int:
         if code.get("present"):
             print(f"code          : {len(code['repos'])} repos, {code['files']} files, "
                   f"{code['chunks']} chunks, built {code['indexed_at']}")
+            # a chunk with no repo lands in the "-" bucket and would otherwise
+            # just inflate the repo count — it reads as one extra repo instead
+            # of as the bug it is
+            if "-" in (code.get("repos") or {}):
+                print(f"                {code['repos']['-']} chunk(s) with NO repo "
+                      f"— report this, every code chunk should have one")
+            if code.get("excluded"):
+                print("                excluded as vendored: "
+                      + ", ".join(code["excluded"]))
         else:
             print("code          : configured but not built — "
                   "run `mb index rebuild --code`")

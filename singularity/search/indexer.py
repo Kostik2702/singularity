@@ -46,6 +46,18 @@ class IndexLockedError(RuntimeError):
     """Raised when another writer already holds the index lock."""
 
 
+class CorpusRootUnavailable(RuntimeError):
+    """The corpus root (or a subtree of it) could not be read, while an index
+    with content already exists.
+
+    Refusing beats proceeding: a scan that returns nothing is byte-identical to
+    "every file was deleted", and the incremental writer would faithfully purge
+    the whole index. An unmounted drive, a synced folder mid-reconnect or a
+    denied ACL would silently destroy a corpus that takes minutes to rebuild.
+    Bootstrapping an EMPTY corpus over a missing root is still allowed — there
+    is nothing to lose there."""
+
+
 # --------------------------------------------------------------------------
 # Corpora (W03)
 #
@@ -105,6 +117,11 @@ class Corpus:
     skip_file_patterns: tuple[str, ...] = ()
     max_file_bytes: int | None = None
     chunk_schema: int = chunking.CHUNK_SCHEMA_VERSION
+    # C09: directory-name regex for vendored third-party distributions, pruned
+    # at any depth like `prune_dirs` but by shape rather than by an enumerated
+    # name — a bundled SDK carries its version in the directory name, and no
+    # fixed list can enumerate versions. Empty = the check is skipped entirely.
+    vendored_dir_pattern: str = ""
 
 
 def memory_corpus(cfg: Config) -> Corpus:
@@ -147,7 +164,9 @@ def code_corpus(cfg: Config) -> Corpus:
         # first-segment match == repository name, which is exactly what
         # `should_skip` already does; no new mechanism needed for D1
         skip_dirs=code_chunking.SKIP_REPOS,
-        prune_dirs=code_chunking.SKIP_DIRS,
+        prune_dirs=(code_chunking.SKIP_DIRS
+                    + tuple(cfg.get("code_skip_dirs") or ())),
+        vendored_dir_pattern=code_chunking.VENDORED_DIR_PATTERN,
         patterns=code_chunking.CODE_PATTERNS,
         skip_file_patterns=code_chunking.SKIP_FILE_PATTERNS,
         max_file_bytes=code_chunking.MAX_FILE_BYTES,
@@ -383,7 +402,18 @@ def _glob_matcher(globs: tuple[str, ...]) -> Callable[[str], Any] | None:
         re.IGNORECASE).match
 
 
-def _scan_corpus(corpus: Corpus) -> dict[str, Path]:
+@functools.lru_cache(maxsize=8)
+def _regex_matcher(pattern: str) -> Callable[[str], Any] | None:
+    """Compiled `.match` for a raw regex, or None when the pattern is empty.
+    Kept as a string on `Corpus` rather than a compiled object so the dataclass
+    stays trivially comparable and picklable."""
+    if not pattern:
+        return None
+    return re.compile(pattern, re.IGNORECASE).match
+
+
+def _scan_corpus(corpus: Corpus, report: dict[str, Any] | None = None
+                 ) -> dict[str, Path]:
     """rel_path (forward slashes, `rel_prefix` applied) -> absolute Path for
     every indexable file of this corpus.
 
@@ -399,21 +429,57 @@ def _scan_corpus(corpus: Corpus) -> dict[str, Path]:
         5. stat()            — the only syscall, and only for survivors
 
     Reversing 4 and 5 would cost one `stat()` per candidate — on a measured
-    repositories root, ~56 000 syscalls to keep ~500 files."""
+    repositories root, ~56 000 syscalls to keep ~500 files.
+
+    `report` is an optional out-param (kept out of the return type so
+    `_scan_vault` and every existing call site are untouched). It collects:
+
+      * `walk_errors` — directories `os.walk` could not read. Without an
+        `onerror` handler `os.walk` swallows them and simply yields nothing for
+        that subtree, which is INDISTINGUISHABLE from the files having been
+        deleted — and the caller would then purge their chunks. A denied ACL or
+        a file lock must never look like a deletion.
+      * `excluded`  — subtrees deliberately dropped, by NAME not by count. A
+        count cannot tell "pruned a vendored engine" from "pruned your own
+        snapshot", which is the whole point of reporting an exclusion at all.
+    """
     files: dict[str, Path] = {}
+    if report is not None:
+        report.setdefault("walk_errors", [])
+        report.setdefault("excluded", [])
     if not corpus.root.exists():
+        if report is not None:
+            report["root_missing"] = str(corpus.root)
         return files
     root = corpus.root
     skip_dirs = list(corpus.skip_dirs)
     skip_parts = list(corpus.skip_parts)
     prune = set(corpus.prune_dirs)
+    match_vendored = _regex_matcher(corpus.vendored_dir_pattern)
     match_name = _glob_matcher(tuple(corpus.patterns))
     match_skip = _glob_matcher(tuple(corpus.skip_file_patterns))
     max_bytes = corpus.max_file_bytes
 
-    for dirpath, dirnames, filenames in os.walk(root):
-        if prune:
-            dirnames[:] = [d for d in dirnames if d not in prune]
+    def _on_walk_error(exc: OSError) -> None:
+        if report is not None:
+            report["walk_errors"].append(
+                {"path": str(getattr(exc, "filename", "") or root),
+                 "error": f"{type(exc).__name__}: {exc}"})
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=_on_walk_error):
+        if prune or match_vendored is not None:
+            keep = []
+            for d in dirnames:
+                if d in prune:
+                    continue
+                if match_vendored is not None and match_vendored(d):
+                    if report is not None:
+                        rel = (Path(dirpath) / d).relative_to(root).as_posix()
+                        report["excluded"].append(
+                            {"kind": "vendored", "path": rel})
+                    continue
+                keep.append(d)
+            dirnames[:] = keep
         base = Path(dirpath)
         for name in filenames:
             if match_name is not None and not match_name(name):
@@ -470,10 +536,44 @@ def rebuild(cfg: Config, progress: bool = True,
         return _rebuild(cfg, progress, corp)
 
 
+def _guard_scan(corp: Corpus, report: dict[str, Any],
+                existing_chunks: int) -> None:
+    """Refuse to replace a populated index using a scan we know was incomplete.
+
+    Only fires when there is something to lose: bootstrapping an empty corpus
+    over a missing root stays legal, which is what `mb ingest index` does on a
+    vault that has never ingested anything."""
+    if existing_chunks <= 0:
+        return
+    if report.get("root_missing"):
+        raise CorpusRootUnavailable(
+            f"{corp.name} corpus root is unavailable ({report['root_missing']}) "
+            f"— refusing to drop {existing_chunks} existing chunk(s); the index "
+            f"is untouched. Reconnect the path, or rebuild deliberately once it "
+            f"is back.")
+    errs = report.get("walk_errors") or []
+    if errs:
+        first = errs[0]
+        raise CorpusRootUnavailable(
+            f"{corp.name} corpus: {len(errs)} directory(ies) could not be read "
+            f"(first: {first['path']} — {first['error']}) — refusing to treat "
+            f"unreadable as deleted; the index is untouched.")
+
+
+def _existing_chunk_count(corp: Corpus) -> int:
+    summary = index_summary(corp.index_dir) or {}
+    try:
+        return int(summary.get("chunk_count") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _rebuild(cfg: Config, progress: bool = True,
              corpus: "str | Corpus | None" = None) -> dict[str, int]:
     corp = resolve_corpus(cfg, corpus)
-    files = _scan_corpus(corp)
+    report: dict[str, Any] = {}
+    files = _scan_corpus(corp, report)
+    _guard_scan(corp, report, _existing_chunk_count(corp))
     chunks: list[dict[str, Any]] = []
     file_meta: dict[str, list[int]] = {}
     personal_roots = cfg.get("personal_roots") or []
@@ -489,10 +589,16 @@ def _rebuild(cfg: Config, progress: bool = True,
     else:
         embs = np.zeros((0, 384), dtype=np.float32)
 
+    excluded = report.get("excluded") or []
     _save_index(corp, embs,
-                {"model": cfg.model, "file_meta": file_meta, "chunks": chunks})
+                {"model": cfg.model, "file_meta": file_meta, "chunks": chunks,
+                 "excluded": excluded})
     size_mb = embs.nbytes / 1e6
-    return {"files": len(files), "chunks": len(chunks), "size_mb": round(size_mb, 1)}
+    out: dict[str, Any] = {"files": len(files), "chunks": len(chunks),
+                           "size_mb": round(size_mb, 1)}
+    if excluded:
+        out["excluded"] = [e["path"] for e in excluded]
+    return out
 
 
 def inspect(cfg: Config, rel: str,
@@ -540,7 +646,14 @@ def _update(cfg: Config, only_files: list[str] | None = None,
         # stamp) still forces the full rebuild it always did.
         return _rebuild(cfg, progress=False, corpus=corp)  # old chunk format -> full rebuild
 
-    files = _scan_corpus(corp)
+    report: dict[str, Any] = {}
+    files = _scan_corpus(corp, report)
+    # An incomplete scan here is the dangerous one: everything it failed to see
+    # is about to be classified as `deleted` and purged a few lines below.
+    _guard_scan(corp, report, len(meta.get("chunks") or []))
+    # `_update` re-commits the LOADED meta, so a field written only by
+    # `_rebuild` would be carried forward stale forever — refresh it here.
+    meta["excluded"] = report.get("excluded") or []
     old_meta: dict[str, list[int]] = meta.get("file_meta", {})
 
     if only_files is not None:
@@ -558,8 +671,12 @@ def _update(cfg: Config, only_files: list[str] | None = None,
         if old_meta.get(rel) != _file_stat(files[rel]):
             added_or_changed.append(rel)
 
+    excluded = [e["path"] for e in (report.get("excluded") or [])]
     if not added_or_changed and not deleted:
-        return {"added": 0, "deleted": 0, "chunks": embs.shape[0]}
+        out: dict[str, Any] = {"added": 0, "deleted": 0, "chunks": embs.shape[0]}
+        if excluded:
+            out["excluded"] = excluded
+        return out
 
     # drop chunks of deleted+changed files (Genevra keep-mask)
     dirty = set(deleted) | set(added_or_changed)
@@ -583,5 +700,8 @@ def _update(cfg: Config, only_files: list[str] | None = None,
 
     meta["file_meta"] = old_meta
     _save_index(corp, embs, meta)
-    return {"added": len(added_or_changed), "deleted": len(deleted),
-            "chunks": len(meta["chunks"])}
+    out = {"added": len(added_or_changed), "deleted": len(deleted),
+           "chunks": len(meta["chunks"])}
+    if excluded:
+        out["excluded"] = excluded
+    return out

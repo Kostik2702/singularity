@@ -277,6 +277,7 @@ class SearchEngine:
                 out["code_warning"] = self.code_warning
             elif not self.code_chunks:
                 out["code_warning"] = (
-                    "no code index exists — set `code_repos_dir` and run "
+                    "the code index is empty or its configured root is "
+                    "unreachable — check `code_repos_dir`, then run "
                     "`mb index rebuild --code`")
         return out

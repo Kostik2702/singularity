@@ -81,6 +81,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # --- CODE-INDEX (C00-C07): the code corpus. `code_repos_dir` above is the
     # on/off switch (D1); this is the only other key the epic introduces.
     "code_index_max_age_days": 7,       # C05: `mb doctor` WARNs past this (no watcher, D4)
+    "code_skip_dirs": [],               # C09: extra directory names pruned at any depth
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -172,7 +173,7 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
         v = data["nightly_schedule_time"]
         if not (isinstance(v, str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v)):
             errors.append("nightly_schedule_time: must be 'HH:MM' 24h string")
-    for key in ("skip_dirs", "skip_path_parts"):
+    for key in ("skip_dirs", "skip_path_parts", "code_skip_dirs"):
         if key in data and (not isinstance(data[key], list)
                             or not all(isinstance(x, str) for x in data[key])):
             errors.append(f"{key}: must be a list of strings")
