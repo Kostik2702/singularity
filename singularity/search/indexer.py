@@ -122,6 +122,13 @@ class Corpus:
     # name — a bundled SDK carries its version in the directory name, and no
     # fixed list can enumerate versions. Empty = the check is skipped entirely.
     vendored_dir_pattern: str = ""
+    # C10: follow directory symlinks while scanning. Windows junctions are
+    # traversed by `os.walk` regardless (Python reports them islink=False), but
+    # a POSIX symlink is NOT — so "link a repository in from outside the root"
+    # worked on Windows and silently indexed nothing on macOS/Linux. Kept off
+    # for the vault: a note tree is authored in place, and quietly following a
+    # link out of it would index files the user never put in their vault.
+    follow_links: bool = False
 
 
 def memory_corpus(cfg: Config) -> Corpus:
@@ -171,7 +178,10 @@ def code_corpus(cfg: Config) -> Corpus:
         skip_file_patterns=code_chunking.SKIP_FILE_PATTERNS,
         max_file_bytes=code_chunking.MAX_FILE_BYTES,
         chunker=code_chunking.extract_code_chunks,
-        chunk_schema=code_chunking.CODE_CHUNK_SCHEMA_VERSION)
+        chunk_schema=code_chunking.CODE_CHUNK_SCHEMA_VERSION,
+        # a repository living outside the root is linked in — and a symlink is
+        # the only way to do that on macOS/Linux
+        follow_links=True)
 
 
 CORPUS_BUILDERS = {"memory": memory_corpus, "sources": sources_corpus,
@@ -466,7 +476,21 @@ def _scan_corpus(corpus: Corpus, report: dict[str, Any] | None = None
                 {"path": str(getattr(exc, "filename", "") or root),
                  "error": f"{type(exc).__name__}: {exc}"})
 
-    for dirpath, dirnames, filenames in os.walk(root, onerror=_on_walk_error):
+    # Every visited directory is keyed by its REAL path. Following links makes
+    # a cycle reachable (a link pointing at an ancestor), and `os.walk` has no
+    # loop detection of its own — on Windows that is already reachable today
+    # via a junction, without any opt-in at all.
+    seen_real: set[str] = set()
+    for dirpath, dirnames, filenames in os.walk(root, onerror=_on_walk_error,
+                                                followlinks=corpus.follow_links):
+        try:
+            real = os.path.realpath(dirpath)
+        except OSError:
+            real = dirpath
+        if real in seen_real:
+            dirnames[:] = []
+            continue
+        seen_real.add(real)
         if prune or match_vendored is not None:
             keep = []
             for d in dirnames:

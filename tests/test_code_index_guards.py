@@ -249,6 +249,68 @@ def test_code_skip_dirs_is_a_known_validated_key():
     assert validate_config({"code_skip_dirs": "nope"})["errors"]
 
 
+# --- linked-in repositories (the cross-platform half) ------------------------
+
+def test_a_symlinked_repository_is_indexed(built):
+    """Windows junctions are traversed by os.walk regardless (islink=False), but
+    a POSIX symlink is not — so the documented "link a repo in from outside the
+    root" workaround worked on Windows and silently indexed NOTHING on
+    macOS/Linux until the code corpus opted into followlinks."""
+    outside = built.vault.parent / "outside-repo"
+    (outside / "pkg").mkdir(parents=True)
+    (outside / "pkg" / "mod.py").write_text(
+        "def linked_in_function():\n    return 'reachable only through the link'\n",
+        encoding="utf-8")
+    link = built.code_repos_dir / "linked"
+    try:
+        import os as _os
+        _os.symlink(outside, link, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not permitted on this machine")
+
+    scanned = indexer_mod._scan_corpus(indexer_mod.code_corpus(built))
+    assert "linked/pkg/mod.py" in scanned
+
+
+def test_a_link_cycle_terminates_instead_of_walking_forever(built):
+    """Following links makes a cycle reachable; os.walk has no loop detection.
+    On Windows this is already reachable today through a junction, with no
+    opt-in at all."""
+    loop = built.code_repos_dir / "api" / "loop"
+    try:
+        import os as _os
+        _os.symlink(built.code_repos_dir, loop, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not permitted on this machine")
+
+    scanned = indexer_mod._scan_corpus(indexer_mod.code_corpus(built))
+    assert "api/orders.py" in scanned
+    # the cycle contributes no duplicate of the file it loops back to
+    assert not [k for k in scanned if k.count("loop") > 1]
+
+
+def test_the_vault_corpus_does_not_follow_links_out_of_itself(tmp_path, monkeypatch):
+    """A note tree is authored in place; quietly following a link out of it
+    would index files the user never put in their vault."""
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    (outside / "leaked.md").write_text(
+        "# Leak\n\n## S\n" + "content that is not part of the vault " * 3,
+        encoding="utf-8")
+    try:
+        import os as _os
+        _os.symlink(outside, vault / "linked", target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not permitted on this machine")
+
+    cfg = Config(vault=vault, data={"model": "fake"})
+    assert indexer_mod.memory_corpus(cfg).follow_links is False
+    assert indexer_mod._scan_corpus(indexer_mod.memory_corpus(cfg)) == {}
+
+
 def test_the_vendored_rule_never_touches_the_markdown_corpora(tmp_path, monkeypatch):
     """Only the code corpus sets the pattern; a vault folder named like a
     release must keep being indexed."""
