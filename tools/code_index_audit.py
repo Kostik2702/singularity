@@ -91,6 +91,12 @@ def audit(cfg) -> dict:
         "largest_repo": top_repo,
         "fallback_share": round(
             sum(1 for c in chunks if c.get("kind") == "lines") / total, 3),
+        # C09: subtrees deliberately dropped, BY NAME. A count would satisfy the
+        # letter of "an exclusion must not be silent" and not its purpose — it
+        # cannot distinguish a vendored engine from your own snapshot.
+        "excluded": [e.get("path") for e in (meta.get("excluded") or [])
+                     if isinstance(e, dict)],
+        "chunks_without_repo": sum(1 for c in chunks if not c.get("repo")),
     }
 
 
@@ -126,6 +132,11 @@ def main(argv=None) -> int:
     print(f"  {'TOTAL':<20} {report['secret_marker_total']}")
     print(f"\nforbidden-extension files : {len(report['forbidden_extension_files'])}")
     print(f"paths naming secrets      : {len(report['paths_naming_secrets'])}")
+    print("excluded as vendored      : "
+          + (", ".join(report["excluded"]) if report["excluded"] else "(none)"))
+    if report["chunks_without_repo"]:
+        print(f"chunks with NO repo       : {report['chunks_without_repo']}"
+              f"   <- every code chunk should have one; report this")
     return 1 if report["secret_marker_total"] else 0
 
 
