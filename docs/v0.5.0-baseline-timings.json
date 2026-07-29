@@ -1,0 +1,22 @@
+{
+ "stats": {
+  "ms": 344,
+  "sha256": "7394485cbf0f60d6",
+  "bytes": 1117
+ },
+ "curator": {
+  "ms": 6465,
+  "sha256": "5d97f7d80adb8603",
+  "bytes": 13232
+ },
+ "digest": {
+  "ms": 356,
+  "sha256": "7bd7c0082a381b3f",
+  "bytes": 168972
+ },
+ "status": {
+  "ms": 677,
+  "sha256": "7bafee5d63f5d0f4",
+  "bytes": 1765
+ }
+}
