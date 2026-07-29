@@ -110,6 +110,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # on/off switch (D1); this is the only other key the epic introduces.
     "code_index_max_age_days": 7,       # C05: `mb doctor` WARNs past this (no watcher, D4)
     "code_skip_dirs": [],               # C09: extra directory names pruned at any depth
+    # C10: directory-name regex for vendored distributions. null = the built-in
+    # `code_chunking.VENDORED_DIR_PATTERN`; "" disables the rule entirely. It is
+    # configurable because the rule can over-match a first-party directory
+    # (`schema-1.0.0`, `proto-3.21.12`) and `code_skip_dirs` can only ADD
+    # prunes — without this key such a directory had no remedy but a source edit.
+    "code_vendored_pattern": None,
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -191,6 +197,16 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     _int("backup_max_sources_mb", 1, 100_000)
     # CODE-INDEX
     _int("code_index_max_age_days", 1, 3650)
+    if "code_vendored_pattern" in data and data["code_vendored_pattern"] is not None:
+        value = data["code_vendored_pattern"]
+        if not isinstance(value, str):
+            errors.append("code_vendored_pattern: must be a regex string, "
+                          '"" to disable the rule, or null for the built-in')
+        else:
+            try:
+                re.compile(value)
+            except re.error as exc:
+                errors.append(f"code_vendored_pattern: invalid regex ({exc})")
     for key in ("ingest_index_sources", "lint_llm_adjudication"):
         if key in data and not isinstance(data[key], bool):
             errors.append(f"{key}: must be a boolean")

@@ -69,7 +69,7 @@ the default result set was a property of that corpus, not of the design: it
 collapsed on the addition of a single first-party repository. Code stays
 opt-in.
 
-Tests **1636 → 1656**.
+Tests **1636 → 1659**.
 
 ---
 

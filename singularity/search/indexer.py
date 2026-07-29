@@ -173,7 +173,9 @@ def code_corpus(cfg: Config) -> Corpus:
         skip_dirs=code_chunking.SKIP_REPOS,
         prune_dirs=(code_chunking.SKIP_DIRS
                     + tuple(cfg.get("code_skip_dirs") or ())),
-        vendored_dir_pattern=code_chunking.VENDORED_DIR_PATTERN,
+        vendored_dir_pattern=(code_chunking.VENDORED_DIR_PATTERN
+                              if cfg.get("code_vendored_pattern") is None
+                              else str(cfg.get("code_vendored_pattern"))),
         patterns=code_chunking.CODE_PATTERNS,
         skip_file_patterns=code_chunking.SKIP_FILE_PATTERNS,
         max_file_bytes=code_chunking.MAX_FILE_BYTES,

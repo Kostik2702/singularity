@@ -129,6 +129,11 @@ MAX_FILE_BYTES = 100_000
 # Measured on a real repositories root: fires exactly once, on an unpacked
 # engine SDK holding 100% of that project's indexable files; zero matches
 # anywhere else across two roots.
+#
+# It can still over-match a hand-written `schema-1.0.0`, and `code_skip_dirs`
+# only ADDS prunes — so the pattern itself is overridable through the config key
+# `code_vendored_pattern` ("" disables it). Without that, a false positive had
+# no remedy short of editing installed source.
 VENDORED_DIR_PATTERN = r"^.+[-_]v?\d+(?:\.\d+){2,}(?:[-_.].*)?$"
 
 _PY_BOUNDARY_RE = re.compile(r"^([ \t]*)(?:async\s+)?(def|class)\s+(\w+)")

@@ -321,6 +321,48 @@ def test_code_skip_dirs_prunes_an_extra_name_at_any_depth(built):
     assert "api/orders.py" in scanned
 
 
+def test_a_first_party_directory_caught_by_the_rule_has_a_real_remedy(built):
+    """The rule can over-match a hand-written name (`schema-1.0.0`), and
+    `code_skip_dirs` only ADDS prunes — it cannot rescue one. Without a
+    configurable pattern the only remedy was editing installed source."""
+    caught = built.code_repos_dir / "api" / "schema-1.0.0"
+    caught.mkdir()
+    (caught / "model.py").write_text(
+        "def first_party_model():\n    return 'my own code, not vendored'\n",
+        encoding="utf-8")
+    assert indexer_mod._regex_matcher(
+        code_chunking.VENDORED_DIR_PATTERN)("schema-1.0.0")
+
+    scanned = indexer_mod._scan_corpus(indexer_mod.code_corpus(built))
+    assert "api/schema-1.0.0/model.py" not in scanned
+
+    built.data["code_vendored_pattern"] = ""          # disable the rule
+    scanned = indexer_mod._scan_corpus(indexer_mod.code_corpus(built))
+    assert "api/schema-1.0.0/model.py" in scanned
+
+
+def test_a_custom_vendored_pattern_replaces_the_builtin(built):
+    (built.code_repos_dir / "api" / "thirdparty").mkdir()
+    (built.code_repos_dir / "api" / "thirdparty" / "x.py").write_text(
+        "def vendored_thing():\n    return 'not mine at all'\n", encoding="utf-8")
+    built.data["code_vendored_pattern"] = r"^thirdparty$"
+    report: dict = {}
+    scanned = indexer_mod._scan_corpus(indexer_mod.code_corpus(built), report)
+    assert not [k for k in scanned if "thirdparty" in k]
+    assert report["excluded"] == [{"kind": "vendored", "path": "api/thirdparty"}]
+
+
+def test_code_vendored_pattern_is_validated():
+    from singularity.config import DEFAULT_CONFIG, validate_config
+
+    assert DEFAULT_CONFIG["code_vendored_pattern"] is None
+    assert validate_config({"code_vendored_pattern": None})["errors"] == []
+    assert validate_config({"code_vendored_pattern": ""})["errors"] == []
+    assert validate_config({"code_vendored_pattern": r"^ok$"})["errors"] == []
+    assert validate_config({"code_vendored_pattern": "("})["errors"]     # bad regex
+    assert validate_config({"code_vendored_pattern": 5})["errors"]
+
+
 def test_code_skip_dirs_is_a_known_validated_key():
     from singularity.config import DEFAULT_CONFIG, validate_config
 
