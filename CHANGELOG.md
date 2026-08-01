@@ -10,6 +10,41 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.5.1 — hotfix: a dying daemon no longer deletes its successor's state
+
+Reported from the field as issue #8 (reproduced twice on macOS during normal
+restarts), present in every version since daemon identity state was introduced
+in AUD-11.
+
+- **The exiting daemon's cleanup is now conditional on still owning the state.**
+  `stop_daemon()` returns ~0.5s after SIGTERM, but the daemon only polls its
+  shutdown flag *between* requests — mid-request it outlives its own stop by as
+  long as that request runs, and since 0.4.0 in-daemon index writes
+  (`{"cmd":"index"}`) made multi-minute requests the normal case. The starter
+  meanwhile spawned a replacement that bound a port and wrote **its**
+  `daemon.json`/`daemon.port`/`daemon.pid`. The old daemon's `finally` block
+  then unlinked all three unconditionally — deleting the *successor's*
+  identity. The starter's ping loop found no port, timed out after 30s and
+  reported `FAILED to start` for a daemon that was up, and every later
+  `ping`/`search` failed until the orphan was killed by hand. This reliably hit
+  installer phase 3b, `mb model install`'s restart and `mb doctor --fix
+  --heavy`. `SearchDaemon._cleanup_state()` now reads the state file first and
+  removes nothing if a newer instance owns it.
+- **Ownership is decided by `instance_id`, not pid.** The reporter's patch
+  compared pids; `instance_id` is a fresh uuid4 per daemon and cannot be reused,
+  while a pid can be — and pid reuse is the same class of race this fix exists
+  to close. Legacy state files written before AUD-11 carry no `instance_id`, so
+  the pid comparison remains as the fallback. Unreadable or absent state means
+  nobody claims ownership and the instance's own leftovers are still removed.
+- Five regression tests pin it: the successor survives both a differing pid and
+  a reused pid, an instance still cleans its own state, legacy pid-only state
+  works, and missing/corrupt state does not strand port/pid files.
+
+Verified on a real machine against the live daemon: a simulated predecessor
+cleanup left the running daemon's identity intact and it still answered `ping`.
+
+---
+
 # v0.5.0 — CODE-INDEX release hardening (C10)
 
 Everything here came out of two adversarial reviews — one of a proposed design

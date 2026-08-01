@@ -165,12 +165,40 @@ class SearchDaemon:
                 self._serve_conn(conn)
         finally:
             srv.close()
-            for p in (cfg.daemon_state_file, cfg.daemon_port_file, cfg.daemon_pid_file):
-                try:
-                    p.unlink(missing_ok=True)
-                except OSError:
-                    pass
+            self._cleanup_state(cfg, pid, self.instance_id)
             print("[daemon] stopped", flush=True)
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _cleanup_state(cfg: Config, own_pid: int,
+                       own_instance_id: str | None = None) -> None:
+        """Remove the state files ONLY while they still record THIS instance.
+
+        The shutdown flag is polled between requests, so a daemon that is
+        mid-request (an in-daemon `{"cmd":"index"}` rebuild holds `_serve_conn`
+        for minutes) outlives its own SIGTERM by that long. By the time it gets
+        here a replacement may already have bound a port and written its own
+        identity — unlinking unconditionally would delete the *successor's*
+        state and leave a live-but-unreachable daemon behind (the starter's
+        ping loop then times out and reports a bogus startup failure).
+        """
+        try:
+            state = json.loads(cfg.daemon_state_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            state = None
+        if isinstance(state, dict):
+            state_iid = state.get("instance_id")
+            state_pid = state.get("pid")
+            if own_instance_id is not None and isinstance(state_iid, str):
+                if state_iid != own_instance_id:
+                    return          # a newer daemon owns the state now
+            elif state_pid is not None and state_pid != own_pid:
+                return              # legacy state without instance_id — pid wins
+        for p in (cfg.daemon_state_file, cfg.daemon_port_file, cfg.daemon_pid_file):
+            try:
+                p.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def main(cfg: Config) -> None:
