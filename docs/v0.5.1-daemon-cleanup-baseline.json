@@ -1,0 +1,228 @@
+{
+ "taken_at": "2026-08-01T11:35:14",
+ "note": "v0.5.1 fix baseline: SearchDaemon._cleanup_state() ownership matrix (issue #8)",
+ "version": "0.5.1",
+ "commit": "958af34d50d47c45efb4cdbe4ec7844563bbd33b",
+ "environment": {
+  "platform": "Windows-10-10.0.26200-SP0",
+  "python": "3.10.6",
+  "package_path": "E:\\_sing-baseline\\singularity\\__init__.py"
+ },
+ "subject": "singularity/search/daemon.py :: SearchDaemon._cleanup_state",
+ "ownership_matrix": [
+  {
+   "scenario": "successor_owns__different_pid",
+   "why": "the successor bound a port and wrote its identity while this instance was still finishing a request",
+   "state_file": {
+    "instance_id": "successor",
+    "pid": 222,
+    "port": 5001
+   },
+   "own": {
+    "pid": 111,
+    "instance_id": "own-instance"
+   },
+   "before": {
+    "daemon.json": true,
+    "daemon.port": true,
+    "daemon.pid": true
+   },
+   "after": {
+    "daemon.json": true,
+    "daemon.port": true,
+    "daemon.pid": true
+   },
+   "expected": "preserved",
+   "actual": "preserved",
+   "pass": true
+  },
+  {
+   "scenario": "successor_owns__reused_pid",
+   "why": "the OS handed the successor the same pid — instance_id is what decides",
+   "state_file": {
+    "instance_id": "successor",
+    "pid": 111,
+    "port": 5001
+   },
+   "own": {
+    "pid": 111,
+    "instance_id": "own-instance"
+   },
+   "before": {
+    "daemon.json": true,
+    "daemon.port": true,
+    "daemon.pid": true
+   },
+   "after": {
+    "daemon.json": true,
+    "daemon.port": true,
+    "daemon.pid": true
+   },
+   "expected": "preserved",
+   "actual": "preserved",
+   "pass": true
+  },
+  {
+   "scenario": "self_owns",
+   "why": "ordinary shutdown: the state still records this instance",
+   "state_file": {
+    "instance_id": "own-instance",
+    "pid": 111,
+    "port": 5001
+   },
+   "own": {
+    "pid": 111,
+    "instance_id": "own-instance"
+   },
+   "before": {
+    "daemon.json": true,
+    "daemon.port": true,
+    "daemon.pid": true
+   },
+   "after": {
+    "daemon.json": false,
+    "daemon.port": false,
+    "daemon.pid": false
+   },
+   "expected": "removed",
+   "actual": "removed",
+   "pass": true
+  },
+  {
+   "scenario": "legacy_state_no_instance_id__self",
+   "why": "pre-AUD-11 state file carries no instance_id — the pid is the fallback",
+   "state_file": {
+    "pid": 111,
+    "port": 5001
+   },
+   "own": {
+    "pid": 111,
+    "instance_id": "own-instance"
+   },
+   "before": {
+    "daemon.json": true,
+    "daemon.port": true,
+    "daemon.pid": true
+   },
+   "after": {
+    "daemon.json": false,
+    "daemon.port": false,
+    "daemon.pid": false
+   },
+   "expected": "removed",
+   "actual": "removed",
+   "pass": true
+  },
+  {
+   "scenario": "legacy_state_no_instance_id__successor",
+   "why": "same fallback, but the pid says somebody else owns it",
+   "state_file": {
+    "pid": 222,
+    "port": 5001
+   },
+   "own": {
+    "pid": 111,
+    "instance_id": "own-instance"
+   },
+   "before": {
+    "daemon.json": true,
+    "daemon.port": true,
+    "daemon.pid": true
+   },
+   "after": {
+    "daemon.json": true,
+    "daemon.port": true,
+    "daemon.pid": true
+   },
+   "expected": "preserved",
+   "actual": "preserved",
+   "pass": true
+  },
+  {
+   "scenario": "state_absent",
+   "why": "nobody claims ownership — the legacy port/pid files are this instance's own leftovers",
+   "state_file": null,
+   "own": {
+    "pid": 111,
+    "instance_id": "own-instance"
+   },
+   "before": {
+    "daemon.json": false,
+    "daemon.port": true,
+    "daemon.pid": true
+   },
+   "after": {
+    "daemon.json": false,
+    "daemon.port": false,
+    "daemon.pid": false
+   },
+   "expected": "removed",
+   "actual": "removed",
+   "pass": true
+  },
+  {
+   "scenario": "state_corrupt",
+   "why": "unreadable state is treated as unclaimed, same as absent",
+   "state_file": "<corrupt>",
+   "own": {
+    "pid": 111,
+    "instance_id": "own-instance"
+   },
+   "before": {
+    "daemon.json": true,
+    "daemon.port": true,
+    "daemon.pid": true
+   },
+   "after": {
+    "daemon.json": false,
+    "daemon.port": false,
+    "daemon.pid": false
+   },
+   "expected": "removed",
+   "actual": "removed",
+   "pass": true
+  }
+ ],
+ "reporter_signature_compat": {
+  "call": "_cleanup_state(cfg, own_pid=111)",
+  "after": {
+   "daemon.json": true,
+   "daemon.port": true,
+   "daemon.pid": true
+  },
+  "expected": "preserved",
+  "pass": true
+ },
+ "live_daemon_check": {
+  "ran": true,
+  "vault": "E:\\obsidian\\memory brain",
+  "live_instance_id": "5458310893f5460ebda4f24f950257dc",
+  "live_pid": 21868,
+  "before": {
+   "daemon.json": true,
+   "daemon.port": true,
+   "daemon.pid": true
+  },
+  "after": {
+   "daemon.json": true,
+   "daemon.port": true,
+   "daemon.pid": true
+  },
+  "ping_before_ok": true,
+  "ping_after_ok": true,
+  "pass": true
+ },
+ "tests": [
+  {
+   "target": "tests/test_daemon_identity.py",
+   "exit_code": 0,
+   "summary": "12 passed in 0.16s"
+  },
+  {
+   "target": "tests/",
+   "exit_code": 0,
+   "summary": "1662 passed, 6 skipped, 1 warning in 119.35s (0:01:59)"
+  }
+ ],
+ "all_pass": true
+}
