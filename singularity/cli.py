@@ -422,6 +422,9 @@ def cmd_daemon(cfg, args) -> int:
     from .search import client
 
     if args.action == "run":
+        # This process IS the daemon: its stdout is the log file the launcher
+        # redirected, so notices belong there rather than on stderr.
+        log_setup.configure_for_cli(stream=sys.stdout)
         from .search import daemon
         daemon.main(cfg)
         return 0
@@ -1439,6 +1442,7 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_model(cfg, args)
     if args.command == "watch":
         from . import watch
+        log_setup.configure_for_cli(stream=sys.stdout)   # watcher log, same as the daemon's
         watch.run(cfg)
         return 0
     if args.command == "doctor":

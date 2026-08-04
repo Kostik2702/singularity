@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any
 
 from ..config import Config
+from ..log import log
 from ..platform import proc
 from .engine import SearchEngine
 
@@ -181,12 +182,12 @@ class SearchDaemon:
     def run(self) -> None:
         cfg = self.cfg
         cfg.mb_dir.mkdir(parents=True, exist_ok=True)
-        print(f"[daemon] loading model {cfg.model} ...", flush=True)
+        log.info(f"[daemon] loading model {cfg.model} ...")
         t0 = time.perf_counter()
         self.engine = SearchEngine(cfg)
-        print(f"[daemon] model+index ready in {time.perf_counter()-t0:.1f}s "
-              f"(memory={len(self.engine.mem_chunks)}, code={len(self.engine.code_chunks)})",
-              flush=True)
+        log.info("[daemon] model+index ready in %.1fs (memory=%d, code=%d)",
+                 time.perf_counter() - t0, len(self.engine.mem_chunks),
+                 len(self.engine.code_chunks))
 
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -210,7 +211,7 @@ class SearchDaemon:
         })
         cfg.daemon_port_file.write_text(str(port), encoding="utf-8")
         cfg.daemon_pid_file.write_text(str(pid), encoding="utf-8")
-        print(f"[daemon] listening on 127.0.0.1:{port}", flush=True)
+        log.info(f"[daemon] listening on 127.0.0.1:{port}")
 
         def _stop(*_a):
             self._running = False
@@ -230,7 +231,7 @@ class SearchDaemon:
         finally:
             srv.close()
             self._cleanup_state(cfg, pid, self.instance_id)
-            print("[daemon] stopped", flush=True)
+            log.info("[daemon] stopped")
 
     # ------------------------------------------------------------------
     @staticmethod

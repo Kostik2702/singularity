@@ -94,10 +94,13 @@ def _check(actual: set[str], exempt: set[str], what: str):
 # carries a `--json` branch duplicating its own text output. Shrinks as the
 # render layer takes over (plan step 1.3).
 PRINT_EXEMPT = {
-    "contradictions", "curator", "gaps", "stats", "status", "selftest", "watch",
+    # Reports: these print the answer their command was asked for. Splitting
+    # collection from rendering is the remaining work (plan step 1.3b) —
+    # `status.snapshot()` and `curator.analyze()` already return the data.
+    "contradictions", "curator", "gaps", "stats", "status", "selftest",
     "doctor",           # a report generator by nature; kept deliberately
-    "llm",              # supervisor notices; move to `log` with the rest
-    "search.client", "search.daemon",
+    "llm",              # `llm status|list|add|setup` output, notices already moved
+    # Presentation for their own package, just not named `*.cli`:
     "reel.util", "imgqa._contract", "scout._contract",
 }
 
@@ -146,7 +149,7 @@ def test_domain_never_imports_the_cli():
 def test_the_debt_is_visible_and_finite():
     """One number to watch across the refactor; it must never grow."""
     total = len(PRINT_EXEMPT) + len(EXIT_EXEMPT) + len(ARGPARSE_EXEMPT)
-    assert total <= 15, (
+    assert total <= 12, (
         f"layer debt grew to {total} — new exemptions need a decision, not a default")
 
 

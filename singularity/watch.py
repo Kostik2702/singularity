@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from .config import Config
+from .log import log
 
 DEBOUNCE_SECONDS = 3.0
 HEARTBEAT_FILE = "watch.heartbeat"
@@ -80,7 +81,7 @@ def run(cfg: Config) -> None:
     observer.schedule(Handler(), str(cfg.vault), recursive=True)
     observer.start()
     _write_heartbeat(cfg)
-    print(f"[watch] watching {cfg.vault} (debounce {DEBOUNCE_SECONDS}s)", flush=True)
+    log.info(f"[watch] watching {cfg.vault} (debounce {DEBOUNCE_SECONDS}s)")
     try:
         while True:
             time.sleep(1.0)
@@ -110,17 +111,17 @@ def _process_pending(cfg: Config, pending: dict[str, float]) -> None:
 
     try:
         stats = client.run_index(cfg, "update", files)
-        print(f"[watch] updated {files} -> {stats}", flush=True)
+        log.info(f"[watch] updated {files} -> {stats}")
         for rel in files:
             pending.pop(rel, None)
     except client.RemoteIndexError as exc:
         if exc.error_type != "IndexLockedError":
-            print(f"[watch] update failed: {exc}", flush=True)
+            log.info(f"[watch] update failed: {exc}")
         else:
-            print(f"[watch] index locked, will retry: {files}", flush=True)
+            log.info(f"[watch] index locked, will retry: {files}")
         for rel in files:
             pending[rel] = time.monotonic()
     except Exception as exc:  # noqa: BLE001 — watcher must survive bad files
-        print(f"[watch] update failed: {exc}", flush=True)
+        log.info(f"[watch] update failed: {exc}")
         for rel in files:
             pending[rel] = time.monotonic()

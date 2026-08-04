@@ -37,6 +37,21 @@ from singularity.platform import scheduler  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
+def _notices_go_to_stderr():
+    """Run every test with the logging a real `mb` invocation has.
+
+    Domain modules emit notices through the `mb` logger instead of printing
+    (a daemon and a hook cannot share a user's stdout). Without a handler those
+    lines vanish, so a test asserting on what the user sees would pass on an
+    empty string. `configure_for_cli` resolves the stream at emit time, so
+    capsys still captures them.
+    """
+    from singularity import log as log_setup
+    log_setup.configure_for_cli()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _no_real_scheduler(request, monkeypatch):
     """Fail loudly instead of registering a real OS scheduled task.
 

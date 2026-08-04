@@ -19,6 +19,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+from .log import log
 from .platform import proc
 
 
@@ -224,7 +225,7 @@ def _acquire_start_lock(cfg, stale_after_s: float) -> bool:
     except FileExistsError:
         if time.time() - lock.stat().st_mtime < stale_after_s:
             return False
-        print(f"[mb] stale start-lock ({lock}) — taking over", file=sys.stderr)
+        log.warning(f"[mb] stale start-lock ({lock}) — taking over")
         return True
 
 
@@ -234,12 +235,12 @@ def start(cfg, model_name: str) -> int:
         argv = build_server_argv(llm, model_name)
         validate_paths(llm, model_name)
     except LLMConfigError as exc:
-        print(f"[mb] {exc}", file=sys.stderr)
+        log.warning(f"[mb] {exc}")
         return 1
 
     if not has_chat_template(llm, model_name):
-        print("[mb] warning: model args lack --jinja/--chat-template; "
-              "tool-calling may not work", file=sys.stderr)
+        log.warning("[mb] warning: model args lack --jinja/--chat-template; "
+              "tool-calling may not work")
 
     timeout = float(llm.get("health_timeout_s", 120))
     host = llm.get("server_host", "127.0.0.1")
@@ -250,8 +251,8 @@ def start(cfg, model_name: str) -> int:
     # onto the same port/VRAM. Stale window covers the worst case: two
     # sequential health-timeouts (server + router) plus margin.
     if not _acquire_start_lock(cfg, stale_after_s=2 * timeout + 60):
-        print("[mb] another 'mb llm start' is already in progress — wait for it "
-              "or 'mb llm stop' if it's stuck", file=sys.stderr)
+        log.warning("[mb] another 'mb llm start' is already in progress — wait for it "
+              "or 'mb llm stop' if it's stuck")
         return 1
 
     spawned: list[int] = []      # PIDs *this run* created; cleanup scope on interrupt/crash
@@ -260,13 +261,13 @@ def start(cfg, model_name: str) -> int:
         existing = load_state(cfg)
         if existing and (proc.is_running(existing.get("server_pid") or -1)
                           or proc.is_running(existing.get("router_pid") or -1)):
-            print(f"[mb] stopping active model '{existing.get('model')}' first")
+            log.info(f"[mb] stopping active model '{existing.get('model')}' first")
             stop(cfg)
 
         try:
             server_pid = proc.spawn_detached(argv, _log(cfg, "server"))
         except Exception as exc:
-            print(f"[mb] failed to start server: {exc}", file=sys.stderr)
+            log.warning(f"[mb] failed to start server: {exc}")
             clear_state(cfg)
             return 1
         spawned.append(server_pid)
@@ -281,8 +282,7 @@ def start(cfg, model_name: str) -> int:
         if not poll_health(f"http://{host}:{port}{ready}", timeout, pid=server_pid):
             proc.kill(server_pid)
             clear_state(cfg)
-            print(f"[mb] server not healthy in {timeout:g}s — see {_log(cfg, 'server')}",
-                  file=sys.stderr)
+            log.warning(f"[mb] server not healthy in {timeout:g}s — see {_log(cfg, 'server')}")
             return 1
 
         state = {
@@ -306,7 +306,7 @@ def start(cfg, model_name: str) -> int:
                 router_pid = proc.spawn_detached([str(a) for a in r_cmd],
                                                  _log(cfg, "router"))
             except Exception as exc:
-                print(f"[mb] failed to start router: {exc}", file=sys.stderr)
+                log.warning(f"[mb] failed to start router: {exc}")
                 proc.kill(server_pid)
                 clear_state(cfg)
                 return 1
@@ -318,14 +318,13 @@ def start(cfg, model_name: str) -> int:
                 proc.kill(router_pid)
                 proc.kill(server_pid)
                 clear_state(cfg)
-                print(f"[mb] router not healthy in {timeout:g}s — see {_log(cfg, 'router')}",
-                      file=sys.stderr)
+                log.warning(f"[mb] router not healthy in {timeout:g}s — see {_log(cfg, 'router')}")
                 return 1
             state["router_pid"] = router_pid
             state["router_port"] = r_port
 
         write_state(cfg, {**state, "status": "running"})
-        print(f"[mb] started '{model_name}'")
+        log.info(f"[mb] started '{model_name}'")
         if router:
             print(f"export ANTHROPIC_BASE_URL=http://{router.get('host', '127.0.0.1')}:"
                   f"{int(router.get('port', 3456))}")
@@ -342,8 +341,7 @@ def start(cfg, model_name: str) -> int:
         if spawned:
             clear_state(cfg)
         if isinstance(exc, KeyboardInterrupt):
-            print("[mb] start interrupted — cleaned up spawned process(es)",
-                  file=sys.stderr)
+            log.warning("[mb] start interrupted — cleaned up spawned process(es)")
             return 130
         raise
     finally:
@@ -381,7 +379,7 @@ def status(cfg, as_json: bool = False) -> int:
               f"({'alive' if router_alive else 'DEAD'}) port {state.get('router_port')}")
     print(f"since:  {state.get('started_at')}")
     if not server_alive:
-        print("[mb] server pid is dead — run 'mb llm stop' to clear stale state")
+        log.info("[mb] server pid is dead — run 'mb llm stop' to clear stale state")
     return 0
 
 
@@ -400,7 +398,7 @@ def add_model(cfg, name: str, gguf: str, extra_args: list[str] | None = None) ->
     from .config import validate_config
 
     if not name.strip():
-        print("[mb] model name must not be empty", file=sys.stderr)
+        log.warning("[mb] model name must not be empty")
         return 1
     llm_section = dict(cfg.get("llm") or {})
     models = dict(llm_section.get("models") or {})
@@ -416,20 +414,20 @@ def add_model(cfg, name: str, gguf: str, extra_args: list[str] | None = None) ->
     try:
         _validate_llm(llm_section)
     except LLMConfigError as exc:
-        print(f"[mb] {exc}", file=sys.stderr)
+        log.warning(f"[mb] {exc}")
         return 1
     result = validate_config(candidate)
     if result["errors"]:
         for e in result["errors"]:
-            print(f"[mb] {e}", file=sys.stderr)
+            log.warning(f"[mb] {e}")
         return 1
 
     cfg.data = candidate
     cfg.save()
     print(f"model {'updated' if previous else 'added'}: {name} -> {gguf}")
     if not Path(gguf).exists():
-        print(f"[mb] note: {gguf} does not exist on this machine yet "
-              f"(`mb doctor` reports it under A6-config-paths)", file=sys.stderr)
+        log.warning(f"[mb] note: {gguf} does not exist on this machine yet "
+              f"(`mb doctor` reports it under A6-config-paths)")
     _warn_daemon_stale(cfg)
     return 0
 
@@ -443,16 +441,15 @@ def remove_model(cfg, name: str, force: bool = False) -> int:
     llm_section = dict(cfg.get("llm") or {})
     models = dict(llm_section.get("models") or {})
     if name not in models:
-        print(f"[mb] unknown model: {name} (known: "
-              f"{', '.join(sorted(models)) or '(none)'})", file=sys.stderr)
+        log.warning(f"[mb] unknown model: {name} (known: "
+              f"{', '.join(sorted(models)) or '(none)'})")
         return 1
 
     state = load_state(cfg) or {}
     if state.get("model") == name and not force:
-        print(f"[mb] {name} is the model currently being served (pid "
+        log.warning(f"[mb] {name} is the model currently being served (pid "
               f"{state.get('server_pid')}) — `mb llm stop` first, or pass "
-              f"--force to unregister it and leave the server running",
-              file=sys.stderr)
+              f"--force to unregister it and leave the server running")
         return 1
 
     del models[name]
@@ -461,14 +458,13 @@ def remove_model(cfg, name: str, force: bool = False) -> int:
     result = validate_config(candidate)
     if result["errors"]:
         for e in result["errors"]:
-            print(f"[mb] {e}", file=sys.stderr)
+            log.warning(f"[mb] {e}")
         return 1
     cfg.data = candidate
     cfg.save()
     print(f"model removed: {name}")
     if state.get("model") == name:
-        print("[mb] the server for it is still running — `mb llm stop` when done",
-              file=sys.stderr)
+        log.warning("[mb] the server for it is still running — `mb llm stop` when done")
     _warn_daemon_stale(cfg)
     return 0
 
@@ -482,20 +478,22 @@ def _warn_daemon_stale(cfg) -> None:
     except Exception:                        # noqa: BLE001 — advisory only
         return
     if answered and live != cfg.get("llm"):
-        print("[mb] a daemon is running and still serves the previous llm "
-              "section — run `mb daemon reload`", file=sys.stderr)
+        log.warning("[mb] a daemon is running and still serves the previous llm "
+              "section — run `mb daemon reload`")
 
 
 def list_models(cfg) -> int:
     try:
         llm = _llm_cfg(cfg)
     except LLMConfigError as exc:
-        print(f"[mb] {exc}", file=sys.stderr)
+        log.warning(f"[mb] {exc}")
         return 1
     models = llm.get("models") or {}
     if not models:
+        # Part of `mb llm list`'s own output, not a notice: it answers the
+        # command that was asked, so it belongs on stdout with the listing.
         print("[mb] no models in config — register one with "
-              '`mb llm add <name> --gguf <path>`')
+              "`mb llm add <name> --gguf <path>`")
         return 1
     state = load_state(cfg)
     active = state.get("model") if state else None
@@ -508,7 +506,7 @@ def list_models(cfg) -> int:
 def logs(cfg, which: str = "server", n: int = 40) -> int:
     path = _log(cfg, which)
     if not path.exists():
-        print(f"[mb] no log yet: {path}")
+        log.info(f"[mb] no log yet: {path}")
         return 0
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     for line in lines[-n:]:
@@ -622,17 +620,15 @@ def code(cfg, extra: list[str] | None = None) -> int:
     try:
         llm = _llm_cfg(cfg)
     except LLMConfigError as exc:
-        print(f"[mb] {exc}", file=sys.stderr)
+        log.warning(f"[mb] {exc}")
         return 1
     state = load_state(cfg)
     if not state or not proc.is_running(state.get("server_pid") or -1):
-        print("[mb] no local model running — run 'mb llm start <model>'",
-              file=sys.stderr)
+        log.warning("[mb] no local model running — run 'mb llm start <model>'")
         return 1
     claude = shutil.which("claude")
     if not claude:
-        print("[mb] 'claude' CLI not found — npm install -g @anthropic-ai/claude-code",
-              file=sys.stderr)
+        log.warning("[mb] 'claude' CLI not found — npm install -g @anthropic-ai/claude-code")
         return 1
     host = llm.get("server_host", "127.0.0.1")
     port = state.get("server_port") or int(llm.get("server_port", 8080))

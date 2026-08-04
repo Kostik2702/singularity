@@ -10,11 +10,11 @@ from __future__ import annotations
 import json
 import shutil
 import socket
-import sys
 import time
 from typing import Any
 
 from ..config import Config
+from ..log import log
 from ..platform import proc
 
 START_TIMEOUT_TRIES = 30   # x1s: model load can take ~10-20s on first run
@@ -250,8 +250,7 @@ def status(cfg: Config) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 def _cold_search(cfg: Config, payload: dict[str, Any]) -> dict[str, Any]:
-    print("[mb] WARNING: daemon unavailable — cold one-off search (slow)",
-          file=sys.stderr)
+    log.warning("[mb] WARNING: daemon unavailable — cold one-off search (slow)")
     from .engine import SearchEngine
 
     t0 = time.perf_counter()
