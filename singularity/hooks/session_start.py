@@ -87,7 +87,11 @@ def build_context(event_cwd: str | None = None) -> str:
         "Semantic search over the vault: `mb search \"<query>\"` "
         "(RU/EN, ~20ms warm; flags: --top N --type T --tags a,b --links X --json). "
         "SEM-FIRST: use it BEFORE grep/Read for any knowledge discovery. "
-        "Capture insights: `mb learn \"<insight>\" --task <ID>`; new notes: `mb note new <type> <title>`."
+        "Capture insights: `mb learn \"<insight>\" --task <ID>`; new notes: `mb note new <type> <title>`. "
+        # The four commands above cover the daily loop; this is the pointer for
+        # everything else, so an agent looks the surface up instead of guessing
+        # at command names it half-remembers.
+        "The rest of the engine: `mb --help` (ten commands) / `mb help --all` (every one)."
     )
     from singularity.hooks_state import (
         CAPTURE_HOOKS_FRAGMENT,
