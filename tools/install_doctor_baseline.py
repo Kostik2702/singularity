@@ -24,7 +24,7 @@ Every section answers a question the reporter had to answer by hand.
 Run from the repo root of a checkout that HAS the fixes:
 
     PYTHONIOENCODING=utf-8 python tools/install_doctor_baseline.py \
-        > docs/v0.9.0-install-doctor-baseline.json
+        > docs/v0.10.0-install-doctor-baseline.json
 
 PYTHONIOENCODING matters on Windows: a bare redirect encodes stdout in the
 console codepage and mangles every non-ASCII character in the snapshot. In
@@ -509,6 +509,88 @@ def run_pytest(target: str) -> dict:
             "summary": tail[-1].strip() if tail else "<no summary>"}
 
 
+def cli_window(tmp: Path) -> dict:
+    """Grade v0.10.0's own claim: the window narrows the VIEW and moves nothing.
+
+    A facade is the kind of change that looks fine in a demo and rots in the
+    gaps — a grouped path that quietly diverges from its direct one, a help
+    text listing a command the parser lost, an exit code that changed without
+    anyone deciding it. Each row below is a question a reporter would otherwise
+    answer by hand, and the equivalence rows are byte-for-byte on purpose: a
+    group that "does the same thing" is not a claim, it is a diff.
+    """
+    from singularity import facade
+    from singularity.cli import _build_parser
+
+    home, vault = tmp / "win-home", tmp / "win-vault"
+    home.mkdir(), vault.mkdir()
+    rows: list[dict] = []
+
+    visible = [name for _, names in facade.WINDOW for name in names]
+    help_out = _mb(["--help"], vault, home)
+    listed = {ln.split()[0] for ln in help_out.stdout.splitlines()
+              if ln.startswith("  ") and ln.strip()}
+    rows.append({
+        "case": "the window lists exactly the commands the facade declares",
+        "exit_code": help_out.returncode,
+        "visible": visible,
+        "pass": help_out.returncode == 0 and set(visible) <= listed,
+    })
+
+    all_out = _mb(["help", "--all"], vault, home)
+    commands = sorted(facade.parser_commands(_build_parser()))
+    missing = [c for c in commands if c not in all_out.stdout]
+    rows.append({
+        "case": "`mb help --all` names every command the parser has",
+        "exit_code": all_out.returncode,
+        "commands": len(commands), "missing": missing,
+        "pass": all_out.returncode == 0 and not missing,
+    })
+
+    # Equivalence, not similarity: the grouped and hosted forms must produce
+    # the SAME help as the direct command, because they are meant to be the
+    # same code reached through a rewritten argv.
+    for label, direct, through in (
+            ("group", ["daemon", "--help"], ["service", "daemon", "--help"]),
+            ("group", ["config", "--help"], ["setup", "config", "--help"]),
+            ("host", ["nightly", "--help"], ["curator", "nightly", "--help"]),
+            ("host", ["stats", "--help"], ["status", "stats", "--help"])):
+        a, b = _mb(direct, vault, home), _mb(through, vault, home)
+        rows.append({
+            "case": f"{label}: `mb {' '.join(through)}` == `mb {' '.join(direct)}`",
+            "exit_codes": [a.returncode, b.returncode],
+            "identical_stdout": a.stdout == b.stdout,
+            "pass": a.returncode == b.returncode == 0 and a.stdout == b.stdout,
+        })
+
+    # A host still runs itself: `mb curator` must reach the report, not a
+    # listing. No vault here, so 2 with the vault diagnostic is the correct
+    # answer — what would fail the release is argparse rejecting the command.
+    host = _mb(["curator"], vault, home)
+    rows.append({
+        "case": "a host still dispatches to its own command",
+        "exit_code": host.returncode,
+        "rejected_by_parser": "invalid choice" in (host.stderr or ""),
+        "pass": "invalid choice" not in (host.stderr or ""),
+    })
+
+    # The one behavioural change this release makes, pinned so a later edit
+    # cannot move it silently (docs/UPGRADE.md states these three).
+    codes = {
+        "mb help": _mb(["help"], vault, home).returncode,
+        "mb <unknown>": _mb(["nonsense"], vault, home).returncode,
+        "mb service <unknown>": _mb(["service", "nonsense"], vault, home).returncode,
+    }
+    rows.append({
+        "case": "exit codes: help is not an error, unknown still is",
+        "codes": codes,
+        "pass": codes["mb help"] == 0 and codes["mb <unknown>"] == 2
+        and codes["mb service <unknown>"] == 2,
+    })
+
+    return {"pass": all(r["pass"] for r in rows), "rows": rows}
+
+
 def main() -> None:
     pkg = Path(singularity.__file__).resolve().parent
     if pkg.parent != REPO:
@@ -521,12 +603,14 @@ def main() -> None:
         locator = locator_matrix(tmp)
         config_write = nested_config_write(tmp)
         machine_cfg = machine_config(tmp)
+        window = cli_window(tmp)
 
     snap = {
         "taken_at": datetime.now().isoformat(timespec="seconds"),
-        "note": "v0.9.0 baseline: install + doctor honesty, the config write "
-                "path that the v0.6.0 baseline went around, and the config's "
-                "move out of the vault onto the machine",
+        "note": "v0.10.0 baseline: install + doctor honesty, the config write "
+                "path, the config's move onto the machine, and the CLI window "
+                "this release added — grouped and hosted paths graded against "
+                "their direct commands byte-for-byte",
         "version": singularity.__version__,
         "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(REPO),
                                  capture_output=True, text=True).stdout.strip(),
@@ -543,6 +627,7 @@ def main() -> None:
         "issue_12_live_config_reload": live_config_reload(cfg),
         "config_write_path": config_write,
         "v090_machine_config": machine_cfg,
+        "v0100_cli_window": window,
         "tests": [run_pytest("tests/")],
     }
     snap["all_pass"] = (
@@ -550,6 +635,7 @@ def main() -> None:
         and locator["pass"]
         and config_write["pass"]
         and machine_cfg["pass"]
+        and window["pass"]
         and snap["issue_12_live_config_reload"].get("pass", None) is not False
         and all(t["exit_code"] == 0 for t in snap["tests"])
     )
