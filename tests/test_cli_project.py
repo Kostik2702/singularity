@@ -119,7 +119,5 @@ def test_malformed_config_blocks_add_before_any_write(tmp_path, capsys):
     bad.write_text("{not json", encoding="utf-8")
     original = bad.read_text(encoding="utf-8")
 
-    with pytest.raises(SystemExit) as ei:
-        cli.main(["--vault", str(tmp_path), "project", "add", "p", "D:/p"])
-    assert ei.value.code == 2
+    assert cli.main(["--vault", str(tmp_path), "project", "add", "p", "D:/p"]) == 2
     assert bad.read_text(encoding="utf-8") == original

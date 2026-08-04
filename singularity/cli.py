@@ -40,7 +40,8 @@ import sys
 from datetime import datetime
 
 from . import __version__, facade
-from .config import load_config, write_pointer
+from . import log as log_setup
+from .config import Config, ConfigError, load_config, write_pointer
 
 MEMORY_FOLDERS = ["learnings/active", "learnings/archive", "decisions", "howto",
                   "incidents", "rules", "reference", "changelog", "templates",
@@ -1378,6 +1379,20 @@ def cmd_init(cfg, _args) -> int:
     return 0
 
 
+def _load_config_or_report(vault: str | None) -> Config | None:
+    """Config, or None after printing why — the CLI's half of `ConfigError`.
+
+    `load_config` used to end the process itself; it now raises, because a
+    daemon or a hook cannot recover from `sys.exit`. The user-visible result is
+    unchanged: the same `[mb] …` lines on stderr, the same exit code 2."""
+    try:
+        return load_config(vault)
+    except ConfigError as exc:
+        for line in exc.lines:
+            print(line, file=sys.stderr)
+        return None
+
+
 def main(argv: list[str] | None = None) -> int:
     # Windows consoles default to a legacy codepage (cp1251) that cannot print
     # emoji/box chars coming from vault notes — force UTF-8, never crash on output.
@@ -1390,6 +1405,7 @@ def main(argv: list[str] | None = None) -> int:
     # commands and answers the four things argparse renders badly here (a bare
     # `mb`, the curated help, the full list, a group's own listing). Everything
     # it does not claim reaches the parser byte-identical to before.
+    log_setup.configure_for_cli()      # notices go to stderr; reports are returned
     raw = list(sys.argv[1:] if argv is None else argv)
     plan = facade.resolve(raw)
     if plan.action == "help":
@@ -1403,12 +1419,16 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if plan.action == "greeting":
         from . import status as status_mod
-        cfg = load_config(facade.vault_of(raw))
+        cfg = _load_config_or_report(facade.vault_of(raw))
+        if cfg is None:
+            return 2
         print(facade.render_greeting(status_mod.snapshot(cfg)))
         return 0
 
     args = _build_parser().parse_args(plan.argv)
-    cfg = load_config(args.vault)
+    cfg = _load_config_or_report(args.vault)
+    if cfg is None:
+        return 2
     if args.command == "search":
         return cmd_search(cfg, args)
     if args.command == "daemon":

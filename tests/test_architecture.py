@@ -94,17 +94,17 @@ def _check(actual: set[str], exempt: set[str], what: str):
 # carries a `--json` branch duplicating its own text output. Shrinks as the
 # render layer takes over (plan step 1.3).
 PRINT_EXEMPT = {
-    "config",           # migration notices; step 1.1 turns these into exceptions
     "contradictions", "curator", "gaps", "stats", "status", "selftest", "watch",
     "doctor",           # a report generator by nature; kept deliberately
-    "llm",              # supervisor logs; step 1.2 splits its CLI out
+    "llm",              # supervisor notices; move to `log` with the rest
     "search.client", "search.daemon",
     "reel.util", "imgqa._contract", "scout._contract",
 }
 
-# Debt: library code that ends the process. A caller that is not a CLI (daemon,
-# GUI, another test) cannot recover. Step 1.1 replaces these with exceptions.
-EXIT_EXEMPT = {"config"}
+# Empty, and it stays that way: `config` raised `ConfigError` instead of
+# exiting in v0.10.1 — the change that lets `search/daemon.py` stop carrying its
+# own copy of the config validation.
+EXIT_EXEMPT: set[str] = set()
 
 # Empty on purpose, and it stays that way: `llm` carried a dead `import
 # argparse` (the parser had already moved to `cli.py`); the lint pass removed
@@ -146,7 +146,7 @@ def test_domain_never_imports_the_cli():
 def test_the_debt_is_visible_and_finite():
     """One number to watch across the refactor; it must never grow."""
     total = len(PRINT_EXEMPT) + len(EXIT_EXEMPT) + len(ARGPARSE_EXEMPT)
-    assert total <= 18, (
+    assert total <= 15, (
         f"layer debt grew to {total} — new exemptions need a decision, not a default")
 
 

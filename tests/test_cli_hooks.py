@@ -92,9 +92,9 @@ def test_malformed_config_blocks_enable_before_any_write(tmp_path, capsys):
     bad.write_text("{not json", encoding="utf-8")
     original = bad.read_text(encoding="utf-8")
 
-    with pytest.raises(SystemExit) as ei:
-        cli.main(["--vault", str(tmp_path), "hooks", "enable"])
-    assert ei.value.code == 2
+    # main() reports the failure by return code now (config raises instead of
+    # exiting); the console script turns that into the same exit status 2.
+    assert cli.main(["--vault", str(tmp_path), "hooks", "enable"]) == 2
     assert "[mb]" in capsys.readouterr().err
     assert bad.read_text(encoding="utf-8") == original     # untouched
 
@@ -104,6 +104,4 @@ def test_malformed_config_blocks_status_before_any_write(tmp_path, capsys):
     mb.mkdir(parents=True)
     (mb / "config.json").write_text("{not json", encoding="utf-8")
 
-    with pytest.raises(SystemExit) as ei:
-        cli.main(["--vault", str(tmp_path), "hooks", "status"])
-    assert ei.value.code == 2
+    assert cli.main(["--vault", str(tmp_path), "hooks", "status"]) == 2

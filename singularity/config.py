@@ -31,10 +31,11 @@ import json
 import os
 import platform
 import re
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from .log import log
 
 
 def machine_id() -> str:
@@ -168,6 +169,26 @@ def _home_relative(path_str: str, home: Path) -> str:
     except (OSError, ValueError):
         return path_str
     return "~/" + str(rel).replace("\\", "/")
+
+
+class ConfigError(Exception):
+    """The config cannot be used, and only the caller knows what that means.
+
+    This module used to answer with `sys.exit(2)`, which is right for a CLI and
+    wrong for everyone else: `search/daemon.py` could not call `load_config()`
+    at all — a malformed file would have killed a serving process — so it grew
+    its own copy of the validation, i.e. a second source of truth for what a
+    valid config is.
+
+    `lines` carries the diagnostic exactly as it was printed before (`[mb] …`,
+    one entry per line) so the CLI can render it unchanged; `code` is the exit
+    status it used to take.
+    """
+
+    def __init__(self, *lines: str, code: int = 2):
+        super().__init__(lines[0] if lines else "config error")
+        self.lines = list(lines)
+        self.code = code
 
 
 class ConfigKeyError(ValueError):
@@ -708,33 +729,31 @@ def resolve_vault(explicit: str | None = None) -> Path | None:
 def load_config(vault_arg: str | None = None) -> Config:
     vault = resolve_vault(vault_arg)
     if vault is None:
-        print("[mb] no vault configured", file=sys.stderr)
-        print('[mb] pass --vault "/path/to/your/vault", set MB_HOME, or create '
-              '~/.singularity.json with {"vault_path": "/path/to/your/vault"}',
-              file=sys.stderr)
-        sys.exit(2)
+        raise ConfigError(
+            "[mb] no vault configured",
+            '[mb] pass --vault "/path/to/your/vault", set MB_HOME, or create '
+            '~/.singularity.json with {"vault_path": "/path/to/your/vault"}')
     if not vault.exists():
-        print(f"[mb] vault not found: {vault}", file=sys.stderr)
-        print("[mb] set MB_HOME, pass --vault, or create ~/.singularity.json", file=sys.stderr)
-        sys.exit(2)
+        raise ConfigError(
+            f"[mb] vault not found: {vault}",
+            "[mb] set MB_HOME, pass --vault, or create ~/.singularity.json")
     cfg = Config(vault=vault)
     migrate_vault_config(cfg)          # seamless, one-time, pre-0.7 layouts
     if cfg.config_path.exists():
         try:
             cfg.data = json.loads(cfg.config_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            print(f"[mb] broken config {cfg.config_path}: {exc}", file=sys.stderr)
-            sys.exit(2)
+            raise ConfigError(
+                f"[mb] broken config {cfg.config_path}: {exc}") from exc
         if not isinstance(cfg.data, dict):
-            print(f"[mb] config must be a JSON object: {cfg.config_path}", file=sys.stderr)
-            sys.exit(2)
+            raise ConfigError(
+                f"[mb] config must be a JSON object: {cfg.config_path}")
         result = validate_config(cfg.data)
         if result["errors"]:
-            print(f"[mb] invalid config {cfg.config_path}:", file=sys.stderr)
-            for e in result["errors"]:
-                print(f"[mb]   - {e}", file=sys.stderr)
-            print("[mb] fix the values above or run 'mb config validate'", file=sys.stderr)
-            sys.exit(2)
+            raise ConfigError(
+                f"[mb] invalid config {cfg.config_path}:",
+                *(f"[mb]   - {e}" for e in result["errors"]),
+                "[mb] fix the values above or run 'mb config validate'")
         migrated, changed = migrate_config(cfg.data)
         if changed:
             _backup_config(cfg.config_path)   # keep a copy before rewriting
@@ -801,17 +820,15 @@ def migrate_vault_config(cfg: Config) -> Path | None:
         # Refuse, loudly. Skipping a broken legacy config would start this
         # machine on a fresh empty one and silently drop every setting the user
         # had — the exact silent-loss shape this release exists to remove.
-        print(f"[mb] cannot migrate {legacy}: {exc}", file=sys.stderr)
-        print(f"[mb] fix or move that file, then re-run — nothing was written "
-              f"to {CONFIG_FILE}", file=sys.stderr)
-        sys.exit(2)
+        raise ConfigError(
+            f"[mb] cannot migrate {legacy}: {exc}",
+            f"[mb] fix or move that file, then re-run — nothing was written "
+            f"to {CONFIG_FILE}") from exc
     except OSError as exc:
-        print(f"[mb] cannot read {legacy}: {exc}", file=sys.stderr)
-        sys.exit(2)
+        raise ConfigError(f"[mb] cannot read {legacy}: {exc}") from exc
     if not isinstance(data, dict):
-        print(f"[mb] cannot migrate {legacy}: config must be a JSON object",
-              file=sys.stderr)
-        sys.exit(2)
+        raise ConfigError(
+            f"[mb] cannot migrate {legacy}: config must be a JSON object")
 
     cfg.data = {**data, "vault_path": str(cfg.vault)}
     cfg.save()                          # writes decisions only, defaults dropped
@@ -828,16 +845,16 @@ def migrate_vault_config(cfg: Config) -> Path | None:
         legacy.replace(moved)
     except OSError:
         moved = legacy                  # could not rename: the copy still stands
-    print(f"[mb] config moved out of the vault -> {cfg.config_path} "
-          f"(was {legacy}, kept as {moved.name})", file=sys.stderr)
+    log.info("[mb] config moved out of the vault -> %s (was %s, kept as %s)",
+             cfg.config_path, legacy, moved.name)
     # A daemon started before this release holds the OLD module: its
     # `config_path` still resolves into the vault, so it keeps serving the file
     # we just renamed and `mb daemon reload` reports nothing changed — the
     # settings look applied everywhere except where they are actually read.
     # Migration is the one moment we know this happened, so say it here.
     if _daemon_running(cfg):
-        print("[mb] a daemon is running from the pre-migration code and still "
-              "reads the old file — run `mb daemon restart`", file=sys.stderr)
+        log.info("[mb] a daemon is running from the pre-migration code and still "
+                 "reads the old file — run `mb daemon restart`")
     # The migration is the one moment we know an upgrade just happened, and the
     # only one where "you never told this machine where X is" is actionable
     # rather than nagging: a vault that arrived from another machine carries
@@ -845,7 +862,7 @@ def migrate_vault_config(cfg: Config) -> Path | None:
     from . import machine_setup
 
     for line in machine_setup.summary_lines(cfg.data):
-        print(line, file=sys.stderr)
+        log.info("%s", line)
     return moved
 
 
