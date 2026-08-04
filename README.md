@@ -104,6 +104,10 @@ cd ~/singularity
 ./install/install.sh
 ```
 
+If that fails with `permission denied`, the executable bit did not survive the
+way this copy reached you — run `sh install/install.sh` instead. The wrapper is
+`#!/bin/sh`-compatible, so invoking the interpreter directly is equivalent.
+
 The wrappers are ~20 lines each; all logic lives in `install/install.py`, which walks five phases:
 
 1. **Python env** — creates `.venv` and installs dependencies.
