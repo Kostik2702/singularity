@@ -160,6 +160,33 @@ def reload_daemon(cfg: Config) -> Optional[dict[str, Any]]:
     return _request(port, {"cmd": "reload"})
 
 
+def restart_daemon(cfg: Config) -> bool:
+    """Stop then start. The remedy for anything `reload` cannot re-bind — a
+    changed embedding model, most of all — had no single command before
+    (issue #12), and `reload`, the one that SOUNDS like it, was the one that
+    did not do it."""
+    stop_daemon(cfg)
+    return start_daemon(cfg)
+
+
+def daemon_value(cfg: Config, key: str) -> tuple[bool, Any]:
+    """What the RUNNING daemon currently serves for `key`.
+
+    Returns (daemon_answered, value). A daemon that predates this command
+    answers with an error, which is reported as "did not answer" rather than as
+    a mismatch — an old daemon must not produce a scary warning."""
+    port = _read_port(cfg)
+    if port is None:
+        return False, None
+    try:
+        resp = _request(port, {"cmd": "config", "key": key})
+    except Exception:                       # noqa: BLE001 — advisory path only
+        return False, None
+    if not isinstance(resp, dict) or "value" not in resp:
+        return False, None
+    return True, resp["value"]
+
+
 def run_index(cfg: Config, action: str = "update",
               files: list[str] | None = None,
               corpus: str | None = None) -> dict[str, Any]:

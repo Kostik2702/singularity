@@ -242,7 +242,10 @@ Worth recording: the non-obvious, the surprising, anything that took more than o
 Save a note in Obsidian → the watcher asks the already-warm daemon to re-index just that file (~5–15 s) → it's searchable. CLI update/rebuild, nightly, and selftest use the same daemon RPC, so the model stays loaded once in one process instead of being reloaded by every command. A nightly full rebuild (with missed-run catch-up when the machine was off) is the safety net. Manual controls if you ever need them:
 
 ```bash
-mb daemon start|stop|status|reload
+mb daemon start|stop|restart|status|reload
+                            # reload = re-read .mb/config.json AND the indexes;
+                            # restart = the remedy when reload cannot rebind it
+                            # in place (a changed `model`, above all)
 mb model status             # verify pinned local snapshot + manifest
 mb model install            # explicit one-time adopt/download + daemon restart
 mb index rebuild            # full

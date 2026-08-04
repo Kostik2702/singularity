@@ -194,6 +194,56 @@ def test_doctor_warns_when_the_root_is_gone(tmp_path):
     assert _check(cfg)["status"] == "WARN"
 
 
+def test_rebuild_refuses_a_configured_but_unreachable_root(tmp_path, monkeypatch):
+    """Issue #12: `code_repos_dir` pointing at a path that does not exist on
+    this machine (a leftover Windows path after a cross-OS move) reported
+    `{"files": 0}` — indistinguishable from a successful scan of an empty tree,
+    which is what made the stale-daemon-config bug so hard to see.
+    `CodeCorpusNotConfigured` already models "off"; "configured but
+    unreachable" now gets the same treatment."""
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
+    vault = tmp_path / "vault"
+    (vault / "howto").mkdir(parents=True)
+    cfg = Config(vault=vault,
+                 data={"model": "fake",
+                       "code_repos_dir": str(tmp_path / "gone-with-the-old-machine")})
+    cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(indexer_mod.CorpusRootUnavailable) as exc:
+        indexer_mod.rebuild(cfg, progress=False, corpus="code")
+
+    assert "does not exist" in str(exc.value)
+    assert "mb daemon restart" in str(exc.value)
+
+
+def test_rebuild_still_allows_an_empty_but_present_root(tmp_path, monkeypatch):
+    """The refusal must be about reachability, not emptiness — a real
+    directory with no code in it is a legitimate (if useless) state."""
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
+    repos = tmp_path / "Project"
+    repos.mkdir()
+    vault = tmp_path / "vault"
+    (vault / "howto").mkdir(parents=True)
+    cfg = Config(vault=vault, data={"model": "fake", "code_repos_dir": str(repos)})
+    cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+
+    stats = indexer_mod.rebuild(cfg, progress=False, corpus="code")
+    assert stats["files"] == 0
+
+
+def test_sources_corpus_still_bootstraps_over_a_missing_root(tmp_path, monkeypatch):
+    """`mb ingest index` on a vault that has never ingested anything must keep
+    working: `.mb/sources/` legitimately does not exist yet."""
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
+    vault = tmp_path / "vault"
+    (vault / "howto").mkdir(parents=True)
+    cfg = Config(vault=vault, data={"model": "fake", "ingest_index_sources": True})
+    cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+
+    stats = indexer_mod.rebuild(cfg, progress=False, corpus="sources")
+    assert stats["files"] == 0
+
+
 def test_doctor_warns_on_a_corpus_built_from_zero_files(tmp_path, monkeypatch):
     """Issue #13: `PASS: 0 chunk(s) from 0 file(s)` is a status contradicting
     its own message. This is the check that should have caught the stale
