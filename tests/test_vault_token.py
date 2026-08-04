@@ -58,6 +58,40 @@ def test_the_sentinel_is_the_token_not_a_path():
     assert register_agents.TEMPLATE_VAULT == vault_token.TOKEN
 
 
+def test_the_token_is_always_followed_by_forward_slashes():
+    """The sources were authored on Windows, so the paths after the token used
+    backslashes. Substituting a POSIX vault into `{{VAULT}}\\rules\\` yields
+    `/Users/k/vault\\rules\\`, which is not a path on any OS. Forward slashes
+    work on both."""
+    offenders = []
+    for folder in ("agents", "skills"):
+        for path in (ENGINE / "singularity" / folder).rglob("*.md"):
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            if vault_token.TOKEN + "\\" in text:
+                offenders.append(path.name)
+    assert not offenders, f"backslash after the token in: {offenders}"
+
+
+def test_the_token_survives_only_where_a_path_is_actually_needed():
+    """A mention that merely IDENTIFIES the vault does not need its path —
+    `mb search` already knows where it is, and naming it there is the habit
+    that put one machine's drive letter into 18 files. The token is for places
+    the reader must locate a concrete file or folder.
+
+    Guard shape: every surviving occurrence has a path segment after it."""
+    import re
+
+    bare = []
+    for folder in ("agents", "skills"):
+        for path in (ENGINE / "singularity" / folder).rglob("*.md"):
+            for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                for m in re.finditer(re.escape(vault_token.TOKEN) + r"(.?)", line):
+                    if m.group(1) != "/":
+                        bare.append(f"{path.name}: {line.strip()[:70]}")
+    assert not bare, ("the vault is named without a path after it — drop the "
+                      f"mention instead: {bare}")
+
+
 # --- rendering ----------------------------------------------------------------
 
 def test_render_substitutes_in_text_and_leaves_binaries_alone(skill, tmp_path):

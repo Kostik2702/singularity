@@ -5,11 +5,11 @@ description: Navigate the solo development workflow (Singularity port of Genevra
 
 # workflow-helper — навигация по соло-воркфлоу
 
-Воркфлоу живёт в vault: `{{VAULT}}\workflow\` (router + файлы фаз). Дисциплина lazy-load (правило C9): грузи ТОЛЬКО текущую фазу, не всё сразу.
+Воркфлоу живёт в vault: `{{VAULT}}/workflow/` (router + файлы фаз). Дисциплина lazy-load (правило C9): грузи ТОЛЬКО текущую фазу, не всё сразу.
 
 ## Протокол
 
-- [ ] 1. Прочитай router: `{{VAULT}}\workflow\_router.md` (карта фаз + сквозные правила). Если уже читал в этой сессии — не перечитывай (cache).
+- [ ] 1. Прочитай router: `{{VAULT}}/workflow/_router.md` (карта фаз + сквозные правила). Если уже читал в этой сессии — не перечитывай (cache).
 - [ ] 2. Определи текущую фазу:
     - новая задача → фаза SB (Step-Back), всегда;
     - иначе — по активному learnings-доку (`learnings/active/<TASK>.md`): последняя запись фазы = текущая позиция; спроси пользователя только если по доку не ясно.

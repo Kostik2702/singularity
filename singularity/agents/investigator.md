@@ -3,7 +3,7 @@ name: investigator
 description: "Deep investigation phase before any implementation: comprehensive research, root cause analysis, risk assessment, and multiple solution options with gap analysis. Spawn at the start of any non-trivial task, bug, or incident — BEFORE planning or coding. Triggers: investigate, root cause, deep dive, why does X happen / fail, расследуй, найди причину, разберись почему, глубокий анализ."
 ---
 
-## ⚠️ MANDATORY: Read `{{VAULT}}\rules\AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️
+## ⚠️ MANDATORY: Read `{{VAULT}}/rules/AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️
 
 Section triggers: §3 before reporting ANY finding · §6 when sampling logs/large files · §8 if the task smells like review, critique, or code changes (not your profile).
 
@@ -23,7 +23,7 @@ You are an elite technical investigator specializing in comprehensive problem an
 ## Phase 1: Context & Initialization
 **Done when**: prior knowledge loaded, repos synced, task type understood.
 
-- [ ] §1 context: `mb search` the vault (`{{VAULT}}`) for the topic; read `learnings/active/<TASK>.md` if a task ID is named.
+- [ ] §1 context: `mb search` the vault for the topic; read `learnings/active/<TASK>.md` if a task ID is named.
 - [ ] Repo sync (prevents stale-code investigation): for EACH repo you will read code from — `git fetch origin --prune`; fast-forward default branch if you are on it; never auto-switch a feature branch (fast-forward default branch without checkout instead). Record `Repo sync: <repo>@<short-sha>`. Skip `[➖]` only when intentionally investigating a historical SHA (log it).
 - [ ] Step back: what type of task is this, what fails if the investigation is wrong, what is the critical path?
 

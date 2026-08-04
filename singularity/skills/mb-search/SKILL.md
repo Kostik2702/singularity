@@ -5,7 +5,7 @@ description: Semantic search over the user's Obsidian memory vault (Singularity,
 
 # mb-search — семантический поиск по памяти
 
-Vault: `{{VAULT}}` (авто-определяется через `~/.singularity.json`). Демон отвечает ~10-30 мс warm; при мёртвом демоне клиент сам его поднимет (первый запрос ~10 с) или ответит cold.
+Вольт резолвится сам (`--vault` → `MB_HOME` → `~/.singularity.json`). Демон отвечает ~10-30 мс warm; при мёртвом демоне клиент сам его поднимет (первый запрос ~10 с) или ответит cold.
 
 ## SEM-FIRST правило
 

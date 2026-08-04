@@ -5,7 +5,7 @@ description: Capture an assistant mistake as a PENDING error-report note in the 
 
 # report — error capture (self-learning pipeline: INPUT)
 
-Vault: `{{VAULT}}`. Target folder: `incidents/`. This skill only RECORDS (status PENDING); converting reports into rules is the `error-reports` skill.
+Target folder: `incidents/`. This skill only RECORDS (status PENDING); converting reports into rules is the `error-reports` skill.
 
 ## Search default
 
@@ -44,7 +44,7 @@ date "+%Y-%m-%d %H:%M:%S"
 
 ## Step 3: write the PENDING note
 
-Create `{{VAULT}}\incidents\Error - <short title>.md` (or append a `## #error-report` block to an existing related incident/learnings note — dedup per Step 0 search). Note contract (frontmatter mandatory):
+Create `{{VAULT}}/incidents/Error - <short title>.md` (or append a `## #error-report` block to an existing related incident/learnings note — dedup per Step 0 search). Note contract (frontmatter mandatory):
 
 ```markdown
 ---
