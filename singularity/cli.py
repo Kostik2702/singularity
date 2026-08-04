@@ -171,6 +171,9 @@ def _build_parser() -> argparse.ArgumentParser:
     cfgs = cfgsub.add_parser("set", help="set a config value (validated, atomic save)")
     cfgs.add_argument("key")
     cfgs.add_argument("value", help="JSON value; falls back to a string literal")
+    cfgs.add_argument("--allow-unknown", action="store_true",
+                      help="write a key the schema does not know (a typo is "
+                           "refused without this)")
 
     pr = sub.add_parser("project", help="multi-project registry + cwd detection")
     prsub = pr.add_subparsers(dest="project_action", required=True)
@@ -282,6 +285,9 @@ def _build_parser() -> argparse.ArgumentParser:
     nn.add_argument("type")
     nn.add_argument("title")
     nn.add_argument("--project", help="explicit project id/general/personal (else cwd-detected)")
+    nn.add_argument("--filename",
+                    help="filename stem, when the vault's convention differs "
+                         "from the title (e.g. `Rule - X.md` holding `title: X`)")
     nn.add_argument("--from-source", dest="from_source", action="append",
                     help="source_id this note is derived from (repeatable) — writes "
                          "`sources:` frontmatter and the registry back-link")
@@ -294,6 +300,20 @@ def _build_parser() -> argparse.ArgumentParser:
     llst = llsub.add_parser("status", help="running model, pids, health")
     llst.add_argument("--json", action="store_true")
     llsub.add_parser("list", help="models from config registry")
+    # `<name> <gguf>` positionally, mirroring `mb project add <id> <path>` —
+    # the symmetry is the point, and it also keeps the REMAINDER last, where it
+    # cannot swallow a required option. REMAINDER (not an option with nargs)
+    # because llama-server args are all flag-shaped, and verbatim capture keeps
+    # Windows paths intact where shlex-splitting one string would not.
+    lladd = llsub.add_parser("add", help="register a model (validated, atomic)")
+    lladd.add_argument("name")
+    lladd.add_argument("gguf", help="path to the .gguf weights")
+    lladd.add_argument("server_args", nargs=argparse.REMAINDER,
+                       help="extra llama-server args (use -- before flags)")
+    llrm = llsub.add_parser("remove", help="unregister a model")
+    llrm.add_argument("name")
+    llrm.add_argument("--force", action="store_true",
+                      help="unregister even while it is the model being served")
     lllog = llsub.add_parser("logs", help="tail server/router log")
     lllog.add_argument("which", nargs="?", choices=["server", "router"], default="server")
     lllog.add_argument("-n", type=int, default=40)
@@ -561,12 +581,23 @@ def cmd_config(cfg, args) -> int:
             for e in res["errors"]:
                 print(f"[mb] {e}", file=sys.stderr)
             return 1
-        # An unknown key is ignored at runtime, so writing one silently is how a
-        # typo passes for a fix. Warn, but still write: unknown-to-the-schema is
-        # not the same as wrong (connectors and future keys live here too).
-        for w in res["warnings"]:
-            if w.startswith(f"{args.key}:"):
-                print(f"[mb] {w}", file=sys.stderr)
+        # An unknown key is ignored at runtime, so writing one is a no-op the
+        # user will read as a fix — and `modle` vs `model` is one keystroke.
+        # Refusing by default (owner decision 2026-08-04) makes the typo loud;
+        # `--allow-unknown` keeps the legitimate case (connectors, a key a newer
+        # build reads) one explicit flag away.
+        if any(w.startswith(f"{args.key}: unknown config key") for w in res["warnings"]):
+            if not getattr(args, "allow_unknown", False):
+                import difflib
+                from .config import DEFAULT_CONFIG
+                near = difflib.get_close_matches(args.key, DEFAULT_CONFIG, n=3, cutoff=0.7)
+                hint = f" (did you mean: {', '.join(near)}?)" if near else ""
+                print(f"[mb] {args.key}: unknown config key{hint}\n"
+                      f"      nothing reads it — write it anyway with "
+                      f"--allow-unknown", file=sys.stderr)
+                return 1
+            print(f"[mb] {args.key}: unknown config key — written as requested",
+                  file=sys.stderr)
         cfg.data = candidate
         cfg.save()                             # atomic (tmp + replace)
         print(f"{args.key} = {json.dumps(value, ensure_ascii=False)}")
@@ -1135,7 +1166,17 @@ def cmd_note(cfg, args) -> int:
             print(f"[mb] unknown source_id: {sid} (see `mb ingest list`)",
                   file=sys.stderr)
             return 2
-    safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in args.title).strip()
+    # The vault's own convention has the type in the FILENAME and a clean
+    # `title:` inside (`rules/Rule - X.md` + `title: X`), which a single
+    # positional argument cannot express — so it got expressed by putting the
+    # prefix in the title, where it does not belong. `--filename` separates the
+    # two without changing what happens when it is absent.
+    stem_source = args.filename if getattr(args, "filename", None) else args.title
+    safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in stem_source).strip()
+    if not safe:
+        print(f"[mb] {stem_source!r} leaves nothing usable as a filename",
+              file=sys.stderr)
+        return 1
     path = cfg.vault / folder / f"{safe}.md"
     if path.exists():
         print(f"[mb] already exists: {path}", file=sys.stderr)
@@ -1145,7 +1186,9 @@ def cmd_note(cfg, args) -> int:
     # from memory in another note points at nothing, and the break surfaces
     # later as a missing page in `mb curator gaps` rather than here. Say it once,
     # at the only moment the difference is still cheap to fix.
-    if safe != args.title.strip():
+    # With `--filename` the difference is the author's intent, not a surprise:
+    # only announce the link target when it still resolves to something else.
+    if safe != stem_source.strip():
         print(f"[mb] filename differs from the title: link to it as "
               f"[[{safe}]] (characters outside letters, digits, space, `-` "
               f"and `_` become `_`)", file=sys.stderr)
@@ -1229,6 +1272,13 @@ def cmd_llm(cfg, args) -> int:
         return llm.status(cfg, as_json=args.json)
     if args.llm_action == "list":
         return llm.list_models(cfg)
+    if args.llm_action == "add":
+        extra = list(args.server_args or [])
+        if extra and extra[0] == "--":       # the separator, not an argument
+            extra = extra[1:]
+        return llm.add_model(cfg, args.name, args.gguf, extra)
+    if args.llm_action == "remove":
+        return llm.remove_model(cfg, args.name, force=args.force)
     if args.llm_action == "logs":
         return llm.logs(cfg, which=args.which, n=args.n)
     if args.llm_action == "code":

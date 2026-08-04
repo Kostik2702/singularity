@@ -557,6 +557,8 @@ Run `mb llm setup` once more after editing: it reports missing files, repairs kn
 #### Everyday use
 
 ```bash
+mb llm add q9b /models/q9b.gguf -- -ngl 99 --jinja   # register (validated, atomic)
+mb llm remove q9b                     # unregister; refuses while it is being served
 mb llm list                           # configured models; active one is marked
 mb llm start qwen3-30b                # switch from any running model, then health-check
 mb llm code                           # interactive Claude Code on the active local model

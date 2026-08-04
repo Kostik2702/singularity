@@ -10,6 +10,74 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.7.0 — the registry gets a write half, and a typo stops passing for a fix
+
+Three CLI frictions, each filed after `mb doctor` or the vault guard pointed at
+a command that could not do the job. Two of them were the owner's call to make
+and were made explicitly.
+
+### `mb llm add` / `mb llm remove`
+
+The model registry was read-only. `mb llm list` on an empty one said *"add to
+llm.models in .mb/config.json"* — by hand, in the file `mb config set` owns,
+which is exactly the edit the vault guard flags. And after a move between
+machines, `A6-config-paths` reports dead `llm.models.*.gguf` paths with nothing
+to offer: `config set` can repoint one, but a model that is gone for good has to
+be *removed*, and no command did that. `mb project` has had `add`/`remove` since
+T03; models had neither.
+
+```bash
+mb llm add q9b /models/q9b.gguf -- -ngl 99 --jinja
+mb llm remove q9b
+```
+
+`<name> <gguf>` positionally, mirroring `mb project add <id> <path>`. Adding an
+existing name repoints it and **keeps its `args`** — the same silent-loss bug
+`project add` had in v0.6.1. A path that does not exist yet is registered with a
+note, not refused: configs get prepared before weights are downloaded, and A6
+already reports paths that resolve nowhere.
+
+`remove` refuses while that model is the one being served, unless `--force`.
+Stopping someone's running server as a side effect of a registry edit is not a
+config change, it is an outage. With `--force` the entry goes and the server is
+left alone, with a line saying so.
+
+`A6`'s fix line now names both registries instead of sending everyone through
+`config set`.
+
+### `mb config set` refuses an unknown key
+
+`mb config set modle 60` wrote the key and warned (v0.6.1+). Nothing reads it,
+so the write is a no-op the user reads as a fix — and `modle` is one keystroke
+from `model`. **Owner decision:** refuse by default, with the near-miss named.
+
+```
+$ mb config set modle 60
+[mb] modle: unknown config key (did you mean: model?)
+      nothing reads it — write it anyway with --allow-unknown
+$ echo $?
+1
+```
+
+The legitimate case — a connector key, or one a newer build reads — stays one
+explicit flag away.
+
+### `mb note new --filename`
+
+The vault's convention keeps the type in the filename and `title:` clean
+(`rules/Rule - X.md` holding `title: X` — 28 of 38 rules look like that). A
+single positional argument cannot say both, so the prefix ended up inside the
+title, where it does not belong. **Owner decision:** an explicit flag, default
+behaviour untouched.
+
+The v0.6.2 warning now fires only when the sanitizer changed what was actually
+asked for — with `--filename` a different filename is intent, not a surprise. A
+stem that strips to nothing is refused rather than creating a stemless `.md`.
+
+Full suite: 1797 passed, 25 skipped.
+
+---
+
 # v0.6.4 — the guard's advice is now takeable everywhere it applies
 
 v0.6.3 turned the guard on. This closes the two things that made ignoring it
