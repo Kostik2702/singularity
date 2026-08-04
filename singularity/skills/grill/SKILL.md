@@ -35,7 +35,7 @@ Lenses are thinking prompts, NEVER a printed checklist. A lens yields a candidat
 
 ## Step 2: Self-Resolve - Codebase/Memory-First (ALWAYS, token-bounded)
 
-Canonical rule: *"if a question can be answered by exploring the codebase, explore instead."* The memory vault (D:\obsidian\memory brain) is the glossary.
+Canonical rule: *"if a question can be answered by exploring the codebase, explore instead."* The memory vault ({{VAULT}}) is the glossary.
 
 - [ ] `mb search "<query>"` FIRST for ALL candidates - batch into few calls.
 - [ ] Escalate to Grep/Glob/Read (code, logs, git) ONLY for unresolved AND decision-shaping candidates; cap ~1-2 lookups each.

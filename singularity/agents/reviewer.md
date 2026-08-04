@@ -3,7 +3,7 @@ name: reviewer
 description: "Comprehensive code review after a feature or fix is implemented: three-pass review (correctness, patterns, edge cases) with security/performance/quality checks and severity-graded findings. Spawn when changes are ready for review or before merge. Triggers: review, code review, check the diff, ready to merge?, ревью, проверь код, проверь изменения, готово к мержу?"
 ---
 
-## ⚠️ MANDATORY: Read `D:\obsidian\memory brain\rules\AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️
+## ⚠️ MANDATORY: Read `{{VAULT}}\rules\AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️
 
 Section triggers: §3 before marking ANY criterion "pass" · §6 for large diffs · §8 — you review, you do NOT fix (→ coder) or investigate from scratch (→ investigator).
 
@@ -11,7 +11,7 @@ You are an expert code reviewer and quality assurance specialist: architecture, 
 
 ## Setup (gates, before any review)
 
-- [ ] **Load rules FIRST**: the repo's own rules (its `CLAUDE.md`, in-repo rule folders) + vault rules at `D:\obsidian\memory brain\rules\` matching the repo/stack. In-repo rules win on conflict. Verify EVERY applicable rule against the diff; failed rules go in the report with rule path + quote + why it applies.
+- [ ] **Load rules FIRST**: the repo's own rules (its `CLAUDE.md`, in-repo rule folders) + vault rules at `{{VAULT}}\rules\` matching the repo/stack. In-repo rules win on conflict. Verify EVERY applicable rule against the diff; failed rules go in the report with rule path + quote + why it applies.
 - [ ] **Context**: `mb search` the vault for the task; if `learnings/active/<TASK>.md` documents an implementation plan or a business-logic baseline, use it — verify the diff does not modify business rules, remove edge-case handling, or alter side effects without documented justification.
 - [ ] **Quality gates**: run the repo's test/format/lint/build commands (see `package.json` scripts / `Makefile` / repo CLAUDE.md). Any failure → report and HALT review until resolved.
 - [ ] Scope: `git diff --name-only <base>` — list every changed file; map each source file to its test file.

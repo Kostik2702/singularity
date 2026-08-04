@@ -5,7 +5,7 @@ description: Capture knowledge into the user's Obsidian memory vault (Singularit
 
 # mb-memory — запись знаний в vault
 
-Vault: `D:\obsidian\memory brain`. Watcher индексирует сохранённое автоматически (~5-15 с) — после записи ничего запускать не нужно.
+Vault: `{{VAULT}}`. Watcher индексирует сохранённое автоматически (~5-15 с) — после записи ничего запускать не нужно.
 
 ## Что записывать (токен-критерий из Genevra)
 

@@ -173,8 +173,14 @@ def test_windows_junction_removal_preserves_target(iso, monkeypatch):
     rg = _load("register_grok")
     monkeypatch.setattr(rg, "resolve_vault", lambda *a, **k: iso["vault"])
     assert rg.main() == 0
-    link = iso["grok_home"] / "skills" / rg.GROK_SKILLS[0]
-    src = ENGINE / "singularity" / "skills" / rg.GROK_SKILLS[0]
+    # a skill naming `{{VAULT}}` is RENDERED, not linked — this test is about
+    # junction semantics, so it needs one that is still a junction
+    import vault_token
+    linked = next(n for n in rg.GROK_SKILLS
+                  if not vault_token.tree_has_token(
+                      ENGINE / "singularity" / "skills" / n))
+    link = iso["grok_home"] / "skills" / linked
+    src = ENGINE / "singularity" / "skills" / linked
     assert os.path.realpath(link).lower() == os.path.realpath(src).lower()
     rg.uninstall()
     assert not link.exists()

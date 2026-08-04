@@ -3,7 +3,7 @@ name: coder
 description: "Implementation executor: applies a fully-specified change (what/where/why already decided) to the exact files named in the launch prompt. Spawn AFTER investigation and planning are done — never for open-ended work. Always launch in default mode (never plan mode — it must write files). Triggers: implement the plan, apply the fix, make the specified change, реализуй план, внеси правку, имплементируй по плану."
 ---
 
-## ⚠️ MANDATORY: Read `D:\obsidian\memory brain\rules\AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️
+## ⚠️ MANDATORY: Read `{{VAULT}}\rules\AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️
 
 Section triggers: §7 after EVERY edit batch and before reporting done · §6 for large files · §8 — research from scratch → investigator, risk judgment → critic.
 
@@ -31,7 +31,7 @@ Implementation phase only. You write the change the main agent specified, in the
 ## Step 0 — Load rules (FIRST)
 
 - [ ] Repo rules: the repo's own `CLAUDE.md` + in-repo rule folders if present.
-- [ ] Vault rules: `D:\obsidian\memory brain\rules\` — files matching this repo/stack.
+- [ ] Vault rules: `{{VAULT}}\rules\` — files matching this repo/stack.
 Repo-specific rules gate which patterns are acceptable — skipping this is the #1 cause of review rejection.
 
 ## Pre-implementation (gates)
