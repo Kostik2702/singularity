@@ -147,6 +147,107 @@ def _home_relative(path_str: str, home: Path) -> str:
     return "~/" + str(rel).replace("\\", "/")
 
 
+class ConfigKeyError(ValueError):
+    """A dotted key that cannot be resolved against the config's actual shape."""
+
+
+_MISSING = object()
+_INDEX_SUFFIX = re.compile(r"\[(\d+)\]$")
+
+
+def parse_config_key(key: str) -> list[str | int]:
+    """`llm.models.q.args[14]` -> `['llm', 'models', 'q', 'args', 14]`.
+
+    The notation is not chosen here — it is the one `mb doctor` already prints
+    in `A6-config-paths` (and `config_paths.path_entries` produces), so `mb
+    config set` has to speak it or the printed fix stays a dead end (#14)."""
+    path: list[str | int] = []
+    for part in key.split("."):
+        name, indexes = part, []
+        while (m := _INDEX_SUFFIX.search(name)):
+            indexes.insert(0, int(m.group(1)))
+            name = name[: m.start()]
+        if not name:
+            raise ConfigKeyError(f"{key}: empty path segment")
+        path.append(name)
+        path.extend(indexes)
+    return path
+
+
+def _walk(data: Any, path: list[str | int]) -> Any:
+    node: Any = data
+    for step in path:
+        if isinstance(step, int):
+            if not isinstance(node, list) or not (0 <= step < len(node)):
+                return _MISSING
+            node = node[step]
+        else:
+            if not isinstance(node, dict) or step not in node:
+                return _MISSING
+            node = node[step]
+    return node
+
+
+def get_config_key(data: dict[str, Any], key: str) -> Any:
+    """Value at a flat OR dotted key; `_MISSING` when the path does not exist.
+
+    A literal top-level key always wins, so a config that already carries a
+    key containing a dot keeps answering for it."""
+    if key in data:
+        return data[key]
+    if "." not in key and "[" not in key:
+        return _MISSING
+    try:
+        return _walk(data, parse_config_key(key))
+    except ConfigKeyError:
+        return _MISSING
+
+
+def set_config_key(data: dict[str, Any], key: str, value: Any) -> dict[str, Any]:
+    """A copy of `data` with `key` set, resolving dotted keys into the nested
+    shape instead of creating a literal top-level key (the trap behind #14 —
+    `mb config set projects.x.path` reported success three times over while the
+    real value never moved).
+
+    Intermediate nodes are never invented. Registering something new is the job
+    of the command that knows the shape (`mb project add`, `mb llm add`); this
+    one only rewrites values that already exist, and says so when they do not."""
+    import copy
+
+    if key in data or ("." not in key and "[" not in key):
+        return {**data, key: value}
+
+    path = parse_config_key(key)
+    out = copy.deepcopy(data)
+    node: Any = out
+    for i, step in enumerate(path[:-1]):
+        walked = ".".join(str(s) for s in path[: i + 1])
+        if isinstance(step, int):
+            if not isinstance(node, list) or not (0 <= step < len(node)):
+                raise ConfigKeyError(f"{key}: no element at index {step} in {walked}")
+        elif not isinstance(node, dict) or step not in node:
+            raise ConfigKeyError(
+                f"{key}: no such config section `{walked}` — this command "
+                f"rewrites existing values and does not create new sections "
+                f"(register a project with `mb project add`)")
+        node = node[step]
+
+    last = path[-1]
+    parent = ".".join(str(s) for s in path[:-1])
+    if isinstance(last, int):
+        if not isinstance(node, list) or not (0 <= last < len(node)):
+            raise ConfigKeyError(f"{key}: no element at index {last} in {parent}")
+    else:
+        if not isinstance(node, dict):
+            raise ConfigKeyError(f"{key}: `{parent}` is not a section")
+        if last not in node:
+            raise ConfigKeyError(
+                f"{key}: `{parent}` has no key `{last}` (present: "
+                f"{', '.join(sorted(map(str, node))) or '(none)'})")
+    node[last] = value
+    return out
+
+
 def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     """Validate a root config dict WITHOUT side effects. Returns
     {"errors": [...], "warnings": [...]}: type/range violations are errors,
@@ -388,7 +489,12 @@ class Config:
             return self.data[key]
         if key in DEFAULT_CONFIG:
             return DEFAULT_CONFIG[key]
-        return default
+        # Dotted read-back, so `mb config get` and the daemon's `config` command
+        # answer for exactly the keys `mb doctor` names and `mb config set`
+        # writes. Only reached when no literal key matched, so flat lookups
+        # keep their previous behavior.
+        found = get_config_key(self.data, key)
+        return default if found is _MISSING else found
 
     @property
     def model(self) -> str:

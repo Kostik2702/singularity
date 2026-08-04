@@ -1,17 +1,22 @@
-"""Snap the v0.6.0 install/doctor baseline (field issues #9-#16).
+"""Snap the install/doctor baseline (field issues #9-#16, extended in v0.6.1).
 
 Unlike the v0.5.1 baseline, which pinned the contract of ONE function, this
 one pins the contract of the surfaces those eight issues were about: what
 `mb doctor` reports on a real machine, whether the shims survive a shadowing
 CWD, where a CLI hidden by a version manager is found, which config paths are
-enumerated, and whether the running daemon actually picks up a config change.
+enumerated, whether the running daemon actually picks up a config change, and
+— since v0.6.1 — whether the command that makes that change reaches the value
+it names. The v0.6.0 baseline asked the first question and skipped the second:
+it wrote through `cfg.data` on a flat key, so `mb config set` resolving no
+dotted key at all was invisible to it while `A6` printed dotted keys as the
+fix.
 
 Every section answers a question the reporter had to answer by hand.
 
 Run from the repo root of a checkout that HAS the fixes:
 
     PYTHONIOENCODING=utf-8 python tools/install_doctor_baseline.py \
-        > docs/v0.6.0-install-doctor-baseline.json
+        > docs/v0.6.1-install-doctor-baseline.json
 
 PYTHONIOENCODING matters on Windows: a bare redirect encodes stdout in the
 console codepage and mangles every non-ASCII character in the snapshot. In
@@ -21,6 +26,7 @@ $false)` instead.
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import json
 import os
@@ -107,9 +113,34 @@ def shim_matrix(tmp: Path) -> dict:
 
 # --- #10: a CLI hidden by a version manager ----------------------------------
 
+# `cli_locator` reads these before falling back to `~`, so a synthetic layout
+# under a faked `Path.home()` is invisible whenever the snapping shell has nvm
+# or fnm sourced — the matrix then grades the operator's terminal instead of
+# the search order. `tests/conftest.py` neutralizes the same surface for the
+# suite (`_no_real_version_managers`, issue #10); the baseline had no such
+# guard and scored 3/5 for exactly that reason.
+_VERSION_MANAGER_ENV = ("NVM_BIN", "NVM_DIR", "FNM_MULTISHELL_PATH")
+
+
+@contextlib.contextmanager
+def _without_version_manager_env():
+    saved = {k: os.environ.pop(k) for k in _VERSION_MANAGER_ENV if k in os.environ}
+    try:
+        yield sorted(saved)
+    finally:
+        os.environ.update(saved)
+
+
 def locator_matrix(tmp: Path) -> dict:
     """Synthetic version-manager layouts — real ones cannot be assumed on any
     given machine, and the point is the search order, not this host."""
+    with _without_version_manager_env() as suppressed:
+        out = _locator_matrix(tmp)
+    out["suppressed_env"] = suppressed
+    return out
+
+
+def _locator_matrix(tmp: Path) -> dict:
     locator = _load_install("cli_locator")
     exe_name = "tool.cmd" if os.name == "nt" else "tool"
     rows = []
@@ -244,6 +275,95 @@ def live_config_reload(cfg) -> dict:
     }
 
 
+# --- the write path itself: does `mb config set` REACH a nested key? ---------
+
+def _mb(args: list[str], vault: Path) -> subprocess.CompletedProcess:
+    """The real CLI, through the launcher, against a throwaway vault."""
+    env = {**os.environ, "MB_HOME": str(vault), "PYTHONIOENCODING": "utf-8"}
+    return subprocess.run(
+        [sys.executable, str(REPO / "bin" / "_launch.py"), "mb",
+         "singularity.cli:main", *args],
+        cwd=str(REPO), env=env, capture_output=True, text=True, timeout=180)
+
+
+def nested_config_write(tmp: Path) -> dict:
+    """Type the fix `mb doctor` prints, then check the file it claims to fix.
+
+    The v0.6.0 baseline proved a live daemon picks up a config change — but it
+    wrote through `cfg.data` directly and only ever touched a flat key, so it
+    could not see that `mb config set` resolved no dotted key at all. Every key
+    `A6-config-paths` names is nested; the printed fix produced a literal
+    top-level key, reported success, was confirmed by `mb daemon reload` and
+    `mb config validate`, and left the WARN exactly where it was.
+
+    So this section goes through the command a user actually types, and grades
+    it on the config as it lands on disk."""
+    vault = tmp / "config-write"
+    (vault / ".mb").mkdir(parents=True)
+    cfg_file = vault / ".mb" / "config.json"
+    cfg_file.write_text(json.dumps({
+        "projects": {"p": {"path": r"E:\P", "group": "g", "about": "a"}},
+        "llm": {"models": {"m": {"args": ["-ngl", "99",
+                                          "--chat-template-file",
+                                          "E:/t.jinja"]}}},
+    }, indent=2), encoding="utf-8")
+
+    def on_disk() -> dict:
+        return json.loads(cfg_file.read_text(encoding="utf-8"))
+
+    rows = []
+
+    r = _mb(["config", "set", "projects.p.path", "/posix/p"], vault)
+    data = on_disk()
+    rows.append({"case": "dotted key reaches the nested value",
+                 "cmd": "config set projects.p.path /posix/p",
+                 "exit_code": r.returncode,
+                 "nested_value": data["projects"]["p"]["path"],
+                 "literal_top_level_keys": [k for k in data if "." in k],
+                 "siblings_kept": sorted(data["projects"]["p"]) == ["about", "group", "path"],
+                 "pass": (r.returncode == 0
+                          and data["projects"]["p"]["path"] == "/posix/p"
+                          and not [k for k in data if "." in k]
+                          and data["projects"]["p"]["group"] == "g")})
+
+    r = _mb(["config", "set", "llm.models.m.args[3]", "/posix/t.jinja"], vault)
+    data = on_disk()
+    rows.append({"case": "indexed key (the args[i] form A6 prints)",
+                 "cmd": "config set llm.models.m.args[3] /posix/t.jinja",
+                 "exit_code": r.returncode,
+                 "value": data["llm"]["models"]["m"]["args"][3],
+                 "pass": (r.returncode == 0
+                          and data["llm"]["models"]["m"]["args"][3] == "/posix/t.jinja"
+                          and data["llm"]["models"]["m"]["args"][2] == "--chat-template-file")})
+
+    before = on_disk()
+    r = _mb(["config", "set", "projects.ghost.path", "/x"], vault)
+    rows.append({"case": "unknown section fails loudly, writes nothing",
+                 "cmd": "config set projects.ghost.path /x",
+                 "exit_code": r.returncode,
+                 "stderr": (r.stderr or "").strip()[:120],
+                 "pass": (r.returncode == 1 and on_disk() == before
+                          and "no such config section" in (r.stderr or ""))})
+
+    r = _mb(["config", "get", "projects.p.path"], vault)
+    rows.append({"case": "read-back answers for the same notation",
+                 "cmd": "config get projects.p.path",
+                 "exit_code": r.returncode,
+                 "stdout": (r.stdout or "").strip()[:80],
+                 "pass": r.returncode == 0 and "/posix/p" in (r.stdout or "")})
+
+    r = _mb(["project", "add", "p", "/posix/p2"], vault)
+    entry = on_disk()["projects"]["p"]
+    rows.append({"case": "project add repoints without dropping metadata",
+                 "cmd": "project add p /posix/p2",
+                 "exit_code": r.returncode,
+                 "entry": entry,
+                 "pass": (r.returncode == 0 and entry["path"] == "/posix/p2"
+                          and entry.get("group") == "g" and entry.get("about") == "a")})
+
+    return {"cases": rows, "pass": all(row["pass"] for row in rows)}
+
+
 def run_pytest(target: str) -> dict:
     r = subprocess.run([sys.executable, "-m", "pytest", target, "-q",
                         "--ignore=tests/test_gemini_e2e.py"],
@@ -263,10 +383,12 @@ def main() -> None:
         tmp = Path(td)
         shims = shim_matrix(tmp)
         locator = locator_matrix(tmp)
+        config_write = nested_config_write(tmp)
 
     snap = {
         "taken_at": datetime.now().isoformat(timespec="seconds"),
-        "note": "v0.6.0 baseline: install + doctor honesty (field issues #9-#16)",
+        "note": "v0.6.1 baseline: install + doctor honesty, and the config "
+                "write path that the v0.6.0 baseline went around",
         "version": singularity.__version__,
         "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(REPO),
                                  capture_output=True, text=True).stdout.strip(),
@@ -281,11 +403,13 @@ def main() -> None:
         "issue_11_13_14_15_doctor": doctor_report(cfg),
         "issue_14_config_paths": config_path_inventory(cfg),
         "issue_12_live_config_reload": live_config_reload(cfg),
+        "config_write_path": config_write,
         "tests": [run_pytest("tests/")],
     }
     snap["all_pass"] = (
         shims["pass"]
         and locator["pass"]
+        and config_write["pass"]
         and snap["issue_12_live_config_reload"].get("pass", None) is not False
         and all(t["exit_code"] == 0 for t in snap["tests"])
     )
