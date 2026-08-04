@@ -57,14 +57,14 @@ ORPHAN_SOURCE_DAYS = 30
 _SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 
 
-def _scan_notes(cfg: Config,
-                unreadable: Optional[list[str]] = None) -> dict[str, dict[str, Any]]:
+def _scan_notes(cfg: Config) -> dict[str, dict[str, Any]]:
     """rel_path -> {frontmatter, title, aliases, outlinks, mtime} for all vault notes.
 
-    `unreadable`, when given, collects the rel paths that could not be read.
-    Skipping a note silently is right for the curator's health checks but wrong
-    for `graph_export`, whose consumer needs to know the graph is incomplete
-    (SUI-005 §6). One scanner, two consumers -- same reasoning as W08."""
+    A note that cannot be read is skipped silently: the curator's health checks
+    are advisory, and one unreadable file must not sink a whole run. (The
+    `unreadable` collector this used to accept existed for the graph export,
+    whose only consumer was an abandoned project; removed with it rather than
+    left as a parameter nothing passes.)"""
     skip_dirs = set(cfg.get("skip_dirs")) - {"templates"}  # validate templates too? no:
     skip_dirs.add("templates")
     notes: dict[str, dict[str, Any]] = {}
@@ -76,8 +76,6 @@ def _scan_notes(cfg: Config,
         try:
             raw = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
-            if unreadable is not None:
-                unreadable.append(rel)
             continue
         fm, body = parse_frontmatter(raw)
         m = re.search(r"^#\s+(.+)$", body, re.MULTILINE)

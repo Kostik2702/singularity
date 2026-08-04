@@ -141,19 +141,6 @@ def _build_parser() -> argparse.ArgumentParser:
     stt = sub.add_parser("stats", help="memory analytics (notes/chunks/types/coverage)")
     stt.add_argument("--json", action="store_true")
 
-    # SUI-005: the sanctioned surface for external consumers of the link graph.
-    # Contract: [[Singularity graph export contract v1]]. Read-only forever --
-    # no write verb belongs under this command.
-    gr = sub.add_parser("graph", help="versioned read-only graph export for external consumers")
-    grsub = gr.add_subparsers(dest="graph_action", required=True)
-    gre = grsub.add_parser("export", help="export the resolved link graph as versioned JSON")
-    gre.add_argument("--json", action="store_true",
-                     help="print JSON to stdout (default when no --out is given)")
-    gre.add_argument("--out", help="write to PATH atomically instead of stdout")
-    gre.add_argument("--include-broken-links", action="store_true",
-                     help="include unresolved wikilinks in diagnostics (count is always reported)")
-    gre.add_argument("--pretty", action="store_true", help="indent the JSON")
-
     rfl = sub.add_parser("reflect", help="privacy-safe adoption telemetry "
                                          "(offline transcript walk, counts/rates only)")
     rfl.add_argument("--days", type=int, help="lookback window (default: reflect_window_days config)")
@@ -1024,42 +1011,6 @@ def cmd_ingest(cfg, args) -> int:
     return 2
 
 
-def cmd_graph(cfg, args) -> int:
-    """`mb graph export` -- SUI-005.
-
-    Errors go to stderr and produce a non-zero exit with NO partial JSON on
-    stdout, so a consumer piping stdout into a parser never sees half a graph.
-    """
-    from pathlib import Path as _Path
-
-    from . import graph_export
-
-    if getattr(args, "graph_action", None) != "export":
-        return 2
-    try:
-        snapshot = graph_export.build_snapshot(
-            cfg, include_broken_links=getattr(args, "include_broken_links", False))
-        text = graph_export.render(snapshot, pretty=getattr(args, "pretty", False))
-    except OSError as exc:
-        print(f"[mb] graph export failed: {exc}", file=sys.stderr)
-        return 1
-
-    out = getattr(args, "out", None)
-    if out:
-        try:
-            graph_export.write_atomic(_Path(out), text)
-        except OSError as exc:
-            print(f"[mb] cannot write {out}: {exc}", file=sys.stderr)
-            return 1
-        print(f"[mb] graph export -> {out} "
-              f"({snapshot['counts']['nodes']} nodes, {snapshot['counts']['edges']} edges)",
-              file=sys.stderr)
-        return 0
-
-    sys.stdout.write(text)
-    return 0
-
-
 def cmd_curator(cfg, args) -> int:
     """`mb curator` (unchanged) plus optional W07/W08 subcommands. The bare
     form must stay byte-identical — it is what nightly snapshots and what
@@ -1371,8 +1322,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "stats":
         from . import stats as stats_mod
         return stats_mod.run(cfg, as_json=args.json)
-    if args.command == "graph":
-        return cmd_graph(cfg, args)
     if args.command == "backup":
         return cmd_backup(cfg, args)
     if args.command == "config":
