@@ -10,6 +10,75 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.9.0 — the config leaves the vault, and nothing in the engine names a drive
+
+One owner decision drove all of it: **paths belong in a config created at
+install, not in code** — and that config does not live in the vault, because a
+vault travels between machines and every absolute path inside it is wrong on
+arrival. v0.6.0 reported that problem (`A6-config-paths`, nine dead keys after
+one clone). This removes the possibility.
+
+### The config is per machine
+
+- **`~/.singularity.json` is THE config.** Everything that was in
+  `<vault>/.mb/config.json` now lives there: paths, behavioural settings, the
+  project registry. `.mb/` keeps derived state and the one thing it holds that
+  a rebuild cannot recreate, `sources/`.
+- **It records decisions, not defaults.** `save()` writes only values that
+  differ from `DEFAULT_CONFIG`; a real machine's file went from 42
+  materialised keys to 9. Defaults stay in code, where they are values rather
+  than machine facts, and the file stays small as the schema grows.
+- **Migration is seamless and one-time.** The next `mb` command adopts a
+  pre-0.9 vault config, writes the machine one, and renames the old file to
+  `config.json.migrated-<ts>` — kept, not deleted. It refuses to run when the
+  machine already has settings, so opening someone else's vault cannot
+  overwrite this machine. A legacy file that does not parse is a loud refusal,
+  never a silent fresh start: skipping it would drop every setting the user
+  had.
+- **Hooks keep working mid-upgrade.** They run before the first `mb` command
+  performs the migration, so `read_config_tolerant()` and
+  `config_unreadable()` fall back to the vault copy while the machine config
+  is still empty — through one shared `active_config_path()`, because a hook
+  that validates one file and reads another is worse than one that does
+  neither.
+- **`A7-config-location`** reports a config still sitting inside a vault.
+
+### Nothing in the engine names a drive
+
+- **`DEFAULT_VAULT_WINDOWS` is gone.** The built-in candidates are
+  home-relative only. That constant was justified as "a last resort costs
+  nothing" and cost twice: it outlived its own machine's move to another
+  drive, and it shipped a dead drive letter to everyone else.
+- **The installer ASKS.** `--vault` wins and creates the directory; otherwise
+  a resolved path is shown for confirmation rather than assumed, and nothing
+  configured means asking until there is a usable path. Non-interactive runs
+  never prompt — CI and scheduled runs fail naming the flag instead of hanging
+  on a question nobody can answer.
+- **Agent and skill text carries `{{VAULT}}`**, substituted at install. The
+  literal path used to be repeated in 18 files with a matching sentinel in
+  `register_agents`, a pairing that silently stopped matching when the
+  authoring machine changed drives. A token cannot drift.
+- **The vault is named only where a path is actually needed.** For a mention
+  that merely identifies it, `mb search` already knows where it is — naming
+  nothing beats substituting something. Eleven decorative mentions removed, so
+  only **4** skills need rendering instead of linking; the rest stay live
+  links into the repo. Paths after the token are forward slashes now:
+  `{{VAULT}}\rules\` would have rendered as `/Users/k/vault\rules\` on macOS.
+
+### Test isolation
+
+Two more guards, and both earned it immediately. `_no_real_machine_config`
+redirects the machine config AND takes the real file's bytes as a witness:
+redirecting the module attribute is not enough, because a module-scope
+`from singularity.config import CONFIG_FILE` binds the original path at import
+time — which overwrote this machine's real config before the witness existed.
+The same guard then exposed a v0.8.0 test that only passed because it read the
+developer's real `~/.singularity.json` and found a real vault.
+
+Full suite: 1846 passed, 13 skipped.
+
+---
+
 # v0.8.0 — a rule that is not there when the decision is made is not a rule
 
 Rollup of everything shipped on 2026-08-04 as v0.6.1 → v0.7.1: 21 commits,
