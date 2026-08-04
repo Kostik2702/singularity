@@ -194,6 +194,51 @@ def test_doctor_warns_when_the_root_is_gone(tmp_path):
     assert _check(cfg)["status"] == "WARN"
 
 
+def test_doctor_warns_on_a_corpus_built_from_zero_files(tmp_path, monkeypatch):
+    """Issue #13: `PASS: 0 chunk(s) from 0 file(s)` is a status contradicting
+    its own message. This is the check that should have caught the stale
+    daemon-config bug; instead it certified the broken state as healthy."""
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
+    repos = tmp_path / "Project"
+    repos.mkdir()                                   # exists, but holds no code
+    vault = tmp_path / "vault"
+    (vault / "howto").mkdir(parents=True)
+    (vault / "howto" / "a.md").write_text("# Note\n\n## S\n" + "content " * 20,
+                                          encoding="utf-8")
+    cfg = Config(vault=vault, data={"model": "fake", "code_repos_dir": str(repos)})
+    cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+    indexer_mod.rebuild(cfg, progress=False)
+    indexer_mod.rebuild(cfg, progress=False, corpus="code")
+
+    check = _check(cfg)
+
+    assert check["status"] == "WARN"
+    assert "0 files" in check["detail"]
+    assert "code_repos_dir" in check["fix"] and "code_skip_dirs" in check["fix"]
+
+
+def test_status_marks_an_empty_code_corpus(tmp_path, monkeypatch, capsys):
+    """`mb status` printed the empty count in the same neutral tone as a
+    healthy one."""
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *_a, **_k: FakeEncoder())
+    repos = tmp_path / "Project"
+    repos.mkdir()
+    vault = tmp_path / "vault"
+    (vault / "howto").mkdir(parents=True)
+    (vault / "howto" / "a.md").write_text("# Note\n\n## S\n" + "content " * 20,
+                                          encoding="utf-8")
+    cfg = Config(vault=vault, data={"model": "fake", "code_repos_dir": str(repos)})
+    cfg.mb_dir.mkdir(parents=True, exist_ok=True)
+    indexer_mod.rebuild(cfg, progress=False)
+    indexer_mod.rebuild(cfg, progress=False, corpus="code")
+
+    status.run(cfg)
+
+    out = capsys.readouterr().out
+    assert "code: 0 chunks from 0 files" in out
+    assert "EMPTY" in out
+
+
 def test_doctor_warns_on_a_stale_corpus(built, monkeypatch):
     built.data["code_index_max_age_days"] = 1
     real = doctor.time.time

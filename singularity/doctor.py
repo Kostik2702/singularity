@@ -492,6 +492,20 @@ def code_index_block(rep: Report, cfg: Config, fix: bool, heavy: bool) -> None:
                     f"spaces",
                     fix="mb index rebuild --code")
             return
+        if not summary.get("file_count"):
+            # issue #13: "built, but from nothing" was falling through to the
+            # success branch and reporting `PASS: 0 chunk(s) from 0 file(s)` —
+            # a message that contradicts its own status. This check exists to
+            # answer "can I search my code", and here the answer is no. It is
+            # also the check that would have caught the stale-daemon-config bug
+            # immediately; instead it certified the broken state as healthy.
+            rep.add("K1-code-index", "WARN",
+                    f"index built from 0 files under {root} — nothing matched "
+                    f"the indexable patterns, or every repository was pruned",
+                    fix="check code_repos_dir and code_skip_dirs, and that the "
+                        "daemon picked up the current config "
+                        "(mb daemon restart), then mb index rebuild --code")
+            return
         files = indexer.index_files(cfg.code_index_dir)
         age_h = None
         if files is not None:
