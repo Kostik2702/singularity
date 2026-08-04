@@ -1109,9 +1109,18 @@ def cmd_note(cfg, args) -> int:
     from . import capture
     from . import sources as sources_mod
 
+    # Every managed knowledge root the vault guard watches needs a way to
+    # create a file in it, or the guard is telling people to use a command that
+    # does not exist and the workaround it warns about is the only option left.
+    # `moc` and `changelog` have no template of their own and fall through to
+    # the generic body below — that is fine; the point is that the sanctioned
+    # path exists. `learnings/archive` is deliberately absent: notes ARRIVE
+    # there by being moved, never by being created.
+    # `tests/test_note_covers_managed_roots.py` holds this to MANAGED_ROOTS.
     folder_by_type = {"learning": "learnings/active", "decision": "decisions",
                       "howto": "howto", "incident": "incidents", "rule": "rules",
-                      "reference": "reference", "daily": "daily"}
+                      "reference": "reference", "daily": "daily",
+                      "moc": "_moc", "changelog": "changelog"}
     folder = folder_by_type.get(args.type)
     if folder is None:
         print(f"[mb] unknown type: {args.type} (use {', '.join(folder_by_type)})",
