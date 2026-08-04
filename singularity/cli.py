@@ -41,6 +41,7 @@ from datetime import datetime
 
 from . import __version__, facade
 from . import log as log_setup
+from . import render
 from .config import Config, ConfigError, load_config, write_pointer
 
 MEMORY_FOLDERS = ["learnings/active", "learnings/archive", "decisions", "howto",
@@ -1086,10 +1087,13 @@ def cmd_curator(cfg, args) -> int:
     if action == "gaps":
         from . import gaps
         per_signal = getattr(args, "per_signal", None)
-        return gaps.run(cfg, as_json=args.json, top=getattr(args, "top", None),
-                        heuristic=getattr(args, "heuristic", False),
-                        per_signal=gaps.DEFAULT_PER_SIGNAL if per_signal is None
-                        else per_signal)
+        heuristic = getattr(args, "heuristic", False)
+        result = gaps.report(cfg, top=getattr(args, "top", None), heuristic=heuristic,
+                             per_signal=gaps.DEFAULT_PER_SIGNAL if per_signal is None
+                             else per_signal)
+        print(json.dumps(result, ensure_ascii=False, indent=1) if args.json
+              else render.gaps(result, heuristic=heuristic))
+        return 0
 
     if action == "verdict":
         from . import contradictions
@@ -1107,7 +1111,18 @@ def cmd_curator(cfg, args) -> int:
         return 0
 
     from . import curator
-    return curator.run(cfg, as_json=args.json)
+    payload = curator.collect(cfg)
+    if args.json:
+        print(json.dumps({"issues": payload["issues"], **payload["report"],
+                          "lint": payload["lint"]}, ensure_ascii=False, indent=1))
+    else:
+        print(render.curator(payload,
+                             orphan_source_days=curator.ORPHAN_SOURCE_DAYS,
+                             stale_days=curator.STALE_DAYS,
+                             suggest_threshold=curator.SUGGEST_THRESHOLD,
+                             duplicate_threshold=curator.DUPLICATE_THRESHOLD,
+                             supersession_gap_days=curator.SUPERSESSION_GAP_DAYS))
+    return 1 if payload["issues"]["broken_links"] else 0
 
 
 def cmd_nightly(cfg, args) -> int:
@@ -1455,10 +1470,14 @@ def main(argv: list[str] | None = None) -> int:
         return selftest.run(cfg, as_json=args.json)
     if args.command == "status":
         from . import status as status_mod
-        return status_mod.run(cfg, as_json=args.json)
+        snap = status_mod.snapshot(cfg)
+        print(json.dumps(snap, ensure_ascii=False) if args.json else render.status(snap))
+        return 0
     if args.command == "stats":
         from . import stats as stats_mod
-        return stats_mod.run(cfg, as_json=args.json)
+        data = stats_mod.compute(cfg)
+        print(json.dumps(data, ensure_ascii=False) if args.json else render.stats(data))
+        return 0
     if args.command == "backup":
         return cmd_backup(cfg, args)
     if args.command == "config":

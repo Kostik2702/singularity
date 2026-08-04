@@ -13,6 +13,7 @@ import json
 import pytest
 
 from singularity import capture, curator, sources, vault_guard
+from singularity import cli
 from singularity.cli import main
 from singularity.config import Config
 from singularity.hooks import vault_guard as guard_hook
@@ -265,7 +266,7 @@ def test_dangling_source_reference_is_reported_without_changing_the_exit_code(tm
     assert issues["source_not_in_registry"] == [
         {"file": "reference/a.md", "source_id": "deadbeefcafe"}]
     assert issues["broken_links"] == []
-    assert curator.run(cfg, as_json=True) == 0
+    assert cli.main(["--vault", str(cfg.vault), "curator", "--json"]) == 0
 
 
 def test_known_source_reference_is_clean(tmp_path):

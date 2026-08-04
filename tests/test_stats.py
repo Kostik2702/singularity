@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from singularity import stats
+from singularity import cli
 from singularity.config import Config
 from singularity.search import indexer
 
@@ -57,13 +58,13 @@ def test_stats_counts_duplicate_chunks(cfg):
 
 def test_stats_json_output(cfg, capsys):
     indexer.rebuild(cfg, progress=False)
-    stats.run(cfg, as_json=True)
+    cli.main(["--vault", str(cfg.vault), "stats", "--json"])
     payload = json.loads(capsys.readouterr().out.strip())
     assert payload["notes"] == 2
 
 
 def test_stats_never_emits_content(cfg, capsys):
     indexer.rebuild(cfg, progress=False)
-    stats.run(cfg, as_json=True)
+    cli.main(["--vault", str(cfg.vault), "stats", "--json"])
     out = capsys.readouterr().out
     assert "meaningful" not in out          # counts only, no note content

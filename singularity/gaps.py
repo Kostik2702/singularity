@@ -311,36 +311,3 @@ def report(cfg: Config, top: int | None = None, heuristic: bool = False,
             "items": shortlist[:top] if top else shortlist}
 
 
-def run(cfg: Config, as_json: bool = False, top: int | None = None,
-        heuristic: bool = False, per_signal: int | None = DEFAULT_PER_SIGNAL) -> int:
-    import json
-
-    result = report(cfg, top=top, heuristic=heuristic, per_signal=per_signal)
-    if as_json:
-        print(json.dumps(result, ensure_ascii=False, indent=1))
-        return 0
-
-    print(f"== mb curator gaps — {result['total']} open items "
-          f"over {result['notes']} notes ==")
-    print("  " + "  ".join(f"{name}:{count}"
-                           for name, count in sorted(result["counts"].items())))
-    if not result["items"]:
-        print("\n(nothing outstanding)")
-    for entry in result["items"]:
-        detail = entry["detail"]
-        extra = detail.get("reason") or detail.get("where") or ""
-        if detail.get("inbound"):
-            extra = f"linked from {detail['inbound']} notes"
-        if detail.get("heuristic"):
-            extra = f"HEURISTIC — appears in {detail.get('document_frequency')} notes"
-        print(f"  {entry['score']:5.2f}  [{entry['signal']}] {entry['key']}"
-              + (f"  — {extra}" if extra else "")
-              + (f"  ({entry['age_days']:.0f}d)" if entry["age_days"] else ""))
-    if result["truncated"]:
-        print("\nnot shown (per-signal ceiling): "
-              + ", ".join(f"{name} +{count}"
-                          for name, count in sorted(result["truncated"].items()))
-              + "  — raise with --per-signal N")
-    if not heuristic:
-        print("(--heuristic adds frequency-based term guesses, off by default)")
-    return 0

@@ -459,56 +459,12 @@ def lint(cfg: Config) -> dict[str, Any]:
 
 # ---------------------------------------------------------------------------
 
-def run(cfg: Config, as_json: bool = False) -> int:
-    issues = validate(cfg)
-    report = analyze(cfg)
-    lint_report = lint(cfg)
 
-    if as_json:
-        print(json.dumps({"issues": issues, **report, "lint": lint_report},
-                         ensure_ascii=False, indent=1))
-        return 1 if issues["broken_links"] else 0
+def collect(cfg: Config) -> dict[str, Any]:
+    """Everything `mb curator` reports, as data.
 
-    print(f"== mb curator — {report['notes']} notes ==")
-    for key, label in (("broken_links", "Broken wikilinks"),
-                       ("missing_frontmatter", "Missing mandatory frontmatter"),
-                       ("decision_no_owner", "Decisions without owner/source"),
-                       ("duplicate_titles", "Duplicate titles"),
-                       ("source_not_in_registry", "Notes citing an unknown source_id"),
-                       ("orphan_source", f"Sources unprocessed >{ORPHAN_SOURCE_DAYS}d")):
-        items = issues[key]
-        print(f"\n[{'FAIL' if items and key == 'broken_links' else 'WARN' if items else 'PASS'}] "
-              f"{label}: {len(items)}")
-        for it in items[:10]:
-            print(f"   - {it}")
-
-    print(f"\nOrphans (no links in/out): {len(report['orphans'])}")
-    for rel in report["orphans"][:10]:
-        print(f"   - {rel}")
-    print(f"Stale active notes (>{STALE_DAYS}d): {len(report['stale'])}")
-    for rel in report["stale"][:10]:
-        print(f"   - {rel}")
-
-    print(f"\nLink suggestions (cosine>{SUGGEST_THRESHOLD}, no existing link) — "
-          f"NOT applied, approve first:")
-    if not report["link_suggestions"]:
-        print("   (none)")
-    for s in report["link_suggestions"]:
-        print(f"   {s['score']:.2f}  {s['a']}  <->  {s['b']}")
-
-    dup = lint_report["duplicates"]
-    print(f"\nDuplicate sections (same file, cosine>{DUPLICATE_THRESHOLD}): {len(dup['same_file'])}")
-    for d in dup["same_file"][:10]:
-        print(f"   {d['score']:.2f}  {d['a']['file']} :: {d['a']['section']}  <->  {d['b']['section']}")
-    print(f"Duplicate sections (cross file, cosine>{DUPLICATE_THRESHOLD}): {len(dup['cross_file'])}")
-    for d in dup["cross_file"][:10]:
-        print(f"   {d['score']:.2f}  {d['a']['file']}::{d['a']['section']}  <->  "
-              f"{d['b']['file']}::{d['b']['section']}")
-    print(f"Supersession candidates (gap>={SUPERSESSION_GAP_DAYS}d): {len(lint_report['supersession'])}")
-    for s in lint_report["supersession"][:10]:
-        print(f"   {s['older']} -> possibly superseded by {s['newer']} (gap {s['gap_days']}d)")
-    print(f"Context budget/reference issues: {len(lint_report['context_issues'])}")
-    for c in lint_report["context_issues"][:10]:
-        where = f"{c['project']}/{c['module']}" if c.get("module") else c["project"]
-        print(f"   [{c['kind']}] {where}: {c['note']}")
-    return 1 if issues["broken_links"] else 0
+    Three collectors that used to be called only from the printing `run()`:
+    keeping them behind one function means the CLI, a future daemon endpoint
+    and the tests all see the same shape.
+    """
+    return {"issues": validate(cfg), "report": analyze(cfg), "lint": lint(cfg)}

@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 
 from singularity import curator
+from singularity import cli
 from singularity.config import Config
 from singularity.search import indexer
 
@@ -371,14 +372,14 @@ def test_lint_caps_are_applied(cfg, monkeypatch):
 
 
 def test_run_json_includes_lint(cfg, capsys):
-    curator.run(cfg, as_json=True)
+    cli.main(["--vault", str(cfg.vault), "curator", "--json"])
     payload = json.loads(capsys.readouterr().out.strip())
     assert "lint" in payload
     assert "duplicates" in payload["lint"]
 
 
 def test_run_human_output_includes_lint_sections(cfg, capsys):
-    curator.run(cfg, as_json=False)
+    cli.main(["--vault", str(cfg.vault), "curator"])
     out = capsys.readouterr().out
     assert "Duplicate sections (same file" in out
     assert "Supersession candidates" in out
