@@ -829,7 +829,7 @@ singularity/
 starters/                  # profile-family scaffolds (static-lite; react-3d planned)
 install/                   # install.py + thin ps1/sh wrappers + hook/skill registration +
 │                           #   skill_manifest.py (single source of client -> skill support)
-tests/                     # contract tests (no ML deps needed): pytest tests -q
+tests/                     # contract tests (no ML deps needed): pip install -e ".[dev]" && pytest -q
 bin/                       # `mb` shims added to PATH
 docs/                      # UPGRADE.md, ROLLBACK.md, incoming-fork-baseline.md
 ```
