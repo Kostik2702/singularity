@@ -550,12 +550,23 @@ def cmd_config(cfg, args) -> int:
             value = json.loads(args.value)     # parse as JSON (int/bool/list/...)
         except json.JSONDecodeError:
             value = args.value                 # fall back to a plain string
-        candidate = {**cfg.data, args.key: value}
+        from .config import ConfigKeyError, set_config_key
+        try:
+            candidate = set_config_key(cfg.data, args.key, value)
+        except ConfigKeyError as exc:
+            print(f"[mb] {exc}", file=sys.stderr)
+            return 1
         res = validate_config(candidate)
         if res["errors"]:
             for e in res["errors"]:
                 print(f"[mb] {e}", file=sys.stderr)
             return 1
+        # An unknown key is ignored at runtime, so writing one silently is how a
+        # typo passes for a fix. Warn, but still write: unknown-to-the-schema is
+        # not the same as wrong (connectors and future keys live here too).
+        for w in res["warnings"]:
+            if w.startswith(f"{args.key}:"):
+                print(f"[mb] {w}", file=sys.stderr)
         cfg.data = candidate
         cfg.save()                             # atomic (tmp + replace)
         print(f"{args.key} = {json.dumps(value, ensure_ascii=False)}")
@@ -604,7 +615,13 @@ def cmd_project(cfg, args) -> int:
         return 0
 
     if args.project_action == "add":
-        entry = {"path": args.path}
+        # `add` doubles as the supported way to REPOINT a project after a move
+        # between machines, so it merges: rebuilding the entry from the flags
+        # alone dropped `group` and `about` without a word, and the loss only
+        # surfaced later as a project missing from its group.
+        previous = entries.get(args.id)
+        entry = dict(previous) if isinstance(previous, dict) else {}
+        entry["path"] = args.path
         if args.group:
             entry["group"] = args.group
         if args.about:
@@ -617,7 +634,8 @@ def cmd_project(cfg, args) -> int:
             return 1
         cfg.data = candidate
         cfg.save()
-        print(f"project added: {args.id} -> {entry['path']}")
+        verb = "updated" if isinstance(previous, dict) else "added"
+        print(f"project {verb}: {args.id} -> {entry['path']}")
         return 0
 
     if args.project_action == "remove":

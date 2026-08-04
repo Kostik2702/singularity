@@ -88,6 +88,24 @@ def _run_shim(sh: str, shim: Path, cwd: str | None = None) -> tuple[int, str, st
 WATCH_HEARTBEAT_MAX_AGE_S = 15 * 60
 
 
+def _paths_fix(keys: list[str]) -> str:
+    """The fix line for A6, quoting a key that is actually broken.
+
+    The generic `mb config set code_repos_dir "<path>"` example was worse than
+    unhelpful: none of the keys A6 reports are flat, and until 2026-08-04 `mb
+    config set` did not resolve dotted keys at all — following the printed fix
+    wrote a literal top-level key, reported success, and left the WARN in
+    place. It resolves them now; the example points at a real key so the two
+    stay honest about each other."""
+    sample = next((k for k in keys if not k.startswith("projects.")), keys[0])
+    line = (f"set each one for this machine, e.g. "
+            f'mb config set {sample} "<path>"  '
+            f"(the correct values cannot be guessed)")
+    if any(k.startswith("projects.") for k in keys):
+        line += "; repoint projects with `mb project add <id> <path>`"
+    return line
+
+
 def config_paths_block(rep: Report, cfg: Config) -> None:
     """Check A6: does every absolute path in the config belong to THIS machine?
 
@@ -126,15 +144,13 @@ def config_paths_block(rep: Report, cfg: Config) -> None:
                 f"{', '.join(keys)}"
                 + (f" (plus {len(missing)} more missing: "
                    f"{', '.join(sorted(missing))})" if missing else ""),
-                fix="set each one for this machine, e.g. "
-                    'mb config set code_repos_dir "<path>"  '
-                    "(the correct values cannot be guessed)")
+                fix=_paths_fix(keys))
         return
     if missing:
         rep.add("A6-config-paths", "WARN",
                 f"{len(missing)} configured path(s) do not exist on this "
                 f"machine: {', '.join(sorted(missing))}",
-                fix="fix them with `mb config set`, or remove the entries")
+                fix=_paths_fix(sorted(missing)))
         return
     rep.add("A6-config-paths", "PASS",
             f"{len(entries)} configured path(s) all resolve on this machine")
