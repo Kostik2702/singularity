@@ -1,4 +1,4 @@
-"""Snap the install/doctor baseline (field issues #9-#16, extended in v0.6.1).
+"""Snap the install/doctor baseline (field issues #9-#16, extended in v0.9.0).
 
 Unlike the v0.5.1 baseline, which pinned the contract of ONE function, this
 one pins the contract of the surfaces those eight issues were about: what
@@ -11,12 +11,20 @@ it wrote through `cfg.data` on a flat key, so `mb config set` resolving no
 dotted key at all was invisible to it while `A6` printed dotted keys as the
 fix.
 
+v0.9.0 adds the question that release is about: the config left the vault for
+`~/.singularity.json`, and a relocation nobody asked for is only acceptable if
+it is invisible — an upgrading machine keeps its values untold, and a machine
+that already has a config is never overwritten by an arriving vault carrying
+someone else's. That same move broke the two sections above until they were
+taught it: `MB_HOME` no longer isolates a run, because it moves the vault and
+leaves the command reading this machine's real config.
+
 Every section answers a question the reporter had to answer by hand.
 
 Run from the repo root of a checkout that HAS the fixes:
 
     PYTHONIOENCODING=utf-8 python tools/install_doctor_baseline.py \
-        > docs/v0.6.1-install-doctor-baseline.json
+        > docs/v0.9.0-install-doctor-baseline.json
 
 PYTHONIOENCODING matters on Windows: a bare redirect encodes stdout in the
 console codepage and mangles every non-ASCII character in the snapshot. In
@@ -31,6 +39,7 @@ import importlib.util
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -277,13 +286,25 @@ def live_config_reload(cfg) -> dict:
 
 # --- the write path itself: does `mb config set` REACH a nested key? ---------
 
-def _mb(args: list[str], vault: Path) -> subprocess.CompletedProcess:
-    """The real CLI, through the launcher, against a throwaway vault."""
-    env = {**os.environ, "MB_HOME": str(vault), "PYTHONIOENCODING": "utf-8"}
+def _mb(args: list[str], vault: Path, home: Path) -> subprocess.CompletedProcess:
+    """The real CLI, through the launcher, against a throwaway vault AND a
+    throwaway home.
+
+    Since v0.9.0 the config is a machine file at `~/.singularity.json`, so
+    `MB_HOME` alone no longer isolates a run: it moves the vault and leaves the
+    command reading (and, worse, writing) this machine's real config. Both
+    `USERPROFILE` and `HOME` are redirected because `Path.home()` reads the
+    first on Windows and the second everywhere else."""
+    env = {**os.environ, "MB_HOME": str(vault), "PYTHONIOENCODING": "utf-8",
+           "USERPROFILE": str(home), "HOME": str(home)}
     return subprocess.run(
         [sys.executable, str(REPO / "bin" / "_launch.py"), "mb",
          "singularity.cli:main", *args],
-        cwd=str(REPO), env=env, capture_output=True, text=True, timeout=180)
+        cwd=str(REPO), env=env, capture_output=True, text=True,
+        # The child writes UTF-8 (PYTHONIOENCODING above); without saying so
+        # here the parent decodes it in the console codepage and every em-dash
+        # in a captured diagnostic lands in the snapshot as mojibake.
+        encoding="utf-8", errors="replace", timeout=180)
 
 
 def nested_config_write(tmp: Path) -> dict:
@@ -300,8 +321,15 @@ def nested_config_write(tmp: Path) -> dict:
     it on the config as it lands on disk."""
     vault = tmp / "config-write"
     (vault / ".mb").mkdir(parents=True)
-    cfg_file = vault / ".mb" / "config.json"
+    # v0.9.0: the config is a MACHINE file, so the throwaway config goes in a
+    # throwaway home, not in the throwaway vault. Written straight to its final
+    # place — a copy in the vault would trip the one-time migration and grade
+    # the migration instead of the write path.
+    home = tmp / "config-write-home"
+    home.mkdir()
+    cfg_file = home / ".singularity.json"
     cfg_file.write_text(json.dumps({
+        "vault_path": str(vault),
         "projects": {"p": {"path": r"E:\P", "group": "g", "about": "a"}},
         "llm": {"models": {"m": {"args": ["-ngl", "99",
                                           "--chat-template-file",
@@ -313,7 +341,7 @@ def nested_config_write(tmp: Path) -> dict:
 
     rows = []
 
-    r = _mb(["config", "set", "projects.p.path", "/posix/p"], vault)
+    r = _mb(["config", "set", "projects.p.path", "/posix/p"], vault, home)
     data = on_disk()
     rows.append({"case": "dotted key reaches the nested value",
                  "cmd": "config set projects.p.path /posix/p",
@@ -326,7 +354,7 @@ def nested_config_write(tmp: Path) -> dict:
                           and not [k for k in data if "." in k]
                           and data["projects"]["p"]["group"] == "g")})
 
-    r = _mb(["config", "set", "llm.models.m.args[3]", "/posix/t.jinja"], vault)
+    r = _mb(["config", "set", "llm.models.m.args[3]", "/posix/t.jinja"], vault, home)
     data = on_disk()
     rows.append({"case": "indexed key (the args[i] form A6 prints)",
                  "cmd": "config set llm.models.m.args[3] /posix/t.jinja",
@@ -337,7 +365,7 @@ def nested_config_write(tmp: Path) -> dict:
                           and data["llm"]["models"]["m"]["args"][2] == "--chat-template-file")})
 
     before = on_disk()
-    r = _mb(["config", "set", "projects.ghost.path", "/x"], vault)
+    r = _mb(["config", "set", "projects.ghost.path", "/x"], vault, home)
     rows.append({"case": "unknown section fails loudly, writes nothing",
                  "cmd": "config set projects.ghost.path /x",
                  "exit_code": r.returncode,
@@ -345,14 +373,14 @@ def nested_config_write(tmp: Path) -> dict:
                  "pass": (r.returncode == 1 and on_disk() == before
                           and "no such config section" in (r.stderr or ""))})
 
-    r = _mb(["config", "get", "projects.p.path"], vault)
+    r = _mb(["config", "get", "projects.p.path"], vault, home)
     rows.append({"case": "read-back answers for the same notation",
                  "cmd": "config get projects.p.path",
                  "exit_code": r.returncode,
                  "stdout": (r.stdout or "").strip()[:80],
                  "pass": r.returncode == 0 and "/posix/p" in (r.stdout or "")})
 
-    r = _mb(["project", "add", "p", "/posix/p2"], vault)
+    r = _mb(["project", "add", "p", "/posix/p2"], vault, home)
     entry = on_disk()["projects"]["p"]
     rows.append({"case": "project add repoints without dropping metadata",
                  "cmd": "project add p /posix/p2",
@@ -360,6 +388,114 @@ def nested_config_write(tmp: Path) -> dict:
                  "entry": entry,
                  "pass": (r.returncode == 0 and entry["path"] == "/posix/p2"
                           and entry.get("group") == "g" and entry.get("about") == "a")})
+
+    return {"cases": rows, "pass": all(row["pass"] for row in rows)}
+
+
+# --- v0.9.0: the config is a MACHINE file, and the move is seamless ----------
+
+def machine_config(tmp: Path) -> dict:
+    """Grade the release's own claim: config left the vault, and nobody lost a
+    setting on the way out.
+
+    The vault travels between machines and every absolute path in it is wrong
+    on arrival, which is why the config now lives at `~/.singularity.json`. A
+    relocation is only worth shipping if it is invisible: an existing install
+    must keep its values without being told to do anything, and a machine that
+    already has its own config must never be overwritten by a vault that
+    arrives carrying someone else's."""
+    rows = []
+
+    # (1) an upgrading machine: legacy config in the vault, nothing in home
+    home = tmp / "mc-fresh-home"
+    vault = tmp / "mc-fresh-vault"
+    (vault / ".mb").mkdir(parents=True)
+    legacy = vault / ".mb" / "config.json"
+    legacy.write_text(json.dumps({
+        "excerpt_chars": 200,                       # a decision: != default 150
+        "min_score": 0.30,                          # a default, must not persist
+        "projects": {"p": {"path": "/kept", "group": "g"}},
+    }, indent=2), encoding="utf-8")
+    home.mkdir()
+    r = _mb(["config", "get", "excerpt_chars"], vault, home)
+    machine_file = home / ".singularity.json"
+    data = (json.loads(machine_file.read_text(encoding="utf-8"))
+            if machine_file.exists() else {})
+    kept = sorted(p.name for p in (vault / ".mb").glob("config.json.migrated-*"))
+    rows.append({
+        "case": "upgrade migrates the vault config into the machine file",
+        "exit_code": r.returncode,
+        "stdout": (r.stdout or "").strip()[:40],
+        "machine_file_created": machine_file.exists(),
+        "excerpt_chars": data.get("excerpt_chars"),
+        "projects_kept": data.get("projects"),
+        "vault_path_bound": data.get("vault_path") == str(vault),
+        "legacy_file_gone": not legacy.exists(),
+        "legacy_preserved_as": kept,
+        "pass": (r.returncode == 0 and machine_file.exists()
+                 and data.get("excerpt_chars") == 200
+                 and data.get("projects", {}).get("p", {}).get("path") == "/kept"
+                 and data.get("vault_path") == str(vault)
+                 and not legacy.exists() and len(kept) == 1),
+    })
+
+    # (2) decisions, not defaults: a value equal to the shipped default is not
+    #     materialised, so the file stays readable instead of listing forty keys
+    rows.append({
+        "case": "the migrated file records decisions, not defaults",
+        "keys": sorted(data),
+        "min_score_persisted": "min_score" in data,
+        "pass": "min_score" not in data and "excerpt_chars" in data,
+    })
+
+    # (3) a configured machine meets a vault that still carries a legacy config
+    home2 = tmp / "mc-configured-home"
+    vault2 = tmp / "mc-configured-vault"
+    (vault2 / ".mb").mkdir(parents=True)
+    legacy2 = vault2 / ".mb" / "config.json"
+    legacy2.write_text(json.dumps({"excerpt_chars": 999}, indent=2),
+                       encoding="utf-8")
+    home2.mkdir()
+    (home2 / ".singularity.json").write_text(json.dumps({
+        "vault_path": str(vault2), "excerpt_chars": 300}, indent=2),
+        encoding="utf-8")
+    r = _mb(["config", "get", "excerpt_chars"], vault2, home2)
+    after = json.loads((home2 / ".singularity.json").read_text(encoding="utf-8"))
+    rows.append({
+        "case": "a configured machine is not overwritten by an arriving vault",
+        "exit_code": r.returncode,
+        "stdout": (r.stdout or "").strip()[:40],
+        "machine_value": after.get("excerpt_chars"),
+        "legacy_untouched": legacy2.exists(),
+        "pass": (r.returncode == 0 and after.get("excerpt_chars") == 300
+                 and "300" in (r.stdout or "") and legacy2.exists()),
+    })
+
+    # (4) nothing shipped names a drive: the default that survived one machine's
+    #     move to another letter and shipped a dead path to everyone else
+    # `C:\Windows\...` is a property of the OS, not of a machine: it is the same
+    # on every Windows install and there is nothing to configure. Everything
+    # else with a drive in it is one machine's layout compiled into the product.
+    drive_default = re.compile(r"""["'][A-Za-z]:[\\/]+([A-Za-z0-9_. -]*)""")
+    offenders = []
+    for path in sorted((REPO / "singularity").rglob("*.py")) + \
+            sorted((REPO / "install").rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        hits = [m.group(0) for m in drive_default.finditer(text)
+                if m.group(1).lower() != "windows"]
+        if hits:
+            offenders.append({"file": str(path.relative_to(REPO)).replace("\\", "/"),
+                              "hits": sorted(set(hits))[:4]})
+    rows.append({
+        "case": "no shipped module names a drive letter",
+        "offenders": offenders,
+        "pass": not offenders,
+    })
 
     return {"cases": rows, "pass": all(row["pass"] for row in rows)}
 
@@ -384,11 +520,13 @@ def main() -> None:
         shims = shim_matrix(tmp)
         locator = locator_matrix(tmp)
         config_write = nested_config_write(tmp)
+        machine_cfg = machine_config(tmp)
 
     snap = {
         "taken_at": datetime.now().isoformat(timespec="seconds"),
-        "note": "v0.6.1 baseline: install + doctor honesty, and the config "
-                "write path that the v0.6.0 baseline went around",
+        "note": "v0.9.0 baseline: install + doctor honesty, the config write "
+                "path that the v0.6.0 baseline went around, and the config's "
+                "move out of the vault onto the machine",
         "version": singularity.__version__,
         "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(REPO),
                                  capture_output=True, text=True).stdout.strip(),
@@ -404,12 +542,14 @@ def main() -> None:
         "issue_14_config_paths": config_path_inventory(cfg),
         "issue_12_live_config_reload": live_config_reload(cfg),
         "config_write_path": config_write,
+        "v090_machine_config": machine_cfg,
         "tests": [run_pytest("tests/")],
     }
     snap["all_pass"] = (
         shims["pass"]
         and locator["pass"]
         and config_write["pass"]
+        and machine_cfg["pass"]
         and snap["issue_12_live_config_reload"].get("pass", None) is not False
         and all(t["exit_code"] == 0 for t in snap["tests"])
     )

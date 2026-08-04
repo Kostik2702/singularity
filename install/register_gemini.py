@@ -172,7 +172,7 @@ def _hook_entry(script_name: str, name: str) -> dict:
     # executable path is directly invokable by POSIX shells, but PowerShell
     # parses it as a string expression; a second quoted path then becomes an
     # UnexpectedToken.  The call operator is therefore required on Windows:
-    #   & "C:\\...\\python.exe" "D:\\...\\hook.py"
+    #   & "<venv>\\python.exe" "<engine>\\hook.py"
     command = f'"{PYTHON}" "{script}"'
     if sys.platform.startswith("win"):
         command = f"& {command}"

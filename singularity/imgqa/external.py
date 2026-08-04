@@ -87,7 +87,12 @@ def run_sheet(args):
 
 # --- cutout dispatch (OD-1) ---------------------------------------------------
 
-DEFAULT_ML_VENV = r"D:\venvs\imgqa-ml"
+# No built-in location. There used to be one (`D:\venvs\imgqa-ml`) and it was
+# wrong in both directions: it named a drive that this machine later stopped
+# having, and on every other machine it produced a "not found" pointing at a
+# path nobody had ever chosen — which reads as a broken install rather than an
+# unconfigured one. A heavy ML venv is a decision; ask for it (v0.9.0, #14).
+ML_VENV_KEY = "imgqa_ml_venv"
 
 
 def _ml_python() -> Path:
@@ -96,10 +101,16 @@ def _ml_python() -> Path:
         pointer = Path.home() / ".singularity.json"
         if pointer.is_file():
             try:
-                venv = json.loads(pointer.read_text(encoding="utf-8-sig")).get("imgqa_ml_venv")
+                venv = json.loads(pointer.read_text(encoding="utf-8-sig")).get(ML_VENV_KEY)
             except (json.JSONDecodeError, OSError):
                 venv = None
-    venv = venv or DEFAULT_ML_VENV
+    if not venv:
+        raise ContractError(
+            "no ML venv configured. Create the isolated venv (WSF-03 spike): "
+            "python -m venv <dir> && <dir>/bin/pip install rembg[cli] (Scripts "
+            "on Windows) — then point IMGQA_ML_VENV or "
+            "~/.singularity.json:imgqa_ml_venv at <dir>. Heavy ML deps must "
+            "NEVER be installed into the engine venv (OD-1).")
     py = Path(venv) / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     if not py.is_file():
         raise ContractError(

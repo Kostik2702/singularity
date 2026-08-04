@@ -830,7 +830,26 @@ def migrate_vault_config(cfg: "Config") -> Optional[Path]:
         moved = legacy                  # could not rename: the copy still stands
     print(f"[mb] config moved out of the vault -> {cfg.config_path} "
           f"(was {legacy}, kept as {moved.name})", file=sys.stderr)
+    # A daemon started before this release holds the OLD module: its
+    # `config_path` still resolves into the vault, so it keeps serving the file
+    # we just renamed and `mb daemon reload` reports nothing changed — the
+    # settings look applied everywhere except where they are actually read.
+    # Migration is the one moment we know this happened, so say it here.
+    if _daemon_running(cfg):
+        print("[mb] a daemon is running from the pre-migration code and still "
+              "reads the old file — run `mb daemon restart`", file=sys.stderr)
     return moved
+
+
+def _daemon_running(cfg: "Config") -> bool:
+    """Cheap liveness check (pid file only, no socket) for migration notices."""
+    try:
+        from .platform import proc
+
+        pid = proc.read_pid(cfg.daemon_pid_file)
+        return bool(pid and proc.is_running(pid))
+    except Exception:
+        return False
 
 
 def write_pointer(vault: Path) -> None:

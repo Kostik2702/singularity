@@ -75,7 +75,31 @@ time — which overwrote this machine's real config before the witness existed.
 The same guard then exposed a v0.8.0 test that only passed because it read the
 developer's real `~/.singularity.json` and found a real vault.
 
-Full suite: 1846 passed, 13 skipped.
+Full suite: 1878 passed, 14 skipped.
+
+### What the baseline caught that the release had missed
+
+`docs/v0.9.0-install-doctor-baseline.md` — the snapshot came back red twice
+before it came back honest, and every reason was real.
+
+- **Four more drive letters were still compiled in.** A scan added to the
+  baseline found `imgqa`'s ML venv (`D:\venvs\imgqa-ml`) and `mb llm setup`'s
+  install directory (`E:/llama.cpp`). Both are gone: the venv must be named
+  through `IMGQA_ML_VENV` or `imgqa_ml_venv`, and `mb llm setup` requires
+  `--dir` the first time instead of downloading gigabytes onto a drive that may
+  not exist. Neither now fails as "not found at <a path you never chose>",
+  which reads as a broken install rather than an unconfigured one.
+  `C:\Windows\Fonts` stays — that belongs to the OS, not to a machine.
+- **A daemon started before the migration keeps reading the old file.** It
+  holds the pre-0.9 module, so its config path still resolves into the vault
+  and `mb daemon reload` answers "nothing changed" while the settings look
+  applied everywhere except where they are read. Migration is the one moment
+  that is known to have happened, so it now says `run mb daemon restart` when
+  it sees a live daemon.
+- **`MB_HOME` no longer isolates a test run**, because it moves the vault and
+  leaves the command reading this machine's real config — which is how the
+  baseline's own `config_write_path` section ended up grading the developer's
+  machine. It fakes `USERPROFILE`/`HOME` now.
 
 ### Also in this release, marked as such
 

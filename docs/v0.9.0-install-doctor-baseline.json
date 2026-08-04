@@ -1,0 +1,470 @@
+{
+ "taken_at": "2026-08-04T21:00:42",
+ "note": "v0.9.0 baseline: install + doctor honesty, the config write path that the v0.6.0 baseline went around, and the config's move out of the vault onto the machine",
+ "version": "0.9.0",
+ "commit": "1b27b9e87940206d601479a6a9267ddb0bc54336",
+ "environment": {
+  "platform": "Windows-10-10.0.26200-SP0",
+  "python": "3.10.6",
+  "package_path": "E:\\Singularity\\singularity\\__init__.py",
+  "vault": "E:\\obsidian\\memory brain"
+ },
+ "issue_9_16_launchers": {
+  "runs": [
+   {
+    "launcher": "bin/_launch.py",
+    "tool": "mb",
+    "cwd": "neutral",
+    "exit_code": 0,
+    "stdout": "mb 0.9.0",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "bin/_launch.py",
+    "tool": "mb",
+    "cwd": "shadowing",
+    "exit_code": 0,
+    "stdout": "mb 0.9.0",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "bin/_launch.py",
+    "tool": "imgqa",
+    "cwd": "neutral",
+    "exit_code": 0,
+    "stdout": "imgqa 0.1.0.dev0 (schema 2)",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "bin/_launch.py",
+    "tool": "imgqa",
+    "cwd": "shadowing",
+    "exit_code": 0,
+    "stdout": "imgqa 0.1.0.dev0 (schema 2)",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "bin/_launch.py",
+    "tool": "design-scout",
+    "cwd": "neutral",
+    "exit_code": 0,
+    "stdout": "design-scout 0.1.0",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "bin/_launch.py",
+    "tool": "design-scout",
+    "cwd": "shadowing",
+    "exit_code": 0,
+    "stdout": "design-scout 0.1.0",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "sh bin/mb",
+    "tool": "mb",
+    "cwd": "neutral",
+    "exit_code": 0,
+    "stdout": "mb 0.9.0",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "sh bin/mb",
+    "tool": "mb",
+    "cwd": "shadowing",
+    "exit_code": 0,
+    "stdout": "mb 0.9.0",
+    "namespace_shadowed": false,
+    "pass": true
+   }
+  ],
+  "executable_bit_in_index": {
+   "install/install.sh": "100755",
+   "bin/mb": "100755",
+   "bin/imgqa": "100755",
+   "bin/design-scout": "100755"
+  },
+  "pass": true
+ },
+ "issue_10_cli_locator": {
+  "search_locations": 8,
+  "runs": [
+   {
+    "layout": "nvm_versions_tree",
+    "found": true,
+    "where_kind": "version-manager",
+    "pass": true
+   },
+   {
+    "layout": "nvm_versions_tree_older",
+    "found": true,
+    "where_kind": "version-manager",
+    "pass": true
+   },
+   {
+    "layout": "volta",
+    "found": true,
+    "where_kind": "version-manager",
+    "pass": true
+   },
+   {
+    "layout": "fnm",
+    "found": true,
+    "where_kind": "version-manager",
+    "pass": true
+   },
+   {
+    "layout": "newest_node_wins",
+    "found": true,
+    "selected": "v24.19.0",
+    "expected": "v24.19.0",
+    "pass": true
+   }
+  ],
+  "pass": true,
+  "suppressed_env": []
+ },
+ "issue_11_13_14_15_doctor": {
+  "exit_code": 0,
+  "counts": {
+   "PASS": 33,
+   "WARN": 3
+  },
+  "checks": [
+   {
+    "id": "A1-config",
+    "status": "PASS"
+   },
+   {
+    "id": "A2-vault-obsidian",
+    "status": "PASS"
+   },
+   {
+    "id": "A7-config-location",
+    "status": "PASS"
+   },
+   {
+    "id": "A6-config-paths",
+    "status": "WARN",
+    "detail": "config contains POSIX paths — this vault was last configured on another operating system; 2 key(s) point nowhere on this machine: code_repos_dir, projects.singularity.path (plus 3 more missing: llm.models.qwen27b.gguf, llm.models.qwythos9b.gguf, llm.models.skyfall31b.gguf)"
+   },
+   {
+    "id": "A3-folders",
+    "status": "PASS"
+   },
+   {
+    "id": "A4-mb-dir",
+    "status": "PASS"
+   },
+   {
+    "id": "A5-secrets",
+    "status": "PASS"
+   },
+   {
+    "id": "B2-deps",
+    "status": "PASS"
+   },
+   {
+    "id": "B3-model",
+    "status": "PASS"
+   },
+   {
+    "id": "B4-index",
+    "status": "PASS"
+   },
+   {
+    "id": "B7-daemon",
+    "status": "PASS"
+   },
+   {
+    "id": "B8-smoke",
+    "status": "PASS"
+   },
+   {
+    "id": "B9-daemon-identity",
+    "status": "PASS"
+   },
+   {
+    "id": "C1-nightly",
+    "status": "PASS"
+   },
+   {
+    "id": "C2-watcher",
+    "status": "PASS"
+   },
+   {
+    "id": "C5-lock",
+    "status": "PASS"
+   },
+   {
+    "id": "D4-cli",
+    "status": "PASS"
+   },
+   {
+    "id": "D8-git-identity",
+    "status": "PASS",
+    "detail": "git can commit into the vault"
+   },
+   {
+    "id": "D7-cli-on-path",
+    "status": "WARN",
+    "detail": "`mb` resolves to C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python310\\Scripts\\mb.exe, not this engine's venv (E:\\Singularity\\.venv\\Scripts) — another Singularity install is shadowing this one, and the two can disagree about config, model and daemon state"
+   },
+   {
+    "id": "D2-agents",
+    "status": "PASS"
+   },
+   {
+    "id": "D1-hooks",
+    "status": "PASS"
+   },
+   {
+    "id": "D3-module-context",
+    "status": "PASS"
+   },
+   {
+    "id": "D5-vault-guard",
+    "status": "PASS"
+   },
+   {
+    "id": "D6-posix-shim",
+    "status": "PASS",
+    "detail": "`sh bin/mb --version` -> mb 0.9.0 (neutral CWD and a CWD containing singularity/)"
+   },
+   {
+    "id": "E1-gemini",
+    "status": "PASS"
+   },
+   {
+    "id": "E2-gemini-profile",
+    "status": "PASS"
+   },
+   {
+    "id": "E3-gemini-skills",
+    "status": "PASS"
+   },
+   {
+    "id": "E4-gemini-hooks",
+    "status": "PASS"
+   },
+   {
+    "id": "F1-grok",
+    "status": "PASS"
+   },
+   {
+    "id": "F2-grok-profile",
+    "status": "PASS"
+   },
+   {
+    "id": "F3-grok-skills",
+    "status": "PASS"
+   },
+   {
+    "id": "F4-grok-capture",
+    "status": "PASS"
+   },
+   {
+    "id": "W1-sources-integrity",
+    "status": "PASS"
+   },
+   {
+    "id": "W2-sources-index",
+    "status": "PASS"
+   },
+   {
+    "id": "W3-sources-portability",
+    "status": "PASS"
+   },
+   {
+    "id": "K1-code-index",
+    "status": "WARN",
+    "detail": "code_repos_dir points at a path that does not exist: \\Users\\konstantingritsuk\\projects"
+   }
+  ],
+  "new_in_this_release": [
+   "A6-config-paths",
+   "D7-cli-on-path",
+   "D8-git-identity"
+  ],
+  "pass": true
+ },
+ "issue_14_config_paths": {
+  "entries": [
+   {
+    "key": "code_repos_dir",
+    "foreign_os": "posix",
+    "exists": false
+   },
+   {
+    "key": "llm.server_bin",
+    "foreign_os": null,
+    "exists": true
+   },
+   {
+    "key": "llm.models.qwythos9b.gguf",
+    "foreign_os": null,
+    "exists": false
+   },
+   {
+    "key": "llm.models.qwythos9b.args[14]",
+    "foreign_os": null,
+    "exists": true
+   },
+   {
+    "key": "llm.models.qwen27b.gguf",
+    "foreign_os": null,
+    "exists": false
+   },
+   {
+    "key": "llm.models.skyfall31b.gguf",
+    "foreign_os": null,
+    "exists": false
+   },
+   {
+    "key": "projects.storyforge.path",
+    "foreign_os": null,
+    "exists": true
+   },
+   {
+    "key": "projects.singularity.path",
+    "foreign_os": "posix",
+    "exists": false
+   },
+   {
+    "key": "projects.intelligo-home-task.path",
+    "foreign_os": null,
+    "exists": true
+   }
+  ],
+  "count": 9,
+  "foreign": [
+   "code_repos_dir",
+   "projects.singularity.path"
+  ],
+  "missing": [
+   "llm.models.qwen27b.gguf",
+   "llm.models.qwythos9b.gguf",
+   "llm.models.skyfall31b.gguf"
+  ]
+ },
+ "issue_12_live_config_reload": {
+  "ran": true,
+  "key": "excerpt_chars",
+  "daemon_value_before_write": 150,
+  "daemon_value_after_write_before_reload": 150,
+  "reload_reported_changed": [
+   "excerpt_chars"
+  ],
+  "daemon_value_after_reload": 151,
+  "restored_to": 150,
+  "pass": true
+ },
+ "config_write_path": {
+  "cases": [
+   {
+    "case": "dotted key reaches the nested value",
+    "cmd": "config set projects.p.path /posix/p",
+    "exit_code": 0,
+    "nested_value": "/posix/p",
+    "literal_top_level_keys": [],
+    "siblings_kept": true,
+    "pass": true
+   },
+   {
+    "case": "indexed key (the args[i] form A6 prints)",
+    "cmd": "config set llm.models.m.args[3] /posix/t.jinja",
+    "exit_code": 0,
+    "value": "/posix/t.jinja",
+    "pass": true
+   },
+   {
+    "case": "unknown section fails loudly, writes nothing",
+    "cmd": "config set projects.ghost.path /x",
+    "exit_code": 1,
+    "stderr": "[mb] projects.ghost.path: no such config section `projects.ghost` — this command rewrites existing values and does not c",
+    "pass": true
+   },
+   {
+    "case": "read-back answers for the same notation",
+    "cmd": "config get projects.p.path",
+    "exit_code": 0,
+    "stdout": "\"/posix/p\"",
+    "pass": true
+   },
+   {
+    "case": "project add repoints without dropping metadata",
+    "cmd": "project add p /posix/p2",
+    "exit_code": 0,
+    "entry": {
+     "path": "/posix/p2",
+     "group": "g",
+     "about": "a"
+    },
+    "pass": true
+   }
+  ],
+  "pass": true
+ },
+ "v090_machine_config": {
+  "cases": [
+   {
+    "case": "upgrade migrates the vault config into the machine file",
+    "exit_code": 0,
+    "stdout": "200",
+    "machine_file_created": true,
+    "excerpt_chars": 200,
+    "projects_kept": {
+     "p": {
+      "path": "/kept",
+      "group": "g"
+     }
+    },
+    "vault_path_bound": true,
+    "legacy_file_gone": true,
+    "legacy_preserved_as": [
+     "config.json.migrated-20260804-210042"
+    ],
+    "pass": true
+   },
+   {
+    "case": "the migrated file records decisions, not defaults",
+    "keys": [
+     "excerpt_chars",
+     "projects",
+     "schema_version",
+     "vault_path"
+    ],
+    "min_score_persisted": false,
+    "pass": true
+   },
+   {
+    "case": "a configured machine is not overwritten by an arriving vault",
+    "exit_code": 0,
+    "stdout": "300",
+    "machine_value": 300,
+    "legacy_untouched": true,
+    "pass": true
+   },
+   {
+    "case": "no shipped module names a drive letter",
+    "offenders": [],
+    "pass": true
+   }
+  ],
+  "pass": true
+ },
+ "tests": [
+  {
+   "target": "tests/",
+   "exit_code": 0,
+   "summary": "1878 passed, 14 skipped, 1 warning in 95.77s (0:01:35)"
+  }
+ ],
+ "all_pass": true
+}

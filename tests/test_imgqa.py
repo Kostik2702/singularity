@@ -254,11 +254,41 @@ def test_full_gt_d1_defringe_reproduction(tmp_path):
 
 # --- cutout dispatch e2e (WSF-03; auto-skips without the ML venv) ---------------
 
-ML_VENV = Path(os.environ.get("IMGQA_ML_VENV", r"D:\venvs\imgqa-ml"))
+def _ml_venv_provisioned() -> bool:
+    """Ask the product where the venv is, instead of restating a location.
+
+    This probe used to hardcode `D:\\venvs\\imgqa-ml` as the fallback — the same
+    machine-specific default v0.9.0 removed from the engine, and with it the
+    only reason the e2e ever ran on one particular machine and silently skipped
+    everywhere else."""
+    from singularity.imgqa import external
+
+    try:
+        return external._ml_python().is_file()
+    except Exception:
+        return False
+
+
 requires_ml_venv = pytest.mark.skipif(
-    not (ML_VENV / "Scripts" / "python.exe").is_file()
-    and not (ML_VENV / "bin" / "python").is_file(),
-    reason="isolated ML venv not provisioned (WSF-03 spike)")
+    not _ml_venv_provisioned(),
+    reason="isolated ML venv not configured (IMGQA_ML_VENV / "
+           "~/.singularity.json:imgqa_ml_venv, WSF-03 spike)")
+
+
+def test_cutout_unconfigured_venv_says_so_instead_of_naming_a_drive(tmp_path, monkeypatch):
+    """v0.9.0 (#14): with nothing configured the error must say "not
+    configured", not "not found at <someone else's path>" — the second reads as
+    a broken install and sends the reader looking for a directory they never
+    chose."""
+    from singularity.imgqa import external
+
+    monkeypatch.delenv("IMGQA_ML_VENV", raising=False)
+    monkeypatch.setattr(external.Path, "home", classmethod(lambda cls: tmp_path))
+    with pytest.raises(external.ContractError) as exc:
+        external._ml_python()
+    assert "no ML venv configured" in str(exc.value)
+    assert "OD-1" in str(exc.value)
+    assert ":\\" not in str(exc.value) and ":/" not in str(exc.value)
 
 
 def test_cutout_missing_venv_is_tool_error_with_remediation(tmp_path, monkeypatch):

@@ -787,7 +787,16 @@ def server_bin_ok(path: Path) -> bool:
 
 # --- mb llm setup -----------------------------------------------------------
 
-DEFAULT_INSTALL_DIR = "E:/llama.cpp"       # big files never on C: (machine rule)
+# No built-in install directory. This used to be `E:/llama.cpp`, chosen because
+# multi-gigabyte weights do not belong on the system drive — a rule of ONE
+# machine, shipped to everyone. There is no portable answer (home is on the
+# system drive), so `mb llm setup` asks instead of guessing: `--dir` is required
+# the first time, and after that the answer lives in the machine config (#14).
+INSTALL_DIR_REQUIRED = (
+    "no llm install directory configured — run `mb llm setup --dir <path>` "
+    "and point it at a drive with room for multi-gigabyte weights (the choice "
+    "is recorded in the machine config, ~/.singularity.json, so you state it "
+    "once)")
 LLAMA_RELEASE_API = ("https://api.github.com/repos/"
                      "ggml-org/llama.cpp/releases/latest")
 _SERVER_EXE = "llama-server.exe"
@@ -817,7 +826,10 @@ def setup(cfg, dir_override: str | None = None) -> int:
     changed = False
     section = cfg.data.get("llm")
     if not section:
-        install_dir = Path(dir_override or DEFAULT_INSTALL_DIR)
+        if not dir_override:
+            report("fail", INSTALL_DIR_REQUIRED)
+            return 1
+        install_dir = Path(dir_override)
         section = _default_llm_section(install_dir)
         cfg.data["llm"] = section
         changed = True
@@ -835,7 +847,7 @@ def setup(cfg, dir_override: str | None = None) -> int:
     server_bin = None
     if not server_bin_raw or not isinstance(server_bin_raw, str):
         report("fail", 'llm.server_bin not set — add e.g. "server_bin": '
-                       '"E:/llama.cpp/llama-server.exe" to the machine config (~/.singularity.json)')
+                       '"<install-dir>/llama-server.exe" to the machine config (~/.singularity.json)')
     else:
         server_bin = Path(server_bin_raw)
         target_dir = Path(dir_override) if dir_override else server_bin.parent
@@ -877,7 +889,7 @@ def setup(cfg, dir_override: str | None = None) -> int:
     models = models or {}
     if not models:
         report("warn", 'model registry empty — add e.g. "models": '
-                       '{"name": {"gguf": "E:/models/x.gguf", '
+                       '{"name": {"gguf": "<models-dir>/x.gguf", '
                        '"args": ["-ngl", "99", "-fa", "on", "--jinja"]}}')
     for name, model in models.items():
         if not isinstance(model, dict):

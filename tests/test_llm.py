@@ -769,6 +769,24 @@ def test_setup_creates_missing_llm_section(tmp_path, monkeypatch):
     assert str(tmp_path / "inst") in saved["llm"]["server_bin"]
 
 
+def test_setup_without_dir_refuses_instead_of_guessing_a_drive(tmp_path, monkeypatch, capsys):
+    """v0.9.0 (#14): there is no built-in install directory any more.
+
+    It used to be `E:/llama.cpp` — one machine's rule ("weights never on the
+    system drive") shipped to everyone, so a fresh `mb llm setup` on any other
+    machine wrote a config pointing at a drive that need not exist and then
+    tried to download gigabytes into it. With no portable answer available, the
+    command asks."""
+    cfg = Config(vault=tmp_path, data={})
+    monkeypatch.setattr(llm, "server_bin_ok", lambda p: True)
+    monkeypatch.setattr(llm, "build_isolated_config", lambda *a, **k: None)
+    assert llm.setup(cfg) == 1
+    err = capsys.readouterr().err
+    assert "--dir" in err
+    assert "llm" not in cfg.data              # nothing invented on the way out
+    assert not cfg.config_path.exists()
+
+
 def test_setup_builds_local_profile(tmp_path, monkeypatch, capsys):
     cfg = _setup_env(tmp_path, monkeypatch)              # claude_home/code_config_dir → tmp
     assert llm.setup(cfg) == 0

@@ -218,6 +218,36 @@ def test_migration_never_overwrites_a_configured_machine(tmp_path, monkeypatch):
     assert (mb / "config.json").exists()          # left alone entirely
 
 
+def test_migration_tells_a_running_daemon_to_restart(tmp_path, monkeypatch, capsys):
+    """A daemon started before the move holds the OLD module: its config path
+    still resolves into the vault, so it keeps serving the file just renamed
+    and `mb daemon reload` reports nothing changed. Settings then look applied
+    everywhere except where they are read. Migration is the one moment we know
+    this happened, so it must say so."""
+    from singularity import config as cfgmod
+    mb = tmp_path / ".mb"; mb.mkdir(parents=True)
+    (mb / "config.json").write_text('{"model": "m"}', encoding="utf-8")
+    monkeypatch.setenv("MB_HOME", str(tmp_path))
+    monkeypatch.setattr(cfgmod, "_daemon_running", lambda cfg: True)
+
+    cfgmod.load_config(str(tmp_path))
+
+    err = capsys.readouterr().err
+    assert "mb daemon restart" in err
+
+
+def test_migration_is_quiet_about_a_daemon_that_is_not_running(tmp_path, monkeypatch, capsys):
+    from singularity import config as cfgmod
+    mb = tmp_path / ".mb"; mb.mkdir(parents=True)
+    (mb / "config.json").write_text('{"model": "m"}', encoding="utf-8")
+    monkeypatch.setenv("MB_HOME", str(tmp_path))
+    monkeypatch.setattr(cfgmod, "_daemon_running", lambda cfg: False)
+
+    cfgmod.load_config(str(tmp_path))
+
+    assert "daemon restart" not in capsys.readouterr().err
+
+
 def test_saved_config_records_decisions_not_defaults(tmp_path, monkeypatch):
     """The file must stay small as the schema grows — forty materialised
     defaults is what made the old one unreadable."""
