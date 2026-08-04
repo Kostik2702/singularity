@@ -550,6 +550,60 @@ def test_d6_skip_without_posix_shell(cfg, monkeypatch):
     assert "no sh/bash" in d6["detail"]
 
 
+# --- D7: is `mb` actually callable by name? (issue #15) ----------------------
+
+def _stub_register_path(monkeypatch, st):
+    """doctor loads install/register_path.py by path, so the stub has to be
+    installed on the object doctor gets back from _load_install."""
+    real_load = doctor._load_install
+
+    def fake_load(name):
+        mod = real_load(name)
+        if name == "register_path":
+            mod.status = lambda: st
+        return mod
+
+    monkeypatch.setattr(doctor, "_load_install", fake_load)
+
+
+def test_d7_pass_when_mb_resolves_into_this_engine(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _stub_register_path(monkeypatch, {
+        "engine": "/engine", "venv_bin": "/engine/.venv/bin",
+        "resolved": "/engine/.venv/bin/mb", "on_path": True, "is_ours": True})
+    doctor.run(cfg, as_json=True)
+    d7 = _check(cfg, "D7-cli-on-path")
+    assert d7["status"] == "PASS"
+    assert "/engine/.venv/bin/mb" in d7["detail"]
+
+
+def test_d7_warns_when_mb_is_not_on_path(cfg, monkeypatch):
+    """The state issue #15 reported: doctor clean, `mb doctor` itself
+    `command not found`."""
+    _stub_externals(monkeypatch)
+    _stub_register_path(monkeypatch, {
+        "engine": "/engine", "venv_bin": "/engine/.venv/bin",
+        "resolved": None, "on_path": False, "is_ours": False})
+    doctor.run(cfg, as_json=True)
+    d7 = _check(cfg, "D7-cli-on-path")
+    assert d7["status"] == "WARN"
+    assert "not callable by name" in d7["detail"]
+    assert "register_path" in d7["fix"]
+
+
+def test_d7_warns_when_another_clone_shadows_this_engine(cfg, monkeypatch):
+    """Two engines against one vault is quieter and worse than no mb at all."""
+    _stub_externals(monkeypatch)
+    _stub_register_path(monkeypatch, {
+        "engine": "/engine", "venv_bin": "/engine/.venv/bin",
+        "resolved": "/old-clone/.venv/bin/mb", "on_path": True, "is_ours": False})
+    doctor.run(cfg, as_json=True)
+    d7 = _check(cfg, "D7-cli-on-path")
+    assert d7["status"] == "WARN"
+    assert "/old-clone/.venv/bin/mb" in d7["detail"]
+    assert "shadowing" in d7["detail"]
+
+
 def test_d5_reports_mode_when_enabled(cfg, monkeypatch):
     _stub_externals(monkeypatch)
     _home(monkeypatch, cfg)

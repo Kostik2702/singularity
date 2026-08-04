@@ -18,8 +18,15 @@ import pytest
 
 ENGINE = Path(__file__).resolve().parents[1]
 
-# Files a user (or a shim) invokes directly, so they must arrive executable.
-MUST_BE_EXECUTABLE = ["install/install.sh"]
+# Files a user invokes directly, so they must arrive executable. The bin/ shims
+# are the alternative to putting the venv on PATH (issue #15) — shipping them
+# 100644 made that alternative fail too: `permission denied` on a fresh clone.
+MUST_BE_EXECUTABLE = [
+    "install/install.sh",
+    "bin/mb",
+    "bin/imgqa",
+    "bin/design-scout",
+]
 
 
 def _index_mode(path: str) -> str | None:

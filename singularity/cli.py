@@ -1228,6 +1228,17 @@ def cmd_uninstall(cfg, _args) -> int:
     print(f"grok: profile {k['profile']}, {k['hooks']} hook(s) removed, "
           f"{k['skills_removed']} skill link(s) removed, {k['skills_kept']} kept (foreign)")
 
+    # PATH registration (issue #15): only the links that resolve back into this
+    # engine, and only the PATH entry we added — a foreign `~/.local/bin/mb` or
+    # someone else's PATH entry is reported and kept.
+    _rp = _load("register_path")
+    p = _rp.uninstall()
+    if "path_entry" in p:
+        print(f"path: user PATH entry {p['path_entry']}")
+    else:
+        print(f"path: {len(p['removed'])} link(s) removed, "
+              f"{len(p['kept'])} kept (not ours)")
+
     for job in (scheduler.Job("nightly-index", [], daily_at="03:00"),   # T02 legacy
                 scheduler.Job("nightly", [], daily_at="03:00"),         # T12
                 scheduler.Job("watch", [], at_login=True)):

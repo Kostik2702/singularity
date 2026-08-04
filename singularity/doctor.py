@@ -889,7 +889,33 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                 f"`sh bin/mb --version` -> {out} (neutral CWD and a CWD "
                 f"containing singularity/)")
 
+    def d7():
+        # issue #15: `pip install -e` generates the console scripts into
+        # <engine>/.venv/bin, which nothing puts on PATH — so every documented
+        # `mb …` command failed on a machine whose doctor summary was clean.
+        # Presence is not enough here either: `mb` resolving to ANOTHER clone's
+        # venv is its own quiet disaster (two engines, one vault).
+        rp = _load_install("register_path")
+        st = rp.status()
+        if st["is_ours"]:
+            rep.add("D7-cli-on-path", "PASS", f"mb -> {st['resolved']}")
+        elif st["on_path"]:
+            rep.add("D7-cli-on-path", "WARN",
+                    f"`mb` resolves to {st['resolved']}, not this engine's venv "
+                    f"({st['venv_bin']}) — another Singularity install is "
+                    f"shadowing this one, and the two can disagree about "
+                    f"config, model and daemon state",
+                    fix="python install/register_path.py, then put "
+                        "the engine venv ahead of it on PATH (or remove the "
+                        "other install)")
+        else:
+            rep.add("D7-cli-on-path", "WARN",
+                    "`mb` is not callable by name — every documented `mb …` "
+                    "command fails in a fresh shell",
+                    fix="python install/register_path.py")
+
     _guard(rep, "D4", d4)
+    _guard(rep, "D7", d7)
     _guard(rep, "D2", d2)
     _guard(rep, "D1", d1)
     _guard(rep, "D3", d3)
