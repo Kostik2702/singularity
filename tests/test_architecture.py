@@ -13,8 +13,9 @@ Two properties make that honest rather than decorative:
   the list cannot quietly outlive the problem it describes.
 
 Presentation layer = the places whose job is to talk to a human or a harness:
-`cli`/`facade`, the seven sibling CLIs (`*.cli`), and `hooks/*` (they print the
-JSON their client reads).
+`cli`/`facade`/`render`, the per-area command handlers in `commands/*`, the
+seven sibling CLIs (`*.cli`), and `hooks/*` (they print the JSON their client
+reads).
 """
 from __future__ import annotations
 
@@ -37,7 +38,8 @@ def _modules() -> dict[str, str]:
 
 
 def _is_presentation(module: str) -> bool:
-    return (module in {"cli", "facade", "__main__"}
+    return (module in {"cli", "facade", "render", "__main__"}
+            or module.startswith("commands.")      # `mb <command>` handlers
             or module.endswith(".cli") or module.startswith("hooks."))
 
 

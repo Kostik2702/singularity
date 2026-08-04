@@ -56,6 +56,14 @@ def machine_id() -> str:
 # editing the source. Nothing in this file names a drive.
 DEFAULT_VAULT_DIRNAME = "memory brain"
 
+# The managed knowledge roots `mb init` creates and `mb doctor` checks for.
+# Declared once: cli.py and doctor.py each carried their own copy of this list,
+# so a new root had to be added twice and a rename could pass one check while
+# failing the other.
+MEMORY_FOLDERS = ["learnings/active", "learnings/archive", "decisions", "howto",
+                  "incidents", "rules", "reference", "changelog", "templates",
+                  "_moc", "daily"]
+
 # THE config. One file, per machine, created by the installer, never inside a
 # vault — a vault travels between machines and every absolute path in it is
 # wrong on arrival (issue #14). Everything the machine decides lives here:
