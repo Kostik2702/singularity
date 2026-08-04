@@ -10,6 +10,43 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.6.2 — a silent rename, and a suite a fresh clone could not run
+
+Two small frictions, both hit during the v0.6.1 release itself.
+
+### `mb note new` says when the filename is not the title
+
+The filename is the wikilink target, and the sanitizer — not the author —
+decides it: everything outside letters, digits, space, `-` and `_` becomes `_`
+(`cli.py`). A comma in a title is enough, so `[[<title>]]` written from memory
+in another note points at nothing. Nothing said so at creation; the break
+surfaces much later in `mb curator gaps` as a missing page, sitting among
+genuinely unwritten notes, with no hint that a rename caused it.
+
+`mb note new` now prints the working link target when it differs from the
+title, at the one moment the difference is still cheap to fix. The `title:`
+frontmatter stays exactly as typed — only the path is sanitized, and that
+asymmetry is the thing worth naming out loud.
+
+### `pip install -e ".[dev]"`
+
+The installer puts the runtime into `.venv` and stops there, which is right for
+a user and wrong for anyone who then tries to run the suite: `python -m pytest`
+answered `No module named pytest`, and the only way to learn about
+`requirements-test.txt` was to read the CI workflow.
+
+The new `dev` extra carries no second copy of any pin — it self-references
+`singularity[imgqa,secrets]` and adds `pytest`, so the base and extra pins stay
+declared exactly once. `requirements-test.txt` remains what CI installs;
+`tests/test_dev_extras_parity.py` pins the two to the same package set, because
+a pin added to one and forgotten in the other yields a green build that fails
+on the next person's machine. Verified by breaking it: adding a package to
+`requirements-test.txt` alone fails the test.
+
+Full suite: 1769 passed, 25 skipped.
+
+---
+
 # v0.6.1 — the fix `mb doctor` prints is one you can actually type
 
 Found while acting on v0.6.0's own output on the machine it was released from.

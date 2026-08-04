@@ -1131,6 +1131,15 @@ def cmd_note(cfg, args) -> int:
     if path.exists():
         print(f"[mb] already exists: {path}", file=sys.stderr)
         return 1
+    # The filename is the wikilink target, and it is what the sanitizer, not the
+    # author, decided. A comma in a title becomes `_` — so `[[<title>]]` written
+    # from memory in another note points at nothing, and the break surfaces
+    # later as a missing page in `mb curator gaps` rather than here. Say it once,
+    # at the only moment the difference is still cheap to fix.
+    if safe != args.title.strip():
+        print(f"[mb] filename differs from the title: link to it as "
+              f"[[{safe}]] (characters outside letters, digits, space, `-` "
+              f"and `_` become `_`)", file=sys.stderr)
 
     dest_rel = str(path.relative_to(cfg.vault)).replace("\\", "/")
     project, err = capture.resolve_capture_project(cfg, args.project, dest_rel)

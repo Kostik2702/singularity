@@ -170,3 +170,35 @@ def test_note_new_unknown_project_errors_before_writing(wired, cfg, capsys):
     rc = cli.main(["note", "new", "howto", "Some Title", "--project", "nope"])
     assert rc == 1
     assert not (cfg.vault / "howto" / "Some Title.md").exists()
+
+
+# --- mb note new: the filename is the wikilink target ------------------------
+#
+# The sanitizer, not the author, decides the filename: a comma becomes `_`, so
+# `[[<title>]]` typed from memory in another note points at nothing. The break
+# does not surface at creation — it surfaces later as a missing page in
+# `mb curator gaps`, next to genuinely unwritten notes. Cost a rename and two
+# link edits on 2026-08-04.
+
+def test_note_new_warns_when_the_filename_differs(wired, cfg, capsys):
+    title = "Rule - verify through the command, not the function"
+    assert cli.main(["note", "new", "rule", title]) == 0
+    err = capsys.readouterr().err
+    assert "filename differs from the title" in err
+    # The warning must quote the link target that actually works.
+    assert "[[Rule - verify through the command_ not the function]]" in err
+    assert (cfg.vault / "rules"
+            / "Rule - verify through the command_ not the function.md").exists()
+
+
+def test_note_new_is_quiet_when_the_title_survives(wired, cfg, capsys):
+    assert cli.main(["note", "new", "rule", "Rule - plain title"]) == 0
+    assert "filename differs" not in capsys.readouterr().err
+
+
+def test_note_new_warning_does_not_change_the_frontmatter_title(wired, cfg):
+    title = "Howto: run the suite"
+    cli.main(["note", "new", "howto", title])
+    body = (cfg.vault / "howto" / "Howto_ run the suite.md").read_text(encoding="utf-8")
+    fm, _ = parse_frontmatter(body)
+    assert fm["title"] == title      # the title is the author's, only the path is sanitized

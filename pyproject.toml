@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "singularity"
-version = "0.6.1"
+version = "0.6.2"
 description = "Singularity — personal AI memory system: Obsidian-native automatic memory + semantic search (Memory Brain engine)"
 requires-python = ">=3.10"
 dependencies = [
@@ -28,6 +28,17 @@ secrets = ["keyring>=24"]
 # owner decision OD-1 2026-07-14) and is reached via the `cutout` dispatch
 # subcommand, so this extras group can never drag numpy pins that break `mb`.
 imgqa = ["Pillow>=10", "scipy>=1.10"]
+# Everything the fast suite needs, and nothing heavy: the runtime deps come
+# from [project.dependencies], keyring and Pillow/scipy from the extras that
+# already declare them, and pytest is the only genuine addition — no second
+# copy of a version pin to drift. `pip install -e ".[dev]"` after a clone.
+#
+# It exists because the install puts the runtime in `.venv` and stops there:
+# `python -m pytest` in a fresh checkout answered "No module named pytest",
+# and the only way to know about `requirements-test.txt` was to read the CI
+# workflow. `tests/test_dev_extras_parity.py` pins this group to that file,
+# which stays the CI entry point.
+dev = ["singularity[imgqa,secrets]", "pytest>=7.0"]
 
 [project.scripts]
 mb = "singularity.cli:main"
