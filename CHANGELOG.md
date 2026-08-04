@@ -10,6 +10,57 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.6.3 — the vault guard is on by default
+
+`vault_guard_enabled` ships `true` in `audit` mode (owner decision, 2026-08-04).
+
+The check was written, registered as a PreToolUse hook, and switched off — so
+the thing it exists to catch went uncaught. It caught it the same day it was
+turned on: two rule notes created with a client's `Write` tool instead of
+`mb note new` skipped `templates/rule.md`, and the miss was invisible because
+skipping a template does not fail — the `source:` field and the required
+sections are simply absent, and the note reads fine. A human noticed, days
+later, by accident.
+
+`audit` only annotates the write (`[vault-guard audit] New file created
+directly in managed knowledge root 'rules/', bypassing the sanctioned CLI —
+prefer mb note new / mb learn`). It never blocks: `deny` stays explicit opt-in,
+per the 2026-07-12 Open Decision.
+
+### Nobody is flipped by an upgrade
+
+`Config.save()` materializes every default into `config.json`, so any install
+that has ever saved its config already carries an explicit value and keeps it.
+The new default reaches new installs. `docs/UPGRADE.md` now states the general
+rule rather than repeating "every opt-in defaults to off", which this release
+would have made false.
+
+### Two defaults were one too many
+
+The hook reads a raw config dict (`read_config_tolerant` applies no defaults),
+so it carried its own literal `False` — a second copy that would have quietly
+outlived this change and left the guard off exactly where it matters. It now
+falls back to `DEFAULT_CONFIG`, as does `mb doctor`, and a test pins the two
+together by monkeypatching the default and asserting the hook follows.
+
+`D5-vault-guard` no longer calls `disabled` the default: it prints
+`disabled (vault_guard_enabled: false)`, because "off" is now somebody's
+decision rather than the shipped state.
+
+### One case where the default must not speak
+
+An unparseable `config.json` used to mean "guard off" for free — `{}` and the
+literal `False` agreed. With the default flipped, that same silence would have
+meant "guard on", annotating writes on a config the user could not have
+expressed anything in. New `config.config_unreadable()` separates "key absent
+in a readable config" (→ default applies) from "file exists but does not
+parse" (→ the hook stays silent; `mb doctor` is where a broken config gets
+reported).
+
+Full suite: 1771 passed, 25 skipped.
+
+---
+
 # v0.6.2 — a silent rename, and a suite a fresh clone could not run
 
 Two small frictions, both hit during the v0.6.1 release itself.

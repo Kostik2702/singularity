@@ -84,7 +84,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "session_context_max_lines": 200,  # T06: total SessionStart injection budget
     "module_note_max_lines": 60,       # T07: per-module context note truncation
     "module_context_enabled": False,   # T07: PreToolUse hook installed but no-op until true
-    "vault_guard_enabled": False,      # T08: PreToolUse guard installed but no-op until true
+    # T08: PreToolUse guard. On by default since 2026-08-04 (owner decision) —
+    # `audit` only annotates a write, and the failure it catches is silent by
+    # construction: a new note written with a client's Write tool skips the
+    # template, so `source:` and the required sections are simply absent and
+    # nobody notices for weeks. Existing installs are unaffected: `Config.save`
+    # materializes every default into config.json, so a machine that has ever
+    # saved its config already carries an explicit `false` and keeps it.
+    "vault_guard_enabled": True,
     "vault_guard_mode": "audit",       # T08: "audit" (warn only) or "deny" (block)
     "personal_roots": [],              # T08: vault-relative roots classified as personal
     "digest_score_threshold": 0.45,    # T11: min cosine to surface a merge candidate
@@ -596,6 +603,24 @@ def read_config_tolerant(vault: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def config_unreadable(vault: Path) -> bool:
+    """True when `.mb/config.json` EXISTS but cannot be parsed as an object.
+
+    `read_config_tolerant` flattens "absent", "malformed" and "not an object"
+    into `{}`, which is right for readers that only want values — but a caller
+    deciding whether a default APPLIES needs the difference. An absent key in a
+    readable config means "the shipped default"; an unparseable file means the
+    user's choice is unknown, and a hook that acts on a guess there would be
+    enforcing a setting nobody could have expressed."""
+    cfg_path = vault / ".mb" / "config.json"
+    if not cfg_path.exists():
+        return False
+    try:
+        return not isinstance(json.loads(cfg_path.read_text(encoding="utf-8-sig")), dict)
+    except (OSError, json.JSONDecodeError):
+        return True
 
 
 def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:

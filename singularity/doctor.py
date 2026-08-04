@@ -1002,11 +1002,15 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                     if isinstance(h, dict) and "vault_guard.py" in str(h.get("command", "")):
                         installed = True
                         break
-        from .config import read_config_tolerant
+        from .config import DEFAULT_CONFIG, read_config_tolerant
         light_cfg = read_config_tolerant(cfg.vault)
-        enabled = bool(light_cfg.get("vault_guard_enabled", False))
-        mode = light_cfg.get("vault_guard_mode", "audit")
-        state = f"mode={mode}" if enabled else "disabled (default, opt-in via vault_guard_enabled)"
+        enabled = bool(light_cfg.get("vault_guard_enabled",
+                                     DEFAULT_CONFIG["vault_guard_enabled"]))
+        mode = light_cfg.get("vault_guard_mode", DEFAULT_CONFIG["vault_guard_mode"])
+        # The guard is on by default now, so "disabled" is somebody's decision,
+        # not the shipped state — say which key expresses it rather than calling
+        # it the default.
+        state = f"mode={mode}" if enabled else "disabled (vault_guard_enabled: false)"
         if installed:
             rep.add("D5-vault-guard", "PASS", f"PreToolUse hook registered, {state}")
         else:

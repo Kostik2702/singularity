@@ -28,10 +28,14 @@ and nothing here requires you to do anything by hand for a normal upgrade.
   (`config.json.bak-<ts>`) is written automatically before any migrating
   rewrite (`config.migrate_config()` / `config._backup_config()`) — your
   previous config is never overwritten without a copy.
-- **Every new opt-in mechanism defaults to OFF**: `module_context_enabled`,
-  `vault_guard_enabled` both default `false`. `auto_capture` keeps whatever
-  value it already had. Nothing new starts intercepting your session unless
-  you explicitly turn it on.
+- **Nothing new starts intercepting an existing session.** `Config.save()`
+  materializes every default into `config.json`, so a machine that has ever
+  saved its config keeps the values it already has — a changed default reaches
+  new installs only. `auto_capture` likewise keeps whatever value it had.
+- **`vault_guard_enabled` ships `true` (audit) since v0.6.3**, `module_context_enabled`
+  still `false`. If your config predates that and you WANT the guard, set it:
+  `mb config set vault_guard_enabled true`. Audit only annotates a write with a
+  hint to use `mb note new` / `mb learn`; `deny` remains explicit opt-in.
 - **`.mb/` gains new subdirectories/files on first use, not on upgrade
   itself**: `.mb/markers/` (per-session nudge markers), `.mb/digest.json`
   (mark journal), `.mb/digest-last.json` / `.mb/curator-last.json` /
