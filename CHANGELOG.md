@@ -10,6 +10,57 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.8.0 — a rule that is not there when the decision is made is not a rule
+
+Rollup of everything shipped on 2026-08-04 as v0.6.1 → v0.7.1: 21 commits,
+27 files, 1754 → 1806 tests. The per-release sections below stay as they are;
+this one is the shape they turned out to share.
+
+Every defect in this batch had the same anatomy. The knowledge existed. The
+rule was written, the check was implemented, the diagnostic printed the right
+words — and none of it was present at the moment someone chose what to do. Six
+times in one day, in six different places:
+
+| Release | The knowledge that existed | Where it wasn't |
+|---|---|---|
+| v0.6.1 | `doctor A6` names the broken key exactly | `config set` could not resolve that key's notation, and four separate read-backs confirmed the write anyway |
+| v0.6.2 | the sanitizer knows the filename changed | nobody was told, until the link broke weeks later in `curator gaps` |
+| v0.6.3 | the vault guard was written and registered | it was switched off |
+| v0.6.4 | the guard says "use `mb note new`" | two guarded roots had no such type — and the skill authorized the bypass in writing |
+| v0.7.0 | `A6` reports a dead model path | the registry was read-only, so there was nothing to do about it |
+| v0.7.1 | "artifacts live in the vault" was an active rule | it was absent where the write path gets chosen |
+
+The fix was the same shape too: put the statement at the point of decision, from
+one source, and add a test that fails when any surface drops it. Three shared
+fragments now work that way — `CAPTURE_HOOKS_FRAGMENT`,
+`VAULT_WRITE_POLICY_FRAGMENT`, and `DEFAULT_CONFIG` as the single home of the
+guard's default — because a second hand-maintained copy is how the guard's own
+default nearly survived being flipped.
+
+### What changed for someone using this
+
+- **`mb config set`** resolves dotted keys (`projects.x.path`,
+  `llm.models.q.args[14]`), refuses unknown keys with a "did you mean", and
+  never invents structure. `--allow-unknown` for the deliberate case.
+- **`mb llm add` / `mb llm remove`** — the model registry can be written to.
+- **`mb note new`** covers every guarded root, takes `--filename`, and names the
+  link target when the filename differs from the title.
+- **`mb project add`** merges instead of rebuilding an entry.
+- **The vault guard is on** in `audit` for new installs; existing configs keep
+  their explicit value.
+- **All four clients** (Claude, Codex, Gemini, Grok) carry the vault-only write
+  policy, and `mb-memory` gates both *where* and *with what* before a write.
+- **`pip install -e ".[dev]"`** exists; a fresh clone can run the suite.
+
+### Known state, not swept under
+
+`A6-config-paths` still WARNs on this machine: 8 paths belong to the Windows box
+this vault came from (three projects, `llama.cpp`, three `.gguf`). That is the
+check doing its job — the values cannot be guessed, and the machine simply does
+not have those files. Everything else in `mb doctor` is green.
+
+---
+
 # v0.7.1 — the vault-only write path, present where the path is chosen
 
 Closes **VSO-01**, open since 2026-07-13.
