@@ -10,6 +10,74 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.6.1 — the fix `mb doctor` prints is one you can actually type
+
+Found while acting on v0.6.0's own output on the machine it was released from.
+`A6-config-paths` reported eight paths belonging to another operating system
+and printed the fix: `mb config set <key> "<path>"`. Typing it changed nothing,
+and said otherwise four times.
+
+### `mb config set` resolves the notation the doctor speaks
+
+`config set` did `{**cfg.data, args.key: value}`, and `Config.get` matched flat
+keys only. Every key `A6` names is nested — `projects.<id>.path`,
+`llm.server_bin`, `llm.models.<name>.gguf`, and the `args[14]` index form — so
+the printed fix wrote a literal top-level key `"projects.singularity.path"`
+that no reader ever looks at, and the real value stayed where it was.
+
+What made it expensive is that nothing disagreed:
+
+- the command echoed `projects.singularity.path = "/Users/…"`;
+- `mb config get <same key>` read the value back — from the junk key, by exact
+  match, which is the read-back you would reach for to confirm the write;
+- `mb daemon reload` answered `config_changed: ["projects.singularity.path"]`;
+- `mb config validate` stayed quiet, because unknown keys are warnings and
+  `set` never printed them.
+
+Then the next `mb doctor` repeated the same WARN, verbatim.
+
+- **`parse_config_key` / `get_config_key` / `set_config_key`** (`config.py`)
+  speak exactly what `config_paths.path_entries` emits, index form included.
+  The notation was never chosen here — it is the one the diagnostic already
+  prints, so the writer has to speak it or the printed fix is a dead end.
+- **Intermediate nodes are never invented.** An unknown section or leaf is an
+  error that names what *is* there (`projects.singularity has no key colour
+  (present: about, group, path)`) and points at `mb project add` for projects.
+  Creating structure stays with the command that knows its shape; guessing it
+  is how the junk key got written in the first place.
+- **`Config.get` answers for dotted keys**, so `mb config get` and the daemon's
+  `config` read-back cover the same keys `set` writes — one notation across the
+  write, the read, and the diagnostic.
+- **`config set` surfaces the unknown-key warning** instead of writing a typo
+  in silence. It still writes: unknown-to-the-schema is not the same as wrong
+  (connectors and forward-compatible settings live there).
+- **`mb project add` merges into an existing entry.** It is the supported way
+  to repoint a project after a move between machines, and it was rebuilding the
+  entry from the flags alone — dropping `group` and `about` without a word,
+  a loss that surfaces much later as a project missing from its group.
+- **`A6`'s fix line quotes a key that is actually broken**, and names
+  `mb project add` when projects are among them.
+
+### The baseline went around the command under test
+
+v0.6.0 shipped a live `set → read-back → reload → restore` cycle against a
+running daemon (#12) and it passed honestly — but it wrote through `cfg.data`
+directly, on the flat key `excerpt_chars`. It never typed `mb config set`, and
+never touched a nested key, so it could not see that the write path resolved no
+dotted key at all while `A6` printed nothing but dotted keys.
+
+`tools/install_doctor_baseline.py` gains `config_write_path`: five cases driven
+through the real CLI against a throwaway vault — dotted write, indexed write,
+unknown section, dotted read-back, and `project add` metadata retention —
+graded on the config as it lands on disk. Run against the pre-fix tree, four of
+the five fail; the one that passes is the read-back, still confirming the junk
+key, which is the whole reason this was believable.
+
+21 tests in `tests/test_config_nested_keys.py`. Full suite: 1762 passed,
+25 skipped.
+
+---
+
 # v0.6.0 — the install is honest about itself (field issues #9–#16)
 
 Eight issues filed from one fresh macOS install of v0.5.1, all of the same
