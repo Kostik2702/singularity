@@ -39,7 +39,7 @@ graph TB
     subgraph HOOKS["Hooks (deterministic)"]
         H1["SessionStart → project brain,<br/>digest nag, doctor warnings"]
         H2["Stop → auto-capture gate"]
-        H3["PreToolUse → module context,<br/>vault guard (both opt-in)"]
+        H3["PreToolUse → module context (opt-in),<br/>vault guard (audit by default)"]
     end
     subgraph ENGINE["Engine (python)"]
         D["search daemon<br/>warm multilingual model<br/>TCP 127.0.0.1, ~15-70ms"]
@@ -113,7 +113,7 @@ The wrappers are ~20 lines each; all logic lives in `install/install.py`, which 
 1. **Python env** — creates `.venv` and installs dependencies.
 2. **Vault** — asks for your vault path, creates the memory folder tree (`learnings/`, `decisions/`, `howto/`, `incidents/`, `rules/`, `reference/`, `changelog/`, `templates/`, `_moc/`), binds it via `~/.singularity.json`.
 3. **Local model + first index + daemon** — explicitly adopts or downloads the embedding snapshot once (~470 MB) into the configured `hf_cache`, writes a pinned local manifest, starts the daemon, and builds the first index inside that warm process. Search/index runtime opens only that local snapshot (`local_files_only`); it never silently falls back to Hugging Face.
-4. **Client wiring** — registers four managed hook entries in `~/.claude/settings.json`: SessionStart, Stop, and two opt-in PreToolUse checks (module context and vault guard). Your existing settings are backed up and preserved; every entry we own is marked `"_mb": true` for clean uninstall. Then, **if they are installed**, the installer wires OpenAI Codex, Google Gemini and xAI Grok Build to the same memory (see [Other CLI clients](#other-cli-clients--codex-gemini--grok)).
+4. **Client wiring** — registers four managed hook entries in `~/.claude/settings.json`: SessionStart, Stop, and two PreToolUse checks (module context, opt-in; vault guard, audit by default). Your existing settings are backed up and preserved; every entry we own is marked `"_mb": true` for clean uninstall. Then, **if they are installed**, the installer wires OpenAI Codex, Google Gemini and xAI Grok Build to the same memory (see [Other CLI clients](#other-cli-clients--codex-gemini--grok)).
 5. **CLIs on PATH** — makes `mb`, `imgqa` and the other console scripts callable by name. macOS/Linux: symlinks them into `~/.local/bin` (and prints the exact `export PATH=…` line if that directory is not on your `PATH` — it never edits your shell rc for you). Windows: appends the venv `Scripts` directory to your **user** `PATH`, so open a new terminal afterwards. Only links that resolve back into this engine are ever created or removed, and `mb doctor`'s `D7-cli-on-path` reports the end state.
 6. **Scheduler + verify** — registers the nightly index rebuild and the on-save watcher with your OS scheduler (Task Scheduler / launchd / systemd — all with missed-run catch-up), then finishes with `mb doctor`.
 
@@ -375,13 +375,15 @@ Here, `Atomic.md` really did have the same paragraph typed twice under different
 
 ### Vault guard
 
-Opt-in (`vault_guard_enabled: true`) PreToolUse check that flags a new note or config edit landing somewhere unexpected — a safety net against "the assistant created a note in the wrong folder" or "edited `.mb/config.json` by hand instead of through `mb config set`." `vault_guard_mode: "audit"` (default once enabled) only warns; `"deny"` blocks the write outright. Start with `audit`, watch what it flags for a few sessions, and only switch to `deny` once you're confident it isn't flagging anything legitimate.
+PreToolUse check that flags a new note or config edit landing somewhere unexpected — a safety net against "the assistant created a note in the wrong folder" or "edited `.mb/config.json` by hand instead of through `mb config set`."
+
+**On by default in `audit` mode** since v0.6.3: it only annotates the write, never blocks. The default flipped because the failure it catches is silent by construction — a note written with a client's Write tool skips `templates/`, so the required frontmatter and sections are simply absent and nobody notices for weeks. `"deny"` blocks outright and stays explicit opt-in: watch what `audit` flags for a few sessions first, and switch only once you're confident nothing legitimate trips it.
+
+An install that has ever saved its config already carries an explicit value, so **upgrading does not flip anything** — this default reaches new installs. An unparseable `config.json` makes the hook stay silent rather than act on a default nobody could have expressed.
 
 ```bash
-mb config set vault_guard_enabled true
-mb config set vault_guard_mode audit        # warn only
-# Later, after observing legitimate work:
 mb config set vault_guard_mode deny         # block unexpected writes
+mb config set vault_guard_enabled false     # or turn the check off entirely
 ```
 
 ### Adoption telemetry with mb reflect
@@ -555,6 +557,8 @@ Run `mb llm setup` once more after editing: it reports missing files, repairs kn
 #### Everyday use
 
 ```bash
+mb llm add q9b /models/q9b.gguf -- -ngl 99 --jinja   # register (validated, atomic)
+mb llm remove q9b                     # unregister; refuses while it is being served
 mb llm list                           # configured models; active one is marked
 mb llm start qwen3-30b                # switch from any running model, then health-check
 mb llm code                           # interactive Claude Code on the active local model
@@ -749,7 +753,7 @@ Everything lives in `<vault>/.mb/config.json` (created with defaults on first ru
   "module_context_enabled": false,     // PreToolUse module-context hook — opt-in, default off
 
   // --- vault guard (PreToolUse) ---------------------------------------------
-  "vault_guard_enabled": false,        // opt-in, default off
+  "vault_guard_enabled": true,         // on by default (v0.6.3+); audit only annotates
   "vault_guard_mode": "audit",         // "audit" (warn only) or "deny" (block)
 
   // --- digest planner (`mb digest plan|mark`) -------------------------------
@@ -768,7 +772,7 @@ Everything lives in `<vault>/.mb/config.json` (created with defaults on first ru
 }
 ```
 
-Every opt-in mechanism above (`module_context_enabled`, `vault_guard_enabled`) defaults to **off** — nothing new activates itself on upgrade. See [docs/UPGRADE.md](docs/UPGRADE.md) and [docs/ROLLBACK.md](docs/ROLLBACK.md) for what changes when you pull a newer version and how to turn any of it back off.
+`module_context_enabled` defaults to **off**, and `vault_guard_enabled` ships **on in `audit`** (v0.6.3+) — annotating writes, never blocking. Neither flips on upgrade: an install that has ever saved its config carries explicit values for both. See [docs/UPGRADE.md](docs/UPGRADE.md) and [docs/ROLLBACK.md](docs/ROLLBACK.md) for what changes when you pull a newer version and how to turn any of it back off.
 
 Vault resolution order: `--vault` flag → `MB_HOME` env → `~/.singularity.json` pointer → default.
 
@@ -784,7 +788,7 @@ singularity/
 ├── capture.py             # capture-time project resolution, bounded dedup (mb learn/note new)
 ├── context_map.py         # .mb/context.json loader + budgeted project-brain excerpt builder
 ├── module_context.py      # per-module context matching (PreToolUse, opt-in)
-├── vault_guard.py         # out-of-band note/config write guard (PreToolUse, opt-in)
+├── vault_guard.py         # out-of-band note/config write guard (PreToolUse, audit by default)
 ├── digest.py              # learnings -> reference/rule/howto/decision merge candidates (report-only)
 ├── curator.py             # vault health: broken links/orphans, semantic link suggestions,
 │                           #   chunk-level near-duplicates, supersession candidates, context budgets

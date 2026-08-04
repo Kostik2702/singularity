@@ -97,12 +97,19 @@ def _paths_fix(keys: list[str]) -> str:
     wrote a literal top-level key, reported success, and left the WARN in
     place. It resolves them now; the example points at a real key so the two
     stay honest about each other."""
-    sample = next((k for k in keys if not k.startswith("projects.")), keys[0])
+    plain = [k for k in keys if not k.startswith(("projects.", "llm.models."))]
     line = (f"set each one for this machine, e.g. "
-            f'mb config set {sample} "<path>"  '
+            f'mb config set {plain[0] if plain else keys[0]} "<path>"  '
             f"(the correct values cannot be guessed)")
+    # Both of these own a registry with its own commands — sending someone to
+    # `config set` for them is sending them the long way round, and for a model
+    # that no longer exists on this machine there is no `config set` answer at
+    # all: the entry has to go, which only `mb llm remove` does.
     if any(k.startswith("projects.") for k in keys):
         line += "; repoint projects with `mb project add <id> <path>`"
+    if any(k.startswith("llm.models.") for k in keys):
+        line += ("; models with `mb llm add <name> <gguf>` "
+                 "(or `mb llm remove <name>` if it is gone for good)")
     return line
 
 
@@ -1022,11 +1029,15 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                     if isinstance(h, dict) and "vault_guard.py" in str(h.get("command", "")):
                         installed = True
                         break
-        from .config import read_config_tolerant
-        light_cfg = read_config_tolerant()
-        enabled = bool(light_cfg.get("vault_guard_enabled", False))
-        mode = light_cfg.get("vault_guard_mode", "audit")
-        state = f"mode={mode}" if enabled else "disabled (default, opt-in via vault_guard_enabled)"
+        from .config import DEFAULT_CONFIG, read_config_tolerant
+        light_cfg = read_config_tolerant()          # per machine since 0.7
+        enabled = bool(light_cfg.get("vault_guard_enabled",
+                                     DEFAULT_CONFIG["vault_guard_enabled"]))
+        mode = light_cfg.get("vault_guard_mode", DEFAULT_CONFIG["vault_guard_mode"])
+        # The guard is on by default now, so "disabled" is somebody's decision,
+        # not the shipped state — say which key expresses it rather than calling
+        # it the default.
+        state = f"mode={mode}" if enabled else "disabled (vault_guard_enabled: false)"
         if installed:
             rep.add("D5-vault-guard", "PASS", f"PreToolUse hook registered, {state}")
         else:

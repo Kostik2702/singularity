@@ -202,3 +202,55 @@ def test_note_new_warning_does_not_change_the_frontmatter_title(wired, cfg):
     body = (cfg.vault / "howto" / "Howto_ run the suite.md").read_text(encoding="utf-8")
     fm, _ = parse_frontmatter(body)
     assert fm["title"] == title      # the title is the author's, only the path is sanitized
+
+
+# --- mb note new --filename (CLI-03) -----------------------------------------
+#
+# The vault's convention puts the type in the FILENAME and keeps `title:` clean
+# (`rules/Rule - X.md` holding `title: X`) — 28 of 38 rules look like that. One
+# positional argument cannot say both, so the prefix ended up in the title,
+# where it does not belong. Owner decision 2026-08-04: an explicit flag, with
+# the default untouched.
+
+def test_note_new_filename_overrides_the_stem(wired, cfg):
+    cli.main(["note", "new", "rule", "верификация через команду",
+              "--filename", "Rule - верификация через команду"])
+    path = cfg.vault / "rules" / "Rule - верификация через команду.md"
+    assert path.exists()
+    fm, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
+    assert fm["title"] == "верификация через команду", "title stays the author's"
+
+
+def test_note_new_filename_is_sanitized_too(wired, cfg, capsys):
+    cli.main(["note", "new", "rule", "X", "--filename", "Rule - a, b"])
+    assert (cfg.vault / "rules" / "Rule - a_ b.md").exists()
+    assert "[[Rule - a_ b]]" in capsys.readouterr().err
+
+
+def test_note_new_filename_absent_keeps_the_old_behaviour(wired, cfg):
+    cli.main(["note", "new", "rule", "Rule - plain"])
+    assert (cfg.vault / "rules" / "Rule - plain.md").exists()
+
+
+def test_note_new_quiet_when_filename_survives_sanitizing(wired, cfg, capsys):
+    """The warning is about a surprise. Asking for a different filename is not
+    one — it only fires when the sanitizer changed what was asked for."""
+    cli.main(["note", "new", "rule", "some title", "--filename", "Rule - some title"])
+    assert "filename differs" not in capsys.readouterr().err
+
+
+def test_note_new_rejects_a_filename_that_sanitizes_to_nothing(wired, cfg, capsys):
+    """Whitespace strips to empty — the one input that would otherwise create
+    `.md`, a dotfile with no stem."""
+    rc = cli.main(["note", "new", "rule", "X", "--filename", "   "])
+    assert rc == 1
+    assert "nothing usable as a filename" in capsys.readouterr().err
+    assert not (cfg.vault / "rules").exists()
+
+
+def test_note_new_filename_of_separators_is_allowed_but_announced(wired, cfg, capsys):
+    """`///` sanitizes to `___`, which is a usable (if odd) stem — so it is
+    created, and the warning names the link target it really got."""
+    assert cli.main(["note", "new", "rule", "X", "--filename", "///"]) == 0
+    assert (cfg.vault / "rules" / "___.md").exists()
+    assert "[[___]]" in capsys.readouterr().err

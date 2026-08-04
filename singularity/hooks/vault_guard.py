@@ -5,19 +5,24 @@ Flags NEW-file creation in a managed knowledge root and direct writes to
 client's Write/Edit tool at all (see singularity/vault_guard.py for why no
 spoofable command-detection is needed).
 
-Installed but no-op until `vault_guard_enabled: true` (opt-in, same posture
-as T07's module_context_enabled — registering the hook must not start
-checking every Write/Edit immediately). When enabled, `vault_guard_mode`
-("audit", default) only adds additionalContext — NEVER permissionDecision,
-never blocks. "deny" (explicit opt-in) sets permissionDecision="deny" with an
-actionable reason; this is NOT the default per the resolved Open Decision
-(2026-07-12): audit first, deny only once explicitly configured.
+On by default since 2026-08-04 (owner decision), in `audit` mode: the check
+only adds additionalContext — NEVER permissionDecision, never blocks. It was
+opt-in until then, and the reason for flipping it is what the default cost:
+a note written with a client's Write tool skips `templates/`, so `source:` and
+the required sections are absent, and nothing says so for weeks. `deny`
+(explicit opt-in) sets permissionDecision="deny" with an actionable reason;
+that half is unchanged per the resolved Open Decision (2026-07-12) — audit
+first, deny only once explicitly configured.
+
+Turning it off stays one key away (`vault_guard_enabled: false`), and an
+install that has ever saved its config already carries an explicit value, so
+upgrading changes nothing there.
 
 ONE exception (WIKI-LOOP D6, 2026-07-28): `immutable_roots` (default
-`[".mb/sources"]`) always denies, audit or not. Honest scope note — the hook
-is still a no-op while `vault_guard_enabled` is false (the default), so the
-real immutability guarantee is the write-once check in `singularity/sources.py`;
-this is the second line, not the first.
+`[".mb/sources"]`) always denies, audit or not. The real immutability
+guarantee remains the write-once check in `singularity/sources.py` — this is
+the second line, not the first, and it is now armed by default rather than
+waiting to be switched on.
 """
 from __future__ import annotations
 
@@ -42,14 +47,33 @@ def evaluate(event: dict) -> dict | None:
     if not isinstance(file_path, str) or not file_path.strip():
         return None
 
-    from singularity.config import read_config_tolerant, resolve_vault
+    from singularity.config import (
+        DEFAULT_CONFIG,
+        config_unreadable,
+        read_config_tolerant,
+        resolve_vault,
+    )
 
     vault = resolve_vault(None)
     if vault is None or not vault.exists():
         return None
 
+    # A config that exists but does not parse says nothing about what the user
+    # wants, and this check is on by default — so acting on the default here
+    # would annotate writes on the strength of a guess. Stay silent instead;
+    # `mb doctor` is where a broken config gets reported.
+    if config_unreadable(vault):
+        return None
+
+    # `read_config_tolerant` applies no defaults, so every fallback here has to
+    # come from DEFAULT_CONFIG rather than a literal: a second copy of a default
+    # is a second thing to forget, and this hook decides whether a check runs at
+    # all. `tests/test_vault_guard_hook.py` pins the two together.
+    # (No `vault` argument since 0.7: the config is per machine, so there is one
+    # file to read and no vault to locate first.)
     light_cfg = read_config_tolerant()
-    if not light_cfg.get("vault_guard_enabled", False):
+    if not light_cfg.get("vault_guard_enabled",
+                         DEFAULT_CONFIG["vault_guard_enabled"]):
         return None
 
     cwd = event.get("cwd")
@@ -91,7 +115,7 @@ def evaluate(event: dict) -> dict | None:
                   f"'{root}/', bypassing the sanctioned CLI — prefer "
                   f"`mb note new` / `mb learn` so it gets project binding and dedup.")
 
-    mode = light_cfg.get("vault_guard_mode", "audit")
+    mode = light_cfg.get("vault_guard_mode", DEFAULT_CONFIG["vault_guard_mode"])
     if mode == "deny":
         return {"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                        "permissionDecision": "deny",

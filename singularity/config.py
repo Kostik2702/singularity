@@ -100,7 +100,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "session_context_max_lines": 200,  # T06: total SessionStart injection budget
     "module_note_max_lines": 60,       # T07: per-module context note truncation
     "module_context_enabled": False,   # T07: PreToolUse hook installed but no-op until true
-    "vault_guard_enabled": False,      # T08: PreToolUse guard installed but no-op until true
+    # T08: PreToolUse guard. On by default since 2026-08-04 (owner decision) —
+    # `audit` only annotates a write, and the failure it catches is silent by
+    # construction: a new note written with a client's Write tool skips the
+    # template, so `source:` and the required sections are simply absent and
+    # nobody notices for weeks. Existing installs are unaffected: `Config.save`
+    # materializes every default into config.json, so a machine that has ever
+    # saved its config already carries an explicit `false` and keeps it.
+    "vault_guard_enabled": True,
     "vault_guard_mode": "audit",       # T08: "audit" (warn only) or "deny" (block)
     "personal_roots": [],              # T08: vault-relative roots classified as personal
     "digest_score_threshold": 0.45,    # T11: min cosine to surface a merge candidate
@@ -623,14 +630,7 @@ def read_config_tolerant() -> dict[str, Any]:
     migration — on an upgraded machine the very next SessionStart or PreToolUse
     would otherwise silently see defaults and, for `vault_guard_mode` or
     `immutable_roots`, quietly stop enforcing what the user configured."""
-    data = _read_json_object(CONFIG_FILE)
-    if any(k not in ("schema_version", "vault_path") for k in data):
-        return data
-    vault = resolve_vault()
-    if vault is None:
-        return data
-    legacy = _read_json_object(legacy_config_path(vault))
-    return legacy or data
+    return _read_json_object(active_config_path())
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:
@@ -642,6 +642,41 @@ def _read_json_object(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def active_config_path(vault: Optional[Path] = None) -> Path:
+    """The file that actually answers config reads right now.
+
+    Normally the machine config. During the upgrade window — machine config
+    still empty, pre-0.7 vault copy still present — it is the vault copy, and
+    both `read_config_tolerant()` and `config_unreadable()` have to agree about
+    which one that is, or a hook would validate one file and read another."""
+    machine = _read_json_object(CONFIG_FILE)
+    if any(k not in ("schema_version", "vault_path") for k in machine):
+        return CONFIG_FILE
+    if vault is None:
+        vault = resolve_vault()
+    if vault is not None and legacy_config_path(vault).exists():
+        return legacy_config_path(vault)
+    return CONFIG_FILE
+
+
+def config_unreadable(vault: Optional[Path] = None) -> bool:
+    """True when the active config EXISTS but cannot be parsed as an object.
+
+    `read_config_tolerant` flattens "absent", "malformed" and "not an object"
+    into `{}`, which is right for readers that only want values — but a caller
+    deciding whether a default APPLIES needs the difference. An absent key in a
+    readable config means "the shipped default"; an unparseable file means the
+    user's choice is unknown, and a hook that acts on a guess there would be
+    enforcing a setting nobody could have expressed."""
+    cfg_path = active_config_path(vault)
+    if not cfg_path.exists():
+        return False
+    try:
+        return not isinstance(json.loads(cfg_path.read_text(encoding="utf-8-sig")), dict)
+    except (OSError, json.JSONDecodeError):
+        return True
 
 
 def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:

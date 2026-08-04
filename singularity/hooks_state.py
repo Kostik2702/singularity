@@ -42,6 +42,28 @@ After enable/disable, always run `mb hooks status` and report the effective stat
 A vague "выключи все хуки" / "disable all hooks" does NOT mean capture hooks by default —
 confirm scope with the user before running a command."""
 
+# VSO-01: the same one-source treatment for WHERE knowledge is written.
+# Incident 2026-07-13 ([[Error - Vault staging duplicates]]): a client edited 14
+# vault documents as copies under the user's profile root and copied them back,
+# because the sandbox exposed that directory as writable and a mirror looked
+# like the path of least resistance. No unique data was lost — every staging
+# file turned out byte-identical to, or contained in, its canonical version —
+# but for a while the machine had two working sets of the same notes, and only
+# a hash audit could say which was authoritative. A rule saying "artifacts live
+# in the vault" already existed; it was not present at the moment the write
+# path got chosen, which is the only moment it could have helped.
+VAULT_WRITE_POLICY_FRAGMENT = """## Vault is the write destination, not a copy of it
+Before the FIRST write of anything destined for the vault, resolve the destination:
+- Write **directly** to the vault path (or through `mb note new` / `mb learn`).
+- **Never** create an editable mirror, staging copy or scratch draft of a vault
+  document elsewhere and copy it back — not for an editor, a sandbox, or a patch
+  tool. A second working copy is a second source of truth until someone diffs them.
+- External folders are for INPUT (reading source material) and for an export the
+  user explicitly asked for. Neither authorizes an editable duplicate.
+- If a direct vault write is genuinely blocked (permission, sandbox), STOP and say
+  so, then ask for access or a vault-native path. Do not route around it.
+Reading vault files, and copying INTO the vault, are always fine."""
+
 
 def _read_json_tolerant(path: Path) -> tuple[dict[str, Any], str | None]:
     """(data, error). Missing file -> ({}, None). Malformed/non-object -> ({}, reason)."""

@@ -89,8 +89,12 @@ def build_context(event_cwd: str | None = None) -> str:
         "SEM-FIRST: use it BEFORE grep/Read for any knowledge discovery. "
         "Capture insights: `mb learn \"<insight>\" --task <ID>`; new notes: `mb note new <type> <title>`."
     )
-    from singularity.hooks_state import CAPTURE_HOOKS_FRAGMENT
+    from singularity.hooks_state import (
+        CAPTURE_HOOKS_FRAGMENT,
+        VAULT_WRITE_POLICY_FRAGMENT,
+    )
     lines.append(CAPTURE_HOOKS_FRAGMENT)
+    lines.append(VAULT_WRITE_POLICY_FRAGMENT)
 
     if not vault.exists():
         lines.append("WARNING: vault path does not exist on this machine.")

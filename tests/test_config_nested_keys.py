@@ -180,9 +180,29 @@ def test_cli_set_fails_loudly_for_a_section_that_does_not_exist(wired, cfg, data
     assert not (cfg.vault / ".mb" / "config.json").exists(), "nothing written"
 
 
-def test_cli_set_warns_about_an_unknown_flat_key(wired, cfg, capsys):
-    assert cli.main(["config", "set", "modle", "typo"]) == 0
-    assert "unknown config key" in capsys.readouterr().err
+def test_cli_set_refuses_an_unknown_flat_key(wired, cfg, capsys):
+    """Owner decision 2026-08-04 (CLI-02): nothing reads an unknown key, so
+    writing one is a no-op the user reads as a fix. It warned until v0.6.4."""
+    assert cli.main(["config", "set", "modle", "typo"]) == 1
+    err = capsys.readouterr().err
+    assert "unknown config key" in err
+    assert "did you mean: model?" in err, "a one-keystroke typo deserves the hint"
+    assert not (cfg.vault / ".mb" / "config.json").exists(), "nothing written"
+
+
+def test_cli_set_allow_unknown_writes_it(wired, cfg, capsys):
+    """The legitimate case — a connector key, or one a newer build reads —
+    stays reachable, just explicit."""
+    assert cli.main(["config", "set", "my_future_key", "1", "--allow-unknown"]) == 0
+    import singularity.config as config_mod
+    on_disk = json.loads(config_mod.CONFIG_FILE.read_text(encoding="utf-8"))
+    assert on_disk["my_future_key"] == 1
+    assert "written as requested" in capsys.readouterr().err
+
+
+def test_cli_set_known_key_needs_no_flag(wired, cfg, capsys):
+    assert cli.main(["config", "set", "excerpt_chars", "200"]) == 0
+    assert "unknown config key" not in capsys.readouterr().err
 
 
 def test_cli_get_reads_a_dotted_key(wired, cfg, data, capsys):

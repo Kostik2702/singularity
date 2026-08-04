@@ -385,6 +385,107 @@ def status(cfg, as_json: bool = False) -> int:
     return 0
 
 
+def add_model(cfg, name: str, gguf: str, extra_args: list[str] | None = None) -> int:
+    """Register a model in `llm.models` — the write half `list` never had.
+
+    Until v0.7.0 the registry was read-only and `mb llm list` told people to
+    "add to llm.models in .mb/config.json" by hand: the exact edit the vault
+    guard flags, in the file `mb config set` owns. Worse on the other end —
+    `doctor A6-config-paths` reports dead `llm.models.*.gguf` after a move
+    between machines and has nothing to offer for removing one.
+
+    The path is NOT required to exist: a config is often prepared before the
+    weights are downloaded, and A6 already reports a path that resolves
+    nowhere. Say so and register anyway."""
+    from .config import validate_config
+
+    if not name.strip():
+        print("[mb] model name must not be empty", file=sys.stderr)
+        return 1
+    llm_section = dict(cfg.get("llm") or {})
+    models = dict(llm_section.get("models") or {})
+    previous = models.get(name)
+    spec = dict(previous) if isinstance(previous, dict) else {}
+    spec["gguf"] = gguf
+    if extra_args:
+        spec["args"] = list(extra_args)
+    models[name] = spec
+    llm_section["models"] = models
+    candidate = {**cfg.data, "llm": llm_section}
+
+    try:
+        _validate_llm(llm_section)
+    except LLMConfigError as exc:
+        print(f"[mb] {exc}", file=sys.stderr)
+        return 1
+    result = validate_config(candidate)
+    if result["errors"]:
+        for e in result["errors"]:
+            print(f"[mb] {e}", file=sys.stderr)
+        return 1
+
+    cfg.data = candidate
+    cfg.save()
+    print(f"model {'updated' if previous else 'added'}: {name} -> {gguf}")
+    if not Path(gguf).exists():
+        print(f"[mb] note: {gguf} does not exist on this machine yet "
+              f"(`mb doctor` reports it under A6-config-paths)", file=sys.stderr)
+    _warn_daemon_stale(cfg)
+    return 0
+
+
+def remove_model(cfg, name: str, force: bool = False) -> int:
+    """Unregister a model. Refuses while it is the one being served, unless
+    `--force`: stopping someone's running server as a side effect of editing a
+    registry is not a config edit, it is an outage."""
+    from .config import validate_config
+
+    llm_section = dict(cfg.get("llm") or {})
+    models = dict(llm_section.get("models") or {})
+    if name not in models:
+        print(f"[mb] unknown model: {name} (known: "
+              f"{', '.join(sorted(models)) or '(none)'})", file=sys.stderr)
+        return 1
+
+    state = load_state(cfg) or {}
+    if state.get("model") == name and not force:
+        print(f"[mb] {name} is the model currently being served (pid "
+              f"{state.get('server_pid')}) — `mb llm stop` first, or pass "
+              f"--force to unregister it and leave the server running",
+              file=sys.stderr)
+        return 1
+
+    del models[name]
+    llm_section["models"] = models
+    candidate = {**cfg.data, "llm": llm_section}
+    result = validate_config(candidate)
+    if result["errors"]:
+        for e in result["errors"]:
+            print(f"[mb] {e}", file=sys.stderr)
+        return 1
+    cfg.data = candidate
+    cfg.save()
+    print(f"model removed: {name}")
+    if state.get("model") == name:
+        print("[mb] the server for it is still running — `mb llm stop` when done",
+              file=sys.stderr)
+    _warn_daemon_stale(cfg)
+    return 0
+
+
+def _warn_daemon_stale(cfg) -> None:
+    """Same courtesy `mb config set` pays (issue #12): a live daemon serves the
+    config it started with, so a registry write it has not seen is a trap."""
+    try:
+        from .search import client
+        answered, live = client.daemon_value(cfg, "llm")
+    except Exception:                        # noqa: BLE001 — advisory only
+        return
+    if answered and live != cfg.get("llm"):
+        print("[mb] a daemon is running and still serves the previous llm "
+              "section — run `mb daemon reload`", file=sys.stderr)
+
+
 def list_models(cfg) -> int:
     try:
         llm = _llm_cfg(cfg)
@@ -393,7 +494,8 @@ def list_models(cfg) -> int:
         return 1
     models = llm.get("models") or {}
     if not models:
-        print("[mb] no models in config — add to llm.models in the machine config (~/.singularity.json)")
+        print("[mb] no models in config — register one with "
+              '`mb llm add <name> --gguf <path>`')
         return 1
     state = load_state(cfg)
     active = state.get("model") if state else None

@@ -420,18 +420,39 @@ def test_d5_warns_when_not_registered(cfg, monkeypatch):
     assert "not registered" in d5["detail"]
 
 
-def test_d5_pass_when_registered_reports_disabled_by_default(cfg, monkeypatch):
-    _stub_externals(monkeypatch)
-    _home(monkeypatch, cfg)
+def _register_vault_guard_hook(cfg):
     settings = cfg.vault / ".claude" / "settings.json"
-    settings.parent.mkdir(parents=True)
+    settings.parent.mkdir(parents=True, exist_ok=True)
     settings.write_text(json.dumps({"hooks": {"PreToolUse": [
         {"_mb": True, "matcher": "Edit|Write|MultiEdit",
          "hooks": [{"type": "command", "command": "x vault_guard.py"}]}]}}), encoding="utf-8")
+
+
+def test_d5_pass_when_registered_reports_audit_by_default(cfg, monkeypatch):
+    """On by default since 2026-08-04 — a config with no key reports the mode
+    it is actually running in, not an opt-in invitation."""
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    _register_vault_guard_hook(cfg)
     doctor.run(cfg, as_json=True)
     d5 = _check(cfg, "D5-vault-guard")
     assert d5["status"] == "PASS"
-    assert "disabled" in d5["detail"]
+    assert "mode=audit" in d5["detail"]
+
+
+def test_d5_names_the_key_when_switched_off(cfg, monkeypatch):
+    """"disabled" is now somebody's decision, so the line points at the key
+    that expresses it instead of calling it the default."""
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    _register_vault_guard_hook(cfg)
+    import singularity.config as config_mod
+    config_mod.CONFIG_FILE.write_text(                         # per machine now
+        json.dumps({"vault_guard_enabled": False}), encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    d5 = _check(cfg, "D5-vault-guard")
+    assert d5["status"] == "PASS"
+    assert "vault_guard_enabled: false" in d5["detail"]
 
 
 # --- T12: C1-nightly job migration --------------------------------------------

@@ -61,7 +61,10 @@ import client_registration  # noqa: E402  (shared safe-registration primitives)
 import register_skills  # noqa: E402  (reuse the junction helpers, single source)
 import skill_manifest  # noqa: E402  (T15/GRK-01: single source of client->skills)
 from singularity.config import resolve_vault  # noqa: E402  (stdlib-only, pre-deps safe)
-from singularity.hooks_state import CAPTURE_HOOKS_FRAGMENT  # noqa: E402  (T02 shared fragment)
+from singularity.hooks_state import (  # noqa: E402  (T02/VSO-01 shared fragments)
+    CAPTURE_HOOKS_FRAGMENT,
+    VAULT_WRITE_POLICY_FRAGMENT,
+)
 
 SKILLS_SRC = ENGINE / "singularity" / "skills"
 GROK_SKILLS = skill_manifest.skills_for_client("grok")
@@ -155,6 +158,8 @@ mb learn "<insight>" --task <ID>     # decisions carry owner + source
 Dedup with `mb search` before writing. Maintenance: `mb doctor --fix`.
 
 {CAPTURE_HOOKS_FRAGMENT}
+
+{VAULT_WRITE_POLICY_FRAGMENT}
 
 ## Shortcuts (user may type these)
 - **um** — update memory (capture insight/decision into the vault; dedup first)
