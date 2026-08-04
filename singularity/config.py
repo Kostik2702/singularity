@@ -616,11 +616,29 @@ def read_config_tolerant() -> dict[str, Any]:
     See [[Rule - hooks must never use the full validated Config load path]].
 
     Takes no vault argument any more: the config is per machine, so there is
-    exactly one file to read and no vault to locate first."""
-    if not CONFIG_FILE.exists():
+    exactly one file to read and no vault to locate first.
+
+    Falls back to the pre-0.7 vault-resident config while the machine config
+    holds no settings yet. Hooks run BEFORE the first `mb` command does the
+    migration — on an upgraded machine the very next SessionStart or PreToolUse
+    would otherwise silently see defaults and, for `vault_guard_mode` or
+    `immutable_roots`, quietly stop enforcing what the user configured."""
+    data = _read_json_object(CONFIG_FILE)
+    if any(k not in ("schema_version", "vault_path") for k in data):
+        return data
+    vault = resolve_vault()
+    if vault is None:
+        return data
+    legacy = _read_json_object(legacy_config_path(vault))
+    return legacy or data
+
+
+def _read_json_object(path: Path) -> dict[str, Any]:
+    """A JSON object from `path`, or {} for anything else. Never raises."""
+    if not path.exists():
         return {}
     try:
-        data = json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
@@ -736,7 +754,10 @@ def migrate_vault_config(cfg: "Config") -> Optional[Path]:
     legacy = legacy_config_path(cfg.vault)
     if not legacy.exists():
         return None
-    machine = read_config_tolerant()
+    # the FILE, not read_config_tolerant(): that one falls back to this very
+    # legacy config during upgrade, so asking it "is the machine configured?"
+    # would always answer yes and the migration would never run
+    machine = _read_json_object(CONFIG_FILE)
     if any(k not in ("schema_version", "vault_path") for k in machine):
         return None                     # this machine is already configured
     try:
