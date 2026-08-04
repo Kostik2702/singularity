@@ -1,7 +1,7 @@
 """mb — single CLI entry point (replaces the Genevra script sprawl).
 
 mb search "<query>" [--top N] [--type T] [--tags a,b] [--links X] [--json] ...
-mb daemon start|stop|status|reload|run
+mb daemon start|stop|restart|status|reload|run
 mb index rebuild|update [--files f1 f2]|inspect <path>
 mb watch
 mb doctor [--fix] [--heavy] [--json]
@@ -73,7 +73,8 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true")
 
     d = sub.add_parser("daemon", help="daemon control")
-    d.add_argument("action", choices=["start", "stop", "status", "reload", "run"])
+    d.add_argument("action",
+                   choices=["start", "stop", "restart", "status", "reload", "run"])
 
     i = sub.add_parser("index", help="index management")
     i.add_argument("action", choices=["rebuild", "update", "inspect"])
@@ -417,9 +418,17 @@ def cmd_daemon(cfg, args) -> int:
     if args.action == "stop":
         print("stopped" if client.stop_daemon(cfg) else "was not running")
         return 0
+    if args.action == "restart":
+        ok = client.restart_daemon(cfg)
+        print("restarted" if ok else "FAILED to start — see .mb/daemon.log")
+        return 0 if ok else 1
     if args.action == "reload":
         resp = client.reload_daemon(cfg)
         print(json.dumps(resp, ensure_ascii=False) if resp else "daemon not running")
+        if resp and resp.get("restart_required"):
+            print(f"[mb] {', '.join(resp['restart_required'])} changed — "
+                  f"reload cannot rebind it, run `mb daemon restart`",
+                  file=sys.stderr)
         return 0 if resp else 1
     print(json.dumps(client.status(cfg), ensure_ascii=False, indent=1))
     return 0
@@ -563,6 +572,19 @@ def cmd_config(cfg, args) -> int:
         cfg.data = candidate
         cfg.save()                             # atomic (tmp + replace)
         print(f"{args.key} = {json.dumps(value, ensure_ascii=False)}")
+        # A running daemon still serves the value it started with, and silently
+        # writing a value the serving process ignores is the trap this cost a
+        # day to (issue #12) — `rebuild --code` kept reporting 0 files against
+        # a config that was already correct on disk.
+        from .search import client
+        answered, live = client.daemon_value(cfg, args.key)
+        if answered and live != value:
+            print(f"[mb] a daemon is running and still serves "
+                  f"{args.key} = {json.dumps(live, ensure_ascii=False)} — "
+                  f"run `mb daemon reload` to pick this up"
+                  + (", or `mb daemon restart` (the model cannot be rebound "
+                     "in place)" if args.key == "model" else ""),
+                  file=sys.stderr)
         return 0
     return 1
 
@@ -1276,6 +1298,17 @@ def cmd_uninstall(cfg, _args) -> int:
     k = _rk.uninstall()
     print(f"grok: profile {k['profile']}, {k['hooks']} hook(s) removed, "
           f"{k['skills_removed']} skill link(s) removed, {k['skills_kept']} kept (foreign)")
+
+    # PATH registration (issue #15): only the links that resolve back into this
+    # engine, and only the PATH entry we added — a foreign `~/.local/bin/mb` or
+    # someone else's PATH entry is reported and kept.
+    _rp = _load("register_path")
+    p = _rp.uninstall()
+    if "path_entry" in p:
+        print(f"path: user PATH entry {p['path_entry']}")
+    else:
+        print(f"path: {len(p['removed'])} link(s) removed, "
+              f"{len(p['kept'])} kept (not ours)")
 
     for job in (scheduler.Job("nightly-index", [], daily_at="03:00"),   # T02 legacy
                 scheduler.Job("nightly", [], daily_at="03:00"),         # T12

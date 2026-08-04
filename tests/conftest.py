@@ -67,6 +67,61 @@ def _no_real_scheduler(request, monkeypatch):
     monkeypatch.setattr(scheduler, "unregister", _blocked_unregister)
 
 
+@pytest.fixture(autouse=True)
+def _no_real_user_path(request, monkeypatch):
+    """Fail loudly instead of rewriting the developer's real user PATH.
+
+    One machine-mutating surface later (issue #15): the PATH registrar and
+    `mb uninstall` write `HKCU\\Environment` on Windows. The POSIX half of that
+    feature symlinks under `Path.home()`, which tests already fake — the
+    registry has no such indirection, so it is blocked at `winreg` itself,
+    which is the one module object every importer shares (`register_path` is
+    loaded fresh by path each time, so patching that module would not hold).
+
+    Two layers, because either one alone is insufficient. The write is blocked
+    so a test that tries it fails loudly instead of silently editing the
+    developer's environment. The read is answered with an EMPTY PATH so the
+    common case — `mb uninstall`, which removes only entries it finds — has
+    nothing to find and never reaches the write at all; otherwise the verdict
+    would differ between a machine that has run the installer and one that has
+    not (caught exactly this way by test_wiki_loop_e2e)."""
+    if request.node.get_closest_marker("real_user_path"):
+        return
+    try:
+        import winreg
+    except ImportError:
+        return                      # not Windows: nothing to protect
+
+    def _blocked(*_args, **_kwargs):
+        raise AssertionError(
+            "test tried to WRITE the real Windows user environment (PATH). "
+            "Stub install/register_path.py, or mark the test "
+            "@pytest.mark.real_user_path if it genuinely drives the registry.")
+
+    monkeypatch.setattr(winreg, "SetValueEx", _blocked)
+    monkeypatch.setattr(winreg, "QueryValueEx",
+                        lambda key, name: ("", winreg.REG_EXPAND_SZ))
+
+
+@pytest.fixture(autouse=True)
+def _no_real_version_managers(request, monkeypatch):
+    """A test that says "this CLI is not installed" must stay right.
+
+    Issue #10 widened CLI discovery past `PATH` into `~/.nvm`, `~/.volta`,
+    `~/.fnm`, `/opt/homebrew/bin`, `/usr/local/bin` and friends — none of which
+    a fake `Path.home()` or a stubbed `shutil.which` redirects. On a developer
+    machine that really does have `gemini` under nvm, the Gemini/Grok tests
+    would otherwise find it and assert against the wrong world.
+
+    Opt out with `@pytest.mark.real_version_managers`."""
+    if request.node.get_closest_marker("real_version_managers"):
+        return
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "install"))
+    import cli_locator
+
+    monkeypatch.setattr(cli_locator, "search_locations", lambda: [])
+
+
 @pytest.fixture
 def isolated_machine(tmp_path, monkeypatch):
     """Neutralize every outward-facing effect of a `fix=True` code path.

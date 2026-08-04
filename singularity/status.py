@@ -190,8 +190,12 @@ def run(cfg: Config, as_json: bool = False) -> int:
     code = snap["code"]
     if code.get("configured"):
         if code.get("present"):
+            # A built-but-empty corpus is not a small healthy number, it is a
+            # broken feature (issue #13) — do not print it in the same neutral
+            # tone as a real count.
+            empty = "" if code.get("files") else "  <- EMPTY, code search finds nothing"
             print(f"code: {code['chunks']} chunks from {code['files']} files, "
-                  f"age {code['age_hours']}h")
+                  f"age {code['age_hours']}h{empty}")
         else:
             print("code: configured but not built (`mb index rebuild --code`)")
     print(f"disk(.mb): {snap['disk'].get('mb_dir_mb')} MB")

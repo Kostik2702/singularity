@@ -105,6 +105,15 @@ def main(argv: list[str] | None = None) -> int:
     if register_grok.main() != 0:
         failures.append("register_grok")
 
+    print("== Phase 4e: CLIs on PATH ==")
+    import register_path
+    # Deliberately NOT a required phase: a machine whose PATH the user manages
+    # themselves is a legitimate choice, and a read-only home should not fail an
+    # otherwise complete install. Doctor's D7-cli-on-path reports the end state.
+    if register_path.main() != 0:
+        print("[install] PATH registration incomplete — `mb` may not be "
+              "callable by name; see D7-cli-on-path below", file=sys.stderr)
+
     if not args.skip_schedule:
         print("== Phase 5: scheduler ==")
         from singularity.platform import scheduler

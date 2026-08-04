@@ -1,14 +1,19 @@
 #!/bin/sh
 # POSIX shim (macOS/Linux/Windows Git Bash -- Git Bash resolves THIS
 # extensionless file, not reel.cmd, so it must work everywhere).
-# `exec A || exec B` is a false fallback: a failed exec exits a non-interactive
-# shell with 127 before B can run. Pick the interpreter by checking the file
-# instead, and fail LOUD if neither exists.
+# Same pattern as bin/mb: never `exec A || exec B` (incident 2026-07-14), and
+# never `python -m` (issue #16 -- `-m` puts the CWD on sys.path, where a
+# `singularity/` directory shadows the installed package).
 d="$(dirname "$0")"
+
+for c in "$d/../.venv/bin/reel" "$d/../.venv/Scripts/reel.exe"; do
+  if [ -x "$c" ]; then exec "$c" "$@"; fi
+done
+
 py="$d/../.venv/bin/python"
 [ -x "$py" ] || py="$d/../.venv/Scripts/python.exe"
 if [ ! -x "$py" ]; then
   echo "reel: no python interpreter found at $d/../.venv/{bin/python,Scripts/python.exe}" >&2
   exit 127
 fi
-exec "$py" -m singularity.reel.cli "$@"
+exec "$py" "$d/_launch.py" reel singularity.reel.cli:main "$@"

@@ -10,6 +10,176 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.6.0 — the install is honest about itself (field issues #9–#16)
+
+Eight issues filed from one fresh macOS install of v0.5.1, all of the same
+family: **the installer exited 0 and every diagnostic was green while a feature
+was quietly unusable.** Nothing here is a new capability — it is the install
+and the doctor learning to tell the truth about what actually works on the
+machine in front of them.
+
+### The install could not be run, and then could not be called
+
+- **`install/install.sh` is executable again (#9).** It was stored in the index
+  as `100644`, so the exact first command the README documents failed with
+  `permission denied` (exit 126) on every fresh POSIX clone. `tests/
+  test_repo_file_modes.py` pins the index mode — `.gitattributes` cannot set
+  the exec bit, only the index can, and it is easy to drop again. README
+  documents `sh install/install.sh` as a fallback.
+- **The CLIs are put on `PATH` (#15).** `pip install -e` generates the seven
+  console scripts into `<engine>/.venv/bin`, which nothing adds to `PATH`, so
+  every documented `mb …` command failed with `command not found` on a machine
+  the installer had just called healthy — and the `bin/` shims, the apparent
+  alternative, shipped `100644` too. New phase `4e` symlinks the console
+  scripts into `~/.local/bin` on POSIX (printing the exact `export PATH=…` line
+  for the user's own shell rather than editing their rc file) and appends the
+  venv `Scripts` directory to the Windows **user** `PATH` via the registry —
+  not `setx`, which truncates at 1024 characters and flattens `REG_EXPAND_SZ`.
+  Ownership follows the rule skills and hooks already use: only links resolving
+  back into THIS engine are created, and `mb uninstall` removes exactly those.
+  The tool list is parsed from `[project.scripts]`, so it cannot drift.
+- **`D7-cli-on-path`** answers what `D4-cli` never asked about our own CLI: is
+  `mb` callable, and is it *our* `mb`. Two installs answering one vault is
+  quieter and worse than none.
+
+### Launching stopped depending on where you were standing
+
+- **Nothing launches via `python -m` any more (#16).** `-m` puts the current
+  working directory first on `sys.path`; a directory containing a folder named
+  `singularity` — the parent of a standard clone, and `$HOME` itself when you
+  follow the README's `git clone <url> ~/singularity` — is then adopted as a
+  namespace package and shadows the installed one, killing the CLI with
+  `ImportError: cannot import name '__version__' from 'singularity' (unknown
+  location)`. An empty decoy directory is enough to reproduce it. The `bin/`
+  shims now exec the generated console script (immune, and kept in sync by
+  pip), falling back to `bin/_launch.py` — running a *file* puts that file's
+  own directory on `sys.path[0]`. The same defect was live in three more
+  places the report did not cover, all of which inherit a working directory
+  nobody chose: the detached daemon spawn, and the scheduler jobs in all four
+  backends (Windows `<WorkingDirectory>`, launchd, systemd, cron `cd … &&`) —
+  on the README's own Linux layout every nightly rebuild and login watcher was
+  dying silently. `D6-posix-shim` now runs the shim from two directories it
+  creates itself, one of them shadowing, instead of inheriting doctor's.
+- **`bin/*` are `100755`**, so the shim route works on a fresh clone too, and
+  the `.cmd` shims no longer carry an absolute engine path that only ever
+  worked on the author's machine.
+
+### The daemon stopped serving a config nobody could change
+
+- **`mb daemon reload` reloads the config, not only the indexes (#12).** It
+  reloaded indexes off the `Config` captured at daemon start, so `mb config
+  set` wrote a value the serving process never saw — `mb index rebuild --code`
+  reported `{"files": 0}` indefinitely while an in-process rebuild of the same
+  config indexed 205 files, and the command whose name promises exactly this
+  answered `{"status": "reloaded"}` while changing nothing. Reload now re-reads,
+  validates and migrates the file and reports which **keys** changed (names
+  only — the response crosses a socket). A changed `model` is reported as
+  `restart_required`: the encoder cannot be swapped under a live engine.
+- **`mb config set` says so when a running daemon still holds the old value**,
+  via a new read-only single-key read-back. A daemon that predates the command
+  is treated as "did not answer", never as a mismatch.
+- **`mb daemon restart` exists.** The remedy for anything `reload` cannot
+  rebind had no single command, and `reload` — the one that sounds like it —
+  was the one that did not do it.
+- **A configured-but-unreachable corpus root is a refusal, not `files: 0`.**
+  Corpora carry `root_must_exist`, set only for the code corpus: the user typed
+  that path. The vault and `.mb/sources/` keep the permissive default, so
+  `mb ingest index` on a never-ingested vault still works.
+
+### Checks that confirmed existence now confirm function
+
+- **`K1-code-index` treats "built from 0 files" as a WARN (#13).** It reported
+  `PASS: 0 chunk(s) from 0 file(s)` — a status contradicting its own message —
+  and would otherwise have caught the daemon-config bug immediately. Signal
+  quality had been *inverted*: pointing `code_repos_dir` at a real path turned
+  a true warning into a false pass while the feature stayed equally broken.
+  `mb status` no longer prints the empty count in a healthy tone.
+- **`D8-git-identity` checks that git can commit, not that git exists (#11).**
+  A new machine has no `user.name`/`user.email`, the vault is a git repo for
+  most users, and several skills here run `git commit` inside it — so an
+  install passing every check was one step from `Author identity unknown`.
+  Read-only, `SKIP` when the vault is not a work tree, honours a per-repo
+  identity, and **never** auto-fixed even with `--fix`: a commit identity is a
+  personal choice permanently embedded in published history.
+- **`A6-config-paths` validates every path in the config (#14).** The vault is
+  built to travel and `.mb/config.json` travels with it, but only
+  `code_repos_dir` was ever checked — `llm.server_bin`, every `gguf`, the
+  `--chat-template-file` inside `llm.models.*.args` and every
+  `projects[].path` arrived dead on a new machine and went unmentioned. A value
+  matching `C:\…` on a POSIX host is not missing, it is from another operating
+  system, and now gets one statement naming every affected key instead of nine
+  confusing absences. Nothing is rewritten automatically: the correct values
+  cannot be guessed.
+
+### A CLI installed under a version manager is found, not blamed
+
+- **#10.** With `@google/gemini-cli@0.53.1` genuinely installed under nvm, the
+  SessionStart and AfterAgent hooks were silently skipped and the message
+  named a constraint the machine already satisfied (`requires gemini >=
+  0.26.0`). nvm is a shell function sourced from an interactive rc file, so the
+  CLI is invisible to any non-interactive process — an installer, a CI job, the
+  scheduled jobs this project registers, anything under `sudo`. The new shared
+  `install/cli_locator.py` probes `$NVM_BIN`, the nvm versions tree (newest
+  Node first, ordered numerically), fnm, volta, asdf, bun, `%APPDATA%\npm` and
+  the homebrew/local prefixes. "Installed but unreachable" is now its own
+  reported state with an actionable hint, distinct from "too old", and
+  `doctor --fix` can finally repair it — the old gate was `supported`, false
+  whenever the version was unknown, so the hook branch was unreachable in
+  exactly the state that needed it.
+- **`mb doctor`'s summary repeats WARN lines, not only FAIL.** A phase that
+  skipped a requested feature must not look identical to one that succeeded
+  when the exit code is 0.
+
+### Test isolation
+
+Two new machine surfaces meant two new autouse guards in `tests/conftest.py`,
+in the spirit of the existing `_no_real_scheduler` — and both earned their
+keep immediately. `_no_real_user_path` caught a test that was about to delete
+`E:\Singularity\.venv\Scripts` from the developer's real user `PATH`;
+`_no_real_version_managers` stops a test that says "this CLI is not installed"
+from finding the developer's own nvm copy.
+
+Verified on a real machine as well as in tests: `PASS 33 | WARN 2`, both WARNs
+being genuine findings the previous doctor never surfaced. Full suite: 1754
+passed, 12 skipped.
+
+---
+
+# v0.5.1 — hotfix: a dying daemon no longer deletes its successor's state
+
+Reported from the field as issue #8 (reproduced twice on macOS during normal
+restarts), present in every version since daemon identity state was introduced
+in AUD-11.
+
+- **The exiting daemon's cleanup is now conditional on still owning the state.**
+  `stop_daemon()` returns ~0.5s after SIGTERM, but the daemon only polls its
+  shutdown flag *between* requests — mid-request it outlives its own stop by as
+  long as that request runs, and since 0.4.0 in-daemon index writes
+  (`{"cmd":"index"}`) made multi-minute requests the normal case. The starter
+  meanwhile spawned a replacement that bound a port and wrote **its**
+  `daemon.json`/`daemon.port`/`daemon.pid`. The old daemon's `finally` block
+  then unlinked all three unconditionally — deleting the *successor's*
+  identity. The starter's ping loop found no port, timed out after 30s and
+  reported `FAILED to start` for a daemon that was up, and every later
+  `ping`/`search` failed until the orphan was killed by hand. This reliably hit
+  installer phase 3b, `mb model install`'s restart and `mb doctor --fix
+  --heavy`. `SearchDaemon._cleanup_state()` now reads the state file first and
+  removes nothing if a newer instance owns it.
+- **Ownership is decided by `instance_id`, not pid.** The reporter's patch
+  compared pids; `instance_id` is a fresh uuid4 per daemon and cannot be reused,
+  while a pid can be — and pid reuse is the same class of race this fix exists
+  to close. Legacy state files written before AUD-11 carry no `instance_id`, so
+  the pid comparison remains as the fallback. Unreadable or absent state means
+  nobody claims ownership and the instance's own leftovers are still removed.
+- Five regression tests pin it: the successor survives both a differing pid and
+  a reused pid, an instance still cleans its own state, legacy pid-only state
+  works, and missing/corrupt state does not strand port/pid files.
+
+Verified on a real machine against the live daemon: a simulated predecessor
+cleanup left the running daemon's identity intact and it still answered `ping`.
+
+---
+
 # v0.5.0 — CODE-INDEX release hardening (C10)
 
 Everything here came out of two adversarial reviews — one of a proposed design

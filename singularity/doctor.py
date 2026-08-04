@@ -73,15 +73,71 @@ def _action_matches(state: dict, expected_args: str | None) -> bool:
     return actual.strip() == expected_args.strip()
 
 
-def _run_shim(sh: str, shim: Path) -> tuple[int, str, str]:
-    """Run the POSIX shim through sh; separated so tests can stub the subprocess."""
+def _run_shim(sh: str, shim: Path, cwd: str | None = None) -> tuple[int, str, str]:
+    """Run the POSIX shim through sh; separated so tests can stub the subprocess.
+
+    `cwd` is explicit because the failure this check exists to catch is
+    CWD-dependent (issue #16), so inheriting doctor's own directory made the
+    verdict depend on where the user happened to stand."""
     proc = subprocess.run([sh, str(shim), "--version"],
-                          capture_output=True, text=True, timeout=60)
+                          capture_output=True, text=True, timeout=60, cwd=cwd)
     return proc.returncode, (proc.stdout or "").strip(), (proc.stderr or "").strip()
 
 
 # Watcher is considered alive if its heartbeat file was touched this recently.
 WATCH_HEARTBEAT_MAX_AGE_S = 15 * 60
+
+
+def config_paths_block(rep: Report, cfg: Config) -> None:
+    """Check A6: does every absolute path in the config belong to THIS machine?
+
+    Issue #14: the vault is built to travel, `.mb/config.json` travels with it,
+    and every absolute path inside it is machine-specific. Only
+    `code_repos_dir` was ever validated (by K1), so `llm.server_bin`, the gguf
+    paths, the `--chat-template-file` inside `llm.models.*.args` and every
+    `projects[].path` arrived dead on a new machine and went unmentioned —
+    each surfacing later as its own mid-session failure, weeks apart.
+
+    Module-level (not a run() closure) so it is unit-testable, like the client
+    blocks below."""
+    from . import config_paths
+
+    entries = config_paths.path_entries(cfg.data)
+    if not entries:
+        rep.add("A6-config-paths", "SKIP", "no absolute paths in the config")
+        return
+    foreign: dict[str, list[str]] = {}
+    missing: list[str] = []
+    for key, value in entries:
+        other = config_paths.foreign_os(value)
+        if other:
+            foreign.setdefault(other, []).append(key)
+        elif not Path(value).exists():
+            missing.append(key)
+    if foreign:
+        # ONE understandable statement instead of N confusing absences: a
+        # `C:\…` on macOS is not a missing path, it is another machine's.
+        os_name = "Windows" if "windows" in foreign else "POSIX"
+        keys = sorted(k for ks in foreign.values() for k in ks)
+        rep.add("A6-config-paths", "WARN",
+                f"config contains {os_name} paths — this vault was last "
+                f"configured on another operating system; "
+                f"{len(keys)} key(s) point nowhere on this machine: "
+                f"{', '.join(keys)}"
+                + (f" (plus {len(missing)} more missing: "
+                   f"{', '.join(sorted(missing))})" if missing else ""),
+                fix="set each one for this machine, e.g. "
+                    'mb config set code_repos_dir "<path>"  '
+                    "(the correct values cannot be guessed)")
+        return
+    if missing:
+        rep.add("A6-config-paths", "WARN",
+                f"{len(missing)} configured path(s) do not exist on this "
+                f"machine: {', '.join(sorted(missing))}",
+                fix="fix them with `mb config set`, or remove the entries")
+        return
+    rep.add("A6-config-paths", "PASS",
+            f"{len(entries)} configured path(s) all resolve on this machine")
 
 
 def gemini_block(rep: Report, fix: bool) -> None:
@@ -91,7 +147,8 @@ def gemini_block(rep: Report, fix: bool) -> None:
     is a single SKIP. Module-level (not a run() closure) so it is unit-testable."""
     rg = _load_install("register_gemini")
     home_g = Path.home() / ".gemini"
-    if not (home_g.exists() or shutil.which("gemini") is not None):
+    exe, where = rg._gemini_exe()
+    if not (home_g.exists() or exe is not None):
         rep.add("E1-gemini", "SKIP", "Gemini CLI not installed on this machine")
         return
     version = rg._gemini_version()
@@ -120,17 +177,30 @@ def gemini_block(rep: Report, fix: bool) -> None:
         return (rg.SESSION_START_HOOK_NAME in _names("SessionStart")
                 and rg.AFTER_AGENT_HOOK_NAME in _names("AfterAgent"))
 
+    # "Located but unreadable version" is a repairable state, not a dead end
+    # (issue #10): the old gate was `supported`, which is False whenever the
+    # version is unknown, so `--fix` could not reach the hook branch in exactly
+    # the situation that needed it most.
     supported = version is not None and version >= rg.MIN_HOOKS_VERSION
+    repairable = supported or (version is None and exe is not None)
 
     # --fix runs ONLY the safe registrar (no network/auth) once, then re-checks.
     fixed = False
     if fix and (not profile_ok() or missing_skills()
-                or (supported and hook_state() is not True)):
+                or (repairable and hook_state() is not True)):
         rg.main()
         fixed = True
 
-    if version is None:
-        rep.add("E1-gemini", "WARN", "installed, but `gemini --version` unreadable")
+    if exe is None:
+        rep.add("E1-gemini", "WARN",
+                f"{home_g} exists but the `gemini` binary is unreachable from "
+                f"this process — PATH and the nvm/volta/fnm/homebrew locations "
+                f"were all checked",
+                fix="re-run `mb doctor --fix` from an interactive shell "
+                    "(a version manager is a shell function, invisible here)")
+    elif version is None:
+        rep.add("E1-gemini", "WARN",
+                f"installed at {exe}, but `gemini --version` unreadable")
     elif not supported:
         rep.add("E1-gemini", "WARN",
                 f"gemini {'.'.join(map(str, version))} < "
@@ -157,12 +227,22 @@ def gemini_block(rep: Report, fix: bool) -> None:
     if h == "malformed":
         rep.add("E4-gemini-hooks", "FAIL", "~/.gemini/settings.json unparseable",
                 fix="repair or remove the file, then mb doctor --fix")
-    elif not supported:
+    elif exe is None:
+        # NOT a version SKIP: naming a constraint the installed client may well
+        # satisfy is what made this take a week to diagnose (issue #10).
+        rep.add("E4-gemini-hooks", "WARN",
+                "hook support could not be established — the `gemini` binary is "
+                "unreachable from this process, so recall and capture are off",
+                fix="mb doctor --fix from an interactive shell")
+    elif not repairable:
         rep.add("E4-gemini-hooks", "SKIP",
-                f"SessionStart hook requires gemini >= {'.'.join(map(str, rg.MIN_HOOKS_VERSION))}")
+                f"SessionStart hook requires gemini >= "
+                f"{'.'.join(map(str, rg.MIN_HOOKS_VERSION))} "
+                f"(this one reports {'.'.join(map(str, version))})")
     elif h is True:
         rep.add("E4-gemini-hooks", "FIXED" if fixed else "PASS",
-                "SessionStart + AfterAgent hooks registered")
+                "SessionStart + AfterAgent hooks registered"
+                + ("" if supported else " (version unreadable — inert if unsupported)"))
     else:
         rep.add("E4-gemini-hooks", "WARN", "SessionStart/AfterAgent hooks not registered",
                 fix="python install/register_gemini.py")
@@ -182,6 +262,7 @@ def grok_block(rep: Report, fix: bool) -> None:
     if not rg._grok_present():
         rep.add("F1-grok", "SKIP", "Grok CLI not installed on this machine")
         return
+    exe, _where = rg._grok_exe()
     version = rg._grok_version()
 
     def profile_ok() -> bool:
@@ -215,8 +296,16 @@ def grok_block(rep: Report, fix: bool) -> None:
         rg.main()
         fixed = True
 
-    if version is None:
-        rep.add("F1-grok", "WARN", "installed, but `grok --version` unreadable")
+    if exe is None:
+        rep.add("F1-grok", "WARN",
+                f"{grok_home} exists but the `grok` binary is unreachable from "
+                f"this process — PATH and the nvm/volta/fnm/homebrew locations "
+                f"were all checked",
+                fix="re-run `mb doctor --fix` from an interactive shell "
+                    "(a version manager is a shell function, invisible here)")
+    elif version is None:
+        rep.add("F1-grok", "WARN",
+                f"installed at {exe}, but `grok --version` unreadable")
     elif version < rg.MIN_GROK_VERSION:
         rep.add("F1-grok", "WARN",
                 f"grok {'.'.join(map(str, version))} < "
@@ -250,10 +339,17 @@ def grok_block(rep: Report, fix: bool) -> None:
                     ", then mb doctor --fix" if supported else
                     " (re-registration needs grok >= "
                     f"{'.'.join(map(str, rg.MIN_GROK_VERSION))})"))
+    elif exe is None:
+        # Not a version SKIP — the version is not what is missing here (#10).
+        rep.add("F4-grok-capture", "WARN",
+                "the stop-gate contract could not be established — the `grok` "
+                "binary is unreachable from this process, so capture is off",
+                fix="mb doctor --fix from an interactive shell")
     elif not supported:
         rep.add("F4-grok-capture", "SKIP",
                 f"Stop capture hook requires grok >= {'.'.join(map(str, rg.MIN_GROK_VERSION))} "
-                "(stop-gate contract unproven below)")
+                + (f"(this one reports {'.'.join(map(str, version))})" if version
+                   else "(`grok --version` unreadable, so the contract is unproven)"))
     elif h is True:
         rep.add("F4-grok-capture", "FIXED" if fixed else "PASS",
                 "Stop capture hook registered")
@@ -448,6 +544,20 @@ def code_index_block(rep: Report, cfg: Config, fix: bool, heavy: bool) -> None:
                     f"spaces",
                     fix="mb index rebuild --code")
             return
+        if not summary.get("file_count"):
+            # issue #13: "built, but from nothing" was falling through to the
+            # success branch and reporting `PASS: 0 chunk(s) from 0 file(s)` —
+            # a message that contradicts its own status. This check exists to
+            # answer "can I search my code", and here the answer is no. It is
+            # also the check that would have caught the stale-daemon-config bug
+            # immediately; instead it certified the broken state as healthy.
+            rep.add("K1-code-index", "WARN",
+                    f"index built from 0 files under {root} — nothing matched "
+                    f"the indexable patterns, or every repository was pruned",
+                    fix="check code_repos_dir and code_skip_dirs, and that the "
+                        "daemon picked up the current config "
+                        "(mb daemon restart), then mb index rebuild --code")
+            return
         files = indexer.index_files(cfg.code_index_dir)
         age_h = None
         if files is not None:
@@ -512,6 +622,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     _guard(rep, "A1", a1)
     _guard(rep, "A2", a2)
+    _guard(rep, "A6", lambda: config_paths_block(rep, cfg))
     _guard(rep, "A3", a3)
     _guard(rep, "A4", a4)
     _guard(rep, "A5", a5)
@@ -723,11 +834,55 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     # ---- Block D: host tools ------------------------------------------
     def d4():
+        # Presence only. Whether git can actually produce a commit is D8 —
+        # necessary and sufficient are different questions (issue #11).
         missing = [t for t in ("git",) if shutil.which(t) is None]
         if missing:
             rep.add("D4-cli", "FAIL", f"missing on PATH: {missing}")
         else:
             rep.add("D4-cli", "PASS", "git on PATH")
+
+    def d8():
+        # issue #11: D4 answers "is the binary present", which is a weaker
+        # question than the one that matters — "can this machine produce a
+        # commit". A new machine has no user.name/user.email until someone sets
+        # them, and this project exists to get a new machine productive from an
+        # existing vault; several skills and agent workflows here run `git add`
+        # / `git commit` inside it. The failure otherwise lands mid-session,
+        # dressed up as a Singularity problem.
+        git = shutil.which("git")
+        if git is None:
+            rep.add("D8-git-identity", "SKIP", "git not on PATH (see D4-cli)")
+            return
+        inside = subprocess.run([git, "-C", str(cfg.vault), "rev-parse",
+                                 "--is-inside-work-tree"],
+                                capture_output=True, text=True, check=False)
+        if inside.returncode != 0 or inside.stdout.strip() != "true":
+            # A vault that is not under git needs no commit identity; warning
+            # about it would be noise, not diagnosis.
+            rep.add("D8-git-identity", "SKIP", "vault is not a git work tree")
+            return
+        missing = []
+        for key in ("user.name", "user.email"):
+            # run inside the vault so a deliberate per-repo identity counts:
+            # `--get` already resolves local over global, and checking --global
+            # alone would warn at people who configured this on purpose
+            out = subprocess.run([git, "-C", str(cfg.vault), "config", "--get", key],
+                                 capture_output=True, text=True, check=False)
+            if not out.stdout.strip():
+                missing.append(key)
+        if not missing:
+            rep.add("D8-git-identity", "PASS", "git can commit into the vault")
+        else:
+            # WARN, never FAIL, and NEVER auto-fixed even with --fix: a commit
+            # identity is a personal choice that ends up permanently embedded
+            # in published history. Guessing it from $USER/hostname or from the
+            # GitHub CLI would be wrong.
+            rep.add("D8-git-identity", "WARN",
+                    f"git cannot commit into the vault: {', '.join(missing)} unset — "
+                    f"the first vault commit will fail with 'Author identity unknown'",
+                    fix='git config --global user.name "Your Name" && '
+                        'git config --global user.email "you@example.com"')
 
     def d2():
         # every engine-owned agent (singularity/agents/*.md) must be registered
@@ -854,18 +1009,65 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
         if sh is None:
             rep.add("D6-posix-shim", "SKIP", "no sh/bash on PATH (POSIX shim unused)")
             return
-        code, out, err = _run_shim(sh, shim)
-        if code == 0 and out:
-            rep.add("D6-posix-shim", "PASS", f"`sh bin/mb --version` -> {out}")
+        # Two CWDs, always, in a temp tree we control. Running only from
+        # doctor's own directory made the verdict depend on where the user
+        # stood (issue #16): `python -m singularity` puts the CWD on sys.path,
+        # so a CWD that contains a `singularity/` folder — the parent of a
+        # standard clone — shadows the package with a namespace package and
+        # the shim dies, while the same command from anywhere else passes.
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            neutral = Path(td) / "neutral"
+            decoy = Path(td) / "decoy"
+            neutral.mkdir()
+            (decoy / "singularity").mkdir(parents=True)
+            out = ""
+            for label, cwd in (("a neutral CWD", neutral),
+                               ("a CWD containing singularity/", decoy)):
+                code, out, err = _run_shim(sh, shim, cwd=str(cwd))
+                if code != 0 or not out:
+                    detail = (f"`sh bin/mb --version` from {label}: exit {code}, "
+                              f"stdout {'empty' if not out else repr(out)}")
+                    if err:
+                        detail += f", stderr: {err[:160]}"
+                    rep.add("D6-posix-shim", "FAIL", detail,
+                            fix="bin/mb must exec the venv console script or "
+                                "bin/_launch.py — never `python -m`, which puts "
+                                "the CWD on sys.path")
+                    return
+        rep.add("D6-posix-shim", "PASS",
+                f"`sh bin/mb --version` -> {out} (neutral CWD and a CWD "
+                f"containing singularity/)")
+
+    def d7():
+        # issue #15: `pip install -e` generates the console scripts into
+        # <engine>/.venv/bin, which nothing puts on PATH — so every documented
+        # `mb …` command failed on a machine whose doctor summary was clean.
+        # Presence is not enough here either: `mb` resolving to ANOTHER clone's
+        # venv is its own quiet disaster (two engines, one vault).
+        rp = _load_install("register_path")
+        st = rp.status()
+        if st["is_ours"]:
+            rep.add("D7-cli-on-path", "PASS", f"mb -> {st['resolved']}")
+        elif st["on_path"]:
+            rep.add("D7-cli-on-path", "WARN",
+                    f"`mb` resolves to {st['resolved']}, not this engine's venv "
+                    f"({st['venv_bin']}) — another Singularity install is "
+                    f"shadowing this one, and the two can disagree about "
+                    f"config, model and daemon state",
+                    fix="python install/register_path.py, then put "
+                        "the engine venv ahead of it on PATH (or remove the "
+                        "other install)")
         else:
-            detail = (f"`sh bin/mb --version` exit {code}, "
-                      f"stdout {'empty' if not out else repr(out)}")
-            if err:
-                detail += f", stderr: {err[:120]}"
-            rep.add("D6-posix-shim", "FAIL", detail,
-                    fix="bin/mb must pick the interpreter via [ -x ... ] and fail loud")
+            rep.add("D7-cli-on-path", "WARN",
+                    "`mb` is not callable by name — every documented `mb …` "
+                    "command fails in a fresh shell",
+                    fix="python install/register_path.py")
 
     _guard(rep, "D4", d4)
+    _guard(rep, "D8", d8)
+    _guard(rep, "D7", d7)
     _guard(rep, "D2", d2)
     _guard(rep, "D1", d1)
     _guard(rep, "D3", d3)
@@ -898,8 +1100,14 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     print("\n================ mb doctor summary ================")
     print(" | ".join(f"{k} {v}" for k, v in sorted(counts.items())))
-    fails = [c for c in rep.checks if c["status"] == "FAIL"]
-    for c in fails:
-        print(f"  FAIL {c['id']}: {c['detail']}" + (f"  fix: {c['fix']}" if c["fix"] else ""))
+    # WARNs are repeated here, not just inline above (issue #10, point 4): a
+    # phase that skipped a requested feature must not be indistinguishable from
+    # one that succeeded when the exit code is 0, and the summary is the part
+    # people actually read after a few hundred lines of install output.
+    for status in ("FAIL", "WARN"):
+        for c in rep.checks:
+            if c["status"] == status:
+                print(f"  {status} {c['id']}: {c['detail']}"
+                      + (f"  fix: {c['fix']}" if c["fix"] else ""))
     print("===================================================")
     return 1 if rep.has_fail else 0

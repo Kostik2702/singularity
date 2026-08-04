@@ -60,6 +60,9 @@ def _wire_happy_dependencies(monkeypatch, tmp_path, *, doctor_rc=0):
     monkeypatch.setitem(sys.modules, "register_agents", _fake_module("register_agents", 0))
     monkeypatch.setitem(sys.modules, "register_gemini", _fake_module("register_gemini", 0))
     monkeypatch.setitem(sys.modules, "register_grok", _fake_module("register_grok", 0))
+    # PATH registration (#15) is a real phase but NOT a required one — stubbed
+    # by default so it never touches the developer's ~/.local/bin or user PATH.
+    monkeypatch.setitem(sys.modules, "register_path", _fake_module("register_path", 0))
 
 
 def test_install_succeeds_when_all_phases_pass(tmp_path, monkeypatch):
@@ -128,6 +131,37 @@ def test_install_required_failure_overrides_a_passing_doctor(tmp_path, monkeypat
 
     rc = install.main(["--skip-deps", "--skip-schedule", "--vault", str(tmp_path)])
     assert rc == 1
+
+
+def test_install_registers_the_clis_on_path(tmp_path, monkeypatch):
+    """The phase issue #15 asked for: a successful install must leave `mb`
+    callable by name, so it has to actually run."""
+    _wire_happy_dependencies(monkeypatch, tmp_path)
+    for name in ("register_hooks", "register_skills", "register_codex"):
+        monkeypatch.setitem(sys.modules, name, _fake_module(name, 0))
+    ran = []
+    mod = types.ModuleType("register_path")
+    mod.main = lambda: ran.append("path") or 0
+    monkeypatch.setitem(sys.modules, "register_path", mod)
+
+    assert install.main(["--skip-deps", "--skip-schedule", "--vault", str(tmp_path)]) == 0
+    assert ran == ["path"]
+
+
+def test_install_path_failure_does_not_fail_the_install(tmp_path, monkeypatch, capsys):
+    """A machine whose PATH the user manages themselves, or a read-only home,
+    is not a broken install — it is a warning plus a doctor check."""
+    _wire_happy_dependencies(monkeypatch, tmp_path)
+    for name in ("register_hooks", "register_skills", "register_codex"):
+        monkeypatch.setitem(sys.modules, name, _fake_module(name, 0))
+    monkeypatch.setitem(sys.modules, "register_path", _fake_module("register_path", 1))
+
+    rc = install.main(["--skip-deps", "--skip-schedule", "--vault", str(tmp_path)])
+
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "PATH registration incomplete" in err
+    assert "REQUIRED phase(s) failed" not in err
 
 
 def test_install_missing_vault_fails_fast_before_any_phase(tmp_path, monkeypatch):

@@ -26,6 +26,23 @@ def python_executable(windowed: bool = False) -> str:
     return exe
 
 
+def module_search_root() -> str:
+    """A working directory from which `python -m singularity` always resolves
+    to THIS package (issue #16).
+
+    `-m` puts the launching process's CWD first on `sys.path`, so any directory
+    that happens to contain a `singularity/` folder shadows the installed
+    package with a namespace package and the child dies on import — and the
+    README tells people to clone into `~/singularity`, which makes `$HOME` such
+    a directory. Every unattended launch (daemon spawn, systemd/launchd/cron
+    job) inherits a CWD it did not choose, so it must be told one.
+
+    The package's own parent is the one directory that is always safe:
+    whatever else lives there, `<parent>/singularity/__init__.py` exists, and a
+    regular package always beats a namespace portion."""
+    return str(Path(__file__).resolve().parents[2])
+
+
 def rotate_log(log_file: Path, max_bytes: int = 5_000_000, keep: int = 3) -> None:
     """Size-based log rotation with bounded retention (AUD-18): when log_file
     exceeds max_bytes, shift .N->.N+1 and start fresh; keep at most `keep`
@@ -45,11 +62,17 @@ def rotate_log(log_file: Path, max_bytes: int = 5_000_000, keep: int = 3) -> Non
         pass
 
 
-def spawn_detached(args: list[str], log_file: Path) -> int:
-    """Start a long-lived background process, return its PID."""
+def spawn_detached(args: list[str], log_file: Path, cwd: str | None = None) -> int:
+    """Start a long-lived background process, return its PID.
+
+    `cwd` defaults to `module_search_root()` rather than inheriting the
+    caller's: a detached child launched with `-m singularity` from a directory
+    that contains a `singularity/` folder dies on import (issue #16), and the
+    caller's CWD is whatever the user happened to be standing in."""
     log_file.parent.mkdir(parents=True, exist_ok=True)
     rotate_log(log_file)                       # bound daemon log growth (AUD-18)
     log = open(log_file, "ab")
+    cwd = cwd or module_search_root()
     if current_os() == "windows":
         DETACHED_PROCESS = 0x00000008
         CREATE_NO_WINDOW = 0x08000000
@@ -60,6 +83,7 @@ def spawn_detached(args: list[str], log_file: Path) -> int:
             stdin=subprocess.DEVNULL,
             creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
             close_fds=True,
+            cwd=cwd,
         )
     else:
         proc = subprocess.Popen(
@@ -69,6 +93,7 @@ def spawn_detached(args: list[str], log_file: Path) -> int:
             stdin=subprocess.DEVNULL,
             start_new_session=True,
             close_fds=True,
+            cwd=cwd,
         )
     return proc.pid
 

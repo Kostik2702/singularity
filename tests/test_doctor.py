@@ -6,6 +6,7 @@
 - watcher freshness is checked via a heartbeat file.
 """
 import json
+from pathlib import Path
 
 import pytest
 
@@ -170,7 +171,8 @@ def _stub_externals(monkeypatch, tmp_path=None):
     monkeypatch.setattr(model_store_mod, "status",
                         lambda cfg: {"installed": True, "model": cfg.model,
                                      "snapshot": "/test/model", "revision": "test"})
-    monkeypatch.setattr(doctor, "_run_shim", lambda sh, shim: (0, "mb 0.2.0", ""))
+    monkeypatch.setattr(doctor, "_run_shim",
+                        lambda sh, shim, cwd=None: (0, "mb 0.2.0", ""))
 
 
 def test_b3_reports_missing_local_model(cfg, monkeypatch):
@@ -476,7 +478,8 @@ def test_d6_fail_on_silent_exit_127(cfg, monkeypatch):
     """The exact incident shape: exit 127, zero bytes of output."""
     _stub_externals(monkeypatch)
     monkeypatch.setattr(doctor.shutil, "which", lambda name: f"C:/git/{name}.exe")
-    monkeypatch.setattr(doctor, "_run_shim", lambda sh, shim: (127, "", ""))
+    monkeypatch.setattr(doctor, "_run_shim",
+                        lambda sh, shim, cwd=None: (127, "", ""))
     doctor.run(cfg, as_json=True)
     d6 = _check(cfg, "D6-posix-shim")
     assert d6["status"] == "FAIL"
@@ -487,9 +490,55 @@ def test_d6_fail_on_silent_exit_127(cfg, monkeypatch):
 def test_d6_fail_when_exit_zero_but_silent(cfg, monkeypatch):
     _stub_externals(monkeypatch)
     monkeypatch.setattr(doctor.shutil, "which", lambda name: f"C:/git/{name}.exe")
-    monkeypatch.setattr(doctor, "_run_shim", lambda sh, shim: (0, "", ""))
+    monkeypatch.setattr(doctor, "_run_shim",
+                        lambda sh, shim, cwd=None: (0, "", ""))
     doctor.run(cfg, as_json=True)
     assert _check(cfg, "D6-posix-shim")["status"] == "FAIL"
+
+
+# --- D6 must not depend on where doctor was launched from (issue #16) --------
+
+def test_d6_probes_a_neutral_cwd_and_a_shadowing_cwd(cfg, monkeypatch):
+    """The namespace-shadowing failure only shows from a CWD that contains a
+    `singularity/` directory, so the check has to stand in both places itself
+    instead of inheriting doctor's."""
+    _stub_externals(monkeypatch)
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"C:/git/{name}.exe")
+    # sampled inside the call: the temp tree is gone once doctor returns
+    seen = []
+    monkeypatch.setattr(
+        doctor, "_run_shim",
+        lambda sh, shim, cwd=None:
+            seen.append((cwd, (Path(cwd) / "singularity").is_dir() if cwd else None))
+            or (0, "mb 0.2.0", ""))
+    doctor.run(cfg, as_json=True)
+
+    assert _check(cfg, "D6-posix-shim")["status"] == "PASS"
+    assert len(seen) == 2
+    assert [shadows for _cwd, shadows in seen] == [False, True]
+    assert len({cwd for cwd, _ in seen}) == 2                # two distinct dirs
+
+
+def test_d6_fails_when_the_shim_only_dies_in_a_shadowing_cwd(cfg, monkeypatch):
+    """The regression of issue #16 verbatim: fine from anywhere else, dead one
+    level above the clone. A check that passed here would be the bug."""
+    _stub_externals(monkeypatch)
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"C:/git/{name}.exe")
+
+    def fake(sh, shim, cwd=None):
+        if (Path(cwd) / "singularity").is_dir():
+            return 1, "", ("ImportError: cannot import name '__version__' "
+                           "from 'singularity' (unknown location)")
+        return 0, "mb 0.2.0", ""
+
+    monkeypatch.setattr(doctor, "_run_shim", fake)
+    doctor.run(cfg, as_json=True)
+
+    d6 = _check(cfg, "D6-posix-shim")
+    assert d6["status"] == "FAIL"
+    assert "containing singularity/" in d6["detail"]
+    assert "unknown location" in d6["detail"]
+    assert "python -m" in d6["fix"]
 
 
 def test_d6_skip_without_posix_shell(cfg, monkeypatch):
@@ -499,6 +548,141 @@ def test_d6_skip_without_posix_shell(cfg, monkeypatch):
     d6 = _check(cfg, "D6-posix-shim")
     assert d6["status"] == "SKIP"
     assert "no sh/bash" in d6["detail"]
+
+
+# --- D8: can git actually commit into the vault? (issue #11) -----------------
+
+def _git_stub(monkeypatch, *, inside=True, name="", email="", git="C:/git/git.exe"):
+    """Stand in for the two read-only git calls D8 makes."""
+    monkeypatch.setattr(doctor.shutil, "which",
+                        lambda n: git if n == "git" else f"C:/git/{n}.exe")
+
+    class R:
+        def __init__(self, out):
+            self.stdout, self.returncode = out, 0
+
+    def fake_run(cmd, **_kw):
+        if "rev-parse" in cmd:
+            return R("true\n" if inside else "false\n")
+        if "user.name" in cmd:
+            return R(name)
+        if "user.email" in cmd:
+            return R(email)
+        return R("")
+
+    monkeypatch.setattr(doctor.subprocess, "run", fake_run)
+
+
+def test_d8_warns_when_commit_identity_is_unset(cfg, monkeypatch):
+    """The default state of a new machine — and the state that made an install
+    reporting PASS 28 still fail at the first vault commit."""
+    _stub_externals(monkeypatch)
+    _git_stub(monkeypatch, inside=True, name="", email="")
+    doctor.run(cfg, as_json=True)
+    d8 = _check(cfg, "D8-git-identity")
+    assert d8["status"] == "WARN"
+    assert "user.name" in d8["detail"] and "user.email" in d8["detail"]
+    assert "git config --global" in d8["fix"]
+
+
+def test_d8_passes_when_identity_is_configured(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _git_stub(monkeypatch, name="Ada\n", email="ada@example.com\n")
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D8-git-identity")["status"] == "PASS"
+
+
+def test_d8_reports_only_the_missing_half(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _git_stub(monkeypatch, name="Ada\n", email="")
+    doctor.run(cfg, as_json=True)
+    d8 = _check(cfg, "D8-git-identity")
+    assert d8["status"] == "WARN"
+    assert "user.email" in d8["detail"] and "user.name" not in d8["detail"]
+
+
+def test_d8_skips_when_the_vault_is_not_a_git_repo(cfg, monkeypatch):
+    """A vault that is not under git needs no commit identity — warning about
+    it would be noise, not diagnosis."""
+    _stub_externals(monkeypatch)
+    _git_stub(monkeypatch, inside=False)
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D8-git-identity")["status"] == "SKIP"
+
+
+def test_d8_never_auto_fixes_the_identity(cfg, monkeypatch):
+    """A commit identity is a personal choice, permanently embedded in
+    published history. `--fix` must warn, never guess."""
+    _stub_externals(monkeypatch)
+    writes = []
+
+    _git_stub(monkeypatch, name="", email="")
+    real_run = doctor.subprocess.run
+
+    def watching_run(cmd, **kw):
+        if "config" in cmd and "--get" not in cmd:
+            writes.append(cmd)
+        return real_run(cmd, **kw)
+
+    monkeypatch.setattr(doctor.subprocess, "run", watching_run)
+    doctor.run(cfg, fix=True, as_json=True)
+
+    assert writes == []
+    assert _check(cfg, "D8-git-identity")["status"] == "WARN"
+
+
+# --- D7: is `mb` actually callable by name? (issue #15) ----------------------
+
+def _stub_register_path(monkeypatch, st):
+    """doctor loads install/register_path.py by path, so the stub has to be
+    installed on the object doctor gets back from _load_install."""
+    real_load = doctor._load_install
+
+    def fake_load(name):
+        mod = real_load(name)
+        if name == "register_path":
+            mod.status = lambda: st
+        return mod
+
+    monkeypatch.setattr(doctor, "_load_install", fake_load)
+
+
+def test_d7_pass_when_mb_resolves_into_this_engine(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _stub_register_path(monkeypatch, {
+        "engine": "/engine", "venv_bin": "/engine/.venv/bin",
+        "resolved": "/engine/.venv/bin/mb", "on_path": True, "is_ours": True})
+    doctor.run(cfg, as_json=True)
+    d7 = _check(cfg, "D7-cli-on-path")
+    assert d7["status"] == "PASS"
+    assert "/engine/.venv/bin/mb" in d7["detail"]
+
+
+def test_d7_warns_when_mb_is_not_on_path(cfg, monkeypatch):
+    """The state issue #15 reported: doctor clean, `mb doctor` itself
+    `command not found`."""
+    _stub_externals(monkeypatch)
+    _stub_register_path(monkeypatch, {
+        "engine": "/engine", "venv_bin": "/engine/.venv/bin",
+        "resolved": None, "on_path": False, "is_ours": False})
+    doctor.run(cfg, as_json=True)
+    d7 = _check(cfg, "D7-cli-on-path")
+    assert d7["status"] == "WARN"
+    assert "not callable by name" in d7["detail"]
+    assert "register_path" in d7["fix"]
+
+
+def test_d7_warns_when_another_clone_shadows_this_engine(cfg, monkeypatch):
+    """Two engines against one vault is quieter and worse than no mb at all."""
+    _stub_externals(monkeypatch)
+    _stub_register_path(monkeypatch, {
+        "engine": "/engine", "venv_bin": "/engine/.venv/bin",
+        "resolved": "/old-clone/.venv/bin/mb", "on_path": True, "is_ours": False})
+    doctor.run(cfg, as_json=True)
+    d7 = _check(cfg, "D7-cli-on-path")
+    assert d7["status"] == "WARN"
+    assert "/old-clone/.venv/bin/mb" in d7["detail"]
+    assert "shadowing" in d7["detail"]
 
 
 def test_d5_reports_mode_when_enabled(cfg, monkeypatch):

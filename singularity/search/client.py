@@ -102,7 +102,11 @@ def start_daemon(cfg: Config, wait: bool = True) -> bool:
                 return True
             args = [proc.python_executable(windowed=True), "-m", "singularity",
                     "--vault", str(cfg.vault), "daemon", "run"]
-            proc.spawn_detached(args, cfg.daemon_log_file)
+            # never the caller's CWD: `mb daemon start` run one level above the
+            # clone would spawn a daemon that dies on a shadowed import and
+            # report only "FAILED to start" 30s later (issue #16)
+            proc.spawn_detached(args, cfg.daemon_log_file,
+                                cwd=proc.module_search_root())
         if not wait:
             return True
         for _ in range(START_TIMEOUT_TRIES):
@@ -154,6 +158,33 @@ def reload_daemon(cfg: Config) -> Optional[dict[str, Any]]:
     if port is None:
         return None
     return _request(port, {"cmd": "reload"})
+
+
+def restart_daemon(cfg: Config) -> bool:
+    """Stop then start. The remedy for anything `reload` cannot re-bind — a
+    changed embedding model, most of all — had no single command before
+    (issue #12), and `reload`, the one that SOUNDS like it, was the one that
+    did not do it."""
+    stop_daemon(cfg)
+    return start_daemon(cfg)
+
+
+def daemon_value(cfg: Config, key: str) -> tuple[bool, Any]:
+    """What the RUNNING daemon currently serves for `key`.
+
+    Returns (daemon_answered, value). A daemon that predates this command
+    answers with an error, which is reported as "did not answer" rather than as
+    a mismatch — an old daemon must not produce a scary warning."""
+    port = _read_port(cfg)
+    if port is None:
+        return False, None
+    try:
+        resp = _request(port, {"cmd": "config", "key": key})
+    except Exception:                       # noqa: BLE001 — advisory path only
+        return False, None
+    if not isinstance(resp, dict) or "value" not in resp:
+        return False, None
+    return True, resp["value"]
 
 
 def run_index(cfg: Config, action: str = "update",
