@@ -79,10 +79,24 @@ def _read_json_tolerant(path: Path) -> tuple[dict[str, Any], str | None]:
 
 
 def capture_config_state(vault: Path) -> dict[str, Any]:
-    """Desired-state of the `auto_capture` flag, read directly from
-    vault/.mb/config.json (independent of the CLI's stricter load_config gate,
-    so this stays usable from a doctor/status probe on a broken config)."""
-    data, error = _read_json_tolerant(vault / ".mb" / "config.json")
+    """Desired-state of the `auto_capture` flag, read directly from the machine
+    config (independent of the CLI's stricter load_config gate, so this stays
+    usable from a doctor/status probe on a broken config).
+
+    `vault` is still taken because a pre-0.7 vault-resident config is honoured
+    until the migration runs — same upgrade window `read_config_tolerant()`
+    covers, and for the same reason: this decides whether the capture hook
+    fires, and defaulting it during an upgrade would silently change
+    behaviour."""
+    from .config import CONFIG_FILE, legacy_config_path
+
+    path = CONFIG_FILE
+    machine, machine_error = _read_json_tolerant(path)
+    configured = machine_error is None and any(
+        k not in ("schema_version", "vault_path") for k in machine)
+    if not configured and legacy_config_path(vault).exists():
+        path = legacy_config_path(vault)
+    data, error = _read_json_tolerant(path)
     if error is not None:
         return {"configured": True, "default": True, "source": "error", "error": error}
     value = data.get("auto_capture", True)

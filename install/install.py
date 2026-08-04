@@ -26,6 +26,86 @@ def phase1_deps() -> None:
                            f"{ENGINE}[imgqa]"])
 
 
+def _interactive() -> bool:
+    """A terminal a human can answer from. CI, `sh -c`, a scheduled run and a
+    piped installer are all non-interactive — prompting there would hang."""
+    try:
+        return sys.stdin.isatty() and sys.stdout.isatty()
+    except (AttributeError, ValueError):
+        return False
+
+
+def choose_vault(explicit: str | None) -> "Path | None":
+    """Settle the vault path — by ASKING, not by guessing.
+
+    Guessing is what this replaces: the engine used to carry one machine's
+    absolute path as a built-in candidate, which outlived that machine's own
+    move to another drive and shipped a dead drive letter to everyone else.
+    The vault is the one thing an installer cannot infer, so it is the one
+    thing it asks about.
+
+    `--vault` wins outright and is created if missing — someone who names a
+    path is stating where the vault should be. Without it, a resolved path is
+    shown for confirmation rather than assumed, because a machine that already
+    has a vault must not be silently re-pointed at another one. A
+    non-interactive run never prompts: it fails with the flag to pass."""
+    from singularity.config import resolve_vault
+
+    if explicit:
+        return _ensure_vault(Path(explicit).expanduser(), ask=False)
+
+    found = resolve_vault(None)
+    if not _interactive():
+        if found is not None and found.exists():
+            print(f"[install] vault: {found}")
+            return found
+        print(f"[install] vault not found: {found or '(nothing configured)'}",
+              file=sys.stderr)
+        print('[install] non-interactive run — pass the path explicitly: '
+              './install/install.sh --vault "/path/to/your/vault"', file=sys.stderr)
+        return None
+
+    print("\n== Vault ==")
+    print("Singularity keeps your notes in a vault — a plain folder of Markdown.")
+    if found is not None and found.exists():
+        print(f"Found one at: {found}")
+        answer = input("Press Enter to use it, or type another path: ").strip()
+        if not answer:
+            return found
+    else:
+        if found is not None:
+            print(f"Configured path does not exist: {found}")
+        answer = input("Path to your vault (it will be created if missing): ").strip()
+
+    while True:
+        if answer:
+            chosen = _ensure_vault(Path(answer.strip('"').strip("'")).expanduser(),
+                                   ask=True)
+            if chosen is not None:
+                return chosen
+        answer = input("Path to your vault: ").strip()
+
+
+def _ensure_vault(path: "Path", *, ask: bool) -> "Path | None":
+    """The chosen path, creating the directory when it is not there yet."""
+    if path.is_dir():
+        return path
+    if path.exists():
+        print(f"[install] not a directory: {path}", file=sys.stderr)
+        return None
+    if ask:
+        reply = input(f"{path} does not exist. Create it? [Y/n] ").strip().lower()
+        if reply and not reply.startswith("y"):
+            return None
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        print(f"[install] cannot create {path}: {exc}", file=sys.stderr)
+        return None
+    print(f"[install] created {path}")
+    return path
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--vault", help="vault path")
@@ -36,12 +116,8 @@ def main(argv: list[str] | None = None) -> int:
     # Fail fast BEFORE the slow dependency phase (github#1: a fresh macOS
     # install burned Phase 1 minutes, then died on the Windows default path).
     # config is stdlib-only, safe to import pre-deps.
-    from singularity.config import resolve_vault
-    vault = resolve_vault(args.vault)
-    if vault is None or not vault.exists():
-        print(f"[install] vault not found: {vault or '(nothing configured)'}", file=sys.stderr)
-        print('[install] re-run with your vault path, e.g.: '
-              './install/install.sh --vault "/path/to/your/vault"', file=sys.stderr)
+    vault = choose_vault(args.vault)
+    if vault is None:
         return 2
 
     if not args.skip_deps:
@@ -51,7 +127,9 @@ def main(argv: list[str] | None = None) -> int:
     from singularity.cli import cmd_init
 
     print("== Phase 2: vault ==")
-    cfg = load_config(args.vault)
+    # the CHOSEN vault, not args.vault — an interactive answer must win over
+    # the flag that was not passed
+    cfg = load_config(str(vault))
     write_pointer(cfg.vault)
     cmd_init(cfg, None)
 

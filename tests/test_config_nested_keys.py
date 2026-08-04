@@ -166,7 +166,8 @@ def test_config_get_flat_lookup_is_unchanged(cfg):
 def test_cli_set_writes_the_nested_value_to_disk(wired, cfg, data, capsys):
     cfg.data = dict(data)
     assert cli.main(["config", "set", "projects.singularity.path", "/Users/k/s"]) == 0
-    on_disk = json.loads((cfg.vault / ".mb" / "config.json").read_text(encoding="utf-8"))
+    from singularity.config import CONFIG_FILE
+    on_disk = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))   # per machine now
     assert on_disk["projects"]["singularity"]["path"] == "/Users/k/s"
     assert "projects.singularity.path" not in on_disk
 
@@ -193,7 +194,8 @@ def test_cli_set_allow_unknown_writes_it(wired, cfg, capsys):
     """The legitimate case — a connector key, or one a newer build reads —
     stays reachable, just explicit."""
     assert cli.main(["config", "set", "my_future_key", "1", "--allow-unknown"]) == 0
-    on_disk = json.loads((cfg.vault / ".mb" / "config.json").read_text(encoding="utf-8"))
+    import singularity.config as config_mod
+    on_disk = json.loads(config_mod.CONFIG_FILE.read_text(encoding="utf-8"))
     assert on_disk["my_future_key"] == 1
     assert "written as requested" in capsys.readouterr().err
 

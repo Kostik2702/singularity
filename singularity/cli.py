@@ -162,7 +162,7 @@ def _build_parser() -> argparse.ArgumentParser:
     bkr = bksub.add_parser("restore", help="restore config + index pointer from a backup")
     bkr.add_argument("id")
 
-    cfgp = sub.add_parser("config", help="inspect/validate .mb/config.json")
+    cfgp = sub.add_parser("config", help="inspect/validate the machine config")
     cfgsub = cfgp.add_subparsers(dest="config_action", required=True)
     cfgv = cfgsub.add_parser("validate", help="check schema (types/ranges/unknown keys)")
     cfgv.add_argument("--json", action="store_true")

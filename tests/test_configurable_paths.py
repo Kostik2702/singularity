@@ -1,11 +1,14 @@
-"""Machine-specific literals become defaults, not requirements.
+"""No machine-specific literal is a default any more.
 
 The engine carried two hardcoded paths belonging to one machine: the built-in
-fallback vault, and the vault path written into the agent definitions. Neither
-is deleted — both keep working as the LAST fallback — but neither is the only
-possibility any more.
+fallback vault and the vault path written into the agent definitions. Keeping
+them "as the last fallback" was the earlier compromise, and it failed twice:
+the fallback outlived that machine's own move to another drive, and it shipped
+a dead drive letter to everyone else. Now the installer asks, and the agent /
+skill sources carry a token rather than a path.
 """
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -26,11 +29,25 @@ _spec.loader.exec_module(register_agents)
 
 # --- built-in vault candidates ----------------------------------------------
 
-def test_candidates_are_home_relative_before_the_machine_literal(monkeypatch):
+def test_every_builtin_candidate_is_home_relative(monkeypatch):
+    """No default may name a drive or a machine.
+
+    The list used to end with one machine's absolute path. It outlived that
+    machine's own move to another drive and shipped a dead drive letter to
+    everybody else — a default nobody can satisfy is not a fallback."""
     monkeypatch.delenv("MB_DEFAULT_VAULT", raising=False)
     cands = config_mod.default_vault_candidates()
-    assert cands[-1] == Path(config_mod.DEFAULT_VAULT_WINDOWS)   # still last
-    assert all(Path.home() in c.parents for c in cands[:-1])
+    assert cands, "there must still be a home-relative guess"
+    assert all(Path.home() in c.parents for c in cands)
+
+
+def test_no_drive_letter_default_survives_anywhere_in_config():
+    """Structural, not just behavioural: the constant is gone, so it cannot be
+    reintroduced by a well-meant 'last resort costs nothing' edit."""
+    src = (ENGINE / "singularity" / "config.py").read_text(encoding="utf-8")
+    assert "DEFAULT_VAULT_WINDOWS" not in src
+    assert not re.search(r'r?"[A-Za-z]:\\\\?[A-Za-z]', src), \
+        "config.py must not contain an absolute drive path"
 
 
 def test_env_replaces_the_whole_candidate_list(monkeypatch, tmp_path):

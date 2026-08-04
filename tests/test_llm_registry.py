@@ -11,6 +11,8 @@ import json
 
 import pytest
 
+import singularity.config as config_mod
+
 from singularity import cli, llm
 from singularity.config import Config
 
@@ -32,7 +34,7 @@ def wired(monkeypatch, cfg):
 
 def _models(cfg):
     return json.loads(
-        (cfg.vault / ".mb" / "config.json").read_text(encoding="utf-8")
+        config_mod.CONFIG_FILE.read_text(encoding="utf-8")
     )["llm"]["models"]
 
 
@@ -75,7 +77,7 @@ def test_add_preserves_the_rest_of_the_config(wired, cfg):
     cfg.data["model"] = "custom"
     cfg.data["llm"] = {"server_bin": "/llama-server"}
     cli.main(["llm", "add", "q9b", "/a.gguf"])
-    on_disk = json.loads((cfg.vault / ".mb" / "config.json").read_text(encoding="utf-8"))
+    on_disk = json.loads(config_mod.CONFIG_FILE.read_text(encoding="utf-8"))
     assert on_disk["model"] == "custom"
     assert on_disk["llm"]["server_bin"] == "/llama-server"
 

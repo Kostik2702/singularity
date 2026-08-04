@@ -643,8 +643,28 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                     "no OS keyring — secrets require explicit plaintext opt-in",
                     fix="install a keyring backend for secure secret storage")
 
+    def a7():
+        # 0.7: the config is per machine. A vault that still holds one means
+        # either the migration has not run yet, or something wrote a config
+        # back into a folder that travels between machines — the shape that
+        # made nine keys arrive dead after one clone (issue #14).
+        from .config import legacy_config_path
+
+        legacy = legacy_config_path(cfg.vault)
+        if not legacy.exists():
+            rep.add("A7-config-location", "PASS",
+                    f"config is per machine ({cfg.config_path})")
+            return
+        rep.add("A7-config-location", "WARN",
+                f"a config still sits inside the vault: {legacy} — it travels "
+                f"with the vault, so its absolute paths are wrong on any other "
+                f"machine",
+                fix="run any `mb` command to adopt it automatically, "
+                    "or delete it once the machine config is correct")
+
     _guard(rep, "A1", a1)
     _guard(rep, "A2", a2)
+    _guard(rep, "A7", a7)
     _guard(rep, "A6", lambda: config_paths_block(rep, cfg))
     _guard(rep, "A3", a3)
     _guard(rep, "A4", a4)
@@ -935,7 +955,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
             rep.add("D1-hooks", "WARN",
                     f"capture hooks config unreadable, treated as default: "
                     f"{state['warnings'][0] if state['warnings'] else '?'}",
-                    fix="fix or remove .mb/config.json, then mb hooks status")
+                    fix="fix or remove ~/.singularity.json, then mb hooks status")
             return
         desired = "enabled" if state["configured"] else "disabled"
         clients = state["clients"]
@@ -977,7 +997,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                         installed = True
                         break
         from .config import read_config_tolerant
-        enabled = bool(read_config_tolerant(cfg.vault).get("module_context_enabled", False))
+        enabled = bool(read_config_tolerant().get("module_context_enabled", False))
         state = "enabled" if enabled else "disabled (default, opt-in via module_context_enabled)"
         if installed:
             rep.add("D3-module-context", "PASS", f"PreToolUse hook registered, {state}")
@@ -1010,7 +1030,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                         installed = True
                         break
         from .config import DEFAULT_CONFIG, read_config_tolerant
-        light_cfg = read_config_tolerant(cfg.vault)
+        light_cfg = read_config_tolerant()          # per machine since 0.7
         enabled = bool(light_cfg.get("vault_guard_enabled",
                                      DEFAULT_CONFIG["vault_guard_enabled"]))
         mode = light_cfg.get("vault_guard_mode", DEFAULT_CONFIG["vault_guard_mode"])

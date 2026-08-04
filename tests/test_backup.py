@@ -9,8 +9,11 @@ from singularity.config import Config
 
 @pytest.fixture
 def cfg(tmp_path):
-    c = Config(vault=tmp_path, data={"model": "m", "min_score": 0.3})
-    c.save()                       # writes .mb/config.json
+    # min_score is deliberately NOT the default: from 0.7 `save()` records
+    # decisions only, so a default-valued key never reaches the file and could
+    # not be asserted on after a restore.
+    c = Config(vault=tmp_path, data={"model": "m", "min_score": 0.42})
+    c.save()                       # writes the machine config
     return c
 
 
@@ -48,7 +51,7 @@ def test_restore_brings_back_config(cfg):
     assert json.loads(cfg.config_path.read_text(encoding="utf-8"))["min_score"] == 0.99
     res = backup.restore(cfg, "B1")
     assert res["ok"] and "config.json" in res["restored"]
-    assert json.loads(cfg.config_path.read_text(encoding="utf-8"))["min_score"] == 0.3
+    assert json.loads(cfg.config_path.read_text(encoding="utf-8"))["min_score"] == 0.42
 
 
 def test_restore_refuses_corrupt(cfg):

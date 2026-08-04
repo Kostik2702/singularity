@@ -69,7 +69,9 @@ def evaluate(event: dict) -> dict | None:
     # come from DEFAULT_CONFIG rather than a literal: a second copy of a default
     # is a second thing to forget, and this hook decides whether a check runs at
     # all. `tests/test_vault_guard_hook.py` pins the two together.
-    light_cfg = read_config_tolerant(vault)
+    # (No `vault` argument since 0.7: the config is per machine, so there is one
+    # file to read and no vault to locate first.)
+    light_cfg = read_config_tolerant()
     if not light_cfg.get("vault_guard_enabled",
                          DEFAULT_CONFIG["vault_guard_enabled"]):
         return None

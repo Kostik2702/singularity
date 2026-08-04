@@ -20,15 +20,22 @@ import sys
 from pathlib import Path
 
 ENGINE = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling install/ imports
+
+import vault_token  # noqa: E402  ({{VAULT}} substitution, shared with skills)
+
 AGENTS_SRC = ENGINE / "singularity" / "agents"
 
-# The agent sources tell the model to read rules out of the vault, and they name
-# a concrete path so they stay readable as documents. That path is one machine's
-# layout, so it is treated as a TEMPLATE DEFAULT: when this machine's vault
-# resolves elsewhere, the installer renders a substituted copy instead of
-# linking. Same path -> plain symlink, i.e. the historic behavior and the
-# property that matters most (edit the repo, every agent updates at once).
-TEMPLATE_VAULT = r"D:\obsidian\memory brain"
+# The agent sources tell the model to read rules out of the vault, so they have
+# to name a path. They name `{{VAULT}}` and the installer substitutes it.
+#
+# This used to be one machine's absolute path, with the same string repeated
+# here as a sentinel to substitute back out. That pairing had to be kept in
+# sync by hand across every agent and skill source, and it silently stopped
+# matching the moment the authoring machine moved to another drive. A token
+# cannot drift: it is not a path, so it never goes stale and never needs
+# migrating.
+TEMPLATE_VAULT = vault_token.TOKEN
 
 # Engine-owned council/workflow agents (source of truth in singularity/agents/).
 AGENTS = [

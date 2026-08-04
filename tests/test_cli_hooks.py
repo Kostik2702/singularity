@@ -76,7 +76,8 @@ def test_disable_preserves_foreign_and_unknown_keys(wired, cfg, capsys):
     cfg.data["totally_unknown_key"] = "keep-me"
     cfg.data["model"] = "custom-model"
     cli.main(["hooks", "disable"])
-    on_disk = json.loads((cfg.vault / ".mb" / "config.json").read_text(encoding="utf-8"))
+    from singularity.config import CONFIG_FILE
+    on_disk = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))   # per machine now
     assert on_disk["totally_unknown_key"] == "keep-me"
     assert on_disk["model"] == "custom-model"
     assert on_disk["auto_capture"] is False

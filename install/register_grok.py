@@ -176,14 +176,17 @@ Note: Grok also scans ~/.claude for rules and skills; same-name skills resolve t
 def _deploy_skills() -> dict:
     dest_root = _grok_home() / "skills"
     dest_root.mkdir(parents=True, exist_ok=True)
-    counts = {"ok": 0, "linked": 0, "copied": 0, "backed-up": 0, "missing": 0}
+    counts = {"ok": 0, "linked": 0, "copied": 0, "backed-up": 0, "rendered": 0,
+              "missing": 0}
+    # same reason as Gemini: never deploy the raw `{{VAULT}}` token to a client
+    vault = resolve_vault()
     for name in GROK_SKILLS:
         src = SKILLS_SRC / name
         if not src.is_dir():
             print(f"[grok] MISSING in repo: {name}", file=sys.stderr)
             counts["missing"] += 1
             continue
-        status = register_skills._link_dir(src, dest_root / name)
+        status = register_skills._link_dir(src, dest_root / name, vault)
         counts[status] += 1
         if status == "backed-up":
             print(f"[grok] {name}: differing local copy preserved as backup, "
@@ -235,13 +238,9 @@ def _register_hook() -> str:
 
 
 def _remove_link(link: Path) -> None:
-    """Delete a symlink/junction without touching its target."""
-    if link.is_symlink():
-        link.unlink()
-    elif os.name == "nt" and link.is_dir():
-        link.rmdir()                     # junction reparse point, not the target
-    else:
-        link.unlink()
+    """Delete an owned skill entry — a link, a junction, or a copy we rendered.
+    Shared with register_skills so the two cannot drift."""
+    register_skills.remove_owned(link)
 
 
 def uninstall() -> dict:
@@ -249,7 +248,8 @@ def uninstall() -> dict:
       - the managed block in <grok-home>/AGENTS.md (user text outside preserved;
         the file is deleted only when our block was its sole content);
       - skill links in <grok-home>/skills that resolve EXACTLY to our engine
-        source (register_skills._points_to) — foreign or copied directories at
+        source, or a copy we rendered ourselves and marked as ours
+        (register_skills.is_owned) — foreign or hand-made directories at
         an owned name are counted and kept, never auto-deleted.
     Foreign skills, backup dirs, credentials, sessions, config.toml, the Grok
     binary and the vault are never touched. Safe to run when Grok is absent."""
@@ -272,7 +272,7 @@ def uninstall() -> dict:
     skills_dir = grok_home / "skills"
     for name in GROK_SKILLS:
         link = skills_dir / name
-        if register_skills._points_to(link, SKILLS_SRC / name):
+        if register_skills.is_owned(link, SKILLS_SRC / name):
             _remove_link(link)
             result["skills_removed"] += 1
         elif link.is_symlink() or link.exists():

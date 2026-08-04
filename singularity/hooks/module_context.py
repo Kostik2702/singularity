@@ -47,7 +47,7 @@ def build_additional_context(event: dict) -> str | None:
 
     # Installed but opt-in: default False so registering the hook (T07) never
     # starts checking every Edit/Write until the user turns it on.
-    light_cfg = read_config_tolerant(vault)
+    light_cfg = read_config_tolerant()
     if not light_cfg.get("module_context_enabled", False):
         return None
 

@@ -69,8 +69,12 @@ def test_claude_session_start_carries_the_policy(tmp_path, monkeypatch):
     vault = tmp_path / "vault"
     (vault / ".mb").mkdir(parents=True)
     (vault / ".mb" / "config.json").write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(session_start, "resolve_vault", lambda explicit=None: vault,
-                        raising=False)
+    # build_context imports resolve_vault INSIDE the function, so the patch has
+    # to land on singularity.config — patching the hook module's attribute is
+    # shadowed by that import. It passed before only because resolve_vault then
+    # read the developer's real ~/.singularity.json and found a real vault.
+    import singularity.config as config_mod
+    monkeypatch.setattr(config_mod, "resolve_vault", lambda explicit=None: vault)
     payload = session_start.build_context(vault)
     assert VAULT_WRITE_POLICY_FRAGMENT in payload
 

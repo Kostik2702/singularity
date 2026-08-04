@@ -59,7 +59,7 @@ def _validate_llm(data: dict) -> dict:
     normalized dict (server_port/health_timeout_s/router.port coerced to
     numbers) — never mutates the caller's cfg.data in place. The single
     boundary every consumer (start/list/code/status) goes through, so a
-    malformed .mb/config.json always surfaces as one actionable
+    a malformed machine config always surfaces as one actionable
     LLMConfigError, never a KeyError/TypeError/ValueError traceback."""
     data = _require_object(data, "llm config section")
     data = dict(data)
@@ -102,7 +102,7 @@ def _llm_cfg(cfg) -> dict:
     data = cfg.get("llm")
     if not data:
         raise LLMConfigError(
-            'no [llm] config — add an "llm" section to .mb/config.json '
+            'no [llm] config — add an "llm" section to the machine config (~/.singularity.json) '
             "(server_bin + models)")
     return _validate_llm(data)
 
@@ -825,7 +825,7 @@ def setup(cfg, dir_override: str | None = None) -> int:
                         f"(server_bin -> {section['server_bin']})")
     elif not isinstance(section, dict):
         report("fail", f'llm config section must be an object, got '
-                       f"{type(section).__name__} — fix .mb/config.json")
+                       f"{type(section).__name__} — fix the machine config (~/.singularity.json)")
         return 1
     else:
         report("ok", "llm config section present")
@@ -835,7 +835,7 @@ def setup(cfg, dir_override: str | None = None) -> int:
     server_bin = None
     if not server_bin_raw or not isinstance(server_bin_raw, str):
         report("fail", 'llm.server_bin not set — add e.g. "server_bin": '
-                       '"E:/llama.cpp/llama-server.exe" to .mb/config.json')
+                       '"E:/llama.cpp/llama-server.exe" to the machine config (~/.singularity.json)')
     else:
         server_bin = Path(server_bin_raw)
         target_dir = Path(dir_override) if dir_override else server_bin.parent

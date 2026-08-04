@@ -147,14 +147,18 @@ Note: Gemini may require one-time consent when a skill is activated — that is 
 def _deploy_skills() -> dict:
     dest_root = Path.home() / ".gemini" / "skills"
     dest_root.mkdir(parents=True, exist_ok=True)
-    counts = {"ok": 0, "linked": 0, "copied": 0, "backed-up": 0, "missing": 0}
+    counts = {"ok": 0, "linked": 0, "copied": 0, "backed-up": 0, "rendered": 0,
+              "missing": 0}
+    # a skill naming `{{VAULT}}` must be rendered here too — deploying the raw
+    # token to a client is worse than deploying a wrong path
+    vault = resolve_vault()
     for name in GEMINI_SKILLS:
         src = SKILLS_SRC / name
         if not src.is_dir():
             print(f"[gemini] MISSING in repo: {name}", file=sys.stderr)
             counts["missing"] += 1
             continue
-        status = register_skills._link_dir(src, dest_root / name)
+        status = register_skills._link_dir(src, dest_root / name, vault)
         counts[status] += 1
         if status == "backed-up":
             print(f"[gemini] {name}: differing local copy preserved as backup, "
@@ -213,13 +217,9 @@ def _register_hooks() -> str:
 
 
 def _remove_link(link: Path) -> None:
-    """Delete a symlink/junction without touching its target."""
-    if link.is_symlink():
-        link.unlink()
-    elif os.name == "nt" and link.is_dir():
-        link.rmdir()                     # junction reparse point, not the target
-    else:
-        link.unlink()
+    """Delete an owned skill entry — a link, a junction, or a copy we rendered.
+    Shared with register_skills so the two cannot drift."""
+    register_skills.remove_owned(link)
 
 
 def uninstall() -> dict:
@@ -255,7 +255,7 @@ def uninstall() -> dict:
     skills_dir = home_gemini / "skills"
     for name in GEMINI_SKILLS:
         link = skills_dir / name
-        if register_skills._points_to(link, SKILLS_SRC / name):
+        if register_skills.is_owned(link, SKILLS_SRC / name):
             _remove_link(link)
             result["skills_removed"] += 1
         elif link.is_symlink() or link.exists():

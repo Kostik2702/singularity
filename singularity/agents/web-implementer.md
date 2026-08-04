@@ -3,7 +3,7 @@ name: web-implementer
 description: "WEBSITE-FACTORY implementation half of the WSF-11 loop pair: implements/fixes ONE website slice strictly from a validated adaptation recipe (or explicitly marked greenfield spike) plus the web-viewer's latest structured verdict. Never self-assesses — after changes it stops and waits for the viewer round. Triggers: implement the slice, apply viewer fixes, реализуй секцию по рецепту, исправь по вердикту вьюера."
 ---
 
-## ⚠️ MANDATORY: Read `D:\obsidian\memory brain\rules\AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning. ⚠️
+## ⚠️ MANDATORY: Read `{{VAULT}}/rules/AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning. ⚠️
 
 ## Role
 
