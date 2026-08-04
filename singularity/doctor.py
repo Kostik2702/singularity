@@ -970,7 +970,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                         installed = True
                         break
         from .config import read_config_tolerant
-        enabled = bool(read_config_tolerant(cfg.vault).get("module_context_enabled", False))
+        enabled = bool(read_config_tolerant().get("module_context_enabled", False))
         state = "enabled" if enabled else "disabled (default, opt-in via module_context_enabled)"
         if installed:
             rep.add("D3-module-context", "PASS", f"PreToolUse hook registered, {state}")
@@ -1003,7 +1003,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                         installed = True
                         break
         from .config import read_config_tolerant
-        light_cfg = read_config_tolerant(cfg.vault)
+        light_cfg = read_config_tolerant()
         enabled = bool(light_cfg.get("vault_guard_enabled", False))
         mode = light_cfg.get("vault_guard_mode", "audit")
         state = f"mode={mode}" if enabled else "disabled (default, opt-in via vault_guard_enabled)"

@@ -96,7 +96,7 @@ def build_context(event_cwd: str | None = None) -> str:
         lines.append("WARNING: vault path does not exist on this machine.")
         return "\n".join(lines)
 
-    light_cfg = read_config_tolerant(vault)
+    light_cfg = read_config_tolerant()
 
     # T06: project brain — independent fail-open block. Project detection
     # never touches SessionStart's own operation even if it errors.

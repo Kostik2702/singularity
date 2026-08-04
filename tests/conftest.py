@@ -104,6 +104,28 @@ def _no_real_user_path(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_machine_config(request, tmp_path_factory, monkeypatch):
+    """Never let a test read or write the developer's real machine config.
+
+    From 0.7 the config lives at `~/.singularity.json` instead of inside the
+    vault, and `load_config()` / `cfg.save()` / `write_pointer()` all write it.
+    A vault fixture is a tmp_path, but `CONFIG_FILE` is an absolute path in
+    `$HOME` that no tmp vault redirects — so without this every test that loads
+    a config would rewrite the machine's real one, and the seamless migration
+    would fire against the developer's actual vault.
+
+    Third guard of the same family as `_no_real_scheduler` and
+    `_no_real_user_path`. Opt out with `@pytest.mark.real_machine_config`."""
+    if request.node.get_closest_marker("real_machine_config"):
+        return
+    from singularity import config as config_mod
+
+    fake = tmp_path_factory.mktemp("machine-config") / ".singularity.json"
+    monkeypatch.setattr(config_mod, "CONFIG_FILE", fake)
+    monkeypatch.setattr(config_mod, "POINTER_FILE", fake)
+
+
+@pytest.fixture(autouse=True)
 def _no_real_version_managers(request, monkeypatch):
     """A test that says "this CLI is not installed" must stay right.
 

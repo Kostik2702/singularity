@@ -48,7 +48,7 @@ def evaluate(event: dict) -> dict | None:
     if vault is None or not vault.exists():
         return None
 
-    light_cfg = read_config_tolerant(vault)
+    light_cfg = read_config_tolerant()
     if not light_cfg.get("vault_guard_enabled", False):
         return None
 
