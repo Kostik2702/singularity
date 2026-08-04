@@ -77,6 +77,15 @@ developer's real `~/.singularity.json` and found a real vault.
 
 Full suite: 1846 passed, 13 skipped.
 
+### Also in this release, marked as such
+
+- **`reel` — EXPERIMENTAL, in development.** The video-editing CLI and its
+  `reel-editor` skill land in master unfinished, by owner decision, carrying
+  the label rather than waiting: the subcommand contract is still moving,
+  backward compatibility is not promised, and it has no `mb doctor` check of
+  its own. Shipping it silently as a finished capability was the alternative,
+  and that is how a prototype becomes a promise.
+
 ---
 
 # v0.8.0 — a rule that is not there when the decision is made is not a rule

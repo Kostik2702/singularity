@@ -51,7 +51,7 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess:
 # argv serialization — one correct quoting per backend (AUD-01)
 #
 # The bug: `" ".join(args)` split any argv element containing a space (a vault
-# path like `D:\obsidian\memory brain`) into two tokens, so the scheduled job
+# path like `E:\obsidian\memory brain`) into two tokens, so the scheduled job
 # received a broken --vault and failed with LastTaskResult=1. Each OS parses
 # the stored action differently, so each needs its own quoter.
 # --------------------------------------------------------------------------

@@ -40,6 +40,7 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
     "error-reports":          {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
     "report":                 {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
     "compaction-plan":        {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
+    "create-image-prompt":   {"clients": _ALL_CLIENTS, "tools": [], "reason": None},
     "council": {
         "clients": ["claude"], "tools": ["Agent"],
         "reason": "spawns Claude subagents (investigator/critic/validator/historian) "
@@ -79,7 +80,7 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "judgment step requires visually comparing viewport screenshots "
                   "against the design mockup via multimodal Read and consulting the "
-                  "vault (mb search) for owner decisions during A/B categorization — "
+                  "vault (mb search) for owner decisions during A/B categorization вЂ” "
                   "that review loop is authored and validated only on Claude Code",
     },
     "website-factory": {
@@ -92,34 +93,34 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "runtime-choice judgment and the evidence loop read rendered "
                   "screenshots multimodally and consult vault decisions; ends "
-                  "at the owner visual gate — GT-precedent (letter-glitch) "
+                  "at the owner visual gate вЂ” GT-precedent (letter-glitch) "
                   "executed only on Claude Code (WSF-E05)",
     },
     "pattern-adapter": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "resolving recipe TODOs (intent, token mapping, fallback "
                   "design) is a judgment layer over the recipe CLI that "
-                  "consults the vault and ends at owner acceptance — GT-tested "
+                  "consults the vault and ends at owner acceptance вЂ” GT-tested "
                   "only against Claude Code (WSF-E04)",
     },
     "motion-qa": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "budget findings need A/B triage against owner decisions in "
                   "the vault (a continuous background loop can be a deliberate "
-                  "choice) and drive the owner budget sign-off — GT-tested only "
+                  "choice) and drive the owner budget sign-off вЂ” GT-tested only "
                   "against Claude Code (WSF-E06)",
     },
     "component-intake": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "quarantine judgment (disputed REJECTs, requirement triage "
                   "into adaptation recipes) consults the vault and drives owner "
-                  "gates — GT-tested only against Claude Code (WSF-E03)",
+                  "gates вЂ” GT-tested only against Claude Code (WSF-E03)",
     },
     "pattern-source-scout": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "query-expansion judgment from the brief and the review-board "
                   "reading before the owner shortlist gate rely on multimodal "
-                  "Read and vault consultation — GT-tested only against Claude "
+                  "Read and vault consultation вЂ” GT-tested only against Claude "
                   "Code (WSF-E02)",
     },
     "design-analysis": {
@@ -127,14 +128,14 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
         "reason": "one of the two Stage-1 skills with a legitimate LLM judgment "
                   "step: aesthetic/structural mockup reading requires multimodal "
                   "Read anchored to design-metrics numbers, plus the owner brief "
-                  "gate — GT-tested only against Claude Code (WSF-06)",
+                  "gate вЂ” GT-tested only against Claude Code (WSF-06)",
     },
     "contrast-and-a11y-check": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "judgment step cross-references vault owner decisions (mb "
                   "search) for A/B categorization of violations and reads "
                   "rendered evidence multimodally; keyboard protocol depends on "
-                  "the local Playwright provisioning conventions — GT-tested "
+                  "the local Playwright provisioning conventions вЂ” GT-tested "
                   "only against Claude Code (WSF-05)",
     },
     "video-visual-review": {
@@ -149,8 +150,24 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
         "reason": "thin SKILL.md over the design-scout CLI; the query-expansion "
                   "step and the moodboard review before the owner acceptance "
                   "gate rely on multimodal Read of the rendered board and vault "
-                  "consultation (mb search/mb learn) — authored and GT-tested "
+                  "consultation (mb search/mb learn) вЂ” authored and GT-tested "
                   "only against Claude Code (WSF-09)",
+    },
+    "reel-editor": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "thin SKILL.md over the `reel` CLI whose every decision step is "
+                  "multimodal: contact sheets and cut sheets are READ as images to "
+                  "judge unusable AI-generation stretches, jump cuts, axis flips and "
+                  "the emotional ladder, and the format/copy gates end with the owner; "
+                  "it also leans on vault consultation (mb search) for the montage "
+                  "method вЂ” that review loop is authored and tested only on Claude Code",
+    },
+    "capcut-editor": {
+        "clients": ["claude"], "tools": ["MCP:capcut", "Bash"],
+        "reason": "requires a CapCut MCP capable of creating or safely cloning editable "
+                  "drafts, plus Claude-side inspection of provider tool schemas and an "
+                  "owner visual gate in the CapCut desktop app; no compatible MCP/draft "
+                  "round-trip has been validated on Codex, Gemini or Grok",
     },
     "image-asset-qa": {
         "clients": ["claude"], "tools": ["Bash"],

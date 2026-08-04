@@ -16,8 +16,8 @@ description: Структурный разбор дизайн-макета (PNG/
 imgqa probe MOCKUP.png --json
 
 # 2. Числа: размеры, aspect, доминантная палитра, кандидаты секций
-D:\Singularity\.venv\Scripts\python.exe \
-  "D:\Singularity\singularity\skills\design-analysis\scripts\design-metrics.py" \
+E:\Singularity\.venv\Scripts\python.exe \
+  "E:\Singularity\singularity\skills\design-analysis\scripts\design-metrics.py" \
   MOCKUP.png --out "<evidence-dir ВНЕ дерева макета>" --json
 
 # 3. Мультимодальный Read макета — суждение ПОВЕРХ чисел шага 2

@@ -117,6 +117,8 @@ The wrappers are ~20 lines each; all logic lives in `install/install.py`, which 
 5. **CLIs on PATH** — makes `mb`, `imgqa` and the other console scripts callable by name. macOS/Linux: symlinks them into `~/.local/bin` (and prints the exact `export PATH=…` line if that directory is not on your `PATH` — it never edits your shell rc for you). Windows: appends the venv `Scripts` directory to your **user** `PATH`, so open a new terminal afterwards. Only links that resolve back into this engine are ever created or removed, and `mb doctor`'s `D7-cli-on-path` reports the end state.
 6. **Scheduler + verify** — registers the nightly index rebuild and the on-save watcher with your OS scheduler (Task Scheduler / launchd / systemd — all with missed-run catch-up), then finishes with `mb doctor`.
 
+> ⚠️ **`reel` is experimental.** The video-editing CLI (`reel`, plus the `reel-editor` skill) ships in v0.9.0 as a feature **still in development**: its subcommand contract is still moving, backward compatibility is not promised, and it has no `mb doctor` check of its own. Usable, but not something to build automation on yet.
+
 Re-running the installer is safe — it refreshes and re-verifies instead of breaking things. To remove everything (hooks, scheduled jobs, daemon) **without touching your vault**: `mb uninstall`. Already have Singularity installed? See [docs/UPGRADE.md](docs/UPGRADE.md) for exactly what changes on upgrade, and [docs/ROLLBACK.md](docs/ROLLBACK.md) to turn any specific new feature back off.
 
 ### Verify

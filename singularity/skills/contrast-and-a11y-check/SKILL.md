@@ -22,7 +22,7 @@ imgqa contrast "#RRGGBB" "#RRGGBB" --json          # --min 4.5 по умолча
 
 ```bash
 # Сервер: ТОЛЬКО npx http-server (python http.server не отдаёт Range — правило vault)
-node "D:\Singularity\singularity\skills\contrast-and-a11y-check\scripts\a11y-audit.mjs" \
+node "E:\Singularity\singularity\skills\contrast-and-a11y-check\scripts\a11y-audit.mjs" \
   --project "<корень проекта>" --url http://localhost:8743 \
   --out "<evidence-dir ВНЕ проекта>" [--page /index.html] [--fail-impact serious]
 ```

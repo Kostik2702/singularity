@@ -58,7 +58,13 @@ _SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 
 
 def _scan_notes(cfg: Config) -> dict[str, dict[str, Any]]:
-    """rel_path -> {frontmatter, title, aliases, outlinks, mtime} for all vault notes."""
+    """rel_path -> {frontmatter, title, aliases, outlinks, mtime} for all vault notes.
+
+    A note that cannot be read is skipped silently: the curator's health checks
+    are advisory, and one unreadable file must not sink a whole run. (The
+    `unreadable` collector this used to accept existed for the graph export,
+    whose only consumer was an abandoned project; removed with it rather than
+    left as a parameter nothing passes.)"""
     skip_dirs = set(cfg.get("skip_dirs")) - {"templates"}  # validate templates too? no:
     skip_dirs.add("templates")
     notes: dict[str, dict[str, Any]] = {}

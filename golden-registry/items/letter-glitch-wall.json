@@ -51,8 +51,8 @@
   "cleanup": "cancelAnimationFrame + removeEventListener('resize') + IntersectionObserver.disconnect в destroy(); пауза цикла при выходе секции из viewport (observer) — включая обратный вход; no orphaned listeners (проверяется motion-qa rAF-after-settle: секция вне вьюпорта не тикает).",
   "lazy_strategy": "island: <script> модуль инициализируется по IntersectionObserver (rootMargin 200px), не в критическом пути; бюджет: vanilla-порт ~3KB (против 61.7KB gzip react-бандла из intake runtime) — деплой инлайном в index.html по паттерну scaffold.",
   "patch_set": "ПОРТ react->vanilla (draft-решение): (1) useRef/useEffect -> замыкание initLetterGlitch(container, opts) с destroy(); (2) параметры-пропсы -> opts c дефолтами сайта; (3) [НОВОЕ] seeded PRNG mulberry32(7331) вместо Math.random — детерминизм ?visual-test=1 (контракт harness WSF-08); (4) [НОВОЕ] reduced-motion одна-кадровая ветка; (5) [НОВОЕ] IntersectionObserver пауза; (6) [СОХРАНЕНО] DPR-resize, 5% updateCount, интерполяция, виньетка — алгоритмы upstream байт-в-байт по смыслу.",
-  "acceptance": "D:/Project/matrix-3d-web-evidence/letter-glitch-acceptance/ — скриншот секции (fidelity 1440x900), motion-qa-report.json живой страницы, determinism-чекер harness (2 прогона byte-identical в visual-test).",
-  "target_files": "candidate react-bits/LetterGlitch-JS-CSS -> recipe-letterglitch.json -> D:/Project/matrix-3d-web/index.html (секция #glitch-wall: разметка+стили+island-скрипт)",
+  "acceptance": "E:/Project/matrix-3d-web-evidence/letter-glitch-acceptance/ — скриншот секции (fidelity 1440x900), motion-qa-report.json живой страницы, determinism-чекер harness (2 прогона byte-identical в visual-test).",
+  "target_files": "candidate react-bits/LetterGlitch-JS-CSS -> recipe-letterglitch.json -> E:/Project/matrix-3d-web/index.html (секция #glitch-wall: разметка+стили+island-скрипт)",
   "notes": "Первый прогон E04 part 2 GT по draft-гейтам (DRAFT-GATES 2026-07-19). Владелец может отменить порт-решение — тогда кандидат возвращается в reference-only.",
   "intake_requirements": [
    "add prefers-reduced-motion variant (component animates, no handling found)"
@@ -69,18 +69,18 @@
   {
    "project": "matrix-3d-web",
    "at": "2026-07-19T13:06:54+00:00",
-   "evidence": "D:\\Project\\matrix-3d-web-evidence\\letter-glitch-acceptance"
+   "evidence": "E:\\Project\\matrix-3d-web-evidence\\letter-glitch-acceptance"
   },
   {
    "project": "nika-studio",
    "at": "2026-07-19T14:06:18+00:00",
-   "evidence": "D:\\Project\\nika-evidence\\glyph-wall-retrofit-2026-07-19.png + determinism byte-identical proof (NIKA retrofit branch feat/glyph-wall-retrofit)"
+   "evidence": "E:\\Project\\nika-evidence\\glyph-wall-retrofit-2026-07-19.png + determinism byte-identical proof (NIKA retrofit branch feat/glyph-wall-retrofit)"
   }
  ],
  "promotion": {
   "by": "reuse",
   "at": "2026-07-19T14:06:18+00:00",
-  "evidence": "D:\\Project\\nika-evidence\\glyph-wall-retrofit-2026-07-19.png + determinism byte-identical proof (NIKA retrofit branch feat/glyph-wall-retrofit)"
+  "evidence": "E:\\Project\\nika-evidence\\glyph-wall-retrofit-2026-07-19.png + determinism byte-identical proof (NIKA retrofit branch feat/glyph-wall-retrofit)"
  },
  "deprecation": null
 }

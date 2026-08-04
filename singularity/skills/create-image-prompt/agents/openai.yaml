@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create Image Prompt"
+  short_description: "Craft detailed, controllable image prompts"
+  default_prompt: "Use $create-image-prompt to create a photorealistic image prompt."

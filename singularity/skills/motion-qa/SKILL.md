@@ -10,7 +10,7 @@ description: Гейт качества motion/3D живой страницы —
 > **Правило нулевого кода:** timeline/longtasks/CLS/rAF/WebGL/reduced/no-JS — уже в скрипте. 0 новых скриптов.
 
 ```bash
-node "D:\Singularity\singularity\skills\motion-qa\scripts\motion-qa.mjs" \
+node "E:\Singularity\singularity\skills\motion-qa\scripts\motion-qa.mjs" \
   --project "<корень проекта>" --url http://localhost:PORT/index.html \
   --out "<evidence ВНЕ проекта>" [--budgets budgets.json]
 # waitUntil=load (не networkidle — стриминговое медиа никогда не idle, урок NIKA)
