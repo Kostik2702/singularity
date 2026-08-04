@@ -7,7 +7,9 @@ rollback below is a config flip, a scheduler/hook removal, or `mb uninstall`
 
 ## Individual feature flags
 
-All of these live in `<vault>/.mb/config.json`, set with
+All of these live in the machine config `~/.singularity.json` (since
+v0.9.0 — it is not in the vault, because a vault travels between machines),
+set with
 `mb config set <key> <value>` (validated, atomic write) or by hand-editing
 and running `mb config validate` afterward.
 
@@ -152,7 +154,7 @@ exactly three artifact kinds under `$GROK_HOME` (else `~/.grok`): the
 preserved byte-for-byte), the `hooks/singularity.json` file (only when it
 contains our `grok_stop_capture.py` command — a foreign file at that name
 is left untouched), and `skills/<name>` links that resolve into this repo.
-**Never touches**: your vault, your notes, `.mb/config.json` or any
+**Never touches**: your vault, your notes, `~/.singularity.json` or any
 `.mb/*.json`/`*.jsonl` snapshot or journal file, foreign hooks, foreign
 skills, credentials, Grok's `config.toml`/`sessions/`/`auth.json`, or any
 third-party CLI (Codex/Gemini/Grok themselves are never uninstalled).

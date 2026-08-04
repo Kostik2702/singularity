@@ -49,7 +49,7 @@ graph TB
         RF["mb reflect<br/>offline adoption telemetry<br/>(counts/rates only, no content)"]
     end
     subgraph VAULT["Obsidian Vault = memory"]
-        NOTES["*.md notes<br/>frontmatter + wikilinks + tags<br/>+ project registry (.mb/config.json)"]
+        NOTES["*.md notes<br/>frontmatter + wikilinks + tags<br/>+ project registry (~/.singularity.json)"]
         IDX[(".mb/memory_index<br/>embeddings.npy + metadata.json")]
         CTX[(".mb/context.json<br/>per-project brain notes")]
     end
@@ -158,7 +158,7 @@ mb search "what do we know about the daemon"   # SEM-FIRST works from inside Gem
 gemini -p "summarise the vault" --output-format json   # headless: clean JSON, hooks don't leak
 ```
 
-**Good to know:** activating a skill may ask for one-time consent, and Gemini may prompt to trust the workspace — both are Gemini's own security, not something Singularity bypasses. The capture nudge is a reminder only (no retry, no extra model turn); opt out with `"auto_capture": false` in `<vault>/.mb/config.json`. Gemini's own experimental *Auto Memory* is separate and does not replace vault capture.
+**Good to know:** activating a skill may ask for one-time consent, and Gemini may prompt to trust the workspace — both are Gemini's own security, not something Singularity bypasses. The capture nudge is a reminder only (no retry, no extra model turn); opt out with `mb config set auto_capture false`. Gemini's own experimental *Auto Memory* is separate and does not replace vault capture.
 
 **Lifecycle:** re-run the installer (or `mb doctor --fix`) any time to refresh; `mb doctor` reports Gemini health under the `E*-gemini` checks; `mb uninstall` removes **only** Singularity-owned artifacts (the managed block, our two named hooks, and skill links that resolve back into the engine) — foreign content, credentials, Node, the Gemini CLI and your vault are untouched, and every settings mutation leaves a timestamped backup.
 
@@ -265,7 +265,7 @@ Save a note in Obsidian → the watcher asks the already-warm daemon to re-index
 
 ```bash
 mb daemon start|stop|restart|status|reload
-                            # reload = re-read .mb/config.json AND the indexes;
+                            # reload = re-read ~/.singularity.json AND the indexes;
                             # restart = the remedy when reload cannot rebind it
                             # in place (a changed `model`, above all)
 mb model status             # verify pinned local snapshot + manifest
@@ -299,7 +299,7 @@ Detection is **deepest-path-wins**: the most specific registered path containing
 - `mb search "..." --project singularity` (or `--project core` for the whole group) scopes results to it; unscoped searches still see everything.
 - `mb learn` / `mb note new` auto-detect the project from your current directory and stamp `project: singularity` into the note's frontmatter — you don't have to specify it by hand every time.
 - A note with **no** `project:` frontmatter, or the literal value `general`, is treated as project-agnostic (`general`) — the common case for anything not tied to one codebase (this repo's own vault documentation, for example).
-- **Personal space** is separate from projects and never reached by accident: only `--project personal` explicitly, or a note living under a path listed in `personal_roots` (`.mb/config.json`), is ever classified `personal`. Personal notes are never proposed by `mb digest`, never surfaced by `mb curator`'s suggestions, and never picked up by cwd-based auto-detection.
+- **Personal space** is separate from projects and never reached by accident: only `--project personal` explicitly, or a note living under a path listed in `personal_roots` (`~/.singularity.json`), is ever classified `personal`. Personal notes are never proposed by `mb digest`, never surfaced by `mb curator`'s suggestions, and never picked up by cwd-based auto-detection.
 
 ### Project brain & module context
 
@@ -397,7 +397,7 @@ Here, `Atomic.md` really did have the same paragraph typed twice under different
 
 ### Vault guard
 
-PreToolUse check that flags a new note or config edit landing somewhere unexpected — a safety net against "the assistant created a note in the wrong folder" or "edited `.mb/config.json` by hand instead of through `mb config set`."
+PreToolUse check that flags a new note or config edit landing somewhere unexpected — a safety net against "the assistant created a note in the wrong folder" or "edited the machine config by hand instead of through `mb config set`."
 
 **On by default in `audit` mode** since v0.6.3: it only annotates the write, never blocks. The default flipped because the failure it catches is silent by construction — a note written with a client's Write tool skips `templates/`, so the required frontmatter and sections are simply absent and nobody notices for weeks. `"deny"` blocks outright and stays explicit opt-in: watch what `audit` flags for a few sessions first, and switch only once you're confident nothing legitimate trips it.
 
@@ -475,7 +475,7 @@ mb backup verify <id>      # always verify before restoring
 mb backup restore <id>     # changes current config/index pointer; Markdown notes are untouched
 ```
 
-Prefer the validated CLI over editing `.mb/config.json` by hand. Values are JSON when possible, so booleans and numbers keep their types:
+Prefer the validated CLI over editing `~/.singularity.json` by hand. Values are JSON when possible, so booleans and numbers keep their types:
 
 ```bash
 mb config validate
@@ -556,7 +556,8 @@ mb llm setup --dir ~/llama.cpp    # macOS/Linux (verify a manual installation)
 
 `setup` is idempotent: run it again whenever the environment changes. It creates the `llm` config section, verifies/repairs the server binary and model arguments, checks GGUF paths and the Claude CLI, and prepares an isolated Claude Code profile. On Windows it can download the current CUDA `llama.cpp` release automatically; on macOS/Linux install `llama-server` yourself and set `server_bin`. Singularity does **not** download model weights.
 
-Add at least one local model to `<vault>/.mb/config.json` under `llm.models`:
+Add at least one local model with `mb llm add <name> <gguf>` (it lands in
+`~/.singularity.json` under `llm.models`):
 
 ```jsonc
 {
@@ -746,7 +747,7 @@ For the full stage-by-stage contract (typed inputs/outputs, resume-points, gate 
 
 ## Configuration
 
-Everything lives in `<vault>/.mb/config.json` (created with defaults on first run, validated on every load — `mb config validate`). `mb config get <key>` / `mb config set <key> <value>` read/write it atomically. A sanitized, git-trackable snapshot (`config.example.json`, secrets redacted, paths home-relativized) is regenerated on every save.
+Everything lives in `~/.singularity.json` — the MACHINE config, not the vault: a vault travels between machines and every absolute path inside it is wrong on arrival (v0.9.0). It is created by the installer and validated on every load — `mb config validate`). `mb config get <key>` / `mb config set <key> <value>` read/write it atomically. A sanitized, git-trackable snapshot (`config.example.json`, secrets redacted, paths home-relativized) is regenerated on every save.
 
 ```jsonc
 {

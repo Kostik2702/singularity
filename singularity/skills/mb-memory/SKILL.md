@@ -24,7 +24,7 @@ mb note new decision "Название решения"    # новая заме�
 mb note new rule "X" --filename "Rule - X"   # конвенция vault: тип в имени файла, title чистый
 ```
 
-- [ ] Личное (не относится ни к одному рабочему проекту) — добавь `--project personal` к `mb learn`/`mb note new`, или, если запись уже создаётся в каталоге из `personal_roots` (см. `.mb/config.json`), routing применится автоматически. Личные заметки никогда не попадают в digest/curator-предложения и никогда не резолвятся случайным cwd-детектом — только explicit `--project personal` или personal_roots.
+- [ ] Личное (не относится ни к одному рабочему проекту) — добавь `--project personal` к `mb learn`/`mb note new`, или, если запись уже создаётся в каталоге из `personal_roots` (см. машинный конфиг `~/.singularity.json`), routing применится автоматически. Личные заметки никогда не попадают в digest/curator-предложения и никогда не резолвятся случайным cwd-детектом — только explicit `--project personal` или personal_roots.
 
 ### GATE перед любой записью: куда писать
 
@@ -51,7 +51,7 @@ mb note new rule "X" --filename "Rule - X"   # конвенция vault: тип 
 
 - [ ] **Новый файл в managed-корне** (`learnings/*`, `decisions/`, `howto/`, `incidents/`, `rules/`, `reference/`, `changelog/`, `_moc/`, `daily/`) — ТОЛЬКО `mb note new <type> "<title>"`. Размер записи роли не играет: создай файл командой, а наполняй уже Edit'ом.
 - [ ] **Правка существующей заметки** — Edit/Write, это штатный путь.
-- [ ] **Конфиг** — `mb config set` / `mb project add`, не правка `.mb/config.json`.
+- [ ] **Конфиг** — `mb config set` / `mb project add`, не правка `~/.singularity.json` (машинный конфиг; в vault его нет с v0.9.0).
 - [ ] **Искать в vault** — `mb search`, `mb curator gaps` (битые ссылки, недайджещенные learnings), `mb curator contradictions`, а не `grep`/обход файлов.
 
 Почему это гейт, а не рекомендация: мимо `mb note new` не применяется `templates/<type>.md` — и запись НЕ падает, просто рождается без `source:` и без обязательных секций (для rule — `## Правило` / `## Почему` / `## Происхождение` с GATE). Такую заметку не отличить от полной, пока кто-нибудь не сверит её с шаблоном руками; ровно так и произошло 2026-08-04. Плюс теряются project-routing и dedup.

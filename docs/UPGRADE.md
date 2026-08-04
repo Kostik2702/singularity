@@ -22,16 +22,35 @@ and nothing here requires you to do anything by hand for a normal upgrade.
 
 ## What actually changes on your machine
 
-- **`.mb/config.json` gains new keys with safe defaults**, written the next
-  time anything calls `Config.save()` (installer re-run, `mb config set`,
-  `mb init`). `schema_version` bumps and a timestamped backup
-  (`config.json.bak-<ts>`) is written automatically before any migrating
-  rewrite (`config.migrate_config()` / `config._backup_config()`) — your
-  previous config is never overwritten without a copy.
-- **Nothing new starts intercepting an existing session.** `Config.save()`
-  materializes every default into `config.json`, so a machine that has ever
-  saved its config keeps the values it already has — a changed default reaches
-  new installs only. `auto_capture` likewise keeps whatever value it had.
+- **Since v0.9.0 the config is a MACHINE file: `~/.singularity.json`.** It is
+  no longer inside the vault, because a vault travels between machines and
+  every absolute path in it is wrong on arrival. The first `mb` command after
+  the upgrade adopts your old `<vault>/.mb/config.json` automatically and
+  renames it to `config.json.migrated-<ts>` — kept, never deleted. Nothing to
+  run, and a machine that already has its own config is never overwritten by an
+  arriving vault. An unparseable legacy file is a loud refusal, not a silent
+  fresh start.
+  **If a daemon is running during that first command, restart it**
+  (`mb daemon restart`): a daemon started before the upgrade holds the old
+  module, keeps reading the renamed file, and `mb daemon reload` will report
+  nothing changed. The migration says so when it sees one.
+- **The config records decisions, not defaults.** `Config.save()` writes only
+  values that differ from `DEFAULT_CONFIG` (a real machine's file went from 42
+  materialised keys to 9). An absent key therefore means "the shipped default",
+  which is what keeps the file readable as the schema grows. Practical
+  consequence when a default CHANGES in a later release: a value you set
+  explicitly that happened to equal the old default is not stored, so you would
+  move to the new default with everyone else. If you want a value pinned
+  against future changes, set it to something other than the current default,
+  or re-set it after the release that changes it. Values that differ from the
+  default — including every deliberate opt-out — survive untouched.
+- **Nothing new starts intercepting an existing session.** A changed default
+  reaches a machine only where that machine never expressed a choice;
+  `auto_capture` and friends keep whatever you set.
+- **`schema_version` migrations still take a copy.** A timestamped
+  `.singularity.json.bak-<ts>` is written before any migrating rewrite
+  (`config.migrate_config()` / `config._backup_config()`) — separate from the
+  one-time `.migrated-<ts>` above, which preserves the vault-era file.
 - **`vault_guard_enabled` ships `true` (audit) since v0.6.3**, `module_context_enabled`
   still `false`. If your config predates that and you WANT the guard, set it:
   `mb config set vault_guard_enabled true`. Audit only annotates a write with a
@@ -86,6 +105,16 @@ and nothing here requires you to do anything by hand for a normal upgrade.
   detects the missing/old version, migrates in memory, backs up the old
   file, then saves — this already happened for every machine that upgraded
   through AUD-13 and needs no new action now.
+- **A config still sitting in the vault** — adopted on the next `mb` command
+  (see above). `doctor A7-config-location` reports one that is still there,
+  which after the adoption means something wrote a new config back into a
+  folder that travels.
+- **Nothing stated for this machine yet** — since v0.9.1 the migration and the
+  installer print what is unstated (`code_repos_dir`, `projects`, `llm`,
+  `imgqa_ml_venv`) with the exact command for each, and `doctor
+  A8-machine-setup` reports the same list. Every one of them is optional: an
+  arriving vault carries the settings and none of the local answers, so this is
+  a prompt at the two moments it is actionable rather than a standing warning.
 
 ## Grok Build CLI support (feat/grok-cli-integration)
 
@@ -132,7 +161,7 @@ is the backup note.
   `mb ingest index --rebuild`. It costs proportionally to how much you have
   ingested, and it is empty until you ingest something (measured: 1 document /
   18 chunks in 0.34 s).
-- **`.mb/config.json` gains 11 keys with safe defaults** and `schema_version`
+- **The config gains 11 keys with safe defaults** and `schema_version`
   bumps 1 → 2. Nothing is rewritten: the new keys resolve through
   `DEFAULT_CONFIG`, so a v1 config keeps every value you set and gains only
   defaults. A timestamped `config.json.bak-<ts>` is taken before the migrating
@@ -226,32 +255,41 @@ That is the feature working as intended, but it is the one way this upgrade
 does something you did not explicitly ask for after the fact. To opt back out:
 `mb config set code_repos_dir null`.
 
-## Machine-specific paths became defaults, not requirements
+## Machine-specific paths are gone from the source (v0.9.0)
 
-Two literals belonging to the original dev machine were baked into the source.
-Both still work exactly as before — they are now the LAST fallback rather than
-the only possibility, so nothing changes on a machine that was already working.
+An earlier release demoted the original dev machine's literals to "the last
+fallback". v0.9.0 removed them instead. A default nobody can satisfy is not a
+fallback — it outlived its own machine's move to another drive and shipped a
+dead drive letter to everyone else.
 
-- **The built-in fallback vault.** Resolution order is unchanged (`--vault` →
-  `MB_HOME` → `~/.singularity.json` → built-in), but the last step is now a
-  LIST of candidates: `~/memory brain`, `~/Documents/memory brain`, then the
-  historic `D:\obsidian\memory brain`. Each is still tried only if it exists.
-  Set **`MB_DEFAULT_VAULT`** (one path, or several separated by the platform's
-  path separator) to replace that list entirely. Note the difference from
-  `MB_HOME`: `MB_HOME` says *which vault to use*, `MB_DEFAULT_VAULT` says
-  *where to look when nothing was configured*.
-- **The vault path inside the agent definitions.** `singularity/agents/*.md`
-  tell the model to read rules out of the vault and name a concrete path, so
-  they stay readable as documents. That literal is now a template default: if
-  this machine's vault resolves elsewhere, `install/register_agents.py` writes
-  a substituted copy instead of a symlink and says so. If the vault matches the
-  template — the historic case — nothing changes and the files stay symlinked,
-  which preserves the property that matters: edit the repo, every deployed
-  agent updates at once. A local file you edited yourself is still backed up,
-  never overwritten.
+- **No built-in vault names a drive.** Resolution order is unchanged
+  (`--vault` → `MB_HOME` → `~/.singularity.json` → built-in candidates), but
+  the candidates are home-relative only: `~/memory brain`, then
+  `~/Documents/memory brain`, each tried only if it exists. Nothing configured
+  now yields "no vault configured" with actionable guidance instead of a path
+  from someone else's machine. Set **`MB_DEFAULT_VAULT`** (one path, or several
+  separated by the platform's path separator) to replace that list entirely.
+  `MB_HOME` says *which vault to use*; `MB_DEFAULT_VAULT` says *where to look
+  when nothing was configured*.
+- **The installer ASKS.** `--vault` wins and creates the directory; otherwise
+  the resolved path is shown for confirmation rather than assumed. A
+  non-interactive run never prompts — it fails naming the flag instead of
+  hanging on a question nobody can answer.
+- **Agent and skill text carries a `{{VAULT}}` token**, substituted at install
+  time. The literal path used to be repeated in 18 files with a matching
+  sentinel in `register_agents`, a pairing that silently stopped matching when
+  the authoring machine changed drives. Files whose tree contains the token are
+  rendered as owned copies (marked with `.singularity-owned.json`); everything
+  else stays symlinked, so editing the repo still updates every deployed skill
+  at once. A local file you edited yourself is backed up, never overwritten.
+- **Two more machine literals went with them** (v0.9.0, found by the baseline's
+  own scan): `imgqa`'s ML venv is named through `IMGQA_ML_VENV` or
+  `imgqa_ml_venv`, and `mb llm setup` requires `--dir` the first time rather
+  than downloading gigabytes onto a drive that need not exist. Both now say
+  "not configured" instead of "not found at <a path you never chose>".
 
-Nothing to run: the candidate list applies on the next command, and the agent
-substitution on the next installer / `mb doctor --fix` run.
+Nothing to run for the candidate list; token substitution happens on the next
+installer / `mb doctor --fix` run.
 
 ## The command window (no migration required)
 
