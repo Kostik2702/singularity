@@ -10,6 +10,54 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.7.1 — the vault-only write path, present where the path is chosen
+
+Closes **VSO-01**, open since 2026-07-13.
+
+The incident it came from ([[Error - Vault staging duplicates]]): a client
+edited 14 vault documents as copies under the user's profile root and copied
+them back, because the sandbox exposed that directory as writable and a mirror
+looked like the path of least resistance. No unique data was lost — every
+staging file turned out byte-identical to, or contained in, its canonical
+version — but for a while the machine had two working sets of the same notes,
+and only a hash audit could say which was authoritative. Direct patching of the
+vault path was verified to work during cleanup; the workaround had never been
+necessary.
+
+A rule saying "artifacts live in the vault" already existed and was active. It
+just was not present at the moment the write path gets chosen, which is the
+only moment it could have helped — the same shape as VSO-02, where the skill
+authorized the very bypass the guard was flagging.
+
+`VAULT_WRITE_POLICY_FRAGMENT` joins `CAPTURE_HOOKS_FRAGMENT` in
+`singularity/hooks_state.py` and is injected verbatim into all four surfaces
+that decide a write path: the Claude SessionStart payload and the managed
+blocks of `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`, `~/.grok/AGENTS.md`. One
+source, because four hand-maintained copies of a policy drift — as the guard's
+own default did a release ago.
+
+It says four things: write **directly** to the vault (or via `mb note new` /
+`mb learn`); never create an editable mirror and copy it back; external folders
+are for input and for an explicitly requested export; and if a direct write is
+genuinely blocked, **stop and say so** rather than routing around it. Reading
+vault files and copying *into* the vault stay explicitly fine — the rule is
+about editable duplicates, not about the outside world.
+
+`mb-memory/SKILL.md` gains the matching destination gate above the "чем писать"
+gate added in v0.6.4: together they answer *where* and *with what* before the
+first write.
+
+`tests/test_vault_write_policy.py` asserts the policy on every surface and that
+each imports the shared constant instead of paraphrasing it. Verified by
+deleting it from one registrar: the suite fails.
+
+No home-directory scanner was added — that was ruled out in the task's own
+acceptance as a separate privacy decision.
+
+Full suite: 1806 passed, 25 skipped.
+
+---
+
 # v0.7.0 — the registry gets a write half, and a typo stops passing for a fix
 
 Three CLI frictions, each filed after `mb doctor` or the vault guard pointed at
