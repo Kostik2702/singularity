@@ -120,9 +120,36 @@ def _no_real_machine_config(request, tmp_path_factory, monkeypatch):
         return
     from singularity import config as config_mod
 
+    real = config_mod.CONFIG_FILE
+    before = real.read_bytes() if real.exists() else None
+
     fake = tmp_path_factory.mktemp("machine-config") / ".singularity.json"
     monkeypatch.setattr(config_mod, "CONFIG_FILE", fake)
     monkeypatch.setattr(config_mod, "POINTER_FILE", fake)
+
+    yield
+
+    # Redirecting the module attribute is necessary but NOT sufficient: a test
+    # doing `from singularity.config import CONFIG_FILE` at module scope binds
+    # the ORIGINAL Path at import time, and monkeypatching the attribute
+    # afterwards cannot reach that name. That is not hypothetical — it
+    # overwrote this machine's real config with a pytest path and two guard
+    # keys before this check existed. So the file itself is the witness:
+    # whatever route a write took, the test that took it fails.
+    after = real.read_bytes() if real.exists() else None
+    if after != before:
+        try:                                    # put it back before failing
+            if before is None:
+                real.unlink(missing_ok=True)
+            else:
+                real.write_bytes(before)
+        except OSError:
+            pass
+        raise AssertionError(
+            f"test modified the REAL machine config {real}. Use "
+            f"`from singularity import config as config_mod` and reference "
+            f"`config_mod.CONFIG_FILE` so the redirect applies, or mark the "
+            f"test @pytest.mark.real_machine_config.")
 
 
 @pytest.fixture(autouse=True)
