@@ -73,6 +73,16 @@ graded on the config as it lands on disk. Run against the pre-fix tree, four of
 the five fail; the one that passes is the read-back, still confirming the junk
 key, which is the whole reason this was believable.
 
+While snapping the v0.6.1 baseline, the same tool graded its own version-
+manager matrix 3/5 — not a regression, a measurement reading the operator's
+terminal. `cli_locator` consults `$NVM_BIN` / `$NVM_DIR` / `$FNM_MULTISHELL_PATH`
+before falling back to `~`, so faking `Path.home()` does not redirect it, and
+the synthetic layouts were invisible whenever the snapping shell had nvm
+sourced. The suite has neutralized that surface since #10
+(`_no_real_version_managers`); `locator_matrix` now suppresses the same
+variables for the duration of the run and records which it suppressed. The
+search-location count is back to 8 on this host, matching v0.6.0.
+
 21 tests in `tests/test_config_nested_keys.py`. Full suite: 1762 passed,
 25 skipped.
 

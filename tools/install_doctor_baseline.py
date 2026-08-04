@@ -26,6 +26,7 @@ $false)` instead.
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import json
 import os
@@ -112,9 +113,34 @@ def shim_matrix(tmp: Path) -> dict:
 
 # --- #10: a CLI hidden by a version manager ----------------------------------
 
+# `cli_locator` reads these before falling back to `~`, so a synthetic layout
+# under a faked `Path.home()` is invisible whenever the snapping shell has nvm
+# or fnm sourced — the matrix then grades the operator's terminal instead of
+# the search order. `tests/conftest.py` neutralizes the same surface for the
+# suite (`_no_real_version_managers`, issue #10); the baseline had no such
+# guard and scored 3/5 for exactly that reason.
+_VERSION_MANAGER_ENV = ("NVM_BIN", "NVM_DIR", "FNM_MULTISHELL_PATH")
+
+
+@contextlib.contextmanager
+def _without_version_manager_env():
+    saved = {k: os.environ.pop(k) for k in _VERSION_MANAGER_ENV if k in os.environ}
+    try:
+        yield sorted(saved)
+    finally:
+        os.environ.update(saved)
+
+
 def locator_matrix(tmp: Path) -> dict:
     """Synthetic version-manager layouts — real ones cannot be assumed on any
     given machine, and the point is the search order, not this host."""
+    with _without_version_manager_env() as suppressed:
+        out = _locator_matrix(tmp)
+    out["suppressed_env"] = suppressed
+    return out
+
+
+def _locator_matrix(tmp: Path) -> dict:
     locator = _load_install("cli_locator")
     exe_name = "tool.cmd" if os.name == "nt" else "tool"
     rows = []
