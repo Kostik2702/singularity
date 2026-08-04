@@ -103,6 +103,25 @@ def _no_real_user_path(request, monkeypatch):
                         lambda key, name: ("", winreg.REG_EXPAND_SZ))
 
 
+@pytest.fixture(autouse=True)
+def _no_real_version_managers(request, monkeypatch):
+    """A test that says "this CLI is not installed" must stay right.
+
+    Issue #10 widened CLI discovery past `PATH` into `~/.nvm`, `~/.volta`,
+    `~/.fnm`, `/opt/homebrew/bin`, `/usr/local/bin` and friends — none of which
+    a fake `Path.home()` or a stubbed `shutil.which` redirects. On a developer
+    machine that really does have `gemini` under nvm, the Gemini/Grok tests
+    would otherwise find it and assert against the wrong world.
+
+    Opt out with `@pytest.mark.real_version_managers`."""
+    if request.node.get_closest_marker("real_version_managers"):
+        return
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "install"))
+    import cli_locator
+
+    monkeypatch.setattr(cli_locator, "search_locations", lambda: [])
+
+
 @pytest.fixture
 def isolated_machine(tmp_path, monkeypatch):
     """Neutralize every outward-facing effect of a `fix=True` code path.

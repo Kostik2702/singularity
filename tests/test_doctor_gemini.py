@@ -41,10 +41,66 @@ def test_present_but_bare_warns(iso_home):
     (iso_home / ".gemini").mkdir()
     rep = Report(quiet=True)
     gemini_block(rep, fix=False)
-    assert _status(rep, "E1-gemini") == "WARN"          # version unreadable (no binary)
+    assert _status(rep, "E1-gemini") == "WARN"          # binary unreachable
     assert _status(rep, "E2-gemini-profile") == "WARN"
     assert _status(rep, "E3-gemini-skills") == "WARN"
-    assert _status(rep, "E4-gemini-hooks") == "SKIP"    # hooks need proven version
+    # NOT a version SKIP any more (issue #10): the binary being unreachable is
+    # a different problem from the version being too old, and saying "requires
+    # gemini >= 0.26.0" to someone running 0.53.1 sent them looking in the
+    # wrong place.
+    assert _status(rep, "E4-gemini-hooks") == "WARN"
+
+
+def _detail(rep, check_id):
+    for c in rep.checks:
+        if c["id"] == check_id:
+            return c["detail"] + " || " + c["fix"]
+    return ""
+
+
+def test_unreachable_binary_is_reported_as_such_not_as_a_version_problem(iso_home):
+    """The reported machine: ~/.gemini exists, gemini 0.53.1 installed under
+    nvm, invisible to a non-interactive installer."""
+    (iso_home / ".gemini").mkdir()
+    rep = Report(quiet=True)
+    gemini_block(rep, fix=False)
+
+    e1 = _detail(rep, "E1-gemini")
+    assert "unreachable" in e1
+    assert "interactive shell" in e1
+    assert "0.26" not in e1                      # no misleading version constraint
+    assert "0.26" not in _detail(rep, "E4-gemini-hooks")
+
+
+def test_fix_can_repair_hooks_when_the_version_is_unreadable(iso_home, monkeypatch):
+    """Point 3 of the report: the old gate was `supported`, which is False
+    whenever the version is unknown — so `--fix` could not reach the hook
+    branch in exactly the state that needed it."""
+    g = iso_home / ".gemini"
+    (g / "skills").mkdir(parents=True)
+    (g / "GEMINI.md").write_text(register_gemini.BEGIN + "\nbody\n"
+                                 + register_gemini.END + "\n", encoding="utf-8")
+    for name in register_gemini.GEMINI_SKILLS:
+        (g / "skills" / name).mkdir()
+
+    import singularity.doctor as doctor_mod
+    real_load = doctor_mod._load_install
+    ran = []
+
+    def fake_load(name):
+        mod = real_load(name)
+        if name == "register_gemini":
+            # located, but `--version` unreadable
+            mod._gemini_exe = lambda: ("/nvm/bin/gemini", "/nvm/bin")
+            mod._gemini_version = lambda: None
+            mod.main = lambda: ran.append("registrar") or 0
+        return mod
+
+    monkeypatch.setattr(doctor_mod, "_load_install", fake_load)
+    rep = Report(quiet=True)
+    gemini_block(rep, fix=True)
+
+    assert ran == ["registrar"]                  # the repair actually ran
 
 
 def test_deployed_profile_and_skills_pass(iso_home):

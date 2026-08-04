@@ -95,7 +95,8 @@ def gemini_block(rep: Report, fix: bool) -> None:
     is a single SKIP. Module-level (not a run() closure) so it is unit-testable."""
     rg = _load_install("register_gemini")
     home_g = Path.home() / ".gemini"
-    if not (home_g.exists() or shutil.which("gemini") is not None):
+    exe, where = rg._gemini_exe()
+    if not (home_g.exists() or exe is not None):
         rep.add("E1-gemini", "SKIP", "Gemini CLI not installed on this machine")
         return
     version = rg._gemini_version()
@@ -124,17 +125,30 @@ def gemini_block(rep: Report, fix: bool) -> None:
         return (rg.SESSION_START_HOOK_NAME in _names("SessionStart")
                 and rg.AFTER_AGENT_HOOK_NAME in _names("AfterAgent"))
 
+    # "Located but unreadable version" is a repairable state, not a dead end
+    # (issue #10): the old gate was `supported`, which is False whenever the
+    # version is unknown, so `--fix` could not reach the hook branch in exactly
+    # the situation that needed it most.
     supported = version is not None and version >= rg.MIN_HOOKS_VERSION
+    repairable = supported or (version is None and exe is not None)
 
     # --fix runs ONLY the safe registrar (no network/auth) once, then re-checks.
     fixed = False
     if fix and (not profile_ok() or missing_skills()
-                or (supported and hook_state() is not True)):
+                or (repairable and hook_state() is not True)):
         rg.main()
         fixed = True
 
-    if version is None:
-        rep.add("E1-gemini", "WARN", "installed, but `gemini --version` unreadable")
+    if exe is None:
+        rep.add("E1-gemini", "WARN",
+                f"{home_g} exists but the `gemini` binary is unreachable from "
+                f"this process — PATH and the nvm/volta/fnm/homebrew locations "
+                f"were all checked",
+                fix="re-run `mb doctor --fix` from an interactive shell "
+                    "(a version manager is a shell function, invisible here)")
+    elif version is None:
+        rep.add("E1-gemini", "WARN",
+                f"installed at {exe}, but `gemini --version` unreadable")
     elif not supported:
         rep.add("E1-gemini", "WARN",
                 f"gemini {'.'.join(map(str, version))} < "
@@ -161,12 +175,22 @@ def gemini_block(rep: Report, fix: bool) -> None:
     if h == "malformed":
         rep.add("E4-gemini-hooks", "FAIL", "~/.gemini/settings.json unparseable",
                 fix="repair or remove the file, then mb doctor --fix")
-    elif not supported:
+    elif exe is None:
+        # NOT a version SKIP: naming a constraint the installed client may well
+        # satisfy is what made this take a week to diagnose (issue #10).
+        rep.add("E4-gemini-hooks", "WARN",
+                "hook support could not be established — the `gemini` binary is "
+                "unreachable from this process, so recall and capture are off",
+                fix="mb doctor --fix from an interactive shell")
+    elif not repairable:
         rep.add("E4-gemini-hooks", "SKIP",
-                f"SessionStart hook requires gemini >= {'.'.join(map(str, rg.MIN_HOOKS_VERSION))}")
+                f"SessionStart hook requires gemini >= "
+                f"{'.'.join(map(str, rg.MIN_HOOKS_VERSION))} "
+                f"(this one reports {'.'.join(map(str, version))})")
     elif h is True:
         rep.add("E4-gemini-hooks", "FIXED" if fixed else "PASS",
-                "SessionStart + AfterAgent hooks registered")
+                "SessionStart + AfterAgent hooks registered"
+                + ("" if supported else " (version unreadable — inert if unsupported)"))
     else:
         rep.add("E4-gemini-hooks", "WARN", "SessionStart/AfterAgent hooks not registered",
                 fix="python install/register_gemini.py")
@@ -186,6 +210,7 @@ def grok_block(rep: Report, fix: bool) -> None:
     if not rg._grok_present():
         rep.add("F1-grok", "SKIP", "Grok CLI not installed on this machine")
         return
+    exe, _where = rg._grok_exe()
     version = rg._grok_version()
 
     def profile_ok() -> bool:
@@ -219,8 +244,16 @@ def grok_block(rep: Report, fix: bool) -> None:
         rg.main()
         fixed = True
 
-    if version is None:
-        rep.add("F1-grok", "WARN", "installed, but `grok --version` unreadable")
+    if exe is None:
+        rep.add("F1-grok", "WARN",
+                f"{grok_home} exists but the `grok` binary is unreachable from "
+                f"this process — PATH and the nvm/volta/fnm/homebrew locations "
+                f"were all checked",
+                fix="re-run `mb doctor --fix` from an interactive shell "
+                    "(a version manager is a shell function, invisible here)")
+    elif version is None:
+        rep.add("F1-grok", "WARN",
+                f"installed at {exe}, but `grok --version` unreadable")
     elif version < rg.MIN_GROK_VERSION:
         rep.add("F1-grok", "WARN",
                 f"grok {'.'.join(map(str, version))} < "
@@ -254,10 +287,17 @@ def grok_block(rep: Report, fix: bool) -> None:
                     ", then mb doctor --fix" if supported else
                     " (re-registration needs grok >= "
                     f"{'.'.join(map(str, rg.MIN_GROK_VERSION))})"))
+    elif exe is None:
+        # Not a version SKIP — the version is not what is missing here (#10).
+        rep.add("F4-grok-capture", "WARN",
+                "the stop-gate contract could not be established — the `grok` "
+                "binary is unreachable from this process, so capture is off",
+                fix="mb doctor --fix from an interactive shell")
     elif not supported:
         rep.add("F4-grok-capture", "SKIP",
                 f"Stop capture hook requires grok >= {'.'.join(map(str, rg.MIN_GROK_VERSION))} "
-                "(stop-gate contract unproven below)")
+                + (f"(this one reports {'.'.join(map(str, version))})" if version
+                   else "(`grok --version` unreadable, so the contract is unproven)"))
     elif h is True:
         rep.add("F4-grok-capture", "FIXED" if fixed else "PASS",
                 "Stop capture hook registered")
@@ -948,8 +988,14 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     print("\n================ mb doctor summary ================")
     print(" | ".join(f"{k} {v}" for k, v in sorted(counts.items())))
-    fails = [c for c in rep.checks if c["status"] == "FAIL"]
-    for c in fails:
-        print(f"  FAIL {c['id']}: {c['detail']}" + (f"  fix: {c['fix']}" if c["fix"] else ""))
+    # WARNs are repeated here, not just inline above (issue #10, point 4): a
+    # phase that skipped a requested feature must not be indistinguishable from
+    # one that succeeded when the exit code is 0, and the summary is the part
+    # people actually read after a few hundred lines of install output.
+    for status in ("FAIL", "WARN"):
+        for c in rep.checks:
+            if c["status"] == status:
+                print(f"  {status} {c['id']}: {c['detail']}"
+                      + (f"  fix: {c['fix']}" if c["fix"] else ""))
     print("===================================================")
     return 1 if rep.has_fail else 0

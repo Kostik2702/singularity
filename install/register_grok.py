@@ -56,6 +56,7 @@ ENGINE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ENGINE))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling install/ imports
 
+import cli_locator  # noqa: E402  (find a CLI that PATH alone cannot see, #10)
 import client_registration  # noqa: E402  (shared safe-registration primitives)
 import register_skills  # noqa: E402  (reuse the junction helpers, single source)
 import skill_manifest  # noqa: E402  (T15/GRK-01: single source of client->skills)
@@ -91,8 +92,16 @@ def _grok_home() -> Path:
     return Path(env) if env else Path.home() / ".grok"
 
 
+def _grok_exe() -> tuple[str | None, str | None]:
+    """(path, where) for the CLI — PATH first, then the version-manager
+    locations `PATH` cannot show a non-interactive process (issue #10). The
+    Grok CLI ships via npm too, so it had the same present-by-directory /
+    version-by-`which` asymmetry as Gemini."""
+    return cli_locator.find_cli("grok")
+
+
 def _grok_present() -> bool:
-    return _grok_home().exists() or shutil.which("grok") is not None
+    return _grok_home().exists() or _grok_exe()[0] is not None
 
 
 def _grok_version() -> tuple[int, ...] | None:
@@ -103,7 +112,7 @@ def _grok_version() -> tuple[int, ...] | None:
     Format observed on the pinned contract version: `grok 0.2.111 (94172f2aa4)`
     (identical for `--version` and the `version` subcommand). Retries once for
     the cold-start / first-scan case, mirroring the Gemini prober."""
-    exe = shutil.which("grok")
+    exe, _where = _grok_exe()
     if not exe:
         return None
     for _attempt in range(2):
@@ -271,12 +280,22 @@ def main() -> int:
         print(f"[grok] not installed ({_grok_home()} absent, `grok` not on PATH) — skipping")
         return 0
 
+    exe, where = _grok_exe()
     version = _grok_version()
-    if version is None:
+    if exe is None:
+        print(f"[grok] WARN: {_grok_home()} exists but the `grok` binary is not "
+              f"reachable from this process (PATH and "
+              f"{len(cli_locator.search_locations())} version-manager locations "
+              f"checked). If it was installed via nvm/volta/fnm, re-run "
+              f"`mb doctor --fix` from an interactive shell", file=sys.stderr)
+    elif where != "PATH":
+        print(f"[grok] found outside PATH at {exe} (via {where}) — "
+              f"a version manager is hiding it from non-interactive processes")
+    if version is None and exe is not None:
         print("[grok] WARN: could not determine `grok --version` "
               "(old/unparseable) — deploying profile; contract unproven for this client",
               file=sys.stderr)
-    elif version < MIN_GROK_VERSION:
+    elif version is not None and version < MIN_GROK_VERSION:
         print(f"[grok] WARN: version {'.'.join(map(str, version))} < "
               f"{'.'.join(map(str, MIN_GROK_VERSION))} — the GRK-00 contract is unproven "
               f"below this; profile is still applied", file=sys.stderr)
@@ -298,10 +317,24 @@ def main() -> int:
 
     # Stop capture nudge — only when the version is proven to honor the
     # stop-gate contract (GRK-00 fixtures). SessionStart recall stays static.
+    # Unlike Gemini's inert settings entries, a Stop hook here participates in
+    # the stop-gate, so an unproven version stays a genuine skip (GRK-00) — but
+    # the message now names the real reason instead of a version constraint the
+    # installed client may well satisfy (issue #10).
     if version is not None and version >= MIN_GROK_VERSION:
         print(f"[grok] Stop capture hook: {_register_hook()}")
+    elif exe is None:
+        print("[grok] Stop capture hook: NOT registered — the binary is "
+              "unreachable, so the stop-gate contract cannot be established; "
+              "re-run `mb doctor --fix` from a shell where `grok` is on PATH",
+              file=sys.stderr)
+    elif version is None:
+        print("[grok] Stop capture hook: skipped — `grok --version` unreadable, "
+              "and the stop-gate contract is only proven from "
+              f"{'.'.join(map(str, MIN_GROK_VERSION))}", file=sys.stderr)
     else:
-        print("[grok] Stop capture hook: skipped (version unknown or < "
+        print(f"[grok] Stop capture hook: skipped (version "
+              f"{'.'.join(map(str, version))} < "
               f"{'.'.join(map(str, MIN_GROK_VERSION))} — stop-gate contract unproven)",
               file=sys.stderr)
 
