@@ -88,6 +88,58 @@ def _run_shim(sh: str, shim: Path, cwd: str | None = None) -> tuple[int, str, st
 WATCH_HEARTBEAT_MAX_AGE_S = 15 * 60
 
 
+def config_paths_block(rep: Report, cfg: Config) -> None:
+    """Check A6: does every absolute path in the config belong to THIS machine?
+
+    Issue #14: the vault is built to travel, `.mb/config.json` travels with it,
+    and every absolute path inside it is machine-specific. Only
+    `code_repos_dir` was ever validated (by K1), so `llm.server_bin`, the gguf
+    paths, the `--chat-template-file` inside `llm.models.*.args` and every
+    `projects[].path` arrived dead on a new machine and went unmentioned —
+    each surfacing later as its own mid-session failure, weeks apart.
+
+    Module-level (not a run() closure) so it is unit-testable, like the client
+    blocks below."""
+    from . import config_paths
+
+    entries = config_paths.path_entries(cfg.data)
+    if not entries:
+        rep.add("A6-config-paths", "SKIP", "no absolute paths in the config")
+        return
+    foreign: dict[str, list[str]] = {}
+    missing: list[str] = []
+    for key, value in entries:
+        other = config_paths.foreign_os(value)
+        if other:
+            foreign.setdefault(other, []).append(key)
+        elif not Path(value).exists():
+            missing.append(key)
+    if foreign:
+        # ONE understandable statement instead of N confusing absences: a
+        # `C:\…` on macOS is not a missing path, it is another machine's.
+        os_name = "Windows" if "windows" in foreign else "POSIX"
+        keys = sorted(k for ks in foreign.values() for k in ks)
+        rep.add("A6-config-paths", "WARN",
+                f"config contains {os_name} paths — this vault was last "
+                f"configured on another operating system; "
+                f"{len(keys)} key(s) point nowhere on this machine: "
+                f"{', '.join(keys)}"
+                + (f" (plus {len(missing)} more missing: "
+                   f"{', '.join(sorted(missing))})" if missing else ""),
+                fix="set each one for this machine, e.g. "
+                    'mb config set code_repos_dir "<path>"  '
+                    "(the correct values cannot be guessed)")
+        return
+    if missing:
+        rep.add("A6-config-paths", "WARN",
+                f"{len(missing)} configured path(s) do not exist on this "
+                f"machine: {', '.join(sorted(missing))}",
+                fix="fix them with `mb config set`, or remove the entries")
+        return
+    rep.add("A6-config-paths", "PASS",
+            f"{len(entries)} configured path(s) all resolve on this machine")
+
+
 def gemini_block(rep: Report, fix: bool) -> None:
     """Block E: verify the Gemini integration on a WORKING path (version, managed
     profile, portable skill targets, settings parse, named hook), not mere file
@@ -570,6 +622,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     _guard(rep, "A1", a1)
     _guard(rep, "A2", a2)
+    _guard(rep, "A6", lambda: config_paths_block(rep, cfg))
     _guard(rep, "A3", a3)
     _guard(rep, "A4", a4)
     _guard(rep, "A5", a5)
