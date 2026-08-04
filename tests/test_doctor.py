@@ -693,8 +693,8 @@ def test_d5_reports_mode_when_enabled(cfg, monkeypatch):
     settings.write_text(json.dumps({"hooks": {"PreToolUse": [
         {"_mb": True, "hooks": [{"type": "command", "command": "x vault_guard.py"}]}]}}),
         encoding="utf-8")
-    (cfg.vault / ".mb").mkdir(parents=True, exist_ok=True)
-    (cfg.vault / ".mb" / "config.json").write_text(
+    from singularity.config import CONFIG_FILE
+    CONFIG_FILE.write_text(                                    # per machine now
         json.dumps({"vault_guard_enabled": True, "vault_guard_mode": "deny"}), encoding="utf-8")
     doctor.run(cfg, as_json=True)
     d5 = _check(cfg, "D5-vault-guard")

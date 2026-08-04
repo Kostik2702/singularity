@@ -762,10 +762,21 @@ def migrate_vault_config(cfg: "Config") -> Optional[Path]:
         return None                     # this machine is already configured
     try:
         data = json.loads(legacy.read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError):
-        return None                     # broken legacy file: leave it, warn elsewhere
+    except json.JSONDecodeError as exc:
+        # Refuse, loudly. Skipping a broken legacy config would start this
+        # machine on a fresh empty one and silently drop every setting the user
+        # had — the exact silent-loss shape this release exists to remove.
+        print(f"[mb] cannot migrate {legacy}: {exc}", file=sys.stderr)
+        print(f"[mb] fix or move that file, then re-run — nothing was written "
+              f"to {CONFIG_FILE}", file=sys.stderr)
+        sys.exit(2)
+    except OSError as exc:
+        print(f"[mb] cannot read {legacy}: {exc}", file=sys.stderr)
+        sys.exit(2)
     if not isinstance(data, dict):
-        return None
+        print(f"[mb] cannot migrate {legacy}: config must be a JSON object",
+              file=sys.stderr)
+        sys.exit(2)
 
     cfg.data = {**data, "vault_path": str(cfg.vault)}
     cfg.save()                          # writes decisions only, defaults dropped

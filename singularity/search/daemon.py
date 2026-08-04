@@ -72,7 +72,10 @@ class SearchDaemon:
         # change on the first reload. KEY NAMES only in the answer — values can
         # be paths, tokens or anything else the user put there, and this
         # crosses a socket.
-        keys = set(migrated) | set(self.cfg.data) | set(DEFAULT_CONFIG)
+        # `vault_path` is a binding, not a setting this process serves — a
+        # daemon cannot rebind its vault, and reporting it as a changed key
+        # would make every reload after 0.7 look like a config change.
+        keys = (set(migrated) | set(self.cfg.data) | set(DEFAULT_CONFIG)) - {"vault_path"}
         changed = sorted(k for k in keys
                          if migrated.get(k, DEFAULT_CONFIG.get(k)) != self.cfg.get(k))
         self.cfg.data = migrated
