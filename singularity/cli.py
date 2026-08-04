@@ -1,5 +1,12 @@
 """mb — single CLI entry point (replaces the Genevra script sprawl).
 
+The window a human sees is ten commands wide and lives in `facade.py`:
+search · learn · note · ingest · status · doctor · curator · llm · service ·
+setup. Everything below is the full surface behind it — every direct path
+listed here keeps working exactly as written, and the grouped forms
+(`mb service daemon start`) are the same code reached through a rewritten
+argv, never a second implementation.
+
 mb search "<query>" [--top N] [--type T] [--tags a,b] [--links X] [--json] ...
 mb daemon start|stop|restart|status|reload|run
 mb index rebuild|update [--files f1 f2]|inspect <path>
@@ -32,7 +39,7 @@ import json
 import sys
 from datetime import datetime
 
-from . import __version__
+from . import __version__, facade
 from .config import load_config, write_pointer
 
 MEMORY_FOLDERS = ["learnings/active", "learnings/archive", "decisions", "howto",
@@ -210,8 +217,7 @@ def _build_parser() -> argparse.ArgumentParser:
     dgm.add_argument("--all", action="store_true", help="mark every entry in the current plan")
     dgm.add_argument("--json", action="store_true")
 
-    ing = sub.add_parser("ingest", help="raw source layer: store external documents "
-                                        "with provenance, plan wiki fan-out")
+    ing = sub.add_parser("ingest", help="store an external document with provenance")
     ingsub = ing.add_subparsers(dest="ingest_action", required=True)
     inga = ingsub.add_parser("add", help="store one raw document (write-once, idempotent)")
     inga.add_argument("path", nargs="?", help="local file to ingest (or use --stdin)")
@@ -279,7 +285,7 @@ def _build_parser() -> argparse.ArgumentParser:
                                         "digest/curator/config snapshot -> trend line -> markers sweep")
     nt.add_argument("--json", action="store_true")
 
-    n = sub.add_parser("note", help="notes")
+    n = sub.add_parser("note", help="create a note from its template")
     nsub = n.add_subparsers(dest="note_action", required=True)
     nn = nsub.add_parser("new")
     nn.add_argument("type")
@@ -1380,7 +1386,28 @@ def main(argv: list[str] | None = None) -> int:
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, OSError):
             pass
-    args = _build_parser().parse_args(argv)
+    # The facade owns the first screen: it rewrites group paths onto the real
+    # commands and answers the four things argparse renders badly here (a bare
+    # `mb`, the curated help, the full list, a group's own listing). Everything
+    # it does not claim reaches the parser byte-identical to before.
+    raw = list(sys.argv[1:] if argv is None else argv)
+    plan = facade.resolve(raw)
+    if plan.action == "help":
+        print(facade.render_help(_build_parser(), full=plan.payload == "all"))
+        return 0
+    if plan.action == "group":
+        print(facade.render_group(_build_parser(), plan.payload))
+        return 0
+    if plan.action == "error":
+        print(plan.payload, file=sys.stderr)
+        return 2
+    if plan.action == "greeting":
+        from . import status as status_mod
+        cfg = load_config(facade.vault_of(raw))
+        print(facade.render_greeting(status_mod.snapshot(cfg)))
+        return 0
+
+    args = _build_parser().parse_args(plan.argv)
     cfg = load_config(args.vault)
     if args.command == "search":
         return cmd_search(cfg, args)

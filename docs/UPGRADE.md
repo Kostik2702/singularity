@@ -253,6 +253,37 @@ the only possibility, so nothing changes on a machine that was already working.
 Nothing to run: the candidate list applies on the next command, and the agent
 substitution on the next installer / `mb doctor --fix` run.
 
+## The command window (no migration required)
+
+`mb --help` now lists ten commands instead of twenty-three. Nothing was
+renamed, moved or removed — the window is a **view**, and each claim below is
+covered by `tests/test_cli_facade.py` and by the full suite (1909 passed) run
+against it.
+
+- **Everything you already type works byte-for-byte.** `mb daemon status`,
+  `mb curator gaps`, `mb config set …`, `mb project add …` — unchanged. The
+  facade rewrites the *new* paths (`mb service daemon status`) onto the real
+  commands before argparse sees them, so a grouped form and a direct form are
+  one code path rather than two implementations that could drift. No skill,
+  hook, scheduled job or script was edited for this release, and none needs to
+  be: the direct paths remain the right thing for automation.
+- **The additions are only additions.** `mb service …`, `mb setup …`,
+  `mb curator nightly`, `mb status stats`, `mb help --all`, and a bare `mb`
+  (one line of state) were all *errors* before this release, so no existing
+  invocation changes meaning. `curator` and `status` keep printing exactly what
+  they printed — they merely also answer for a sibling now.
+- **One behavioural change, and it is in the exit codes.** A bare `mb` and
+  `mb help` exit **0** instead of **2**; neither is an error any more. Only
+  relevant if you have a script leaning on `mb` failing when called with no
+  arguments (`mb || echo "broken install"`) — use `mb doctor` or `mb status`
+  for that, which still exit non-zero when something is actually wrong. Every
+  other exit code is untouched, including `mb <unknown command>` → 2 and
+  a bare `mb` with no vault configured → 2.
+
+Nothing to run beyond the usual `git pull` + installer. The next time you type
+`mb --help` it looks different; `mb help --all` prints the full list, grouped,
+with every direct path spelled out.
+
 ## Foreign hooks and settings
 
 Every settings mutation (Claude `~/.claude/settings.json`, Gemini

@@ -183,6 +183,26 @@ mb hooks status       # grok: mode=block, installed/effective state
 
 A guided tour of every part of the system, grouped by topic, with copyable commands and real output — not just a flag reference.
 
+### The window: ten commands
+
+`mb --help` shows ten, not the full surface of 23 — four for working with memory, two for health, and four that front everything else:
+
+```
+Memory   search · learn · note · ingest
+Health   status      (+ stats, reflect)
+         doctor
+Care     curator     (+ digest, nightly)
+Model    llm
+Machine  service     (daemon, index, model, watch, backup, selftest)
+         setup       (config, project, hooks, init, uninstall)
+```
+
+A bare `mb` answers with one line of state; `mb help --all` prints every command.
+
+Two shapes here, deliberately different. `service` and `setup` are **groups** — names that are not commands and exist only to front others. `curator` and `status` are **hosts** — real commands that additionally answer for a sibling: `mb curator nightly` and `mb status stats` work, while `mb curator` still prints the curator report it always did. No command gained a second name.
+
+The mechanism is a rewrite, not a wrapper: `mb service daemon start` becomes `mb daemon start` before the parser sees it. Every direct path documented below keeps working exactly as written, so skills, hooks and scripts need no changes — use the short paths when typing, the direct ones when scripting.
+
 ### First five minutes
 
 ```bash

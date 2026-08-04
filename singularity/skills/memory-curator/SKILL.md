@@ -1,6 +1,6 @@
 ---
 name: memory-curator
-description: Vault health check, contradiction adjudication and research agenda for the Singularity memory (Obsidian). Use when the user says curator, куратор, "проверь память", "check vault health", mdoc, "предложи связи", "что исследовать дальше", "есть ли противоречия", or periodically after large writing sessions. Runs mb curator / contradictions / gaps, reviews findings, proposes fixes - NEVER applies structure changes without user approval.
+description: Vault health check, contradiction adjudication, research agenda AND adoption review for the Singularity memory (Obsidian). Use when the user says curator, куратор, "проверь память", "check vault health", mdoc, "предложи связи", "что исследовать дальше", "есть ли противоречия"; also for "пользуемся ли мы памятью", "работает ли память на меня", adoption, reflect, "статистика памяти", "memory stats", "стоит ли это обслуживать"; or periodically after large writing sessions. Runs mb curator / contradictions / gaps plus mb reflect / stats, reviews findings, proposes fixes - NEVER applies structure changes without user approval.
 ---
 
 # memory-curator — здоровье vault, противоречия и повестка
@@ -52,6 +52,25 @@ mb curator verdict "<key>" --verdict accepted      --note "реальное пр
 - [ ] 4. `missing_pages` → это страницы, на которые ссылаются ≥2 заметки и которых нет. Создавать только по approve.
 - [ ] 5. `undigested_learnings` → это вход для `mb digest plan`, а не для ручной правки.
 - [ ] 6. `--heuristic` — догадки по частотности, включай осознанно и помечай их как догадки в отчёте.
+
+## Здоровье по данным (T14)
+
+Три числа отвечают на вопрос, который `mb curator` не задаёт: **работает ли память на пользователя вообще**. Куратор чинит vault; эта секция решает, стоит ли чинить дальше. Цель T14 дословно: «измерять adoption и принимать решение о дальнейшем усложнении по данным, а не по впечатлениям».
+
+| Команда | Что даёт | На что смотреть |
+|---|---|---|
+| `mb reflect [--days N] [--json]` | доля сессий с каждым сигналом adoption | `search_then_read`, `vault_touch` на фоне `eligible_research` |
+| `mb stats [--json]` | состав памяти | `sources: new=N`, возраст code-индекса, перекос по типам |
+| `mb nightly --json` | ночной прогон + строка тренда | направление, а не абсолют |
+
+**Порогов в движке нет, и это не упущение**: единственная объявленная цель, к которой их можно привязать — G1 из `02_New_System_Design/00_Vision_And_Principles.md` («≥80% знаний сессии попадает в vault без явной команды»). Всё остальное — суждение по тренду, и в отчёте его нужно назвать суждением.
+
+- [ ] 1. `mb reflect --days 30`. Сначала ЗНАМЕНАТЕЛЬ — число сессий. На выборке меньше ~10 проценты не значат ничего: скажи это вслух и не делай выводов (сегодня на этой машине их 3).
+- [ ] 2. `eligible_research` — сессии, где знание было, а код не писали (метрика существует именно затем, чтобы они не выпадали из знаменателя). Высокая их доля при низком `vault_touch` = знание не оседает, прямое расхождение с G1. Действие — не «писать больше заметок», а найти разрыв: выключены хуки (`mb hooks status`), не вызываются скиллы (`skill_invocation`).
+- [ ] 3. Низкий `search_then_read` = SEM-FIRST не соблюдается, память ищут реже, чем читают файлы. Действие — проверить, доходит ли SessionStart-подсказка (она и есть носитель правила), а не переписывать скиллы.
+- [ ] 4. `mb stats`: `sources new=N > 0` — цикл ingest не замкнут. Это тот же сигнал, что `unprocessed_sources` в `mb curator gaps`, и уходит туда же — в скил `mb-ingest`, не в ручную правку.
+- [ ] 5. Отчёт ровно в три строки: что измерено → что из этого следует → какое ОДНО действие предлагается. Метрика без предложенного действия — шум, который перестают читать (тот же принцип, что вердикты в adjudication).
+- [ ] 6. Если числа говорят «система используется меньше, чем стоит её обслуживание» — скажи это прямо. T14 построен и для такого вывода тоже, иначе измерение обслуживает само себя.
 
 ## Write-discipline (из Genevra memory-doctor)
 
