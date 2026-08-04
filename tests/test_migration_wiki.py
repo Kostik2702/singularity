@@ -189,7 +189,12 @@ def test_migration_backs_up_the_old_config(tmp_path, monkeypatch):
     from singularity.config import load_config
     cfg = load_config(None)
     assert cfg.get("schema_version") == 2 and cfg.get("min_score") == 0.42
-    assert list((tmp_path / ".mb").glob("config.json.bak-*")), "no .bak taken"
+    # From 0.7 the config leaves the vault, so the pre-migration copy is the
+    # `.migrated-*` file the move leaves behind rather than a `.bak-*` beside a
+    # file that is no longer there. Either way the old content is preserved.
+    kept = list((tmp_path / ".mb").glob("config.json.migrated-*"))
+    assert kept, "pre-migration config not preserved"
+    assert json.loads(kept[0].read_text(encoding="utf-8"))["schema_version"] == 1
 
 
 # --- 10.4 backup / restore of the ingest layer ------------------------------

@@ -42,6 +42,28 @@ After enable/disable, always run `mb hooks status` and report the effective stat
 A vague "выключи все хуки" / "disable all hooks" does NOT mean capture hooks by default —
 confirm scope with the user before running a command."""
 
+# VSO-01: the same one-source treatment for WHERE knowledge is written.
+# Incident 2026-07-13 ([[Error - Vault staging duplicates]]): a client edited 14
+# vault documents as copies under the user's profile root and copied them back,
+# because the sandbox exposed that directory as writable and a mirror looked
+# like the path of least resistance. No unique data was lost — every staging
+# file turned out byte-identical to, or contained in, its canonical version —
+# but for a while the machine had two working sets of the same notes, and only
+# a hash audit could say which was authoritative. A rule saying "artifacts live
+# in the vault" already existed; it was not present at the moment the write
+# path got chosen, which is the only moment it could have helped.
+VAULT_WRITE_POLICY_FRAGMENT = """## Vault is the write destination, not a copy of it
+Before the FIRST write of anything destined for the vault, resolve the destination:
+- Write **directly** to the vault path (or through `mb note new` / `mb learn`).
+- **Never** create an editable mirror, staging copy or scratch draft of a vault
+  document elsewhere and copy it back — not for an editor, a sandbox, or a patch
+  tool. A second working copy is a second source of truth until someone diffs them.
+- External folders are for INPUT (reading source material) and for an export the
+  user explicitly asked for. Neither authorizes an editable duplicate.
+- If a direct vault write is genuinely blocked (permission, sandbox), STOP and say
+  so, then ask for access or a vault-native path. Do not route around it.
+Reading vault files, and copying INTO the vault, are always fine."""
+
 
 def _read_json_tolerant(path: Path) -> tuple[dict[str, Any], str | None]:
     """(data, error). Missing file -> ({}, None). Malformed/non-object -> ({}, reason)."""
@@ -57,10 +79,24 @@ def _read_json_tolerant(path: Path) -> tuple[dict[str, Any], str | None]:
 
 
 def capture_config_state(vault: Path) -> dict[str, Any]:
-    """Desired-state of the `auto_capture` flag, read directly from
-    vault/.mb/config.json (independent of the CLI's stricter load_config gate,
-    so this stays usable from a doctor/status probe on a broken config)."""
-    data, error = _read_json_tolerant(vault / ".mb" / "config.json")
+    """Desired-state of the `auto_capture` flag, read directly from the machine
+    config (independent of the CLI's stricter load_config gate, so this stays
+    usable from a doctor/status probe on a broken config).
+
+    `vault` is still taken because a pre-0.7 vault-resident config is honoured
+    until the migration runs — same upgrade window `read_config_tolerant()`
+    covers, and for the same reason: this decides whether the capture hook
+    fires, and defaulting it during an upgrade would silently change
+    behaviour."""
+    from .config import CONFIG_FILE, legacy_config_path
+
+    path = CONFIG_FILE
+    machine, machine_error = _read_json_tolerant(path)
+    configured = machine_error is None and any(
+        k not in ("schema_version", "vault_path") for k in machine)
+    if not configured and legacy_config_path(vault).exists():
+        path = legacy_config_path(vault)
+    data, error = _read_json_tolerant(path)
     if error is not None:
         return {"configured": True, "default": True, "source": "error", "error": error}
     value = data.get("auto_capture", True)

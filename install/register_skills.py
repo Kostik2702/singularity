@@ -28,6 +28,7 @@ SKILLS_SRC = ENGINE / "singularity" / "skills"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import skill_manifest  # noqa: E402  (T15: single source of client->skills)
+import vault_token  # noqa: E402  ({{VAULT}} substitution, shared with agents)
 
 # Engine-owned skills deployed to Claude (source of truth: skill_manifest.py).
 # Non-engine skills living loose in ~/.claude/skills are intentionally absent
@@ -42,6 +43,36 @@ def _points_to(link: Path, target: Path) -> bool:
             link.is_symlink() or os.path.realpath(link) != str(link))
     except OSError:
         return False
+
+
+def is_owned(dst: Path, src: Path) -> bool:
+    """Is `dst` ours to remove — a link into the engine, or a copy WE rendered?
+
+    Uninstall deletes only what it can prove it created. Before `{{VAULT}}` that
+    proof was "the symlink resolves to our source"; a rendered copy is a real
+    directory and would fail that test, so it would be orphaned on every
+    uninstall. The marker written at render time is the equivalent proof, and
+    it is just as strict: it must name this exact source."""
+    return _points_to(dst, src) or vault_token.is_rendered_copy(dst, src)
+
+
+def remove_owned(dst: Path) -> None:
+    """Delete something `is_owned()` has already vouched for.
+
+    A link is unlinked without touching its target; a rendered copy is a real,
+    non-empty directory and needs a recursive delete — `rmdir()` was enough
+    while everything we deployed was a link, and raises the moment one is not.
+    Call this ONLY after `is_owned()`: it does not re-check ownership."""
+    if dst.is_symlink():
+        dst.unlink()
+        return
+    if os.name == "nt" and dst.is_dir() and os.path.realpath(dst) != str(dst):
+        dst.rmdir()                      # junction reparse point, not the target
+        return
+    if dst.is_dir():
+        shutil.rmtree(dst)               # our rendered copy
+        return
+    dst.unlink()
 
 
 def _dirs_equal(a: Path, b: Path) -> bool:
@@ -78,12 +109,40 @@ def _backup_dir(dst: Path, reason: str) -> Path:
     return backup
 
 
-def _link_dir(src: Path, dst: Path) -> str:
-    """Make dst a junction/symlink to src. Returns a short status word:
-    'ok' (already linked), 'linked' (created, or replaced an
-    identical/link stale entry), 'backed-up' (a differing real directory was
-    preserved as a backup before linking), 'copied' (no link support on this
-    host)."""
+def _link_dir(src: Path, dst: Path, vault: Path | None = None) -> str:
+    """Make dst mirror src. Returns a short status word: 'ok' (already
+    correct), 'linked' (created, or replaced an identical/link stale entry),
+    'backed-up' (a differing real directory was preserved as a backup first),
+    'copied' (no link support on this host), 'rendered' (the source carries
+    `{{VAULT}}`, so a substituted copy was written instead of a link).
+
+    A skill whose text names the vault cannot be a live link: the deployed copy
+    has to hold this machine's path, and the repo source holds a token. That
+    trades away "edit the repo, every client updates at once" for those skills
+    — deliberately, because the alternative is shipping a path that is wrong on
+    every machine but one. The copy carries an ownership marker so uninstall
+    can still recognise it as ours."""
+    if vault is not None and vault_token.tree_has_token(src):
+        if vault_token.is_rendered_copy(dst, src):
+            # already ours: re-render anyway, the vault path may have changed
+            vault_token.render_tree(src, dst, vault)
+            return "ok"
+        if dst.is_symlink():
+            dst.unlink()
+        elif dst.exists():
+            if os.name == "nt" and dst.is_dir() and os.path.realpath(dst) != str(dst):
+                dst.rmdir()
+            elif _dirs_equal(src, dst):
+                shutil.rmtree(dst)
+            else:
+                _backup_dir(dst, "content differs from engine-owned skill source; "
+                                 "preserved instead of being replaced by a "
+                                 "rendered copy")
+                vault_token.render_tree(src, dst, vault)
+                return "backed-up"
+        vault_token.render_tree(src, dst, vault)
+        return "rendered"
+
     if _points_to(dst, src):
         return "ok"
     status = "linked"
@@ -111,24 +170,38 @@ def _link_dir(src: Path, dst: Path) -> str:
     return status if status == "backed-up" else "copied"
 
 
+def _resolved_vault() -> "Path | None":
+    """This machine's vault, through the engine's own resolution order. Guarded:
+    registration must still work from a checkout whose deps are not installed."""
+    try:
+        sys.path.insert(0, str(ENGINE))
+        from singularity.config import resolve_vault
+        return resolve_vault()
+    except Exception:                       # noqa: BLE001 — fall back to linking
+        return None
+
+
 def main() -> int:
     dest_root = Path.home() / ".claude" / "skills"
     dest_root.mkdir(parents=True, exist_ok=True)
-    counts = {"ok": 0, "linked": 0, "copied": 0, "backed-up": 0, "missing": 0}
+    vault = _resolved_vault()
+    counts = {"ok": 0, "linked": 0, "copied": 0, "backed-up": 0, "rendered": 0,
+              "missing": 0}
     for name in SKILLS:
         src = SKILLS_SRC / name
         if not src.is_dir():
             print(f"[skills] MISSING in repo: {name}", file=sys.stderr)
             counts["missing"] += 1
             continue
-        status = _link_dir(src, dest_root / name)
+        status = _link_dir(src, dest_root / name, vault)
         counts[status] += 1
         if status == "backed-up":
             print(f"[skills] {name}: differing local copy preserved as backup, "
                   f"now linked to repo source", file=sys.stderr)
     print(f"[skills] {len(SKILLS)} owned: {counts['linked']} linked, "
-          f"{counts['ok']} already ok, {counts['copied']} copied, "
-          f"{counts['backed-up']} backed up, {counts['missing']} missing")
+          f"{counts['rendered']} rendered, {counts['ok']} already ok, "
+          f"{counts['copied']} copied, {counts['backed-up']} backed up, "
+          f"{counts['missing']} missing")
     return 1 if counts["missing"] else 0
 
 

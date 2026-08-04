@@ -1,9 +1,10 @@
 """T08: Claude PreToolUse vault-guard adapter (singularity/hooks/vault_guard.py).
 
-Covers: opt-in disabled-by-default, audit mode (additionalContext only,
-NEVER permissionDecision), deny mode (explicit opt-in), existing-note edits
-always allowed, templates/compaction-plans carve-outs, config.json direct-
-edit detection, and the main() wire contract.
+Covers: enabled-by-default (2026-08-04 owner decision; audit, never blocking),
+explicit opt-out, audit mode (additionalContext only, NEVER
+permissionDecision), deny mode (explicit opt-in), existing-note edits always
+allowed, templates/compaction-plans carve-outs, config.json direct-edit
+detection, and the main() wire contract.
 """
 import io
 import json
@@ -28,10 +29,32 @@ def _write_cfg(vault, **kw):
     (mb / "config.json").write_text(json.dumps(kw), encoding="utf-8")
 
 
-# --- disabled by default -----------------------------------------------------------
+# --- enabled by default, and never blocking there -----------------------------------
 
-def test_disabled_by_default_even_on_new_managed_file(monkeypatch, vault):
+def test_enabled_by_default_on_new_managed_file(monkeypatch, vault):
+    """Owner decision 2026-08-04. A config with no key at all is the state of a
+    hand-written or truncated config.json — a real install materializes every
+    default on its first save, so upgrading never flips anyone silently."""
     _write_cfg(vault)     # no vault_guard_enabled key at all
+    _resolve_to(monkeypatch, vault)
+    event = {"tool_name": "Write", "cwd": str(vault),
+             "tool_input": {"file_path": str(vault / "howto" / "new.md")}}
+    out = vg.evaluate(event)
+    assert out is not None
+    payload = out["hookSpecificOutput"]
+    assert "additionalContext" in payload
+    assert "permissionDecision" not in payload, "the default must never block"
+
+
+def test_hook_default_comes_from_the_config_module(monkeypatch, vault):
+    """One default, not two. The hook reads a raw config dict (no defaults
+    applied), so a literal fallback here would silently outlive a change to
+    DEFAULT_CONFIG — and this particular literal decides whether the check runs
+    at all."""
+    from singularity.config import DEFAULT_CONFIG
+
+    monkeypatch.setitem(DEFAULT_CONFIG, "vault_guard_enabled", False)
+    _write_cfg(vault)     # again: no key, so only the default speaks
     _resolve_to(monkeypatch, vault)
     event = {"tool_name": "Write", "cwd": str(vault),
              "tool_input": {"file_path": str(vault / "howto" / "new.md")}}
@@ -157,7 +180,11 @@ def test_malformed_config_json_is_noop_not_a_crash(monkeypatch, vault):
     _resolve_to(monkeypatch, vault)
     event = {"tool_name": "Write", "cwd": str(vault),
              "tool_input": {"file_path": str(vault / "howto" / "new.md")}}
-    assert vg.evaluate(event) is None      # malformed -> read_config_tolerant -> {} -> disabled
+    # Silent, and deliberately NOT via the default: since the guard is on by
+    # default, an unparseable config is the one case where the default must not
+    # speak — the user's choice is unknown, so the hook says nothing rather than
+    # annotating writes on a guess (`config_unreadable`).
+    assert vg.evaluate(event) is None
 
 
 # --- main(): wire contract ---------------------------------------------------------

@@ -10,6 +10,11 @@ Vault resolution order (first hit wins):
      message; with nothing configured resolve_vault now returns None and
      callers show actionable guidance instead)
 
+Step 4 is a convenience for an already-installed machine, never a way to
+establish a vault: the candidates are home-relative and no default in this
+module names a drive or a machine. The installer ASKS for the path (and offers
+to create it) rather than guessing — see `install/install.py`.
+
 Runtime state lives inside the vault under `.mb/` so the vault is
 self-contained and portable across machines.
 
@@ -38,18 +43,30 @@ def machine_id() -> str:
     node = platform.node() or "unknown"
     return re.sub(r"[^A-Za-z0-9_.-]", "_", node)[:64] or "unknown"
 
-# Last-resort vault location, tried only when --vault, MB_HOME and the pointer
-# file all came up empty, and only if the path actually exists.
+# Built-in guesses are HOME-RELATIVE ONLY. There used to be a third candidate
+# holding one machine's absolute path (`D:\obsidian\memory brain`), justified as
+# "a last resort costs nothing". It cost something twice: it survived that
+# machine's own move to another drive, and it shipped a dead drive letter to
+# everyone else. A default nobody can satisfy is not a fallback, it is a lie
+# with a low hit rate.
 #
-# This literal is one machine's layout, which is fine for a LAST resort but not
-# fine as the only one: `MB_DEFAULT_VAULT` overrides the whole candidate list
-# (os.pathsep-separated), and two home-relative locations are tried before it so
-# a fresh install on someone else's machine has a sane default at all. The
-# hardcode stays as the final fallback rather than being deleted, because it is
-# what the dev machine has resolved through for the project's whole history.
-DEFAULT_VAULT_WINDOWS = r"E:\obsidian\memory brain"
+# The installer now ASKS (install/install.py) instead of guessing, and
+# `MB_DEFAULT_VAULT` (os.pathsep-separated) states a machine's own order without
+# editing the source. Nothing in this file names a drive.
 DEFAULT_VAULT_DIRNAME = "memory brain"
-POINTER_FILE = Path.home() / ".singularity.json"
+
+# THE config. One file, per machine, created by the installer, never inside a
+# vault — a vault travels between machines and every absolute path in it is
+# wrong on arrival (issue #14). Everything the machine decides lives here:
+# which vault, where the repositories are, which local model binary, the
+# project registry.
+#
+# It records DECISIONS, NOT DEFAULTS: `save()` writes only values that differ
+# from `DEFAULT_CONFIG`, so a typical file stays under ten keys instead of
+# materialising forty. Defaults belong in code — they are values, not machine
+# facts.
+CONFIG_FILE = Path.home() / ".singularity.json"
+POINTER_FILE = CONFIG_FILE          # pre-0.7 name, kept so callers keep working
 
 
 def default_vault_candidates() -> list[Path]:
@@ -65,8 +82,7 @@ def default_vault_candidates() -> list[Path]:
                 if p.strip()]
     home = Path.home()
     return [home / DEFAULT_VAULT_DIRNAME,
-            home / "Documents" / DEFAULT_VAULT_DIRNAME,
-            Path(DEFAULT_VAULT_WINDOWS)]
+            home / "Documents" / DEFAULT_VAULT_DIRNAME]
 
 SCHEMA_VERSION = 2   # v2 (WIKI-LOOP W10): ingest/gap/lint keys + immutable_roots
 
@@ -84,7 +100,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "session_context_max_lines": 200,  # T06: total SessionStart injection budget
     "module_note_max_lines": 60,       # T07: per-module context note truncation
     "module_context_enabled": False,   # T07: PreToolUse hook installed but no-op until true
-    "vault_guard_enabled": False,      # T08: PreToolUse guard installed but no-op until true
+    # T08: PreToolUse guard. On by default since 2026-08-04 (owner decision) —
+    # `audit` only annotates a write, and the failure it catches is silent by
+    # construction: a new note written with a client's Write tool skips the
+    # template, so `source:` and the required sections are simply absent and
+    # nobody notices for weeks. Existing installs are unaffected: `Config.save`
+    # materializes every default into config.json, so a machine that has ever
+    # saved its config already carries an explicit `false` and keeps it.
+    "vault_guard_enabled": True,
     "vault_guard_mode": "audit",       # T08: "audit" (warn only) or "deny" (block)
     "personal_roots": [],              # T08: vault-relative roots classified as personal
     "digest_score_threshold": 0.45,    # T11: min cosine to surface a merge candidate
@@ -380,7 +403,8 @@ class Config:
 
     @property
     def config_path(self) -> Path:
-        return self.mb_dir / "config.json"
+        # the machine config, NOT `<vault>/.mb/config.json` — see CONFIG_FILE
+        return CONFIG_FILE
 
     @property
     def memory_index_dir(self) -> Path:
@@ -505,21 +529,31 @@ class Config:
         return float(self.get("min_score"))
 
     def save(self) -> None:
-        self.mb_dir.mkdir(parents=True, exist_ok=True)
-        merged = {**DEFAULT_CONFIG, **self.data}
-        tmp = self.config_path.with_suffix(".json.tmp")
-        tmp.write_text(
-            json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-        )
-        tmp.replace(self.config_path)
+        """Persist the config: what this machine DECIDED, nothing else.
+
+        A key whose value equals `DEFAULT_CONFIG` is not written — it is not a
+        decision, and materialising all forty defaults is what made the old
+        file unreadable. `get()` falls back to the defaults, so dropping them
+        changes no behaviour and the file stays small as the schema grows."""
+        doc: dict[str, Any] = {"schema_version": SCHEMA_VERSION,
+                               "vault_path": str(self.vault)}
+        for key in sorted(self.data):
+            if key in ("schema_version", "vault_path"):
+                continue
+            value = self.data[key]
+            if key in DEFAULT_CONFIG and value == DEFAULT_CONFIG[key]:
+                continue
+            doc[key] = value
+        atomic_write_json(self.config_path, doc, indent=2)
         try:
-            self._write_sanitized_example(merged)
+            self._write_sanitized_example({**DEFAULT_CONFIG, **self.data})
         except Exception:  # noqa: BLE001 — example generation must never break a real save
             pass
 
     @property
     def config_example_path(self) -> Path:
-        return self.mb_dir / "config.example.json"
+        # next to the config it exemplifies, never in the vault
+        return CONFIG_FILE.with_name("singularity.example.json")
 
     def _write_sanitized_example(self, merged: dict[str, Any]) -> None:
         """T08: git-trackable sanitized snapshot of the config. No secrets
@@ -580,22 +614,69 @@ def atomic_write_json(path: Path, data: Any, *, indent: int = 1) -> None:
     tmp.replace(path)
 
 
-def read_config_tolerant(vault: Path) -> dict[str, Any]:
-    """Dependency-free, never-raising read of vault/.mb/config.json — for hook
-    hot paths (SessionStart, PreToolUse, ...) that must NOT go through the
-    full load_config() gate: that path sys.exit(2)s on a malformed config,
-    which is correct CLI behavior but would kill a hook mid-session. Missing/
-    malformed/non-object -> {}; every caller already treats absence as "use
-    the default". See [[Rule - hooks must never use the full validated Config
-    load path]]."""
-    cfg_path = vault / ".mb" / "config.json"
-    if not cfg_path.exists():
+def read_config_tolerant() -> dict[str, Any]:
+    """Dependency-free, never-raising read of the machine config — for hook hot
+    paths (SessionStart, PreToolUse, ...) that must NOT go through the full
+    load_config() gate: that path sys.exit(2)s on a malformed config, which is
+    correct CLI behavior but would kill a hook mid-session. Missing/malformed/
+    non-object -> {}; every caller already treats absence as "use the default".
+    See [[Rule - hooks must never use the full validated Config load path]].
+
+    Takes no vault argument any more: the config is per machine, so there is
+    exactly one file to read and no vault to locate first.
+
+    Falls back to the pre-0.7 vault-resident config while the machine config
+    holds no settings yet. Hooks run BEFORE the first `mb` command does the
+    migration — on an upgraded machine the very next SessionStart or PreToolUse
+    would otherwise silently see defaults and, for `vault_guard_mode` or
+    `immutable_roots`, quietly stop enforcing what the user configured."""
+    return _read_json_object(active_config_path())
+
+
+def _read_json_object(path: Path) -> dict[str, Any]:
+    """A JSON object from `path`, or {} for anything else. Never raises."""
+    if not path.exists():
         return {}
     try:
-        data = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def active_config_path(vault: Optional[Path] = None) -> Path:
+    """The file that actually answers config reads right now.
+
+    Normally the machine config. During the upgrade window — machine config
+    still empty, pre-0.7 vault copy still present — it is the vault copy, and
+    both `read_config_tolerant()` and `config_unreadable()` have to agree about
+    which one that is, or a hook would validate one file and read another."""
+    machine = _read_json_object(CONFIG_FILE)
+    if any(k not in ("schema_version", "vault_path") for k in machine):
+        return CONFIG_FILE
+    if vault is None:
+        vault = resolve_vault()
+    if vault is not None and legacy_config_path(vault).exists():
+        return legacy_config_path(vault)
+    return CONFIG_FILE
+
+
+def config_unreadable(vault: Optional[Path] = None) -> bool:
+    """True when the active config EXISTS but cannot be parsed as an object.
+
+    `read_config_tolerant` flattens "absent", "malformed" and "not an object"
+    into `{}`, which is right for readers that only want values — but a caller
+    deciding whether a default APPLIES needs the difference. An absent key in a
+    readable config means "the shipped default"; an unparseable file means the
+    user's choice is unknown, and a hook that acts on a guess there would be
+    enforcing a setting nobody could have expressed."""
+    cfg_path = active_config_path(vault)
+    if not cfg_path.exists():
+        return False
+    try:
+        return not isinstance(json.loads(cfg_path.read_text(encoding="utf-8-sig")), dict)
+    except (OSError, json.JSONDecodeError):
+        return True
 
 
 def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:
@@ -637,6 +718,7 @@ def load_config(vault_arg: Optional[str] = None) -> Config:
         print("[mb] set MB_HOME, pass --vault, or create ~/.singularity.json", file=sys.stderr)
         sys.exit(2)
     cfg = Config(vault=vault)
+    migrate_vault_config(cfg)          # seamless, one-time, pre-0.7 layouts
     if cfg.config_path.exists():
         try:
             cfg.data = json.loads(cfg.config_path.read_text(encoding="utf-8"))
@@ -685,8 +767,77 @@ def _backup_config(config_path: Path) -> Optional[Path]:
         return None
 
 
+LEGACY_VAULT_CONFIG = ".mb/config.json"
+
+
+def legacy_config_path(vault: Path) -> Path:
+    """Where the config lived before 0.7 — inside the vault, and therefore
+    carried to every other machine the vault was cloned to."""
+    return vault / ".mb" / "config.json"
+
+
+def migrate_vault_config(cfg: "Config") -> Optional[Path]:
+    """Adopt a pre-0.7 vault-resident config into the machine config.
+
+    Seamless by design: the user runs nothing. It fires only when the machine
+    config holds no settings yet, so it cannot overwrite a machine that has
+    already been configured, and it is idempotent — the legacy file is renamed
+    aside afterwards rather than deleted, so the step is reversible.
+
+    Returns the path the legacy file was moved to, or None when there was
+    nothing to migrate."""
+    legacy = legacy_config_path(cfg.vault)
+    if not legacy.exists():
+        return None
+    # the FILE, not read_config_tolerant(): that one falls back to this very
+    # legacy config during upgrade, so asking it "is the machine configured?"
+    # would always answer yes and the migration would never run
+    machine = _read_json_object(CONFIG_FILE)
+    if any(k not in ("schema_version", "vault_path") for k in machine):
+        return None                     # this machine is already configured
+    try:
+        data = json.loads(legacy.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError as exc:
+        # Refuse, loudly. Skipping a broken legacy config would start this
+        # machine on a fresh empty one and silently drop every setting the user
+        # had — the exact silent-loss shape this release exists to remove.
+        print(f"[mb] cannot migrate {legacy}: {exc}", file=sys.stderr)
+        print(f"[mb] fix or move that file, then re-run — nothing was written "
+              f"to {CONFIG_FILE}", file=sys.stderr)
+        sys.exit(2)
+    except OSError as exc:
+        print(f"[mb] cannot read {legacy}: {exc}", file=sys.stderr)
+        sys.exit(2)
+    if not isinstance(data, dict):
+        print(f"[mb] cannot migrate {legacy}: config must be a JSON object",
+              file=sys.stderr)
+        sys.exit(2)
+
+    cfg.data = {**data, "vault_path": str(cfg.vault)}
+    cfg.save()                          # writes decisions only, defaults dropped
+
+    import datetime
+
+    ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    moved = legacy.with_name(f"config.json.migrated-{ts}")
+    suffix = 1
+    while moved.exists():
+        moved = legacy.with_name(f"config.json.migrated-{ts}-{suffix}")
+        suffix += 1
+    try:
+        legacy.replace(moved)
+    except OSError:
+        moved = legacy                  # could not rename: the copy still stands
+    print(f"[mb] config moved out of the vault -> {cfg.config_path} "
+          f"(was {legacy}, kept as {moved.name})", file=sys.stderr)
+    return moved
+
+
 def write_pointer(vault: Path) -> None:
-    POINTER_FILE.write_text(
-        json.dumps({"vault_path": str(vault)}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    """Bind this machine to a vault WITHOUT touching anything else in the
+    config — it used to rewrite the whole file with a single key, which is
+    fine for a pointer file and destructive for a config."""
+    data = read_config_tolerant()
+    data["vault_path"] = str(vault)
+    data.setdefault("schema_version", SCHEMA_VERSION)
+    atomic_write_json(CONFIG_FILE, data, indent=2)

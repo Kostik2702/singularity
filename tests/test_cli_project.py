@@ -40,11 +40,12 @@ def test_add_then_list_json(wired, capsys):
 def test_add_writes_atomically_and_preserves_other_keys(wired, cfg):
     cfg.data["model"] = "custom"
     cli.main(["project", "add", "p", "D:/p"])
-    on_disk = json.loads((cfg.vault / ".mb" / "config.json").read_text(encoding="utf-8"))
+    from singularity.config import CONFIG_FILE
+    on_disk = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))   # per machine now
     assert on_disk["projects"]["p"]["path"] == "D:/p"
     assert on_disk["model"] == "custom"
-    leftovers = [f for f in (cfg.vault / ".mb").iterdir()
-                if f.name.startswith("config") and f.suffix != ".json"]
+    leftovers = [f for f in CONFIG_FILE.parent.iterdir()
+                 if f.name.startswith(".singularity") and f.suffix != ".json"]
     assert leftovers == []
 
 
@@ -72,7 +73,8 @@ def test_remove_unknown_id(wired, capsys):
 def test_remove_round_trip(wired, cfg):
     cli.main(["project", "add", "p", "D:/p"])
     assert cli.main(["project", "remove", "p"]) == 0
-    on_disk = json.loads((cfg.vault / ".mb" / "config.json").read_text(encoding="utf-8"))
+    from singularity.config import CONFIG_FILE
+    on_disk = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))   # per machine now
     assert on_disk["projects"] == {}
 
 

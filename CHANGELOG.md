@@ -10,6 +10,383 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.9.0 — the config leaves the vault, and nothing in the engine names a drive
+
+One owner decision drove all of it: **paths belong in a config created at
+install, not in code** — and that config does not live in the vault, because a
+vault travels between machines and every absolute path inside it is wrong on
+arrival. v0.6.0 reported that problem (`A6-config-paths`, nine dead keys after
+one clone). This removes the possibility.
+
+### The config is per machine
+
+- **`~/.singularity.json` is THE config.** Everything that was in
+  `<vault>/.mb/config.json` now lives there: paths, behavioural settings, the
+  project registry. `.mb/` keeps derived state and the one thing it holds that
+  a rebuild cannot recreate, `sources/`.
+- **It records decisions, not defaults.** `save()` writes only values that
+  differ from `DEFAULT_CONFIG`; a real machine's file went from 42
+  materialised keys to 9. Defaults stay in code, where they are values rather
+  than machine facts, and the file stays small as the schema grows.
+- **Migration is seamless and one-time.** The next `mb` command adopts a
+  pre-0.9 vault config, writes the machine one, and renames the old file to
+  `config.json.migrated-<ts>` — kept, not deleted. It refuses to run when the
+  machine already has settings, so opening someone else's vault cannot
+  overwrite this machine. A legacy file that does not parse is a loud refusal,
+  never a silent fresh start: skipping it would drop every setting the user
+  had.
+- **Hooks keep working mid-upgrade.** They run before the first `mb` command
+  performs the migration, so `read_config_tolerant()` and
+  `config_unreadable()` fall back to the vault copy while the machine config
+  is still empty — through one shared `active_config_path()`, because a hook
+  that validates one file and reads another is worse than one that does
+  neither.
+- **`A7-config-location`** reports a config still sitting inside a vault.
+
+### Nothing in the engine names a drive
+
+- **`DEFAULT_VAULT_WINDOWS` is gone.** The built-in candidates are
+  home-relative only. That constant was justified as "a last resort costs
+  nothing" and cost twice: it outlived its own machine's move to another
+  drive, and it shipped a dead drive letter to everyone else.
+- **The installer ASKS.** `--vault` wins and creates the directory; otherwise
+  a resolved path is shown for confirmation rather than assumed, and nothing
+  configured means asking until there is a usable path. Non-interactive runs
+  never prompt — CI and scheduled runs fail naming the flag instead of hanging
+  on a question nobody can answer.
+- **Agent and skill text carries `{{VAULT}}`**, substituted at install. The
+  literal path used to be repeated in 18 files with a matching sentinel in
+  `register_agents`, a pairing that silently stopped matching when the
+  authoring machine changed drives. A token cannot drift.
+- **The vault is named only where a path is actually needed.** For a mention
+  that merely identifies it, `mb search` already knows where it is — naming
+  nothing beats substituting something. Eleven decorative mentions removed, so
+  only **4** skills need rendering instead of linking; the rest stay live
+  links into the repo. Paths after the token are forward slashes now:
+  `{{VAULT}}\rules\` would have rendered as `/Users/k/vault\rules\` on macOS.
+
+### Test isolation
+
+Two more guards, and both earned it immediately. `_no_real_machine_config`
+redirects the machine config AND takes the real file's bytes as a witness:
+redirecting the module attribute is not enough, because a module-scope
+`from singularity.config import CONFIG_FILE` binds the original path at import
+time — which overwrote this machine's real config before the witness existed.
+The same guard then exposed a v0.8.0 test that only passed because it read the
+developer's real `~/.singularity.json` and found a real vault.
+
+Full suite: 1846 passed, 13 skipped.
+
+### Also in this release, marked as such
+
+- **`reel` — EXPERIMENTAL, in development.** The video-editing CLI and its
+  `reel-editor` skill land in master unfinished, by owner decision, carrying
+  the label rather than waiting: the subcommand contract is still moving,
+  backward compatibility is not promised, and it has no `mb doctor` check of
+  its own. Shipping it silently as a finished capability was the alternative,
+  and that is how a prototype becomes a promise.
+
+---
+
+# v0.8.0 — a rule that is not there when the decision is made is not a rule
+
+Rollup of everything shipped on 2026-08-04 as v0.6.1 → v0.7.1: 21 commits,
+27 files, 1754 → 1806 tests. The per-release sections below stay as they are;
+this one is the shape they turned out to share.
+
+Every defect in this batch had the same anatomy. The knowledge existed. The
+rule was written, the check was implemented, the diagnostic printed the right
+words — and none of it was present at the moment someone chose what to do. Six
+times in one day, in six different places:
+
+| Release | The knowledge that existed | Where it wasn't |
+|---|---|---|
+| v0.6.1 | `doctor A6` names the broken key exactly | `config set` could not resolve that key's notation, and four separate read-backs confirmed the write anyway |
+| v0.6.2 | the sanitizer knows the filename changed | nobody was told, until the link broke weeks later in `curator gaps` |
+| v0.6.3 | the vault guard was written and registered | it was switched off |
+| v0.6.4 | the guard says "use `mb note new`" | two guarded roots had no such type — and the skill authorized the bypass in writing |
+| v0.7.0 | `A6` reports a dead model path | the registry was read-only, so there was nothing to do about it |
+| v0.7.1 | "artifacts live in the vault" was an active rule | it was absent where the write path gets chosen |
+
+The fix was the same shape too: put the statement at the point of decision, from
+one source, and add a test that fails when any surface drops it. Three shared
+fragments now work that way — `CAPTURE_HOOKS_FRAGMENT`,
+`VAULT_WRITE_POLICY_FRAGMENT`, and `DEFAULT_CONFIG` as the single home of the
+guard's default — because a second hand-maintained copy is how the guard's own
+default nearly survived being flipped.
+
+### What changed for someone using this
+
+- **`mb config set`** resolves dotted keys (`projects.x.path`,
+  `llm.models.q.args[14]`), refuses unknown keys with a "did you mean", and
+  never invents structure. `--allow-unknown` for the deliberate case.
+- **`mb llm add` / `mb llm remove`** — the model registry can be written to.
+- **`mb note new`** covers every guarded root, takes `--filename`, and names the
+  link target when the filename differs from the title.
+- **`mb project add`** merges instead of rebuilding an entry.
+- **The vault guard is on** in `audit` for new installs; existing configs keep
+  their explicit value.
+- **All four clients** (Claude, Codex, Gemini, Grok) carry the vault-only write
+  policy, and `mb-memory` gates both *where* and *with what* before a write.
+- **`pip install -e ".[dev]"`** exists; a fresh clone can run the suite.
+
+### Known state, not swept under
+
+`A6-config-paths` still WARNs on this machine: 8 paths belong to the Windows box
+this vault came from (three projects, `llama.cpp`, three `.gguf`). That is the
+check doing its job — the values cannot be guessed, and the machine simply does
+not have those files. Everything else in `mb doctor` is green.
+
+---
+
+# v0.7.1 — the vault-only write path, present where the path is chosen
+
+Closes **VSO-01**, open since 2026-07-13.
+
+The incident it came from ([[Error - Vault staging duplicates]]): a client
+edited 14 vault documents as copies under the user's profile root and copied
+them back, because the sandbox exposed that directory as writable and a mirror
+looked like the path of least resistance. No unique data was lost — every
+staging file turned out byte-identical to, or contained in, its canonical
+version — but for a while the machine had two working sets of the same notes,
+and only a hash audit could say which was authoritative. Direct patching of the
+vault path was verified to work during cleanup; the workaround had never been
+necessary.
+
+A rule saying "artifacts live in the vault" already existed and was active. It
+just was not present at the moment the write path gets chosen, which is the
+only moment it could have helped — the same shape as VSO-02, where the skill
+authorized the very bypass the guard was flagging.
+
+`VAULT_WRITE_POLICY_FRAGMENT` joins `CAPTURE_HOOKS_FRAGMENT` in
+`singularity/hooks_state.py` and is injected verbatim into all four surfaces
+that decide a write path: the Claude SessionStart payload and the managed
+blocks of `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`, `~/.grok/AGENTS.md`. One
+source, because four hand-maintained copies of a policy drift — as the guard's
+own default did a release ago.
+
+It says four things: write **directly** to the vault (or via `mb note new` /
+`mb learn`); never create an editable mirror and copy it back; external folders
+are for input and for an explicitly requested export; and if a direct write is
+genuinely blocked, **stop and say so** rather than routing around it. Reading
+vault files and copying *into* the vault stay explicitly fine — the rule is
+about editable duplicates, not about the outside world.
+
+`mb-memory/SKILL.md` gains the matching destination gate above the "чем писать"
+gate added in v0.6.4: together they answer *where* and *with what* before the
+first write.
+
+`tests/test_vault_write_policy.py` asserts the policy on every surface and that
+each imports the shared constant instead of paraphrasing it. Verified by
+deleting it from one registrar: the suite fails.
+
+No home-directory scanner was added — that was ruled out in the task's own
+acceptance as a separate privacy decision.
+
+Full suite: 1806 passed, 25 skipped.
+
+---
+
+# v0.7.0 — the registry gets a write half, and a typo stops passing for a fix
+
+Three CLI frictions, each filed after `mb doctor` or the vault guard pointed at
+a command that could not do the job. Two of them were the owner's call to make
+and were made explicitly.
+
+### `mb llm add` / `mb llm remove`
+
+The model registry was read-only. `mb llm list` on an empty one said *"add to
+llm.models in .mb/config.json"* — by hand, in the file `mb config set` owns,
+which is exactly the edit the vault guard flags. And after a move between
+machines, `A6-config-paths` reports dead `llm.models.*.gguf` paths with nothing
+to offer: `config set` can repoint one, but a model that is gone for good has to
+be *removed*, and no command did that. `mb project` has had `add`/`remove` since
+T03; models had neither.
+
+```bash
+mb llm add q9b /models/q9b.gguf -- -ngl 99 --jinja
+mb llm remove q9b
+```
+
+`<name> <gguf>` positionally, mirroring `mb project add <id> <path>`. Adding an
+existing name repoints it and **keeps its `args`** — the same silent-loss bug
+`project add` had in v0.6.1. A path that does not exist yet is registered with a
+note, not refused: configs get prepared before weights are downloaded, and A6
+already reports paths that resolve nowhere.
+
+`remove` refuses while that model is the one being served, unless `--force`.
+Stopping someone's running server as a side effect of a registry edit is not a
+config change, it is an outage. With `--force` the entry goes and the server is
+left alone, with a line saying so.
+
+`A6`'s fix line now names both registries instead of sending everyone through
+`config set`.
+
+### `mb config set` refuses an unknown key
+
+`mb config set modle 60` wrote the key and warned (v0.6.1+). Nothing reads it,
+so the write is a no-op the user reads as a fix — and `modle` is one keystroke
+from `model`. **Owner decision:** refuse by default, with the near-miss named.
+
+```
+$ mb config set modle 60
+[mb] modle: unknown config key (did you mean: model?)
+      nothing reads it — write it anyway with --allow-unknown
+$ echo $?
+1
+```
+
+The legitimate case — a connector key, or one a newer build reads — stays one
+explicit flag away.
+
+### `mb note new --filename`
+
+The vault's convention keeps the type in the filename and `title:` clean
+(`rules/Rule - X.md` holding `title: X` — 28 of 38 rules look like that). A
+single positional argument cannot say both, so the prefix ended up inside the
+title, where it does not belong. **Owner decision:** an explicit flag, default
+behaviour untouched.
+
+The v0.6.2 warning now fires only when the sanitizer changed what was actually
+asked for — with `--filename` a different filename is intent, not a surprise. A
+stem that strips to nothing is refused rather than creating a stemless `.md`.
+
+Full suite: 1797 passed, 25 skipped.
+
+---
+
+# v0.6.4 — the guard's advice is now takeable everywhere it applies
+
+v0.6.3 turned the guard on. This closes the two things that made ignoring it
+reasonable.
+
+### Every guarded root has a `mb note new` type
+
+`vault_guard` watches ten managed roots and tells you to use `mb note new` /
+`mb learn` instead. Two of them had no type behind that advice: `_moc/` and
+`changelog/`. Creating a dashboard, or the first note of a new month
+(`changelog/YYYY-MM.md` does not exist yet on the 1st), left exactly one route
+open — the one the guard warns about. A warning against the only available
+action is noise, and noise is how a guard gets trained away.
+
+`note new` gains `moc` and `changelog`. Neither has a template of its own and
+both fall through to the generic body; the point is that the sanctioned path
+exists. `learnings/archive` stays deliberately uncovered — notes arrive there
+by being moved, never by being created.
+
+`tests/test_note_covers_managed_roots.py` holds the two lists to each other in
+both directions, so a future guarded root cannot ship without a way to write to
+it, and a type cannot point outside the guarded set. Verified by reverting the
+change: three tests fail.
+
+### The skill said the opposite of the guard
+
+`mb-memory/SKILL.md` is what the assistant actually reads, and it said *"крупные
+записи — редактируй `.md` напрямую (Edit/Write)"*. So the bypass was not a
+lapse — it was the documented instruction, and the guard was arguing with the
+skill. The skill now carries the gate itself: a NEW file in a managed root goes
+through `mb note new` regardless of size (create with the command, fill in with
+Edit), editing an existing note stays Edit/Write, config goes through
+`mb config set`, and searching goes through `mb search` / `mb curator gaps`
+rather than `grep`.
+
+It also opened with one machine's Windows vault path, wrong on every POSIX
+host — the same class as #14, in the first file the assistant reads. Now it
+points at `mb doctor`'s `A2-vault-obsidian` instead, and a test fails on any
+drive-letter path in the file.
+
+Full suite: 1777 passed, 25 skipped.
+
+---
+
+# v0.6.3 — the vault guard is on by default
+
+`vault_guard_enabled` ships `true` in `audit` mode (owner decision, 2026-08-04).
+
+The check was written, registered as a PreToolUse hook, and switched off — so
+the thing it exists to catch went uncaught. It caught it the same day it was
+turned on: two rule notes created with a client's `Write` tool instead of
+`mb note new` skipped `templates/rule.md`, and the miss was invisible because
+skipping a template does not fail — the `source:` field and the required
+sections are simply absent, and the note reads fine. A human noticed, days
+later, by accident.
+
+`audit` only annotates the write (`[vault-guard audit] New file created
+directly in managed knowledge root 'rules/', bypassing the sanctioned CLI —
+prefer mb note new / mb learn`). It never blocks: `deny` stays explicit opt-in,
+per the 2026-07-12 Open Decision.
+
+### Nobody is flipped by an upgrade
+
+`Config.save()` materializes every default into `config.json`, so any install
+that has ever saved its config already carries an explicit value and keeps it.
+The new default reaches new installs. `docs/UPGRADE.md` now states the general
+rule rather than repeating "every opt-in defaults to off", which this release
+would have made false.
+
+### Two defaults were one too many
+
+The hook reads a raw config dict (`read_config_tolerant` applies no defaults),
+so it carried its own literal `False` — a second copy that would have quietly
+outlived this change and left the guard off exactly where it matters. It now
+falls back to `DEFAULT_CONFIG`, as does `mb doctor`, and a test pins the two
+together by monkeypatching the default and asserting the hook follows.
+
+`D5-vault-guard` no longer calls `disabled` the default: it prints
+`disabled (vault_guard_enabled: false)`, because "off" is now somebody's
+decision rather than the shipped state.
+
+### One case where the default must not speak
+
+An unparseable `config.json` used to mean "guard off" for free — `{}` and the
+literal `False` agreed. With the default flipped, that same silence would have
+meant "guard on", annotating writes on a config the user could not have
+expressed anything in. New `config.config_unreadable()` separates "key absent
+in a readable config" (→ default applies) from "file exists but does not
+parse" (→ the hook stays silent; `mb doctor` is where a broken config gets
+reported).
+
+Full suite: 1771 passed, 25 skipped.
+
+---
+
+# v0.6.2 — a silent rename, and a suite a fresh clone could not run
+
+Two small frictions, both hit during the v0.6.1 release itself.
+
+### `mb note new` says when the filename is not the title
+
+The filename is the wikilink target, and the sanitizer — not the author —
+decides it: everything outside letters, digits, space, `-` and `_` becomes `_`
+(`cli.py`). A comma in a title is enough, so `[[<title>]]` written from memory
+in another note points at nothing. Nothing said so at creation; the break
+surfaces much later in `mb curator gaps` as a missing page, sitting among
+genuinely unwritten notes, with no hint that a rename caused it.
+
+`mb note new` now prints the working link target when it differs from the
+title, at the one moment the difference is still cheap to fix. The `title:`
+frontmatter stays exactly as typed — only the path is sanitized, and that
+asymmetry is the thing worth naming out loud.
+
+### `pip install -e ".[dev]"`
+
+The installer puts the runtime into `.venv` and stops there, which is right for
+a user and wrong for anyone who then tries to run the suite: `python -m pytest`
+answered `No module named pytest`, and the only way to learn about
+`requirements-test.txt` was to read the CI workflow.
+
+The new `dev` extra carries no second copy of any pin — it self-references
+`singularity[imgqa,secrets]` and adds `pytest`, so the base and extra pins stay
+declared exactly once. `requirements-test.txt` remains what CI installs;
+`tests/test_dev_extras_parity.py` pins the two to the same package set, because
+a pin added to one and forgotten in the other yields a green build that fails
+on the next person's machine. Verified by breaking it: adding a package to
+`requirements-test.txt` alone fails the test.
+
+Full suite: 1769 passed, 25 skipped.
+
+---
+
 # v0.6.1 — the fix `mb doctor` prints is one you can actually type
 
 Found while acting on v0.6.0's own output on the machine it was released from.

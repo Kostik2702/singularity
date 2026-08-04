@@ -9,7 +9,9 @@ from singularity.config import Config
 def _isolate(monkeypatch, tmp_path):
     monkeypatch.delenv("MB_HOME", raising=False)
     monkeypatch.setattr(config, "POINTER_FILE", tmp_path / "no-pointer.json")
-    monkeypatch.setattr(config, "DEFAULT_VAULT_WINDOWS", str(tmp_path / "no-such-vault"))
+    # the built-in candidates are home-relative now, so point the whole list at
+    # a path that does not exist instead of stubbing one machine's constant
+    monkeypatch.setenv("MB_DEFAULT_VAULT", str(tmp_path / "no-such-vault"))
 
 
 def test_nothing_configured_returns_none(monkeypatch, tmp_path):
@@ -41,7 +43,7 @@ def test_default_used_only_if_it_exists(monkeypatch, tmp_path):
     _isolate(monkeypatch, tmp_path)
     existing = tmp_path / "dev-vault"
     existing.mkdir()
-    monkeypatch.setattr(config, "DEFAULT_VAULT_WINDOWS", str(existing))
+    monkeypatch.setenv("MB_DEFAULT_VAULT", str(existing))
     assert config.resolve_vault(None) == existing
 
 
@@ -168,14 +170,84 @@ def test_migrate_is_noop_when_current():
 
 def test_load_config_migrates_and_backs_up(tmp_path, monkeypatch):
     from singularity import config as cfgmod
-    # a legacy config with no schema_version
+    # a legacy config with no schema_version, in its pre-0.7 vault location
     mb = tmp_path / ".mb"; mb.mkdir(parents=True)
     (mb / "config.json").write_text('{"model": "m", "min_score": 0.3}', encoding="utf-8")
     monkeypatch.setenv("MB_HOME", str(tmp_path))
+
     cfg = cfgmod.load_config(str(tmp_path))
+
     assert cfg.data["schema_version"] == cfgmod.SCHEMA_VERSION
-    # a backup of the pre-migration file was written
-    assert list(mb.glob("config.json.bak-*"))
+    # The pre-migration content is preserved as the `.migrated-*` file the move
+    # leaves behind — the schema bump rides along with the adoption, so a
+    # second `.bak-*` beside it would back up nothing that is not already kept.
+    kept = list(mb.glob("config.json.migrated-*"))
+    assert kept and "min_score" in kept[0].read_text(encoding="utf-8")
+
+
+# --- 0.7: the config leaves the vault, seamlessly ---------------------------
+
+def test_vault_config_is_adopted_and_moved_aside(tmp_path, monkeypatch):
+    """The user runs nothing: the next `mb` command adopts the old file."""
+    from singularity import config as cfgmod
+    mb = tmp_path / ".mb"; mb.mkdir(parents=True)
+    (mb / "config.json").write_text(
+        '{"model": "m", "code_repos_dir": "X:/repos"}', encoding="utf-8")
+    monkeypatch.setenv("MB_HOME", str(tmp_path))
+
+    cfg = cfgmod.load_config(str(tmp_path))
+
+    assert cfg.get("code_repos_dir") == "X:/repos"          # value survived
+    assert cfgmod.CONFIG_FILE.exists()                      # now on the machine
+    assert not (mb / "config.json").exists()                # gone from the vault
+    assert list(mb.glob("config.json.migrated-*"))          # kept, not deleted
+
+
+def test_migration_never_overwrites_a_configured_machine(tmp_path, monkeypatch):
+    """A machine that already has settings must win over a vault it opens."""
+    from singularity import config as cfgmod
+    cfgmod.CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    cfgmod.CONFIG_FILE.write_text('{"model": "mine"}', encoding="utf-8")
+    mb = tmp_path / ".mb"; mb.mkdir(parents=True)
+    (mb / "config.json").write_text('{"model": "theirs"}', encoding="utf-8")
+    monkeypatch.setenv("MB_HOME", str(tmp_path))
+
+    cfg = cfgmod.load_config(str(tmp_path))
+
+    assert cfg.get("model") == "mine"
+    assert (mb / "config.json").exists()          # left alone entirely
+
+
+def test_saved_config_records_decisions_not_defaults(tmp_path, monkeypatch):
+    """The file must stay small as the schema grows — forty materialised
+    defaults is what made the old one unreadable."""
+    from singularity import config as cfgmod
+    monkeypatch.setenv("MB_HOME", str(tmp_path))
+    cfg = cfgmod.Config(vault=tmp_path,
+                        data={"model": "custom", "min_score": cfgmod.DEFAULT_CONFIG["min_score"]})
+    cfg.save()
+
+    written = json.loads(cfgmod.CONFIG_FILE.read_text(encoding="utf-8"))
+
+    assert written["model"] == "custom"           # a decision is kept
+    assert "min_score" not in written             # a default is not
+    assert written["vault_path"] == str(tmp_path)
+    assert set(written) == {"schema_version", "vault_path", "model"}
+
+
+def test_write_pointer_keeps_the_other_settings(tmp_path, monkeypatch):
+    """It used to rewrite the whole file with one key — fine for a pointer,
+    destructive for a config."""
+    from singularity import config as cfgmod
+    cfgmod.CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    cfgmod.CONFIG_FILE.write_text('{"model": "keep-me", "vault_path": "/old"}',
+                                  encoding="utf-8")
+
+    cfgmod.write_pointer(tmp_path)
+
+    data = json.loads(cfgmod.CONFIG_FILE.read_text(encoding="utf-8"))
+    assert data["vault_path"] == str(tmp_path)
+    assert data["model"] == "keep-me"
 
 
 # --- T03: projects registry validation is merged into validate_config -------

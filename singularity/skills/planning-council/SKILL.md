@@ -31,7 +31,7 @@ PLC-5 Weighted-confidence synthesis + report + decision-note offer
 
 **Checklist (lead must check ALL before PLC-1):**
 - [ ] Task extracted from the user request
-- [ ] Vault searched for prior/similar work: `mb search "<topic>"` (vault = `E:\obsidian\memory brain`); similar tasks, decisions, pitfalls pulled into the payload
+- [ ] Vault searched for prior/similar work: `mb search "<topic>"`; similar tasks, decisions, pitfalls pulled into the payload
 - [ ] Greenfield vs existing-flow decided. Existing flow → collect code anchors (files, entry points). **"Code already written" is NOT greenfield** — a diff shows what changed, not what correct is; the plan still needs the real baseline.
 - [ ] **Grill offer (never force)**: propose the `grill` skill before the council; user decides. Skip → record `Grill: skipped by user`.
 - [ ] **GOAL CONTRACT formulated** — concrete + falsifiable: `GOAL:` what "done" looks like, derived from the user's exact request (not invented); `UNMET if <X>` — observable condition under which it is NOT done; `Owner:` recorded. If it narrows the user's request → confirm BEFORE launch (pre-launch question, allowed). Agents may challenge the contract itself in Round 1.
@@ -113,7 +113,7 @@ PLANNING MISSION: You are the FEASIBILITY & ESTIMATION CHECKER.
 *Historian* (`historian`):
 ```
 PLANNING MISSION: You are the HISTORIAN. Prior-task and estimation scan.
-- [ ] Scanned the vault (E:\obsidian\memory brain) via `mb search` + Grep for similar work;
+- [ ] Scanned the vault via `mb search` + Grep for similar work;
       noted estimated-vs-actual effort where recorded; cited sources with dates/paths
 - [ ] Per subtask: flagged known pitfalls from prior similar work
 - [ ] READ-ONLY: never write/edit the vault
