@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "singularity"
-version = "0.5.1"
+version = "0.6.0"
 description = "Singularity — personal AI memory system: Obsidian-native automatic memory + semantic search (Memory Brain engine)"
 requires-python = ">=3.10"
 dependencies = [
@@ -48,4 +48,6 @@ markers = [
     "grok_e2e: end-to-end test needing a real Grok Build CLI on PATH (opt-in; auto-skips when absent; no xAI credentials)",
     "imgqa_gt: full-image imgqa ground-truth tests against the NIKA tree (auto-skips unless IMGQA_GT_ROOT is set)",
     "real_scheduler: test genuinely drives singularity.platform.scheduler — opts out of the conftest guard that otherwise fails a test for touching the real OS scheduler",
+    "real_user_path: test genuinely writes the Windows user PATH (HKCU\\Environment) — opts out of the conftest guard that otherwise fails a test for mutating the developer's environment",
+    "real_version_managers: test genuinely probes the version-manager locations (~/.nvm, ~/.volta, /usr/local/bin …) — opts out of the conftest guard that otherwise empties that search list",
 ]

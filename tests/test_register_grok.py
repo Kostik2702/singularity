@@ -337,10 +337,26 @@ def test_hook_registered_bom_less_with_safe_command(home):
 
 
 def test_hook_skipped_when_version_unproven(home, monkeypatch, capsys):
+    """Reachable binary, version below the proven contract."""
+    monkeypatch.setattr(register_grok, "_grok_exe", lambda: ("/usr/bin/grok", "PATH"))
     monkeypatch.setattr(register_grok, "_grok_version", lambda: (0, 1, 0))
     register_grok.main()
     assert not _hook_path(home).exists()
     assert "stop-gate contract unproven" in capsys.readouterr().err
+
+
+def test_hook_skip_message_blames_reachability_not_the_version(home, monkeypatch, capsys):
+    """Issue #10: `$GROK_HOME` exists but the binary cannot be found anywhere.
+    Reporting that as a version constraint sent the reporter chasing a version
+    their install already satisfied."""
+    monkeypatch.setattr(register_grok, "_grok_exe", lambda: (None, None))
+    monkeypatch.setattr(register_grok, "_grok_version", lambda: None)  # nothing to probe
+    register_grok.main()
+    err = capsys.readouterr().err
+    assert not _hook_path(home).exists()
+    assert "unreachable" in err
+    assert "nvm/volta/fnm" in err
+    assert "stop-gate contract unproven" not in err
 
 
 def test_hook_registration_idempotent(home):

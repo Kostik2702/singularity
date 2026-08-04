@@ -129,6 +129,12 @@ class Corpus:
     # for the vault: a note tree is authored in place, and quietly following a
     # link out of it would index files the user never put in their vault.
     follow_links: bool = False
+    # issue #12: for a corpus whose root the USER named explicitly, "configured
+    # but unreachable" is a different state from "empty", and returning
+    # `files: 0` for it is what made a stale-config bug take a day to find. The
+    # vault and `.mb/sources/` keep the permissive default: a vault that has
+    # never ingested anything legitimately has no sources dir yet.
+    root_must_exist: bool = False
 
 
 def memory_corpus(cfg: Config) -> Corpus:
@@ -183,7 +189,9 @@ def code_corpus(cfg: Config) -> Corpus:
         chunk_schema=code_chunking.CODE_CHUNK_SCHEMA_VERSION,
         # a repository living outside the root is linked in — and a symlink is
         # the only way to do that on macOS/Linux
-        follow_links=True)
+        follow_links=True,
+        # the user typed this path; if it is not there, say so (issue #12)
+        root_must_exist=True)
 
 
 CORPUS_BUILDERS = {"memory": memory_corpus, "sources": sources_corpus,
@@ -587,7 +595,22 @@ def _guard_scan(corp: Corpus, report: dict[str, Any],
 
     Only fires when there is something to lose: bootstrapping an empty corpus
     over a missing root stays legal, which is what `mb ingest index` does on a
-    vault that has never ingested anything."""
+    vault that has never ingested anything.
+
+    The exception is a corpus whose root the user named explicitly
+    (`root_must_exist`, issue #12). There, an unreachable root and a genuinely
+    empty one are not interchangeable: reporting `{"files": 0}` for a
+    `code_repos_dir` that does not exist on this machine is indistinguishable
+    from a successful scan of an empty tree, and `CodeCorpusNotConfigured`
+    already models "off" — "configured but unreachable" deserves the same
+    treatment."""
+    if corp.root_must_exist and report.get("root_missing"):
+        raise CorpusRootUnavailable(
+            f"{corp.name} corpus root does not exist on this machine: "
+            f"{report['root_missing']} — configured, but unreachable; refusing "
+            f"to report that as an empty tree. The index is untouched. Fix the "
+            f"path with `mb config set code_repos_dir \"<path>\"`, then "
+            f"`mb daemon restart` so the daemon stops serving the old value.")
     if existing_chunks <= 0:
         return
     if report.get("root_missing"):

@@ -34,13 +34,74 @@ class SearchDaemon:
         self.instance_id = uuid.uuid4().hex
 
     # ------------------------------------------------------------------
+    def reload_config(self) -> dict[str, Any]:
+        """Re-read `.mb/config.json` into the live Config (issue #12).
+
+        `reload` used to reload *indexes* off the Config captured at daemon
+        start, so `mb config set` wrote a value the serving process never saw —
+        and `mb daemon reload`, the command whose name promises exactly this,
+        answered `{"status": "reloaded"}` while changing nothing. The visible
+        result was `mb index rebuild --code` reporting 0 files indefinitely
+        while an in-process rebuild of the same config indexed 205.
+
+        Mutating `cfg.data` in place is enough: every path on `Config` is a
+        property derived from `vault` + `data`, and `vault` cannot change under
+        a running daemon.
+
+        Never raises and never leaves a half-applied config: `load_config()`
+        exits the process on a malformed file, which is right for a CLI and
+        fatal for a daemon, so the validation is done here and a bad file
+        leaves the previous config serving."""
+        from ..config import DEFAULT_CONFIG, migrate_config, validate_config
+
+        path = self.cfg.config_path
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {"config": "absent"}
+        except (OSError, ValueError) as exc:
+            return {"config": "unreadable", "config_error": str(exc)}
+        if not isinstance(raw, dict):
+            return {"config": "invalid", "config_error": "config is not a JSON object"}
+        errors = validate_config(raw).get("errors") or []
+        if errors:
+            return {"config": "invalid", "config_error": "; ".join(map(str, errors))}
+        migrated, _changed = migrate_config(raw)
+        # EFFECTIVE values, not raw dicts: `cfg.save()` writes defaults into the
+        # file, so comparing `data` to the file would report every default as a
+        # change on the first reload. KEY NAMES only in the answer — values can
+        # be paths, tokens or anything else the user put there, and this
+        # crosses a socket.
+        keys = set(migrated) | set(self.cfg.data) | set(DEFAULT_CONFIG)
+        changed = sorted(k for k in keys
+                         if migrated.get(k, DEFAULT_CONFIG.get(k)) != self.cfg.get(k))
+        self.cfg.data = migrated
+        out: dict[str, Any] = {"config": "changed" if changed else "unchanged",
+                               "config_changed": changed}
+        if "model" in changed:
+            # the encoder was built from the old model at startup and cannot be
+            # swapped underneath a live engine
+            out["restart_required"] = ["model"]
+        return out
+
+    # ------------------------------------------------------------------
     def _handle(self, req: dict[str, Any]) -> dict[str, Any]:
         cmd = req.get("cmd", "search")
         if cmd == "ping":
             return {"status": "ok", "pid": os.getpid(), "instance_id": self.instance_id}
         if cmd == "reload":
+            info = self.reload_config()
             counts = self.engine.reload()
-            return {"status": "reloaded", **counts}
+            return {"status": "reloaded", **counts, **info}
+        if cmd == "config":
+            # Read-back of the value THIS process is serving, so `mb config set`
+            # can tell the user their write is not what answers queries yet
+            # (issue #12). One key at a time and by explicit name: the daemon
+            # does not hand out the whole config over a socket.
+            key = req.get("key")
+            if not isinstance(key, str):
+                return {"error": "config requires a string key"}
+            return {"key": key, "value": self.cfg.get(key)}
         if cmd == "search":
             t0 = time.perf_counter()
             out = self.engine.search(req)

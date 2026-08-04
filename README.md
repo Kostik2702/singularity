@@ -104,13 +104,18 @@ cd ~/singularity
 ./install/install.sh
 ```
 
-The wrappers are ~20 lines each; all logic lives in `install/install.py`, which walks five phases:
+If that fails with `permission denied`, the executable bit did not survive the
+way this copy reached you — run `sh install/install.sh` instead. The wrapper is
+`#!/bin/sh`-compatible, so invoking the interpreter directly is equivalent.
+
+The wrappers are ~20 lines each; all logic lives in `install/install.py`, which walks six phases:
 
 1. **Python env** — creates `.venv` and installs dependencies.
 2. **Vault** — asks for your vault path, creates the memory folder tree (`learnings/`, `decisions/`, `howto/`, `incidents/`, `rules/`, `reference/`, `changelog/`, `templates/`, `_moc/`), binds it via `~/.singularity.json`.
 3. **Local model + first index + daemon** — explicitly adopts or downloads the embedding snapshot once (~470 MB) into the configured `hf_cache`, writes a pinned local manifest, starts the daemon, and builds the first index inside that warm process. Search/index runtime opens only that local snapshot (`local_files_only`); it never silently falls back to Hugging Face.
 4. **Client wiring** — registers four managed hook entries in `~/.claude/settings.json`: SessionStart, Stop, and two opt-in PreToolUse checks (module context and vault guard). Your existing settings are backed up and preserved; every entry we own is marked `"_mb": true` for clean uninstall. Then, **if they are installed**, the installer wires OpenAI Codex, Google Gemini and xAI Grok Build to the same memory (see [Other CLI clients](#other-cli-clients--codex-gemini--grok)).
-5. **Scheduler + verify** — registers the nightly index rebuild and the on-save watcher with your OS scheduler (Task Scheduler / launchd / systemd — all with missed-run catch-up), then finishes with `mb doctor`.
+5. **CLIs on PATH** — makes `mb`, `imgqa` and the other console scripts callable by name. macOS/Linux: symlinks them into `~/.local/bin` (and prints the exact `export PATH=…` line if that directory is not on your `PATH` — it never edits your shell rc for you). Windows: appends the venv `Scripts` directory to your **user** `PATH`, so open a new terminal afterwards. Only links that resolve back into this engine are ever created or removed, and `mb doctor`'s `D7-cli-on-path` reports the end state.
+6. **Scheduler + verify** — registers the nightly index rebuild and the on-save watcher with your OS scheduler (Task Scheduler / launchd / systemd — all with missed-run catch-up), then finishes with `mb doctor`.
 
 Re-running the installer is safe — it refreshes and re-verifies instead of breaking things. To remove everything (hooks, scheduled jobs, daemon) **without touching your vault**: `mb uninstall`. Already have Singularity installed? See [docs/UPGRADE.md](docs/UPGRADE.md) for exactly what changes on upgrade, and [docs/ROLLBACK.md](docs/ROLLBACK.md) to turn any specific new feature back off.
 
@@ -237,7 +242,10 @@ Worth recording: the non-obvious, the surprising, anything that took more than o
 Save a note in Obsidian → the watcher asks the already-warm daemon to re-index just that file (~5–15 s) → it's searchable. CLI update/rebuild, nightly, and selftest use the same daemon RPC, so the model stays loaded once in one process instead of being reloaded by every command. A nightly full rebuild (with missed-run catch-up when the machine was off) is the safety net. Manual controls if you ever need them:
 
 ```bash
-mb daemon start|stop|status|reload
+mb daemon start|stop|restart|status|reload
+                            # reload = re-read .mb/config.json AND the indexes;
+                            # restart = the remedy when reload cannot rebind it
+                            # in place (a changed `model`, above all)
 mb model status             # verify pinned local snapshot + manifest
 mb model install            # explicit one-time adopt/download + daemon restart
 mb index rebuild            # full

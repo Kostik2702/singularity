@@ -37,6 +37,7 @@ ENGINE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ENGINE))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling install/ imports
 
+import cli_locator  # noqa: E402  (find a CLI that PATH alone cannot see, #10)
 import client_registration  # noqa: E402  (shared safe-registration primitives)
 import register_skills  # noqa: E402  (reuse the junction helpers, single source)
 import skill_manifest  # noqa: E402  (T15: single source of client->skills)
@@ -65,19 +66,25 @@ BEGIN = "<!-- SINGULARITY:BEGIN (managed by install/register_gemini.py — edits
 END = "<!-- SINGULARITY:END -->"
 
 
+def _gemini_exe() -> tuple[str | None, str | None]:
+    """(path, where) for the CLI — PATH first, then the version-manager
+    locations `PATH` cannot show a non-interactive process (issue #10)."""
+    return cli_locator.find_cli("gemini")
+
+
 def _gemini_present() -> bool:
-    return (Path.home() / ".gemini").exists() or shutil.which("gemini") is not None
+    return (Path.home() / ".gemini").exists() or _gemini_exe()[0] is not None
 
 
 def _gemini_version() -> tuple[int, ...] | None:
     """Return the CLI version as an int tuple (e.g. (0, 50, 0)), or None if the
-    binary is absent, times out, errors, or prints an unparseable version. Never
-    raises — a probe failure must not crash the installer.
+    binary is unreachable, times out, errors, or prints an unparseable version.
+    Never raises — a probe failure must not crash the installer.
 
     Retries once: the first `gemini --version` on a machine is a cold Node start
     (the CLI bundle is tens of MB and Windows Defender may scan it on first spawn),
     which can exceed the timeout; a warm second attempt is ~2s."""
-    exe = shutil.which("gemini")
+    exe, _where = _gemini_exe()
     if not exe:
         return None
     for attempt in range(2):
@@ -256,12 +263,25 @@ def main() -> int:
         print("[gemini] not installed (~/.gemini absent, `gemini` not on PATH) — skipping")
         return 0
 
+    exe, where = _gemini_exe()
     version = _gemini_version()
-    if version is None:
+    if exe is None:
+        # The distinct, diagnosable state: the client is installed but this
+        # process cannot reach it (issue #10). Naming a version constraint here
+        # — as the old message did — is actively misleading.
+        print(f"[gemini] WARN: ~/.gemini exists but the `gemini` binary is not "
+              f"reachable from this process (PATH and {len(cli_locator.search_locations())} "
+              f"version-manager locations checked). If it was installed via "
+              f"nvm/volta/fnm, re-run `mb doctor --fix` from an interactive shell",
+              file=sys.stderr)
+    elif where != "PATH":
+        print(f"[gemini] found outside PATH at {exe} (via {where}) — "
+              f"a version manager is hiding it from non-interactive processes")
+    if version is None and exe is not None:
         print("[gemini] WARN: could not determine `gemini --version` "
               "(old/unparseable) — deploying profile; skills may be ignored by this client",
               file=sys.stderr)
-    elif version < MIN_SKILLS_VERSION:
+    elif version is not None and version < MIN_SKILLS_VERSION:
         print(f"[gemini] WARN: version {'.'.join(map(str, version))} < "
               f"{'.'.join(map(str, MIN_SKILLS_VERSION))} — Agent Skills may be ignored; "
               f"profile is still applied", file=sys.stderr)
@@ -280,12 +300,22 @@ def main() -> int:
           f"{counts['ok']} already ok, {counts['copied']} copied, "
           f"{counts['backed-up']} backed up, {counts['missing']} missing")
 
-    # SessionStart recall + AfterAgent capture nudge — only when the version is
-    # known to support hooks.
+    # SessionStart recall + AfterAgent capture nudge. An unreadable version on a
+    # binary we DID locate is no longer a silent skip (issue #10): the entries
+    # are inert on a client that does not support them, whereas not writing them
+    # leaves the user with no recall and no capture and nothing saying so.
     if version is not None and version >= MIN_HOOKS_VERSION:
         print(f"[gemini] hooks (SessionStart + AfterAgent): {_register_hooks()}")
+    elif version is None and exe is not None:
+        print(f"[gemini] hooks (SessionStart + AfterAgent): {_register_hooks()} "
+              f"— version unreadable, registered anyway (inert if unsupported)")
+    elif exe is None:
+        print("[gemini] hooks: NOT registered — the binary is unreachable, so "
+              "hook support cannot be established; re-run `mb doctor --fix` "
+              "from a shell where `gemini` is on PATH", file=sys.stderr)
     else:
-        print("[gemini] hooks: skipped (version unknown or < "
+        print(f"[gemini] hooks: skipped (version "
+              f"{'.'.join(map(str, version))} < "
               f"{'.'.join(map(str, MIN_HOOKS_VERSION))} — hook support unproven)",
               file=sys.stderr)
 

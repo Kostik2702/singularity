@@ -83,13 +83,30 @@ def test_grok_home_env_override_is_checked(tmp_path, monkeypatch):
     assert _status(rep, "F3-grok-skills") == "PASS"
 
 
-def test_capture_skip_when_version_unproven(iso_home):
-    """Version unreadable -> the stop-gate contract is unproven -> SKIP, and
-    never a false PASS for a hook file that may not even be honored."""
+def test_capture_skip_when_version_below_the_proven_contract(iso_home, monkeypatch):
+    """An old but reachable CLI -> the stop-gate contract is unproven -> SKIP,
+    and never a false PASS for a hook file that may not even be honored."""
     (iso_home / ".grok").mkdir()
+    import subprocess as sp
+    monkeypatch.setattr(shutil, "which", lambda _n: "grok")
+    monkeypatch.setattr(sp, "run", lambda *a, **k: sp.CompletedProcess(
+        a, 0, stdout="grok 0.1.0 (deadbeef)\n", stderr=""))
     rep = Report(quiet=True)
     grok_block(rep, fix=False)
     assert _status(rep, "F4-grok-capture") == "SKIP"
+
+
+def test_capture_warns_when_the_binary_is_unreachable(iso_home):
+    """Not a version SKIP (issue #10): ~/.grok exists but nothing can run the
+    CLI, so the contract cannot be established at all — a different problem,
+    and one the old message hid behind a version number."""
+    (iso_home / ".grok").mkdir()
+    rep = Report(quiet=True)
+    grok_block(rep, fix=False)
+    assert _status(rep, "F4-grok-capture") == "WARN"
+    assert _status(rep, "F1-grok") == "WARN"
+    detail = next(c["detail"] for c in rep.checks if c["id"] == "F1-grok")
+    assert "unreachable" in detail
 
 
 def _stub_proven_version(monkeypatch):
