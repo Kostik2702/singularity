@@ -1,8 +1,8 @@
 {
- "taken_at": "2026-08-04T21:00:42",
+ "taken_at": "2026-08-04T21:07:30",
  "note": "v0.9.0 baseline: install + doctor honesty, the config write path that the v0.6.0 baseline went around, and the config's move out of the vault onto the machine",
  "version": "0.9.0",
- "commit": "1b27b9e87940206d601479a6a9267ddb0bc54336",
+ "commit": "ef3bb715ef419201cc18f237dc67985d4c3d8cce",
  "environment": {
   "platform": "Windows-10-10.0.26200-SP0",
   "python": "3.10.6",
@@ -428,7 +428,7 @@
     "vault_path_bound": true,
     "legacy_file_gone": true,
     "legacy_preserved_as": [
-     "config.json.migrated-20260804-210042"
+     "config.json.migrated-20260804-210730"
     ],
     "pass": true
    },
@@ -463,7 +463,7 @@
   {
    "target": "tests/",
    "exit_code": 0,
-   "summary": "1878 passed, 14 skipped, 1 warning in 95.77s (0:01:35)"
+   "summary": "1878 passed, 14 skipped, 1 warning in 95.75s (0:01:35)"
   }
  ],
  "all_pass": true
