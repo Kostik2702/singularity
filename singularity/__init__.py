@@ -5,4 +5,4 @@ Reference implementation ported/adapted from the Genevra system
 (see vault: 01_Genevra_Analysis / 02_New_System_Design).
 """
 
-__version__ = "0.6.4"
+__version__ = "0.7.0"

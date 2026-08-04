@@ -21,6 +21,7 @@ Watcher индексирует сохранённое автоматически
 mb learn "<плотный инсайт одной-тремя фразами>" --task <TASK-ID>   # быстрый append в learnings/active/<TASK-ID>.md
 mb note new decision "Название решения"    # новая заметка из шаблона
 # типы: learning|decision|howto|incident|rule|reference|daily|moc|changelog — по одному на каждый managed-корень
+mb note new rule "X" --filename "Rule - X"   # конвенция vault: тип в имени файла, title чистый
 ```
 
 - [ ] Личное (не относится ни к одному рабочему проекту) — добавь `--project personal` к `mb learn`/`mb note new`, или, если запись уже создаётся в каталоге из `personal_roots` (см. `.mb/config.json`), routing применится автоматически. Личные заметки никогда не попадают в digest/curator-предложения и никогда не резолвятся случайным cwd-детектом — только explicit `--project personal` или personal_roots.

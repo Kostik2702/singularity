@@ -97,12 +97,19 @@ def _paths_fix(keys: list[str]) -> str:
     wrote a literal top-level key, reported success, and left the WARN in
     place. It resolves them now; the example points at a real key so the two
     stay honest about each other."""
-    sample = next((k for k in keys if not k.startswith("projects.")), keys[0])
+    plain = [k for k in keys if not k.startswith(("projects.", "llm.models."))]
     line = (f"set each one for this machine, e.g. "
-            f'mb config set {sample} "<path>"  '
+            f'mb config set {plain[0] if plain else keys[0]} "<path>"  '
             f"(the correct values cannot be guessed)")
+    # Both of these own a registry with its own commands — sending someone to
+    # `config set` for them is sending them the long way round, and for a model
+    # that no longer exists on this machine there is no `config set` answer at
+    # all: the entry has to go, which only `mb llm remove` does.
     if any(k.startswith("projects.") for k in keys):
         line += "; repoint projects with `mb project add <id> <path>`"
+    if any(k.startswith("llm.models.") for k in keys):
+        line += ("; models with `mb llm add <name> <gguf>` "
+                 "(or `mb llm remove <name>` if it is gone for good)")
     return line
 
 
