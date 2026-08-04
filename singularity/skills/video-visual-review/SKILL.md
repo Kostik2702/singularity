@@ -13,8 +13,8 @@ description: Техно-визуальный аудит видео перед п
 
 ```bash
 # Полный отчёт: метаданные + contact sheets (идемпотентно, атомарно)
-D:\Singularity\.venv\Scripts\python.exe \
-  "D:\Singularity\singularity\skills\video-visual-review\scripts\video-report.py" \
+E:\Singularity\.venv\Scripts\python.exe \
+  "E:\Singularity\singularity\skills\video-visual-review\scripts\video-report.py" \
   --input "<папка или файл>" --out "<evidence-dir ВНЕ проекта>" --json
 # IMGQA_PROTECTED_ROOTS=<project> запрещает запись в проект физически.
 # Большие HEVC (до 375MB NIKA-мастеров) работают; таймаут sheet 600с/файл.

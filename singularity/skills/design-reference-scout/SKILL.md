@@ -25,7 +25,7 @@ design-scout probe --json
 design-scout collect \
   --query "matrix terminal aesthetic" --query "code rain" \
   --query "dark minimal web design" \
-  --out "D:\Project\<project>-evidence\scout-<date>"
+  --out "E:\Project\<project>-evidence\scout-<date>"
 # --out ВНЕ дерева проекта; DSCOUT_PROTECTED_ROOTS=<project> запрещает запись в проект физически
 
 # 3. Открыть moodboard.html, отсмотреть, вынести на приёмку владельцу

@@ -33,7 +33,7 @@ Phase 5: Weighted-confidence synthesis + final report + decision-note offer
 
 **Checklist (lead must check ALL before Phase 1):**
 - [ ] Topic extracted from the user request
-- [ ] Vault searched for prior knowledge: `mb search "<topic>"` (vault = `D:\obsidian\memory brain`); relevant decisions/howtos/incidents pulled into the payload
+- [ ] Vault searched for prior knowledge: `mb search "<topic>"` (vault = `E:\obsidian\memory brain`); relevant decisions/howtos/incidents pulled into the payload
 - [ ] **Grill offer (offer, never force)**: propose running the `grill` skill on the topic before the council. User decides (run / skip). Skip = fine, record `Grill: skipped by user`.
 - [ ] **GOAL CONTRACT formulated** — concrete + falsifiable:
   - `GOAL:` derived from the user's exact request (not invented)
@@ -113,7 +113,7 @@ COUNCIL MISSION: Fact-check every claim against actual code/docs + assess feasib
 *Historian* (`historian`):
 ```
 COUNCIL MISSION: Prior art, reuse analysis, historical context.
-- [ ] Answered: decided before? what precedent? Scan the vault (D:\obsidian\memory brain)
+- [ ] Answered: decided before? what precedent? Scan the vault (E:\obsidian\memory brain)
       via `mb search` + Grep; cite sources with dates/paths
 - [ ] READ-ONLY: never write/edit the vault
 ```

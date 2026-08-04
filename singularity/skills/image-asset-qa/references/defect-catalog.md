@@ -1,8 +1,8 @@
 # Каталог дефектов cutout/alpha — как выглядят и как не спутать
 
-Ground truth — из сессий NIKA (проект `D:\Project\Content Creator website\`). Ссылки ниже — на реальные кропы, чтобы калибровать глаз. Читать при интерпретации `imgqa edges` / `backgrounds` / `detect-fringe`.
+Ground truth — из сессий NIKA (проект `E:\Project\Content Creator website\`). Ссылки ниже — на реальные кропы, чтобы калибровать глаз. Читать при интерпретации `imgqa edges` / `backgrounds` / `detect-fringe`.
 
-Корень эталонов: `D:\Project\Content Creator website\reports\asset-qa\`.
+Корень эталонов: `E:\Project\Content Creator website\reports\asset-qa\`.
 Исходный GT-ассет (SD3 remove-bg): `references\IMG GEN_SD3 - Remove Background_2026-07-13_05-34-49.png`.
 
 ---

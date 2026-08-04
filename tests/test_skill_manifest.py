@@ -33,7 +33,7 @@ def skill_manifest():
 
 CLIENTS = ["claude", "codex", "gemini", "grok"]
 
-# GRK-01: the approved portable baseline — every cross-client skill, in
+# GRK-01: the approved portable baseline вЂ” every cross-client skill, in
 # manifest order. Codex/Gemini golden regression AND the Grok launch set.
 PORTABLE_BASELINE = [
     "mb-search", "mb-memory", "mb-llm-delegate", "mb-onboard", "mb-triage",
@@ -41,7 +41,7 @@ PORTABLE_BASELINE = [
     # Claude-specific machinery, so it ships to every client like its siblings.
     "mb-ingest",
     "workflow-helper", "grill", "confidence-calibration", "memory-curator",
-    "error-reports", "report", "compaction-plan",
+    "error-reports", "report", "compaction-plan", "create-image-prompt",
 ]
 
 
@@ -126,7 +126,7 @@ def test_gemini_list_is_golden_baseline(skill_manifest):
 
 
 def test_grok_list_equals_approved_portable_baseline(skill_manifest):
-    """GRK-01: Grok launches with exactly the portable baseline — no council
+    """GRK-01: Grok launches with exactly the portable baseline вЂ” no council
     or visual/GT-gated skill is silently promoted (GRK-00 proved SKILL.md
     discovery + advertisement; Claude-only skills stay excluded with reasons)."""
     assert skill_manifest.skills_for_client("grok") == PORTABLE_BASELINE
@@ -134,7 +134,7 @@ def test_grok_list_equals_approved_portable_baseline(skill_manifest):
 
 def test_grok_exclusions_are_client_accurate(skill_manifest):
     """Every skill excluded from grok carries a reason, and the council family
-    must not claim Grok lacks subagents (it has spawn_subagent — GRK-00)."""
+    must not claim Grok lacks subagents (it has spawn_subagent вЂ” GRK-00)."""
     for name, meta in skill_manifest.SKILL_MANIFEST.items():
         if "grok" in meta["clients"]:
             continue

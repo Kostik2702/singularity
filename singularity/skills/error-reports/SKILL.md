@@ -5,11 +5,11 @@ description: Review PENDING error-report notes in the vault, formulate preventiv
 
 # error-reports — errors into rules (self-learning pipeline: OUTPUT)
 
-Vault: `D:\obsidian\memory brain`. Input: PENDING notes created by the `report` skill.
+Vault: `E:\obsidian\memory brain`. Input: PENDING notes created by the `report` skill.
 
 ## Step 1: find all PENDING reports
 
-- [ ] Grep `Status.*PENDING` in `D:\obsidian\memory brain\incidents\` (decisive) + `mb search "error report" --tags error-report` (catches strays in learnings/ etc).
+- [ ] Grep `Status.*PENDING` in `E:\obsidian\memory brain\incidents\` (decisive) + `mb search "error report" --tags error-report` (catches strays in learnings/ etc).
 
 ## Step 2: display as numbered list
 

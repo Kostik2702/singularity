@@ -1,2 +1,2 @@
 @echo off
-"D:\Singularity\.venv\Scripts\python.exe" -m singularity.scout.cli %*
+"E:\Singularity\.venv\Scripts\python.exe" -m singularity.scout.cli %*

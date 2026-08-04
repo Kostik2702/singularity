@@ -1,0 +1,4 @@
+interface:
+  display_name: "CapCut Editor"
+  short_description: "Build and revise safe editable CapCut drafts"
+  default_prompt: "Use $capcut-editor to assemble these media files into a new editable CapCut draft."

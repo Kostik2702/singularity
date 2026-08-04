@@ -28,7 +28,7 @@ AGENTS_SRC = ENGINE / "singularity" / "agents"
 # resolves elsewhere, the installer renders a substituted copy instead of
 # linking. Same path -> plain symlink, i.e. the historic behavior and the
 # property that matters most (edit the repo, every agent updates at once).
-TEMPLATE_VAULT = r"D:\obsidian\memory brain"
+TEMPLATE_VAULT = r"E:\obsidian\memory brain"
 
 # Engine-owned council/workflow agents (source of truth in singularity/agents/).
 AGENTS = [

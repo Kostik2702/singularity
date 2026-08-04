@@ -47,7 +47,7 @@ def machine_id() -> str:
 # a fresh install on someone else's machine has a sane default at all. The
 # hardcode stays as the final fallback rather than being deleted, because it is
 # what the dev machine has resolved through for the project's whole history.
-DEFAULT_VAULT_WINDOWS = r"D:\obsidian\memory brain"
+DEFAULT_VAULT_WINDOWS = r"E:\obsidian\memory brain"
 DEFAULT_VAULT_DIRNAME = "memory brain"
 POINTER_FILE = Path.home() / ".singularity.json"
 
