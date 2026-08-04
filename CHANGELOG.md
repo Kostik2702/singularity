@@ -10,6 +10,81 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.10.0 — ten commands on the window, and the rest behind them
+
+`mb` had grown to 23 top-level commands and 60 leaves — an honest reflection of
+what the engine does and a bad first screen: the four commands used daily sat in
+the same flat list as `uninstall` and `reflect`. This release narrows what the
+CLI *shows* without moving anything.
+
+### The window
+
+- **`mb --help` lists ten**: search · learn · note · ingest · status · doctor ·
+  curator · llm · service · setup. `mb help --all` prints every command, grouped,
+  with each direct path spelled out. A bare `mb` answers with one line of state
+  instead of an argparse error.
+- **Groups rewrite argv; they do not wrap.** `mb service daemon start` becomes
+  `mb daemon start` before the parser sees it, so a grouped path and its direct
+  path are literally the same code — they cannot drift, and nothing that already
+  calls the direct paths needed touching: 1878 existing tests, 33 skills and 3
+  hooks are unmodified.
+- **Help is generated from the parser.** One-line descriptions come from the
+  `help=` text already declared in `_build_parser()`; `facade.py` owns placement,
+  not prose, so a renamed command cannot leave a stale line in the window. Two
+  bad descriptions were fixed at the source instead (`note` read "notes";
+  `ingest` was two concatenated clauses).
+- **The seven sibling CLIs are named** in the help footer (imgqa, design-scout,
+  pattern-scout, component-intake, reel, golden, factory). Owner decision: they
+  are a different subject area, so they keep their own entry points rather than
+  becoming `mb` subcommands — but the help stops pretending they do not exist.
+
+### A group is not a host
+
+The first cut named the knowledge-care group `curate` — while the command
+`curator` already existed and was written in 16 skill files, the SessionStart
+hint and the vault's own notes. Functionally fine (direct paths kept working),
+tests green, and the defect surfaced only through the owner's question "did you
+update the skills for the new contract?". The choice was then between editing 17
+places for a nicer verb or letting two names for one thing live side by side.
+
+The fix removed the second name and split a concept that had been conflated:
+
+- a **group** (`service`, `setup`) is a name that is *not* a command and exists
+  only to front others;
+- a **host** (`curator`, `status`) is a real command that *additionally* answers
+  for a sibling: `mb curator nightly` and `mb status stats` now work, while
+  `mb curator` still prints the report it always did.
+
+`test_cli_facade.py` pins both directions — group names must not be commands,
+host names must be — plus the invariant that keeps the window honest as the
+engine grows: every parser command is either on the window or inside a group or
+a host, and every name the facade lists exists in the parser. Rule recorded in
+the vault: *Второе имя для существующей вещи оплачивается всеми её потребителями*.
+
+### The measurement loop closes
+
+A coverage check ("which command has a skill that leads to it?") found that
+`mb reflect`, `mb stats` and the nightly trend line were mentioned by **none** of
+the 33 skills — including `memory-curator`, whose whole subject is "how is the
+memory doing". T14 shipped those measurements to "decide on further complexity
+from data rather than impressions"; the data had been accumulating unread.
+`memory-curator` gains a *Здоровье по данным* section: thresholds tied to the one
+declared goal (G1, ≥80% of session knowledge lands in the vault) because the
+engine deliberately has none, the denominator checked first (percentages over 3
+sessions mean nothing), and every signal mapped to one action. SessionStart now
+also points at the window, so an agent looks the surface up instead of guessing.
+
+### Upgrading
+
+Nothing to migrate — no data, config, index or command name changed;
+`docs/UPGRADE.md` has the section. One behavioural change: a bare `mb` and
+`mb help` exit **0** instead of **2**, because neither is an error any more.
+Everything else, including `mb <unknown>` → 2, is untouched.
+
+Full suite: 1909 passed, 25 skipped.
+
+---
+
 # v0.9.1 — the machine is asked, and D7 stops accusing the wrong install
 
 Two follow-ups, both from running the release on a second machine.
