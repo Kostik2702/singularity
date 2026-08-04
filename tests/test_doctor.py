@@ -550,6 +550,87 @@ def test_d6_skip_without_posix_shell(cfg, monkeypatch):
     assert "no sh/bash" in d6["detail"]
 
 
+# --- D8: can git actually commit into the vault? (issue #11) -----------------
+
+def _git_stub(monkeypatch, *, inside=True, name="", email="", git="C:/git/git.exe"):
+    """Stand in for the two read-only git calls D8 makes."""
+    monkeypatch.setattr(doctor.shutil, "which",
+                        lambda n: git if n == "git" else f"C:/git/{n}.exe")
+
+    class R:
+        def __init__(self, out):
+            self.stdout, self.returncode = out, 0
+
+    def fake_run(cmd, **_kw):
+        if "rev-parse" in cmd:
+            return R("true\n" if inside else "false\n")
+        if "user.name" in cmd:
+            return R(name)
+        if "user.email" in cmd:
+            return R(email)
+        return R("")
+
+    monkeypatch.setattr(doctor.subprocess, "run", fake_run)
+
+
+def test_d8_warns_when_commit_identity_is_unset(cfg, monkeypatch):
+    """The default state of a new machine — and the state that made an install
+    reporting PASS 28 still fail at the first vault commit."""
+    _stub_externals(monkeypatch)
+    _git_stub(monkeypatch, inside=True, name="", email="")
+    doctor.run(cfg, as_json=True)
+    d8 = _check(cfg, "D8-git-identity")
+    assert d8["status"] == "WARN"
+    assert "user.name" in d8["detail"] and "user.email" in d8["detail"]
+    assert "git config --global" in d8["fix"]
+
+
+def test_d8_passes_when_identity_is_configured(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _git_stub(monkeypatch, name="Ada\n", email="ada@example.com\n")
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D8-git-identity")["status"] == "PASS"
+
+
+def test_d8_reports_only_the_missing_half(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _git_stub(monkeypatch, name="Ada\n", email="")
+    doctor.run(cfg, as_json=True)
+    d8 = _check(cfg, "D8-git-identity")
+    assert d8["status"] == "WARN"
+    assert "user.email" in d8["detail"] and "user.name" not in d8["detail"]
+
+
+def test_d8_skips_when_the_vault_is_not_a_git_repo(cfg, monkeypatch):
+    """A vault that is not under git needs no commit identity — warning about
+    it would be noise, not diagnosis."""
+    _stub_externals(monkeypatch)
+    _git_stub(monkeypatch, inside=False)
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D8-git-identity")["status"] == "SKIP"
+
+
+def test_d8_never_auto_fixes_the_identity(cfg, monkeypatch):
+    """A commit identity is a personal choice, permanently embedded in
+    published history. `--fix` must warn, never guess."""
+    _stub_externals(monkeypatch)
+    writes = []
+
+    _git_stub(monkeypatch, name="", email="")
+    real_run = doctor.subprocess.run
+
+    def watching_run(cmd, **kw):
+        if "config" in cmd and "--get" not in cmd:
+            writes.append(cmd)
+        return real_run(cmd, **kw)
+
+    monkeypatch.setattr(doctor.subprocess, "run", watching_run)
+    doctor.run(cfg, fix=True, as_json=True)
+
+    assert writes == []
+    assert _check(cfg, "D8-git-identity")["status"] == "WARN"
+
+
 # --- D7: is `mb` actually callable by name? (issue #15) ----------------------
 
 def _stub_register_path(monkeypatch, st):

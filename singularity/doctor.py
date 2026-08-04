@@ -767,11 +767,55 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     # ---- Block D: host tools ------------------------------------------
     def d4():
+        # Presence only. Whether git can actually produce a commit is D8 —
+        # necessary and sufficient are different questions (issue #11).
         missing = [t for t in ("git",) if shutil.which(t) is None]
         if missing:
             rep.add("D4-cli", "FAIL", f"missing on PATH: {missing}")
         else:
             rep.add("D4-cli", "PASS", "git on PATH")
+
+    def d8():
+        # issue #11: D4 answers "is the binary present", which is a weaker
+        # question than the one that matters — "can this machine produce a
+        # commit". A new machine has no user.name/user.email until someone sets
+        # them, and this project exists to get a new machine productive from an
+        # existing vault; several skills and agent workflows here run `git add`
+        # / `git commit` inside it. The failure otherwise lands mid-session,
+        # dressed up as a Singularity problem.
+        git = shutil.which("git")
+        if git is None:
+            rep.add("D8-git-identity", "SKIP", "git not on PATH (see D4-cli)")
+            return
+        inside = subprocess.run([git, "-C", str(cfg.vault), "rev-parse",
+                                 "--is-inside-work-tree"],
+                                capture_output=True, text=True, check=False)
+        if inside.returncode != 0 or inside.stdout.strip() != "true":
+            # A vault that is not under git needs no commit identity; warning
+            # about it would be noise, not diagnosis.
+            rep.add("D8-git-identity", "SKIP", "vault is not a git work tree")
+            return
+        missing = []
+        for key in ("user.name", "user.email"):
+            # run inside the vault so a deliberate per-repo identity counts:
+            # `--get` already resolves local over global, and checking --global
+            # alone would warn at people who configured this on purpose
+            out = subprocess.run([git, "-C", str(cfg.vault), "config", "--get", key],
+                                 capture_output=True, text=True, check=False)
+            if not out.stdout.strip():
+                missing.append(key)
+        if not missing:
+            rep.add("D8-git-identity", "PASS", "git can commit into the vault")
+        else:
+            # WARN, never FAIL, and NEVER auto-fixed even with --fix: a commit
+            # identity is a personal choice that ends up permanently embedded
+            # in published history. Guessing it from $USER/hostname or from the
+            # GitHub CLI would be wrong.
+            rep.add("D8-git-identity", "WARN",
+                    f"git cannot commit into the vault: {', '.join(missing)} unset — "
+                    f"the first vault commit will fail with 'Author identity unknown'",
+                    fix='git config --global user.name "Your Name" && '
+                        'git config --global user.email "you@example.com"')
 
     def d2():
         # every engine-owned agent (singularity/agents/*.md) must be registered
@@ -955,6 +999,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                     fix="python install/register_path.py")
 
     _guard(rep, "D4", d4)
+    _guard(rep, "D8", d8)
     _guard(rep, "D7", d7)
     _guard(rep, "D2", d2)
     _guard(rep, "D1", d1)
