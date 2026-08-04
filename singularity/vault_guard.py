@@ -43,7 +43,21 @@ def vault_relative(vault: Path, abs_path: Path) -> Optional[str]:
 
 
 def is_config_json(vault: Path, abs_path: Path) -> bool:
-    return vault_relative(vault, abs_path) == ".mb/config.json"
+    """Is this a direct edit of the config, bypassing `mb config set`?
+
+    Two paths, because a machine mid-upgrade has both: the machine config
+    (~/.singularity.json, where it lives from 0.7) and the pre-0.7
+    vault-resident copy, which still exists until the migration runs. Dropping
+    the second would silently stop guarding it during exactly the window where
+    a hand edit is most likely."""
+    from .config import CONFIG_FILE
+
+    if vault_relative(vault, abs_path) == ".mb/config.json":
+        return True
+    try:
+        return abs_path.resolve() == CONFIG_FILE.resolve()
+    except OSError:
+        return False
 
 
 def immutable_root(vault: Path, abs_path: Path,

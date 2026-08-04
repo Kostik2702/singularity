@@ -255,13 +255,16 @@ def test_status_carries_warning_on_malformed_config(home, vault):
 # --- set_capture_enabled --------------------------------------------------------
 
 def test_set_capture_enabled_writes_atomic_and_preserves_other_keys(vault):
+    from singularity.config import CONFIG_FILE
+
     cfg = Config(vault=vault, data={"model": "m", "min_score": 0.5})
     hooks_state.set_capture_enabled(cfg, False)
-    on_disk = json.loads((vault / ".mb" / "config.json").read_text(encoding="utf-8"))
+    # the config is per machine now, not inside the vault
+    on_disk = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
     assert on_disk["auto_capture"] is False
     assert on_disk["model"] == "m"
-    leftovers = [p for p in (vault / ".mb").iterdir()
-                if p.name.startswith("config") and p.suffix != ".json"]
+    leftovers = [p for p in CONFIG_FILE.parent.iterdir()
+                 if p.name.startswith(".singularity") and p.suffix != ".json"]
     assert leftovers == []
 
 
