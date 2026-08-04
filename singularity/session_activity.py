@@ -28,7 +28,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 # `\b` alone is not enough after "learn"/"new" — it matches on a hyphen too
 # ("mb learn-report" is NOT `mb learn`), so the command word must be followed
@@ -43,7 +42,7 @@ class SessionActivity:
     never a raw total (no raw tool-count threshold, T09 acceptance)."""
     client: str
     session_id: str
-    project_id: Optional[str] = None
+    project_id: str | None = None
     code_edits: int = 0
     vault_writes: int = 0
     sanctioned_captures: int = 0
@@ -56,7 +55,7 @@ class Decision:
     reason: str
 
 
-def is_code_edit_path(resolved_path: Path, cwd: Path, vault: Optional[Path]) -> bool:
+def is_code_edit_path(resolved_path: Path, cwd: Path, vault: Path | None) -> bool:
     """A code edit is a successful write whose resolved target lies inside
     the session's cwd (its project/working tree, spec §6.4 point 2 — no
     registered-project lookup required just to COUNT as a code edit; that's

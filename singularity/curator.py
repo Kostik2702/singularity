@@ -20,7 +20,7 @@ import re
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -89,7 +89,7 @@ def _scan_notes(cfg: Config) -> dict[str, dict[str, Any]]:
         linkable = re.sub(r"`[^`\n]*`", " ", linkable)
         linkable = linkable.replace("\\|", "|")  # escaped pipe in md tables
         outlinks = [mt.group(1).strip() for mt in _WIKILINK_RE.finditer(linkable)]
-        outlinks = [l for l in outlinks if l and l != "..."]
+        outlinks = [ln for ln in outlinks if ln and ln != "..."]
         notes[rel] = {
             "fm": fm, "title": str(title).strip('"'), "aliases": aliases,
             "outlinks": outlinks, "mtime": path.stat().st_mtime,
@@ -263,9 +263,9 @@ def analyze(cfg: Config) -> dict[str, Any]:
                         reverse=True)
         for score, i, j in scored:
             a, b = files[i], files[j]
-            if a in notes and b in notes:
-                if b in outgoing.get(a, set()) or a in outgoing.get(b, set()):
-                    continue
+            if (a in notes and b in notes
+                    and (b in outgoing.get(a, set()) or a in outgoing.get(b, set()))):
+                continue
             suggestions.append({"a": a, "b": b, "score": round(score, 3),
                                 "suggest": f"[[{Path(b).stem}]] <-> [[{Path(a).stem}]]"})
             if len(suggestions) >= SUGGEST_LIMIT:
@@ -340,7 +340,7 @@ def _duplicate_pairs(cfg: Config) -> tuple[list[dict[str, Any]], list[dict[str, 
     return same_file, cross_file, status
 
 
-def _frontmatter_date(value: Any) -> Optional[float]:
+def _frontmatter_date(value: Any) -> float | None:
     if isinstance(value, _dt.datetime):
         return value.timestamp()
     if isinstance(value, _dt.date):
@@ -390,7 +390,7 @@ def _supersession_candidates(notes: dict[str, dict[str, Any]],
     return candidates
 
 
-def _check_note_budget(project: str, module: Optional[str], vault: Path,
+def _check_note_budget(project: str, module: str | None, vault: Path,
                        rel_path: str, max_lines: int) -> list[dict[str, Any]]:
     from .context_map import _resolve_within_vault
 
@@ -463,7 +463,6 @@ def run(cfg: Config, as_json: bool = False) -> int:
     issues = validate(cfg)
     report = analyze(cfg)
     lint_report = lint(cfg)
-    hard = sum(len(v) for v in issues.values())
 
     if as_json:
         print(json.dumps({"issues": issues, **report, "lint": lint_report},

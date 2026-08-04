@@ -37,7 +37,7 @@ import time
 import unicodedata
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from .capture import normalize_gist
 from .config import Config, atomic_write_json
@@ -221,7 +221,7 @@ def registry_lock(cfg: Config, wait_seconds: float = _LOCK_WAIT_SECONDS):
                 owns = True          # stale -> take over; we now own cleanup
                 break
             if time.monotonic() >= deadline:
-                raise RegistryLockedError(
+                raise RegistryLockedError(     # noqa: B904 — state, not a wrapped error
                     "another `mb ingest` writer holds the registry lock "
                     f"({lock}); retry shortly, or remove the directory if no "
                     "ingest is running")
@@ -264,7 +264,7 @@ def render_source_file(record: dict[str, Any], text: str) -> str:
         "type: source",
         f"source_id: {_yaml_scalar(record['source_id'])}",
         f"title: {_yaml_scalar(record.get('title', ''))}",
-        "origin: {kind: %s, ref: %s}" % (_yaml_scalar(origin.get("kind", "file")),
+        "origin: {{kind: {}, ref: {}}}".format(_yaml_scalar(origin.get("kind", "file")),
                                          _yaml_scalar(origin.get("ref", ""))),
         f"sha256: {_yaml_scalar(record['sha256'])}",
         f"bytes: {int(record.get('bytes', 0))}",
@@ -281,7 +281,7 @@ def render_source_file(record: dict[str, Any], text: str) -> str:
     return "\n".join(lines) + text
 
 
-def read_source_text(cfg: Config, source_id: str) -> Optional[str]:
+def read_source_text(cfg: Config, source_id: str) -> str | None:
     """The stored raw body (wrapper frontmatter stripped), or None."""
     record = get(cfg, source_id)
     if not record or not record.get("stored") or not record.get("stored_path"):
@@ -293,7 +293,7 @@ def read_source_text(cfg: Config, source_id: str) -> Optional[str]:
     # newline="" — no universal-newline translation, so a source stored with
     # CRLF round-trips byte-for-byte (Path.read_text gained `newline` only in
     # 3.13; this project supports 3.10+).
-    with open(path, "r", encoding="utf-8", errors="ignore", newline="") as fh:
+    with open(path, encoding="utf-8", errors="ignore", newline="") as fh:
         raw = fh.read()
     _, body = parse_frontmatter(raw)
     return body[1:] if body.startswith("\n") else body
@@ -303,13 +303,13 @@ def read_source_text(cfg: Config, source_id: str) -> Optional[str]:
 # queries
 # ---------------------------------------------------------------------------
 
-def get(cfg: Config, source_id: str) -> Optional[dict[str, Any]]:
+def get(cfg: Config, source_id: str) -> dict[str, Any] | None:
     record = read_registry(cfg)["sources"].get(str(source_id))
     return dict(record, source_id=str(source_id)) if isinstance(record, dict) else None
 
 
-def list_sources(cfg: Config, status: Optional[str] = None,
-                 limit: Optional[int] = None) -> list[dict[str, Any]]:
+def list_sources(cfg: Config, status: str | None = None,
+                 limit: int | None = None) -> list[dict[str, Any]]:
     """Newest first, stable tiebreak on id so the order never depends on dict
     insertion order (a repeated run must be byte-identical)."""
     rows = [dict(rec, source_id=sid)
@@ -320,7 +320,7 @@ def list_sources(cfg: Config, status: Optional[str] = None,
 
 
 def _find_superseded(sources: dict[str, Any], origin_ref: str,
-                     sha256: str) -> Optional[str]:
+                     sha256: str) -> str | None:
     """Newest live record with the SAME origin.ref but different content — the
     one this add supersedes. Records already superseded are skipped so a chain
     of three versions links 1->2->3, not 1->3 and 2->3."""
@@ -344,11 +344,11 @@ def _find_superseded(sources: dict[str, Any], origin_ref: str,
 # add
 # ---------------------------------------------------------------------------
 
-def add(cfg: Config, text: str, *, title: Optional[str] = None,
+def add(cfg: Config, text: str, *, title: str | None = None,
         origin_kind: str = "file", origin_ref: str = "",
-        project: Optional[str] = None, tags: Optional[list[str]] = None,
+        project: str | None = None, tags: list[str] | None = None,
         content_type: str = DEFAULT_CONTENT_TYPE,
-        dry_run: bool = False, now: Optional[str] = None) -> dict[str, Any]:
+        dry_run: bool = False, now: str | None = None) -> dict[str, Any]:
     """Register + store one raw document. Idempotent: the same content yields
     `duplicate: True` and touches neither disk nor registry.
 
@@ -446,9 +446,9 @@ def add(cfg: Config, text: str, *, title: Optional[str] = None,
 
 
 def attach_notes(cfg: Config, source_id: str, notes: list[str],
-                 status: Optional[str] = None, *, actor: str = "manual",
+                 status: str | None = None, *, actor: str = "manual",
                  op: str = "ingest", log: bool = False,
-                 now: Optional[str] = None) -> dict[str, Any]:
+                 now: str | None = None) -> dict[str, Any]:
     """Record which vault notes were derived from a source (the provenance
     back-link; the forward link is `sources: [<id>]` in the note's own
     frontmatter).
@@ -538,8 +538,8 @@ def _append_log(cfg: Config, row: dict[str, Any]) -> None:
                      + [json.dumps(row, ensure_ascii=False)])
 
 
-def read_log(cfg: Config, since: Optional[str] = None, op: Optional[str] = None,
-             limit: Optional[int] = None) -> list[dict[str, Any]]:
+def read_log(cfg: Config, since: str | None = None, op: str | None = None,
+             limit: int | None = None) -> list[dict[str, Any]]:
     """Newest last (chronological, as written). Unparseable lines are skipped
     rather than raised on — a damaged history must never break a read."""
     rows: list[dict[str, Any]] = []
@@ -558,7 +558,7 @@ def read_log(cfg: Config, since: Optional[str] = None, op: Optional[str] = None,
     return rows[-limit:] if limit else rows
 
 
-def sweep_log(cfg: Config, now: Optional[float] = None) -> dict[str, int]:
+def sweep_log(cfg: Config, now: float | None = None) -> dict[str, int]:
     """Drop rows older than `ingest_log_retention_days`. Called from
     `mb nightly` next to the markers sweep."""
     from datetime import timedelta
@@ -608,7 +608,7 @@ def external_source_id(ref: str) -> str:
     """Stable id for a source whose CONTENT we never had. Derived from the
     reference itself, so re-running backfill maps the same URL to the same
     record instead of minting a new one."""
-    return hashlib.sha256(f"external:{str(ref).strip().lower()}".encode("utf-8")
+    return hashlib.sha256(f"external:{str(ref).strip().lower()}".encode()
                           ).hexdigest()[:SOURCE_ID_CHARS]
 
 
@@ -657,7 +657,7 @@ def _discover_external_refs(cfg: Config) -> tuple[dict[str, set[str]], int, list
 
 
 def backfill(cfg: Config, apply: bool = False,
-             now: Optional[str] = None) -> dict[str, Any]:
+             now: str | None = None) -> dict[str, Any]:
     """Register the external documents existing notes already cite.
 
     Without this, `mb curator gaps` would believe the vault has no sources at
@@ -694,7 +694,7 @@ def backfill(cfg: Config, apply: bool = False,
             sources_map = registry["sources"]
             for entry in created:
                 sha = hashlib.sha256(
-                    f"external:{entry['ref'].strip().lower()}".encode("utf-8")).hexdigest()
+                    f"external:{entry['ref'].strip().lower()}".encode()).hexdigest()
                 sources_map[entry["source_id"]] = {
                     "title": entry["ref"][:200],
                     "sha256": sha, "bytes": 0, "chars": 0,
@@ -731,7 +731,7 @@ def backfill(cfg: Config, apply: bool = False,
 # export (D1 escape hatch: raw lives under .mb/, which people delete)
 # ---------------------------------------------------------------------------
 
-def export(cfg: Config, dest: Path, source_id: Optional[str] = None,
+def export(cfg: Config, dest: Path, source_id: str | None = None,
            force: bool = False) -> dict[str, Any]:
     """COPY the registry + raw documents out of `.mb/` so "nuke .mb and
     re-index" stops being destructive. Never moves, never deletes."""

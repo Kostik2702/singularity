@@ -60,7 +60,8 @@ def test_fetch_is_incremental(docs_dir):
     _, cursor = c.fetch()
     docs2, _ = c.fetch(cursor)
     assert docs2 == []                              # nothing changed since cursor
-    import os, time
+    import os
+    import time
     later = time.time() + 10
     os.utime(docs_dir / "a.md", (later, later))     # touch one file
     docs3, _ = c.fetch(cursor)

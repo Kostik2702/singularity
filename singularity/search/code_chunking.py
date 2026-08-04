@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Bumped whenever the code chunk shape changes. Per-corpus by construction
 # (D3): this is NOT `chunking.CHUNK_SCHEMA_VERSION`, so bumping the markdown
@@ -324,7 +324,7 @@ def _make_chunk(*, rel_path: str, repo: str, kind: str, name: str,
 
 
 def extract_code_chunks(path: Path, rel_path: str,
-                        personal_roots: Optional[list[str]] = None
+                        personal_roots: list[str] | None = None
                         ) -> list[dict[str, Any]]:
     """Chunk one source file. Signature matches `Corpus.chunker`.
 

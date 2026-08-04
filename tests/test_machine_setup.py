@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 from singularity import machine_setup
 

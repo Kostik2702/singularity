@@ -1,6 +1,5 @@
 """Vault resolution (github#1: bare Windows default leaked onto macOS)."""
 import json
-from pathlib import Path
 
 from singularity import config
 from singularity.config import Config
@@ -33,7 +32,7 @@ def test_env_mb_home(monkeypatch, tmp_path):
 def test_pointer_file(monkeypatch, tmp_path):
     _isolate(monkeypatch, tmp_path)
     pointer = tmp_path / "pointer.json"
-    pointer.write_text('{"vault_path": "%s"}' % str(tmp_path).replace("\\", "\\\\"),
+    pointer.write_text('{{"vault_path": "{}"}}'.format(str(tmp_path).replace("\\", "\\\\")),
                        encoding="utf-8")
     monkeypatch.setattr(config, "POINTER_FILE", pointer)
     assert config.resolve_vault(None) == tmp_path

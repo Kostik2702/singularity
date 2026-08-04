@@ -26,9 +26,7 @@ Return codes: 0 = skipped (absent) or success; 1 = a real partial failure
 from __future__ import annotations
 
 import json
-import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -90,7 +88,7 @@ def _gemini_version() -> tuple[int, ...] | None:
     exe, _where = _gemini_exe()
     if not exe:
         return None
-    for attempt in range(2):
+    for _attempt in range(2):
         try:
             out = subprocess.run([exe, "--version"], capture_output=True, text=True,
                                  timeout=30, check=False)

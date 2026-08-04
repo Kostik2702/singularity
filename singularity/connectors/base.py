@@ -10,7 +10,7 @@ contract tests pass.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @dataclass
@@ -19,7 +19,7 @@ class ConnectorManifest:
     capabilities: list[str] = field(default_factory=list)   # e.g. ["fetch", "incremental"]
     config_schema: dict[str, str] = field(default_factory=dict)  # key -> type name
     secret_refs: list[str] = field(default_factory=list)    # secret NAMES, never values
-    rate_limit_per_min: Optional[int] = None
+    rate_limit_per_min: int | None = None
     permissions: list[str] = field(default_factory=list)    # e.g. ["read"]
 
 
@@ -40,8 +40,8 @@ class Connector(Protocol):
         """Cheap liveness/config check: {"ok": bool, "detail": str}."""
         ...
 
-    def fetch(self, cursor: Optional[str] = None
-              ) -> tuple[list[NormalizedDoc], Optional[str]]:
+    def fetch(self, cursor: str | None = None
+              ) -> tuple[list[NormalizedDoc], str | None]:
         """Return (docs since cursor, next_cursor). Incremental via the opaque
         cursor; a None cursor means a full initial fetch."""
         ...

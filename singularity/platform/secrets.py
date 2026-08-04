@@ -15,7 +15,6 @@ import shutil
 import stat
 import time
 from pathlib import Path
-from typing import Optional
 
 SERVICE = "singularity"
 _FALLBACK = Path.home() / ".singularity-secrets.json"
@@ -82,7 +81,8 @@ def _file_lock():
             if time.time() - lock.stat().st_mtime > _LOCK_STALE_SECONDS:
                 pass                       # stale -> take over
             else:
-                raise SecretsError("secrets file is locked by another process")
+                raise SecretsError(
+                    "secrets file is locked by another process") from None
         yield
     finally:
         shutil.rmtree(lock, ignore_errors=True)
@@ -152,7 +152,7 @@ def set_secret(name: str, value: str, *, allow_plaintext: bool = False) -> str:
     return "file-fallback"
 
 
-def get_secret(name: str) -> Optional[str]:
+def get_secret(name: str) -> str | None:
     kr = _keyring()
     if kr is not None:
         val = kr.get_password(SERVICE, name)

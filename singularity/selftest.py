@@ -11,7 +11,8 @@ from __future__ import annotations
 import json
 import os
 import time
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from .config import Config
 
@@ -61,12 +62,16 @@ def run(cfg: Config, as_json: bool = False) -> int:
                    for r in resp.get("results", []))
 
     try:
-        if stage("create", lambda: (
+        # Stages nest on purpose: each runs only if the previous one
+        # succeeded, and the lambdas are too long to collapse (SIM102).
+        if stage("create", lambda: (  # noqa: SIM102
                 note.parent.mkdir(parents=True, exist_ok=True),
                 note.write_text(f"# selftest\n\n## probe\n\nUnique token {token} "
                                 "for the mb selftest end-to-end check.\n",
                                 encoding="utf-8"),
                 f"wrote {rel}")[-1]):
+            # Nested on purpose: each stage runs only if the previous one
+            # succeeded, and the lambdas are too long to collapse (SIM102).
             if stage("index", lambda: f"indexed: {client.run_index(cfg, 'update', [rel])}"):
                 stage("find", lambda: "token found in index"
                       if _found() else _fail("token NOT found after indexing"))

@@ -146,10 +146,11 @@ def test_no_index_returns_none(cfg):
 # --- writer lock -------------------------------------------------------------
 
 def test_writer_lock_is_exclusive(cfg):
-    with indexer._writer_lock(cfg):
-        with pytest.raises(indexer.IndexLockedError):
-            with indexer._writer_lock(cfg):
-                pass
+    # The inner acquisition must raise INSIDE the raises-context; merging the
+    # `with` statements would change what is being asserted (SIM117).
+    with indexer._writer_lock(cfg), pytest.raises(indexer.IndexLockedError):  # noqa: SIM117
+        with indexer._writer_lock(cfg):  # noqa: SIM117
+            pass
     # released afterwards -> can acquire again
     with indexer._writer_lock(cfg):
         pass
@@ -162,9 +163,8 @@ def test_losing_contender_does_not_delete_the_winners_lock(cfg):
     # would let a THIRD writer race in while the real holder was mid-write.
     with indexer._writer_lock(cfg):
         assert cfg.lock_dir.exists()
-        with pytest.raises(indexer.IndexLockedError):
-            with indexer._writer_lock(cfg):
-                pass
+        with pytest.raises(indexer.IndexLockedError), indexer._writer_lock(cfg):
+            pass
         assert cfg.lock_dir.exists()   # still held by the outer (winning) writer
     assert not cfg.lock_dir.exists()   # released once the actual owner exits
 

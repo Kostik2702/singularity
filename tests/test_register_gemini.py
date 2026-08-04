@@ -7,6 +7,7 @@ and the missing-repo-skill failure code.
 """
 import importlib.util
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -35,7 +36,7 @@ def home(tmp_path, monkeypatch):
                         classmethod(lambda cls: tmp_path))
     monkeypatch.setattr(register_gemini.register_skills.Path, "home",
                         classmethod(lambda cls: tmp_path))
-    monkeypatch.setattr(register_gemini.shutil, "which", lambda _n: None)
+    monkeypatch.setattr(shutil, "which", lambda _n: None)
     monkeypatch.setattr(register_gemini, "resolve_vault", lambda: VAULT)
     monkeypatch.setattr(register_gemini, "_gemini_version", lambda: (0, 50, 0))
     (tmp_path / ".gemini").mkdir()
@@ -51,7 +52,7 @@ def _profile(home):
 def test_absent_client_skips_and_creates_nothing(tmp_path, monkeypatch):
     monkeypatch.setattr(register_gemini.Path, "home",
                         classmethod(lambda cls: tmp_path))
-    monkeypatch.setattr(register_gemini.shutil, "which", lambda _n: None)
+    monkeypatch.setattr(shutil, "which", lambda _n: None)
     rc = register_gemini.main()
     assert rc == 0
     assert not (tmp_path / ".gemini").exists()
@@ -168,19 +169,19 @@ def test_missing_repo_skill_returns_1(home, monkeypatch):
 # --- _gemini_version parser (isolated) -----------------------------------------
 
 def test_version_parser_reads_semver(monkeypatch):
-    monkeypatch.setattr(register_gemini.shutil, "which", lambda _n: "/fake/gemini")
+    monkeypatch.setattr(shutil, "which", lambda _n: "/fake/gemini")
     monkeypatch.setattr(register_gemini.subprocess, "run",
                         lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="0.50.0\n", stderr=""))
     assert register_gemini._gemini_version() == (0, 50, 0)
 
 
 def test_version_parser_none_when_absent(monkeypatch):
-    monkeypatch.setattr(register_gemini.shutil, "which", lambda _n: None)
+    monkeypatch.setattr(shutil, "which", lambda _n: None)
     assert register_gemini._gemini_version() is None
 
 
 def test_version_parser_none_on_timeout(monkeypatch):
-    monkeypatch.setattr(register_gemini.shutil, "which", lambda _n: "/fake/gemini")
+    monkeypatch.setattr(shutil, "which", lambda _n: "/fake/gemini")
     def boom(*a, **k):
         raise subprocess.TimeoutExpired(cmd="gemini", timeout=20)
     monkeypatch.setattr(register_gemini.subprocess, "run", boom)
@@ -188,7 +189,7 @@ def test_version_parser_none_on_timeout(monkeypatch):
 
 
 def test_version_parser_none_on_unparseable(monkeypatch):
-    monkeypatch.setattr(register_gemini.shutil, "which", lambda _n: "/fake/gemini")
+    monkeypatch.setattr(shutil, "which", lambda _n: "/fake/gemini")
     monkeypatch.setattr(register_gemini.subprocess, "run",
                         lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout="dev-build", stderr=""))
     assert register_gemini._gemini_version() is None

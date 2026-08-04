@@ -85,7 +85,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from . import session_activity as sa
 from .config import Config, atomic_write_json
@@ -123,7 +123,7 @@ def is_search_command(command: str) -> bool:
 class ReflectSession:
     client: str
     session_id: str
-    project_id: Optional[str] = None
+    project_id: str | None = None
     searched: bool = False
     search_then_read: bool = False
     vault_reads: int = 0
@@ -250,9 +250,9 @@ def _grok_session_paths(root: Path, since: float) -> tuple[list[Path], int]:
 # ---------------------------------------------------------------------------
 
 def _parse_claude_session(path: Path, vault: Path, known_skills: set[str],
-                          registry: Optional[dict[str, Any]] = None) -> ReflectSession:
+                          registry: dict[str, Any] | None = None) -> ReflectSession:
     activity = ReflectSession(client="claude", session_id=path.stem)
-    cwd_path: Optional[Path] = None
+    cwd_path: Path | None = None
     pending: dict[str, tuple[str, dict]] = {}
 
     try:
@@ -334,7 +334,7 @@ def _parse_claude_session(path: Path, vault: Path, known_skills: set[str],
 
 
 def _parse_gemini_session(path: Path, vault: Path, known_skills: set[str],
-                          registry: Optional[dict[str, Any]] = None) -> ReflectSession:
+                          registry: dict[str, Any] | None = None) -> ReflectSession:
     # project_id stays None for Gemini: the verified transcript shape
     # (tests/fixtures/gemini/README.md, cross-checked against real
     # ~/.gemini/tmp data on this machine) carries no per-event/per-session
@@ -407,7 +407,7 @@ def _grok_result_failed(content: str) -> bool:
 
 
 def _parse_grok_session(sdir: Path, vault: Path, known_skills: set[str],
-                        registry: Optional[dict[str, Any]] = None) -> ReflectSession:
+                        registry: dict[str, Any] | None = None) -> ReflectSession:
     """Parse one top-level Grok session dir (chat_history.jsonl + summary.json,
     shapes pinned by tests/fixtures/grok/). project_id comes ONLY from the
     verified summary.json info.cwd field resolved through the shared project
@@ -416,7 +416,7 @@ def _parse_grok_session(sdir: Path, vault: Path, known_skills: set[str],
     are injected as instructions), so there is nothing deterministic to count
     -- documented limitation, never guessed from text."""
     activity = ReflectSession(client="grok", session_id=sdir.name)
-    cwd_path: Optional[Path] = None
+    cwd_path: Path | None = None
     del known_skills  # no deterministic skill-invocation signal in this format
 
     try:
@@ -499,7 +499,7 @@ def _parse_grok_session(sdir: Path, vault: Path, known_skills: set[str],
     return activity
 
 
-def _resolve_arg_path(raw: Any, cwd: Optional[Path], fallback_base: Path) -> Optional[Path]:
+def _resolve_arg_path(raw: Any, cwd: Path | None, fallback_base: Path) -> Path | None:
     if not isinstance(raw, str) or not raw.strip():
         return None
     try:
@@ -625,7 +625,7 @@ def _append_history(cfg: Config, result: dict[str, Any], now: str) -> int:
     return len(kept)
 
 
-def run(cfg: Config, days: Optional[int] = None) -> dict[str, Any]:
+def run(cfg: Config, days: int | None = None) -> dict[str, Any]:
     """Compute the snapshot and persist it: atomic latest snapshot +
     bounded/retained history, exactly the `mb reflect` entry point."""
     window = int(days) if days is not None else int(cfg.get("reflect_window_days"))

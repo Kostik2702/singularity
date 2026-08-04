@@ -3,7 +3,6 @@ contract tests; one dead provider doesn't kill the run; offline run serves
 cached candidates stale=true; import gate hard rules; adapter isolation."""
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 

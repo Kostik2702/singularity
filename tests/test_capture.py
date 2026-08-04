@@ -1,5 +1,4 @@
 """T05: bounded dedup + project binding for `mb learn`/`mb note new`."""
-import pytest
 
 from singularity import capture
 from singularity.config import Config

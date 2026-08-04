@@ -35,7 +35,7 @@ def _interactive() -> bool:
         return False
 
 
-def choose_vault(explicit: str | None) -> "Path | None":
+def choose_vault(explicit: str | None) -> Path | None:
     """Settle the vault path — by ASKING, not by guessing.
 
     Guessing is what this replaces: the engine used to carry one machine's
@@ -86,7 +86,7 @@ def choose_vault(explicit: str | None) -> "Path | None":
         answer = input("Path to your vault: ").strip()
 
 
-def _ensure_vault(path: "Path", *, ask: bool) -> "Path | None":
+def _ensure_vault(path: Path, *, ask: bool) -> Path | None:
     """The chosen path, creating the directory when it is not there yet."""
     if path.is_dir():
         return path

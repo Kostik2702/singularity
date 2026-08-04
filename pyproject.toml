@@ -38,7 +38,7 @@ imgqa = ["Pillow>=10", "scipy>=1.10"]
 # and the only way to know about `requirements-test.txt` was to read the CI
 # workflow. `tests/test_dev_extras_parity.py` pins this group to that file,
 # which stays the CI entry point.
-dev = ["singularity[imgqa,secrets]", "pytest>=7.0"]
+dev = ["singularity[imgqa,secrets]", "pytest>=7.0", "ruff>=0.6"]
 
 [project.scripts]
 mb = "singularity.cli:main"
@@ -49,6 +49,42 @@ component-intake = "singularity.intake.cli:main"
 reel = "singularity.reel.cli:main"
 golden = "singularity.golden.cli:main"
 factory = "singularity.factory.cli:main"
+
+[tool.ruff]
+# The suite is the safety net for behaviour; this is the net for the things a
+# test never notices — an import that stopped being used, a name bound and
+# forgotten, an `except` that loses its cause. Added at 23k lines, so the rule
+# set is chosen to reach ZERO and stay there, not to produce a backlog nobody
+# reads.
+target-version = "py310"
+line-length = 100
+extend-exclude = ["singularity/skills/*/scripts"]   # skill-owned scripts, other runtimes
+
+[tool.ruff.lint]
+select = ["F", "E4", "E7", "E9", "W", "B", "C4", "UP", "SIM", "RET"]
+ignore = [
+    # Deliberate style in this codebase, not defects:
+    "E702",    # `a; b` — used in tests for one-line setup pairs
+    "SIM105",  # try/except/pass reads better than contextlib.suppress here
+    "SIM108",  # ternary is not always clearer than if/else
+    "RET504",  # a named result before `return` documents what is returned
+    "RET505",  # `else` after `return` mirrors the branch structure on purpose
+    "B008",    # argparse/Path defaults in signatures are intentional
+    # Line length is tracked separately: 99 offenders predate the rule and
+    # splitting them would churn diff lines that carry the reasoning comments
+    # this codebase leans on. `line-length` above still formats new code.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Baseline tools and installers deliberately import after mutating sys.path,
+# and read secrets from the environment before the package is importable.
+"tools/*.py" = ["E402"]
+"install/*.py" = ["E402"]
+# reel prints fixed-width report tables; %-formatting keeps the column specs
+# readable in one place instead of scattered f-string format mini-languages.
+"singularity/reel/*.py" = ["UP031"]
+"tests/*.py" = ["B011", "E402"]                              # assert False is a valid test failure
 
 [tool.setuptools.packages.find]
 include = ["singularity*"]

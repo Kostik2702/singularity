@@ -6,7 +6,7 @@ import pytest
 
 from singularity import watch
 from singularity.config import Config
-from singularity.search import client, indexer
+from singularity.search import client
 
 
 @pytest.fixture

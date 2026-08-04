@@ -22,7 +22,7 @@ import re
 import time
 from collections import Counter
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from .config import Config
 
@@ -59,13 +59,13 @@ SIGNAL_WEIGHTS = {
 }
 
 
-def _age_days(timestamp: Optional[float], now: float) -> float:
+def _age_days(timestamp: float | None, now: float) -> float:
     if timestamp is None:
         return 0.0
     return max(0.0, (now - timestamp) / 86400)
 
 
-def _parse_date(value: Any) -> Optional[float]:
+def _parse_date(value: Any) -> float | None:
     """`2026-07-28` (or a heading containing it) -> epoch seconds."""
     if value is None:
         return None
@@ -261,9 +261,9 @@ def _heuristic_terms(notes: dict[str, dict[str, Any]], names: dict[str, str],
 
 # ---------------------------------------------------------------------------
 
-def report(cfg: Config, top: Optional[int] = None, heuristic: bool = False,
-           now: Optional[float] = None,
-           per_signal: Optional[int] = DEFAULT_PER_SIGNAL) -> dict[str, Any]:
+def report(cfg: Config, top: int | None = None, heuristic: bool = False,
+           now: float | None = None,
+           per_signal: int | None = DEFAULT_PER_SIGNAL) -> dict[str, Any]:
     """Ranked research agenda. Deterministic: score desc, then (signal, key).
 
     `counts` are the TRUE totals; `items` is the ranked shortlist after the
@@ -288,7 +288,7 @@ def report(cfg: Config, top: Optional[int] = None, heuristic: bool = False,
         items += _heuristic_terms(notes, names, min_inbound, now)
 
     items.sort(key=lambda e: (-e["score"], e["signal"], e["key"]))
-    counts: dict[str, int] = {signal: 0 for signal in SIGNAL_WEIGHTS}
+    counts: dict[str, int] = dict.fromkeys(SIGNAL_WEIGHTS, 0)
     for entry in items:
         counts[entry["signal"]] += 1
 
@@ -311,8 +311,8 @@ def report(cfg: Config, top: Optional[int] = None, heuristic: bool = False,
             "items": shortlist[:top] if top else shortlist}
 
 
-def run(cfg: Config, as_json: bool = False, top: Optional[int] = None,
-        heuristic: bool = False, per_signal: Optional[int] = DEFAULT_PER_SIGNAL) -> int:
+def run(cfg: Config, as_json: bool = False, top: int | None = None,
+        heuristic: bool = False, per_signal: int | None = DEFAULT_PER_SIGNAL) -> int:
     import json
 
     result = report(cfg, top=top, heuristic=heuristic, per_signal=per_signal)

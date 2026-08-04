@@ -99,7 +99,7 @@ def render_tree(src: Path, dst: Path, vault: Path) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         if file_has_token(item):
             # newline="" so a rendered file keeps the line endings it had
-            with open(item, "r", encoding="utf-8", newline="") as fh:
+            with open(item, encoding="utf-8", newline="") as fh:
                 text = fh.read()
             with open(target, "w", encoding="utf-8", newline="") as fh:
                 fh.write(render_text(text, vault))

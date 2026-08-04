@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -68,7 +68,7 @@ def mark(cfg: Config, identities: list[tuple[str, str]]) -> int:
     return len(identities)
 
 
-def _pool(embs: np.ndarray, idxs: list[int]) -> Optional[np.ndarray]:
+def _pool(embs: np.ndarray, idxs: list[int]) -> np.ndarray | None:
     """Mean-pooled, re-normalized vector over the given chunk rows.
 
     W05: the implementation moved to `search.similarity.mean_pool`, shared with
@@ -84,7 +84,7 @@ def _pool(embs: np.ndarray, idxs: list[int]) -> Optional[np.ndarray]:
 # ---------------------------------------------------------------------------
 
 def _group_sources(chunks: list[dict[str, Any]],
-                   project_filter: Optional[set[str]]
+                   project_filter: set[str] | None
                    ) -> dict[tuple[str, str], dict[str, Any]]:
     """(file, section) -> {project, idxs}. Source = active-learning chunks,
     personal excluded (spec: 'Personal notes are never digest targets or
@@ -131,7 +131,7 @@ def _group_targets(chunks: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return groups
 
 
-def _compatible(source_project: Optional[str], target_project: Optional[str]) -> bool:
+def _compatible(source_project: str | None, target_project: str | None) -> bool:
     """A target is compatible when it is general (project-agnostic knowledge
     base) or shares the source's exact project -- this is what gives
     'project isolation' (a proj-A source never matches a proj-B-only target)
@@ -142,7 +142,7 @@ def _compatible(source_project: Optional[str], target_project: Optional[str]) ->
 
 # ---------------------------------------------------------------------------
 
-def plan(cfg: Config, project_filter: Optional[set[str]] = None) -> dict[str, Any]:
+def plan(cfg: Config, project_filter: set[str] | None = None) -> dict[str, Any]:
     """Report-only merge candidates for every un-marked active-learning
     section. Deterministic and repeat-stable: candidates are score-sorted
     with a file-name tiebreak, and entries themselves are ordered by their
@@ -160,7 +160,7 @@ def plan(cfg: Config, project_filter: Optional[set[str]] = None) -> dict[str, An
     sources = _group_sources(chunks, project_filter)
     targets = _group_targets(chunks)
 
-    target_vecs: list[tuple[str, str, Optional[str], np.ndarray]] = []
+    target_vecs: list[tuple[str, str, str | None, np.ndarray]] = []
     for file, info in targets.items():
         v = _pool(embs, info["idxs"])
         if v is not None:

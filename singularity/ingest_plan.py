@@ -20,9 +20,8 @@ returning noise here is worse than refusing, because the caller cannot tell.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
-import numpy as np
 
 from .config import Config
 
@@ -159,8 +158,8 @@ def _new_pages(src_chunks: list[dict[str, Any]], rows: list[int],
     return rows_out[:limit]
 
 
-def plan(cfg: Config, source_id: str, top_k: Optional[int] = None,
-         threshold: Optional[float] = None,
+def plan(cfg: Config, source_id: str, top_k: int | None = None,
+         threshold: float | None = None,
          summary_type: str = DEFAULT_SUMMARY_TYPE) -> dict[str, Any]:
     """Fan-out candidates for one ingested source. Deterministic: a repeated
     run against an unchanged pair of index generations returns byte-identical
@@ -248,7 +247,7 @@ def plan(cfg: Config, source_id: str, top_k: Optional[int] = None,
     scores = vecs @ src_vec
     scored: list[tuple[float, str]] = []
     suppressed = 0
-    for file, score in zip(files, scores):
+    for file, score in zip(files, scores, strict=False):
         target_project = meta_by_file[file].get("project")
         if not digest._compatible(source_project, target_project):
             continue

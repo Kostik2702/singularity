@@ -7,6 +7,10 @@ import os
 import sys
 from pathlib import Path
 
+from .adapters import ADAPTERS, run_search
+from .candidate import CAPABILITIES
+from .registry import RegistryError, load_registry
+
 from singularity.scout.fetch import BudgetLog, Fetcher
 
 ENGINE_ROOT = Path(__file__).resolve().parents[2]
@@ -25,9 +29,6 @@ def resolve_out(out: str) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir
 
-from .adapters import ADAPTERS, run_search
-from .candidate import CAPABILITIES
-from .registry import RegistryError, load_registry
 
 SCHEMA_VERSION = 1
 EXIT_PASS, EXIT_FAIL, EXIT_TOOL_ERROR = 0, 1, 2

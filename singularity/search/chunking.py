@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 MIN_CHUNK_CHARS = 50
 # A long section is split into overlapping windows instead of being truncated
@@ -101,7 +101,7 @@ def _under_root(rel_path: str, root: str) -> bool:
 
 
 def infer_project(frontmatter: dict[str, Any], rel_path: str = "",
-                  personal_roots: Optional[list[str]] = None) -> Optional[str]:
+                  personal_roots: list[str] | None = None) -> str | None:
     """T04 §8.2 classification, extended by T08's personal_roots retrofit
     (Open Decision, 2026-07-12: personal = frontmatter OR configured
     personal_roots — broader than T04's original frontmatter-only cut):
@@ -178,7 +178,7 @@ def _window_text(content: str,
 
 
 def extract_chunks(path: Path, rel_path: str,
-                   personal_roots: Optional[list[str]] = None) -> list[dict[str, Any]]:
+                   personal_roots: list[str] | None = None) -> list[dict[str, Any]]:
     """Chunk one markdown file. rel_path uses forward slashes. personal_roots
     (T08 retrofit) is optional/default-None for callers indifferent to it."""
     try:
@@ -247,7 +247,7 @@ def extract_chunks(path: Path, rel_path: str,
 
 
 def extract_source_chunks(path: Path, rel_path: str,
-                          personal_roots: Optional[list[str]] = None
+                          personal_roots: list[str] | None = None
                           ) -> list[dict[str, Any]]:
     """Chunker for the ingested-source corpus (WIKI-LOOP D2).
 

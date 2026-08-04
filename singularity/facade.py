@@ -23,7 +23,8 @@ exists in the parser.
 from __future__ import annotations
 
 import argparse
-from typing import Iterable, NamedTuple, Optional
+from typing import NamedTuple
+from collections.abc import Iterable
 
 # The window, in reading order. Names only — the one-line descriptions are
 # pulled from the parser so the two can never disagree.
@@ -80,10 +81,10 @@ class Plan(NamedTuple):
     """What `main()` should do with this argv."""
     action: str                 # "run" | "help" | "group" | "greeting" | "error"
     argv: list[str]             # rewritten argv, for action == "run"
-    payload: Optional[str] = None   # group name, "all" for full help, or a message
+    payload: str | None = None   # group name, "all" for full help, or a message
 
 
-def command_index(argv: Iterable[str]) -> Optional[int]:
+def command_index(argv: Iterable[str]) -> int | None:
     """Position of the first positional token — the command — or None.
 
     Global options may precede it (`mb --vault /x service daemon start`), so the
@@ -103,7 +104,7 @@ def command_index(argv: Iterable[str]) -> Optional[int]:
     return None
 
 
-def vault_of(argv: Iterable[str]) -> Optional[str]:
+def vault_of(argv: Iterable[str]) -> str | None:
     """`--vault` value from a raw argv, for the paths that never reach argparse."""
     argv = list(argv)
     for i, tok in enumerate(argv):

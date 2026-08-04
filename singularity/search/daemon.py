@@ -172,7 +172,7 @@ class SearchDaemon:
             except Exception as exc:  # noqa: BLE001 — daemon must not die on one request
                 resp = {"error": str(exc)}
             conn.sendall(json.dumps(resp, ensure_ascii=False).encode("utf-8") + b"\n")
-        except socket.timeout:
+        except TimeoutError:
             pass
         finally:
             conn.close()
@@ -222,7 +222,7 @@ class SearchDaemon:
             while self._running:
                 try:
                     conn, _addr = srv.accept()
-                except socket.timeout:
+                except TimeoutError:
                     continue
                 except OSError:
                     break

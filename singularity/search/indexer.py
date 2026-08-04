@@ -22,7 +22,8 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import numpy as np
 
@@ -198,7 +199,7 @@ CORPUS_BUILDERS = {"memory": memory_corpus, "sources": sources_corpus,
                    "code": code_corpus}
 
 
-def resolve_corpus(cfg: Config, corpus: "str | Corpus | None") -> Corpus:
+def resolve_corpus(cfg: Config, corpus: str | Corpus | None) -> Corpus:
     """`None` -> the memory corpus, preserving every pre-W03 call site."""
     if corpus is None:
         return memory_corpus(cfg)
@@ -392,7 +393,8 @@ def _writer_lock(cfg: Config, corpus_name: str = "memory"):
     except FileExistsError:
         age = time.time() - lock.stat().st_mtime
         if age < STALE_LOCK_SECONDS:
-            raise IndexLockedError("another index writer holds the lock")
+            raise IndexLockedError(
+                "another index writer holds the lock") from None
         owns_lock = True   # stale -> take over; we now own cleanup
     try:
         yield
@@ -581,7 +583,7 @@ def _save_index(corpus: Corpus, embs: np.ndarray, meta: dict[str, Any]) -> None:
 
 
 def rebuild(cfg: Config, progress: bool = True,
-            corpus: "str | Corpus | None" = None) -> dict[str, int]:
+            corpus: str | Corpus | None = None) -> dict[str, int]:
     """Full rebuild of one corpus (serialized against other writers of the
     SAME corpus only). `corpus=None` == the vault corpus, as before W03."""
     corp = resolve_corpus(cfg, corpus)
@@ -637,7 +639,7 @@ def _existing_chunk_count(corp: Corpus) -> int:
 
 
 def _rebuild(cfg: Config, progress: bool = True,
-             corpus: "str | Corpus | None" = None) -> dict[str, int]:
+             corpus: str | Corpus | None = None) -> dict[str, int]:
     corp = resolve_corpus(cfg, corpus)
     report: dict[str, Any] = {}
     files = _scan_corpus(corp, report)
@@ -670,7 +672,7 @@ def _rebuild(cfg: Config, progress: bool = True,
 
 
 def inspect(cfg: Config, rel: str,
-            corpus: "str | Corpus | None" = None) -> list[dict[str, Any]]:
+            corpus: str | Corpus | None = None) -> list[dict[str, Any]]:
     """Chunk-level view of one file in the current index (no content), for
     `mb index inspect` and search debugging (AUD-17)."""
     loaded = _load_index(resolve_corpus(cfg, corpus).index_dir)
@@ -686,7 +688,7 @@ def inspect(cfg: Config, rel: str,
 
 
 def update(cfg: Config, only_files: list[str] | None = None,
-           corpus: "str | Corpus | None" = None) -> dict[str, int]:
+           corpus: str | Corpus | None = None) -> dict[str, int]:
     """Incremental update by (mtime, size) diff (serialized against other
     writers of the SAME corpus). Falls back to rebuild when the index is
     missing/corrupted or was built with another model/chunk schema."""
@@ -696,7 +698,7 @@ def update(cfg: Config, only_files: list[str] | None = None,
 
 
 def _update(cfg: Config, only_files: list[str] | None = None,
-            corpus: "str | Corpus | None" = None) -> dict[str, int]:
+            corpus: str | Corpus | None = None) -> dict[str, int]:
     corp = resolve_corpus(cfg, corpus)
     loaded = _load_index(corp.index_dir)
     if loaded is None:
@@ -750,7 +752,7 @@ def _update(cfg: Config, only_files: list[str] | None = None,
     dirty = set(deleted) | set(added_or_changed)
     keep = np.array([c["file"] not in dirty for c in meta["chunks"]], dtype=bool)
     embs = embs[keep]
-    meta["chunks"] = [c for c, k in zip(meta["chunks"], keep) if k]
+    meta["chunks"] = [c for c, k in zip(meta["chunks"], keep, strict=False) if k]
     for rel in deleted:
         old_meta.pop(rel, None)
 

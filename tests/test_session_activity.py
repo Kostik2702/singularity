@@ -13,7 +13,7 @@ from singularity.session_activity import (Decision, SessionActivity, decide,
 
 
 def _activity(**kw) -> SessionActivity:
-    base = dict(client="claude", session_id="s1")
+    base = {"client": "claude", "session_id": "s1"}
     base.update(kw)
     return SessionActivity(**base)
 

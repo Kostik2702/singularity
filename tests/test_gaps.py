@@ -7,7 +7,6 @@ show, which is why the per-signal ceiling reports its own truncation.
 from __future__ import annotations
 
 import json
-import time
 
 import pytest
 
@@ -288,7 +287,7 @@ def test_top_limits_the_final_list(vault):
 def test_heuristic_is_off_by_default(vault):
     cfg = _cfg(vault)
     for i in range(3):
-        _note(vault, f"reference/n{i}.md", body=f"## Совершенно Новый Термин\n\ntext",
+        _note(vault, f"reference/n{i}.md", body="## Совершенно Новый Термин\n\ntext",
               mtime=NOW)
     default = gaps.report(cfg, now=NOW)
     assert default["heuristic"] is False

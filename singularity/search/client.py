@@ -12,7 +12,7 @@ import shutil
 import socket
 import sys
 import time
-from typing import Any, Optional
+from typing import Any
 
 from ..config import Config
 from ..platform import proc
@@ -28,14 +28,14 @@ class RemoteIndexError(RuntimeError):
         self.error_type = error_type
 
 
-def _read_state(cfg: Config) -> Optional[dict[str, Any]]:
+def _read_state(cfg: Config) -> dict[str, Any] | None:
     try:
         return json.loads(cfg.daemon_state_file.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
 
 
-def _read_port(cfg: Config) -> Optional[int]:
+def _read_port(cfg: Config) -> int | None:
     state = _read_state(cfg)
     if state and isinstance(state.get("port"), int):
         return state["port"]
@@ -47,7 +47,7 @@ def _read_port(cfg: Config) -> Optional[int]:
 
 def _request(port: int, payload: dict[str, Any],
              timeout: float = CONNECT_TIMEOUT,
-             read_timeout: float | None = None) -> Optional[dict[str, Any]]:
+             read_timeout: float | None = None) -> dict[str, Any] | None:
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=timeout) as s:
             s.settimeout(read_timeout if read_timeout is not None
@@ -64,7 +64,7 @@ def _request(port: int, payload: dict[str, Any],
         return None
 
 
-def ping(cfg: Config) -> Optional[dict[str, Any]]:
+def ping(cfg: Config) -> dict[str, Any] | None:
     port = _read_port(cfg)
     if port is None:
         return None
@@ -153,7 +153,7 @@ def stop_daemon(cfg: Config) -> bool:
     return ok
 
 
-def reload_daemon(cfg: Config) -> Optional[dict[str, Any]]:
+def reload_daemon(cfg: Config) -> dict[str, Any] | None:
     port = _read_port(cfg)
     if port is None:
         return None

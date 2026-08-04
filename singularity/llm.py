@@ -940,7 +940,7 @@ def setup(cfg, dir_override: str | None = None) -> int:
     if changed:
         cfg.save()
 
-    counts = {lvl: sum(1 for l, _ in lines if l == lvl)
+    counts = {lvl: sum(1 for ln, _ in lines if ln == lvl)
               for lvl in ("ok", "fixed", "warn", "fail")}
     summary = (f"[mb] setup: {counts['ok']} ok, {counts['fixed']} fixed, "
                f"{counts['warn']} warnings, {counts['fail']} blocking")

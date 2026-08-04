@@ -50,7 +50,7 @@ def _jsonl(name):
 )
 def test_hook_base_and_event_fields(fixture, event, extra):
     payload = _load(fixture)
-    assert BASE_FIELDS <= set(payload), f"{fixture} missing base fields"
+    assert set(payload) >= BASE_FIELDS, f"{fixture} missing base fields"
     assert payload["hookEventName"] == event
     assert extra <= set(payload), f"{fixture} missing event fields {extra}"
 

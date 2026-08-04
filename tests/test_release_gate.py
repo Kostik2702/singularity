@@ -121,7 +121,6 @@ def test_indexing_never_moves_or_renames_vault_files(tmp_path):
     original_mtime = note.stat().st_mtime
 
     cfg = Config(vault=vault_dir, data={})
-    from singularity.search.encoder import shared_encoder
 
     class _FakeEncoder:
         def encode(self, texts, progress=False):

@@ -201,8 +201,8 @@ def test_repos_naming_no_real_repository_returns_no_code(tmp_path):
 def test_compact_line_shows_kind_name_and_path_not_a_bare_path(tmp_path):
     out = _engine(tmp_path).search({"query": "retry", "top_k": 5,
                                     "code_only": True})
-    assert any(l.startswith("api/retry.py |") and "[function]" in l
-               and "retry_with_backoff" in l for l in out["lines"])
+    assert any(ln.startswith("api/retry.py |") and "[function]" in ln
+               and "retry_with_backoff" in ln for ln in out["lines"])
 
 
 # --- model consistency between corpora ---------------------------------------

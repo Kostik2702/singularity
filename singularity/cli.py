@@ -231,7 +231,7 @@ def _build_parser() -> argparse.ArgumentParser:
     inga.add_argument("--dry-run", action="store_true", help="print the intent, write nothing")
     inga.add_argument("--json", action="store_true")
     ingl = ingsub.add_parser("list", help="list registered sources (newest first)")
-    ingl.add_argument("--status", choices=list(("new", "partial", "processed")))
+    ingl.add_argument("--status", choices=["new", "partial", "processed"])
     ingl.add_argument("--limit", type=int)
     ingl.add_argument("--json", action="store_true")
     ings = ingsub.add_parser("show", help="metadata + a bounded excerpt of one source")
@@ -330,12 +330,12 @@ def _build_parser() -> argparse.ArgumentParser:
     llset.add_argument("--dir", default=None,
                        help="llama.cpp install dir (default: E:/llama.cpp)")
 
-    l = sub.add_parser("learn", help="append an insight to active learnings")
-    l.add_argument("insight")
-    l.add_argument("--task", default="GENERAL")
-    l.add_argument("--project", help="explicit project id/general/personal (else cwd-detected)")
-    l.add_argument("--head", help="semantic heading appended after the timestamp")
-    l.add_argument("--force", action="store_true", help="bypass dedup and always append")
+    lrn = sub.add_parser("learn", help="append an insight to active learnings")
+    lrn.add_argument("insight")
+    lrn.add_argument("--task", default="GENERAL")
+    lrn.add_argument("--project", help="explicit project id/general/personal (else cwd-detected)")
+    lrn.add_argument("--head", help="semantic heading appended after the timestamp")
+    lrn.add_argument("--force", action="store_true", help="bypass dedup and always append")
 
     sub.add_parser("init", help="bind this vault (pointer file) + create folder tree")
     sub.add_parser("uninstall", help="remove hooks/scheduler jobs/daemon (vault untouched)")
@@ -813,7 +813,7 @@ def _ingest_read_input(args) -> tuple[str, str, str]:
     if not path.is_file():
         raise OSError(f"not a file: {path}")
     # newline="" so CRLF documents are stored byte-for-byte as they arrived
-    with open(path, "r", encoding="utf-8-sig", errors="replace", newline="") as fh:
+    with open(path, encoding="utf-8-sig", errors="replace", newline="") as fh:
         text = fh.read()
     return text, "file", str(args.origin or path.resolve())
 

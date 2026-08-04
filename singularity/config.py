@@ -34,7 +34,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 def machine_id() -> str:
@@ -415,7 +415,7 @@ class Config:
         return self.mb_dir / "code_index"
 
     @property
-    def code_repos_dir(self) -> "Path | None":
+    def code_repos_dir(self) -> Path | None:
         """Root holding the repositories the code corpus indexes, or None when
         the corpus is switched off.
 
@@ -644,7 +644,7 @@ def _read_json_object(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def active_config_path(vault: Optional[Path] = None) -> Path:
+def active_config_path(vault: Path | None = None) -> Path:
     """The file that actually answers config reads right now.
 
     Normally the machine config. During the upgrade window — machine config
@@ -661,7 +661,7 @@ def active_config_path(vault: Optional[Path] = None) -> Path:
     return CONFIG_FILE
 
 
-def config_unreadable(vault: Optional[Path] = None) -> bool:
+def config_unreadable(vault: Path | None = None) -> bool:
     """True when the active config EXISTS but cannot be parsed as an object.
 
     `read_config_tolerant` flattens "absent", "malformed" and "not an object"
@@ -679,7 +679,7 @@ def config_unreadable(vault: Optional[Path] = None) -> bool:
         return True
 
 
-def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:
+def resolve_vault(explicit: str | None = None) -> Path | None:
     if explicit:
         return Path(explicit)
     env = os.environ.get("MB_HOME")
@@ -705,7 +705,7 @@ def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:
     return None
 
 
-def load_config(vault_arg: Optional[str] = None) -> Config:
+def load_config(vault_arg: str | None = None) -> Config:
     vault = resolve_vault(vault_arg)
     if vault is None:
         print("[mb] no vault configured", file=sys.stderr)
@@ -748,7 +748,7 @@ def load_config(vault_arg: Optional[str] = None) -> Config:
     return cfg
 
 
-def _backup_config(config_path: Path) -> Optional[Path]:
+def _backup_config(config_path: Path) -> Path | None:
     """Copy config aside before a migration rewrites it (never overwrite an
     existing backup)."""
     import datetime
@@ -776,7 +776,7 @@ def legacy_config_path(vault: Path) -> Path:
     return vault / ".mb" / "config.json"
 
 
-def migrate_vault_config(cfg: "Config") -> Optional[Path]:
+def migrate_vault_config(cfg: Config) -> Path | None:
     """Adopt a pre-0.7 vault-resident config into the machine config.
 
     Seamless by design: the user runs nothing. It fires only when the machine
@@ -849,7 +849,7 @@ def migrate_vault_config(cfg: "Config") -> Optional[Path]:
     return moved
 
 
-def _daemon_running(cfg: "Config") -> bool:
+def _daemon_running(cfg: Config) -> bool:
     """Cheap liveness check (pid file only, no socket) for migration notices."""
     try:
         from .platform import proc

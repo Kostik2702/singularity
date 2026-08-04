@@ -145,7 +145,7 @@ def run(cfg: Config, as_json: bool = False) -> int:
     print(f"chunks        : {s['chunks']} ({s['avg_chunks_per_note']}/note, "
           f"{s['duplicate_chunks']} duplicate)")
     print(f"text indexed  : {s['chars_indexed']} chars")
-    print(f"by type       : " + ", ".join(f"{k}={v}" for k, v in s["by_type"].items()))
+    print("by type       : " + ", ".join(f"{k}={v}" for k, v in s["by_type"].items()))
     print(f"chunk schema  : {s['chunk_schema']}")
     src = s.get("sources") or {}
     if src.get("documents"):

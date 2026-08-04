@@ -479,7 +479,7 @@ def test_history_prunes_rows_older_than_retention(_isolate_home, cfg):
     (cfg.mb_dir / reflect.HISTORY_NAME).write_text(json.dumps(old_row) + "\n", encoding="utf-8")
     cfg.data["reflect_retention_days"] = 1
     reflect.run(cfg, days=30)
-    rows = [json.loads(l) for l in
+    rows = [json.loads(ln) for ln in
            (cfg.mb_dir / reflect.HISTORY_NAME).read_text(encoding="utf-8").splitlines()]
     assert all(r["ts"] != "2020-01-01T00:00:00" for r in rows)
 

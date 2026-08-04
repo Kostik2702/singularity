@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 
-_probed_device: Optional[str] = None
+_probed_device: str | None = None
 
 
 def resolve_device(explicit: str | None = None) -> str:
@@ -77,7 +76,7 @@ class Encoder:
         return np.asarray(emb, dtype=np.float32)
 
 
-_shared: Optional[Encoder] = None
+_shared: Encoder | None = None
 
 
 def shared_encoder(model_name: str, batch_size: int = 64,

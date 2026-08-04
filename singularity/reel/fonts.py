@@ -21,7 +21,8 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 GOOGLE_RAW = "https://github.com/google/fonts/raw/main/ofl"
 

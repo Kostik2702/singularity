@@ -7,7 +7,6 @@ snake_case-fallback envelope, and fail-open behavior.
 """
 import io
 import json
-from pathlib import Path
 
 import pytest
 

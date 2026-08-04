@@ -22,7 +22,7 @@ import shutil
 import numpy as np
 import pytest
 
-from singularity import cli, contradictions, gaps, ingest_plan, sources
+from singularity import cli, gaps, ingest_plan, sources
 from singularity.cli import main
 from singularity.config import Config
 from singularity.search import indexer

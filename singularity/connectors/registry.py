@@ -3,7 +3,8 @@ instantiated when explicitly enabled in config `connectors.<name>.enabled`.
 """
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from ..config import Config
 from .base import Connector

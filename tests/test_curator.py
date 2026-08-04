@@ -188,7 +188,7 @@ def test_blockwise_pairs_matches_brute_force_across_block_boundary():
     embs = rng.normal(size=(n, 8)).astype(np.float32)
     embs /= np.linalg.norm(embs, axis=1, keepdims=True)
     threshold = -1.0   # every pair qualifies -- exercises full coverage
-    blockwise = set((i, j) for i, j, _ in curator._blockwise_pairs(embs, threshold, block_size=3))
+    blockwise = {(i, j) for i, j, _ in curator._blockwise_pairs(embs, threshold, block_size=3)}
     brute = set()
     for i in range(n):
         for j in range(i + 1, n):
@@ -209,9 +209,8 @@ def test_blockwise_pairs_bounded_memory_large_synthetic(cfg):
 # --- supersession candidates --------------------------------------------------
 
 def test_supersession_flags_gap_over_60_days(cfg):
-    now = time.time()
-    older = _note(cfg.vault, "reference/Old.md", created="2026-01-01")
-    newer = _note(cfg.vault, "reference/New.md", created="2026-07-01")
+    _note(cfg.vault, "reference/Old.md", created="2026-01-01")
+    _note(cfg.vault, "reference/New.md", created="2026-07-01")
     notes = curator._scan_notes(cfg)
     pairs = [{"a": {"file": "reference/Old.md", "section": "S"},
              "b": {"file": "reference/New.md", "section": "S"}, "score": 0.95}]

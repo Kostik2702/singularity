@@ -9,6 +9,7 @@ foreign-at-owned-name preservation, and the install->uninstall byte round-trip.
 """
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -38,7 +39,7 @@ def home(tmp_path, monkeypatch):
     monkeypatch.delenv("GROK_HOME", raising=False)
     monkeypatch.setattr(register_grok.Path, "home",
                         classmethod(lambda cls: tmp_path))
-    monkeypatch.setattr(register_grok.shutil, "which", lambda _n: None)
+    monkeypatch.setattr(shutil, "which", lambda _n: None)
     monkeypatch.setattr(register_grok, "resolve_vault", lambda: VAULT)
     monkeypatch.setattr(register_grok, "_grok_version", lambda: (0, 2, 111))
     (tmp_path / ".grok").mkdir()
@@ -55,7 +56,7 @@ def test_absent_client_skips_and_creates_nothing(tmp_path, monkeypatch):
     monkeypatch.delenv("GROK_HOME", raising=False)
     monkeypatch.setattr(register_grok.Path, "home",
                         classmethod(lambda cls: tmp_path))
-    monkeypatch.setattr(register_grok.shutil, "which", lambda _n: None)
+    monkeypatch.setattr(shutil, "which", lambda _n: None)
     rc = register_grok.main()
     assert rc == 0
     assert not (tmp_path / ".grok").exists()
@@ -70,7 +71,7 @@ def test_grok_home_env_overrides_home_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("GROK_HOME", str(custom))
     monkeypatch.setattr(register_grok.Path, "home",
                         classmethod(lambda cls: tmp_path))
-    monkeypatch.setattr(register_grok.shutil, "which", lambda _n: None)
+    monkeypatch.setattr(shutil, "which", lambda _n: None)
     monkeypatch.setattr(register_grok, "resolve_vault", lambda: VAULT)
     monkeypatch.setattr(register_grok, "_grok_version", lambda: (0, 2, 111))
     rc = register_grok.main()
@@ -93,7 +94,7 @@ def test_uninstall_uses_same_resolver(tmp_path, monkeypatch):
     monkeypatch.setenv("GROK_HOME", str(custom))
     monkeypatch.setattr(register_grok.Path, "home",
                         classmethod(lambda cls: tmp_path))
-    monkeypatch.setattr(register_grok.shutil, "which", lambda _n: None)
+    monkeypatch.setattr(shutil, "which", lambda _n: None)
     monkeypatch.setattr(register_grok, "resolve_vault", lambda: VAULT)
     monkeypatch.setattr(register_grok, "_grok_version", lambda: (0, 2, 111))
     register_grok.main()
@@ -105,7 +106,7 @@ def test_uninstall_uses_same_resolver(tmp_path, monkeypatch):
 # --- version probe ---------------------------------------------------------------
 
 def test_version_parses_observed_format(monkeypatch):
-    monkeypatch.setattr(register_grok.shutil, "which", lambda _n: "/usr/bin/grok")
+    monkeypatch.setattr(shutil, "which", lambda _n: "/usr/bin/grok")
     monkeypatch.setattr(register_grok.subprocess, "run",
                         lambda *a, **k: subprocess.CompletedProcess(
                             a, 0, stdout="grok 0.2.111 (94172f2aa4)\n", stderr=""))
@@ -113,20 +114,20 @@ def test_version_parses_observed_format(monkeypatch):
 
 
 def test_version_none_when_binary_absent(monkeypatch):
-    monkeypatch.setattr(register_grok.shutil, "which", lambda _n: None)
+    monkeypatch.setattr(shutil, "which", lambda _n: None)
     assert register_grok._grok_version() is None
 
 
 def test_version_none_on_timeout(monkeypatch):
     def boom(*a, **k):
         raise subprocess.TimeoutExpired(cmd="grok", timeout=30)
-    monkeypatch.setattr(register_grok.shutil, "which", lambda _n: "/usr/bin/grok")
+    monkeypatch.setattr(shutil, "which", lambda _n: "/usr/bin/grok")
     monkeypatch.setattr(register_grok.subprocess, "run", boom)
     assert register_grok._grok_version() is None
 
 
 def test_version_none_when_unparseable(monkeypatch):
-    monkeypatch.setattr(register_grok.shutil, "which", lambda _n: "/usr/bin/grok")
+    monkeypatch.setattr(shutil, "which", lambda _n: "/usr/bin/grok")
     monkeypatch.setattr(register_grok.subprocess, "run",
                         lambda *a, **k: subprocess.CompletedProcess(
                             a, 0, stdout="not a version at all\n", stderr=""))

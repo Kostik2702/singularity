@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -37,7 +37,7 @@ class SearchEngine:
 
     # ------------------------------------------------------------------
     def _load_one(self, index_dir: Path
-                  ) -> tuple[Optional[np.ndarray], list[dict], Optional[str]]:
+                  ) -> tuple[np.ndarray | None, list[dict], str | None]:
         """(normalized embeddings, chunks, model name). The model name is read
         here rather than in a second pass because metadata.json holds every
         chunk and is megabytes on a real vault — reading it twice per reload
@@ -113,9 +113,9 @@ class SearchEngine:
             return False
         links = req.get("filter_wikilinks")
         if links:
-            wanted_links = {l.strip().lower() for l in
+            wanted_links = {ln.strip().lower() for ln in
                             (links if isinstance(links, list) else str(links).split(","))}
-            have_links = {str(l).lower() for l in meta.get("wikilinks", [])}
+            have_links = {str(ln).lower() for ln in meta.get("wikilinks", [])}
             # a note also "links to itself": match by title too
             have_links.add(str(meta.get("title", "")).lower())
             if not wanted_links & have_links:
@@ -141,7 +141,7 @@ class SearchEngine:
                 return False
         return True
 
-    def _search_source(self, q_emb: np.ndarray, embs: Optional[np.ndarray],
+    def _search_source(self, q_emb: np.ndarray, embs: np.ndarray | None,
                        chunks: list[dict], source: str,
                        req: dict[str, Any]) -> list[dict[str, Any]]:
         if embs is None or embs.shape[0] == 0:
