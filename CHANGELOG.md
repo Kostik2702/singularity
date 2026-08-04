@@ -10,6 +10,50 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.6.4 — the guard's advice is now takeable everywhere it applies
+
+v0.6.3 turned the guard on. This closes the two things that made ignoring it
+reasonable.
+
+### Every guarded root has a `mb note new` type
+
+`vault_guard` watches ten managed roots and tells you to use `mb note new` /
+`mb learn` instead. Two of them had no type behind that advice: `_moc/` and
+`changelog/`. Creating a dashboard, or the first note of a new month
+(`changelog/YYYY-MM.md` does not exist yet on the 1st), left exactly one route
+open — the one the guard warns about. A warning against the only available
+action is noise, and noise is how a guard gets trained away.
+
+`note new` gains `moc` and `changelog`. Neither has a template of its own and
+both fall through to the generic body; the point is that the sanctioned path
+exists. `learnings/archive` stays deliberately uncovered — notes arrive there
+by being moved, never by being created.
+
+`tests/test_note_covers_managed_roots.py` holds the two lists to each other in
+both directions, so a future guarded root cannot ship without a way to write to
+it, and a type cannot point outside the guarded set. Verified by reverting the
+change: three tests fail.
+
+### The skill said the opposite of the guard
+
+`mb-memory/SKILL.md` is what the assistant actually reads, and it said *"крупные
+записи — редактируй `.md` напрямую (Edit/Write)"*. So the bypass was not a
+lapse — it was the documented instruction, and the guard was arguing with the
+skill. The skill now carries the gate itself: a NEW file in a managed root goes
+through `mb note new` regardless of size (create with the command, fill in with
+Edit), editing an existing note stays Edit/Write, config goes through
+`mb config set`, and searching goes through `mb search` / `mb curator gaps`
+rather than `grep`.
+
+It also opened with one machine's Windows vault path, wrong on every POSIX
+host — the same class as #14, in the first file the assistant reads. Now it
+points at `mb doctor`'s `A2-vault-obsidian` instead, and a test fails on any
+drive-letter path in the file.
+
+Full suite: 1777 passed, 25 skipped.
+
+---
+
 # v0.6.3 — the vault guard is on by default
 
 `vault_guard_enabled` ships `true` in `audit` mode (owner decision, 2026-08-04).

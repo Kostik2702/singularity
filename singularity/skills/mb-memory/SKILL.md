@@ -5,7 +5,9 @@ description: Capture knowledge into the user's Obsidian memory vault (Singularit
 
 # mb-memory — запись знаний в vault
 
-Vault: `D:\obsidian\memory brain`. Watcher индексирует сохранённое автоматически (~5-15 с) — после записи ничего запускать не нужно.
+Vault резолвится сам (`--vault` → `MB_HOME` → `~/.singularity.json` → дефолты); где он на этой машине — скажет `mb doctor` (чек `A2-vault-obsidian`). Путь здесь не хардкодится: до 2026-08-04 в этой строке стоял абсолютный путь одной машины, который на macOS/Linux указывал в никуда.
+
+Watcher индексирует сохранённое автоматически (~5-15 с) — после записи ничего запускать не нужно.
 
 ## Что записывать (токен-критерий из Genevra)
 
@@ -17,12 +19,24 @@ Vault: `D:\obsidian\memory brain`. Watcher индексирует сохранё
 
 ```bash
 mb learn "<плотный инсайт одной-тремя фразами>" --task <TASK-ID>   # быстрый append в learnings/active/<TASK-ID>.md
-mb note new decision "Название решения"    # новая заметка из шаблона (learning|decision|howto|incident|rule|reference|daily)
+mb note new decision "Название решения"    # новая заметка из шаблона
+# типы: learning|decision|howto|incident|rule|reference|daily|moc|changelog — по одному на каждый managed-корень
 ```
 
 - [ ] Личное (не относится ни к одному рабочему проекту) — добавь `--project personal` к `mb learn`/`mb note new`, или, если запись уже создаётся в каталоге из `personal_roots` (см. `.mb/config.json`), routing применится автоматически. Личные заметки никогда не попадают в digest/curator-предложения и никогда не резолвятся случайным cwd-детектом — только explicit `--project personal` или personal_roots.
 
-Крупные записи — редактируй `.md` напрямую (Edit/Write), соблюдая контракт:
+### GATE перед любой записью: чем писать
+
+- [ ] **Новый файл в managed-корне** (`learnings/*`, `decisions/`, `howto/`, `incidents/`, `rules/`, `reference/`, `changelog/`, `_moc/`, `daily/`) — ТОЛЬКО `mb note new <type> "<title>"`. Размер записи роли не играет: создай файл командой, а наполняй уже Edit'ом.
+- [ ] **Правка существующей заметки** — Edit/Write, это штатный путь.
+- [ ] **Конфиг** — `mb config set` / `mb project add`, не правка `.mb/config.json`.
+- [ ] **Искать в vault** — `mb search`, `mb curator gaps` (битые ссылки, недайджещенные learnings), `mb curator contradictions`, а не `grep`/обход файлов.
+
+Почему это гейт, а не рекомендация: мимо `mb note new` не применяется `templates/<type>.md` — и запись НЕ падает, просто рождается без `source:` и без обязательных секций (для rule — `## Правило` / `## Почему` / `## Происхождение` с GATE). Такую заметку не отличить от полной, пока кто-нибудь не сверит её с шаблоном руками; ровно так и произошло 2026-08-04. Плюс теряются project-routing и dedup.
+
+`vault_guard` (audit, включён по умолчанию с v0.6.3) отвечает на такой Write строкой `[vault-guard audit] New file created directly in managed knowledge root …` — это сигнал остановиться и пересоздать командой, а не фоновый шум.
+
+Наполняя заметку, соблюдай контракт:
 
 - [ ] Frontmatter обязателен: `type, title, tags, created`; для decision — `owner` и `source` (Never Decide Alone: у решения есть автор и происхождение).
 - [ ] Связи — inline `[[wikilinks]]` на существующие заметки (питают граф Obsidian и graph-фильтр поиска).
