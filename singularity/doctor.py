@@ -73,10 +73,14 @@ def _action_matches(state: dict, expected_args: str | None) -> bool:
     return actual.strip() == expected_args.strip()
 
 
-def _run_shim(sh: str, shim: Path) -> tuple[int, str, str]:
-    """Run the POSIX shim through sh; separated so tests can stub the subprocess."""
+def _run_shim(sh: str, shim: Path, cwd: str | None = None) -> tuple[int, str, str]:
+    """Run the POSIX shim through sh; separated so tests can stub the subprocess.
+
+    `cwd` is explicit because the failure this check exists to catch is
+    CWD-dependent (issue #16), so inheriting doctor's own directory made the
+    verdict depend on where the user happened to stand."""
     proc = subprocess.run([sh, str(shim), "--version"],
-                          capture_output=True, text=True, timeout=60)
+                          capture_output=True, text=True, timeout=60, cwd=cwd)
     return proc.returncode, (proc.stdout or "").strip(), (proc.stderr or "").strip()
 
 
@@ -854,16 +858,36 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
         if sh is None:
             rep.add("D6-posix-shim", "SKIP", "no sh/bash on PATH (POSIX shim unused)")
             return
-        code, out, err = _run_shim(sh, shim)
-        if code == 0 and out:
-            rep.add("D6-posix-shim", "PASS", f"`sh bin/mb --version` -> {out}")
-        else:
-            detail = (f"`sh bin/mb --version` exit {code}, "
-                      f"stdout {'empty' if not out else repr(out)}")
-            if err:
-                detail += f", stderr: {err[:120]}"
-            rep.add("D6-posix-shim", "FAIL", detail,
-                    fix="bin/mb must pick the interpreter via [ -x ... ] and fail loud")
+        # Two CWDs, always, in a temp tree we control. Running only from
+        # doctor's own directory made the verdict depend on where the user
+        # stood (issue #16): `python -m singularity` puts the CWD on sys.path,
+        # so a CWD that contains a `singularity/` folder — the parent of a
+        # standard clone — shadows the package with a namespace package and
+        # the shim dies, while the same command from anywhere else passes.
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            neutral = Path(td) / "neutral"
+            decoy = Path(td) / "decoy"
+            neutral.mkdir()
+            (decoy / "singularity").mkdir(parents=True)
+            out = ""
+            for label, cwd in (("a neutral CWD", neutral),
+                               ("a CWD containing singularity/", decoy)):
+                code, out, err = _run_shim(sh, shim, cwd=str(cwd))
+                if code != 0 or not out:
+                    detail = (f"`sh bin/mb --version` from {label}: exit {code}, "
+                              f"stdout {'empty' if not out else repr(out)}")
+                    if err:
+                        detail += f", stderr: {err[:160]}"
+                    rep.add("D6-posix-shim", "FAIL", detail,
+                            fix="bin/mb must exec the venv console script or "
+                                "bin/_launch.py — never `python -m`, which puts "
+                                "the CWD on sys.path")
+                    return
+        rep.add("D6-posix-shim", "PASS",
+                f"`sh bin/mb --version` -> {out} (neutral CWD and a CWD "
+                f"containing singularity/)")
 
     _guard(rep, "D4", d4)
     _guard(rep, "D2", d2)

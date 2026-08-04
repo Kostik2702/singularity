@@ -6,6 +6,7 @@
 - watcher freshness is checked via a heartbeat file.
 """
 import json
+from pathlib import Path
 
 import pytest
 
@@ -170,7 +171,8 @@ def _stub_externals(monkeypatch, tmp_path=None):
     monkeypatch.setattr(model_store_mod, "status",
                         lambda cfg: {"installed": True, "model": cfg.model,
                                      "snapshot": "/test/model", "revision": "test"})
-    monkeypatch.setattr(doctor, "_run_shim", lambda sh, shim: (0, "mb 0.2.0", ""))
+    monkeypatch.setattr(doctor, "_run_shim",
+                        lambda sh, shim, cwd=None: (0, "mb 0.2.0", ""))
 
 
 def test_b3_reports_missing_local_model(cfg, monkeypatch):
@@ -476,7 +478,8 @@ def test_d6_fail_on_silent_exit_127(cfg, monkeypatch):
     """The exact incident shape: exit 127, zero bytes of output."""
     _stub_externals(monkeypatch)
     monkeypatch.setattr(doctor.shutil, "which", lambda name: f"C:/git/{name}.exe")
-    monkeypatch.setattr(doctor, "_run_shim", lambda sh, shim: (127, "", ""))
+    monkeypatch.setattr(doctor, "_run_shim",
+                        lambda sh, shim, cwd=None: (127, "", ""))
     doctor.run(cfg, as_json=True)
     d6 = _check(cfg, "D6-posix-shim")
     assert d6["status"] == "FAIL"
@@ -487,9 +490,55 @@ def test_d6_fail_on_silent_exit_127(cfg, monkeypatch):
 def test_d6_fail_when_exit_zero_but_silent(cfg, monkeypatch):
     _stub_externals(monkeypatch)
     monkeypatch.setattr(doctor.shutil, "which", lambda name: f"C:/git/{name}.exe")
-    monkeypatch.setattr(doctor, "_run_shim", lambda sh, shim: (0, "", ""))
+    monkeypatch.setattr(doctor, "_run_shim",
+                        lambda sh, shim, cwd=None: (0, "", ""))
     doctor.run(cfg, as_json=True)
     assert _check(cfg, "D6-posix-shim")["status"] == "FAIL"
+
+
+# --- D6 must not depend on where doctor was launched from (issue #16) --------
+
+def test_d6_probes_a_neutral_cwd_and_a_shadowing_cwd(cfg, monkeypatch):
+    """The namespace-shadowing failure only shows from a CWD that contains a
+    `singularity/` directory, so the check has to stand in both places itself
+    instead of inheriting doctor's."""
+    _stub_externals(monkeypatch)
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"C:/git/{name}.exe")
+    # sampled inside the call: the temp tree is gone once doctor returns
+    seen = []
+    monkeypatch.setattr(
+        doctor, "_run_shim",
+        lambda sh, shim, cwd=None:
+            seen.append((cwd, (Path(cwd) / "singularity").is_dir() if cwd else None))
+            or (0, "mb 0.2.0", ""))
+    doctor.run(cfg, as_json=True)
+
+    assert _check(cfg, "D6-posix-shim")["status"] == "PASS"
+    assert len(seen) == 2
+    assert [shadows for _cwd, shadows in seen] == [False, True]
+    assert len({cwd for cwd, _ in seen}) == 2                # two distinct dirs
+
+
+def test_d6_fails_when_the_shim_only_dies_in_a_shadowing_cwd(cfg, monkeypatch):
+    """The regression of issue #16 verbatim: fine from anywhere else, dead one
+    level above the clone. A check that passed here would be the bug."""
+    _stub_externals(monkeypatch)
+    monkeypatch.setattr(doctor.shutil, "which", lambda name: f"C:/git/{name}.exe")
+
+    def fake(sh, shim, cwd=None):
+        if (Path(cwd) / "singularity").is_dir():
+            return 1, "", ("ImportError: cannot import name '__version__' "
+                           "from 'singularity' (unknown location)")
+        return 0, "mb 0.2.0", ""
+
+    monkeypatch.setattr(doctor, "_run_shim", fake)
+    doctor.run(cfg, as_json=True)
+
+    d6 = _check(cfg, "D6-posix-shim")
+    assert d6["status"] == "FAIL"
+    assert "containing singularity/" in d6["detail"]
+    assert "unknown location" in d6["detail"]
+    assert "python -m" in d6["fix"]
 
 
 def test_d6_skip_without_posix_shell(cfg, monkeypatch):

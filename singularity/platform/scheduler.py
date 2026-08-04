@@ -6,7 +6,10 @@ macOS:   launchd LaunchAgent (ported plist logic from Genevra
 linux:   systemd user timer with Persistent=true; cron fallback.
 
 All jobs run the current venv python with an absolute path (Genevra lesson:
-schedulers run with a minimal PATH).
+schedulers run with a minimal PATH) and pin a working directory (issue #16:
+`-m singularity` puts the CWD on sys.path, and a systemd user unit's default
+CWD is $HOME — which the README tells people to clone into as ~/singularity,
+so every scheduled run would die on a namespace-shadowed import).
 """
 from __future__ import annotations
 
@@ -21,7 +24,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape as _xml_escape, unescape as _xml_unescape
 
 from . import current_os
-from .proc import python_executable
+from .proc import module_search_root, python_executable
 
 
 @dataclass
@@ -78,6 +81,7 @@ def _win_task_xml(exe: str, args: list[str], *,
     else:
         raise ValueError("job needs daily_at or at_login")
     arguments = _win_arguments(args)
+    workdir = module_search_root()
     return (
         '<?xml version="1.0" encoding="UTF-16"?>\n'
         '<Task version="1.2" '
@@ -92,6 +96,7 @@ def _win_task_xml(exe: str, args: list[str], *,
         "    <Exec>\n"
         f"      <Command>{_xml_escape(exe)}</Command>\n"
         f"      <Arguments>{_xml_escape(arguments)}</Arguments>\n"
+        f"      <WorkingDirectory>{_xml_escape(workdir)}</WorkingDirectory>\n"
         "    </Exec>\n"
         "  </Actions>\n"
         "</Task>\n"
@@ -110,8 +115,14 @@ def _systemd_execstart(exe: str, args: list[str]) -> str:
 
 
 def _cron_command(exe: str, args: list[str]) -> str:
-    """Quote for a crontab line (executed via /bin/sh)."""
-    return " ".join(shlex.quote(a) for a in [exe, *args])
+    """Quote for a crontab line (executed via /bin/sh).
+
+    cron runs the job from $HOME, which is where the README tells people to
+    clone (`~/singularity`) — so the `cd` is not cosmetic, it is what keeps
+    `-m singularity` from importing the clone directory as a namespace
+    package (issue #16)."""
+    cmd = " ".join(shlex.quote(a) for a in [exe, *args])
+    return f"cd {shlex.quote(module_search_root())} && {cmd}"
 
 
 def expected_arguments(job: Job) -> str | None:
@@ -186,6 +197,7 @@ def _mac_register(job: Job) -> str:
     plist: dict = {
         "Label": f"com.singularity.{job.name}",
         "ProgramArguments": [python_executable()] + job.args,
+        "WorkingDirectory": module_search_root(),
         "StandardOutPath": str(Path.home() / f".singularity-{job.name}.log"),
         "StandardErrorPath": str(Path.home() / f".singularity-{job.name}.log"),
     }
@@ -236,8 +248,10 @@ def _linux_register(job: Job) -> str:
         d = _systemd_dir()
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{unit}.service").write_text(
-            "[Unit]\nDescription=Singularity %s\n\n[Service]\nType=oneshot\nExecStart=%s\n"
-            % (job.name, _systemd_execstart(exe, job.args)),
+            "[Unit]\nDescription=Singularity %s\n\n[Service]\nType=oneshot\n"
+            "WorkingDirectory=%s\nExecStart=%s\n"
+            % (job.name, _systemd_quote(module_search_root()),
+               _systemd_execstart(exe, job.args)),
             encoding="utf-8",
         )
         if job.daily_at:
@@ -252,8 +266,11 @@ def _linux_register(job: Job) -> str:
             return "OK" if res.returncode == 0 else f"FAIL: {res.stderr.strip()}"
         if job.at_login:
             (d / f"{unit}.service").write_text(
-                "[Unit]\nDescription=Singularity %s\n\n[Service]\nExecStart=%s\nRestart=on-failure\n\n"
-                "[Install]\nWantedBy=default.target\n" % (job.name, _systemd_execstart(exe, job.args)),
+                "[Unit]\nDescription=Singularity %s\n\n[Service]\n"
+                "WorkingDirectory=%s\nExecStart=%s\nRestart=on-failure\n\n"
+                "[Install]\nWantedBy=default.target\n"
+                % (job.name, _systemd_quote(module_search_root()),
+                   _systemd_execstart(exe, job.args)),
                 encoding="utf-8",
             )
             _run(["systemctl", "--user", "daemon-reload"])

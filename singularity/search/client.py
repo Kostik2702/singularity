@@ -102,7 +102,11 @@ def start_daemon(cfg: Config, wait: bool = True) -> bool:
                 return True
             args = [proc.python_executable(windowed=True), "-m", "singularity",
                     "--vault", str(cfg.vault), "daemon", "run"]
-            proc.spawn_detached(args, cfg.daemon_log_file)
+            # never the caller's CWD: `mb daemon start` run one level above the
+            # clone would spawn a daemon that dies on a shadowed import and
+            # report only "FAILED to start" 30s later (issue #16)
+            proc.spawn_detached(args, cfg.daemon_log_file,
+                                cwd=proc.module_search_root())
         if not wait:
             return True
         for _ in range(START_TIMEOUT_TRIES):
