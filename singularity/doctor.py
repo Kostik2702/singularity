@@ -662,9 +662,37 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                 fix="run any `mb` command to adopt it automatically, "
                     "or delete it once the machine config is correct")
 
+    def a8():
+        # A6 grades the values that ARE there. Since the config became per
+        # machine, the commoner shape is a value that is not there at all: the
+        # vault arrives with the settings and without the local answers, and
+        # nothing ever asks. Every item is optional, so this WARNs only when a
+        # machine states nothing beyond which vault to use — a setup that
+        # stopped halfway. Otherwise it reports, and the actionable moments
+        # (migration, install) print the same list.
+        from . import machine_setup
+
+        missing = machine_setup.unstated(cfg.data)
+        if not missing:
+            rep.add("A8-machine-setup", "PASS",
+                    "this machine has stated all of: "
+                    + ", ".join(machine_setup.stated(cfg.data)))
+            return
+        names = ", ".join(item["key"] for item in missing)
+        if not machine_setup.stated(cfg.data):
+            rep.add("A8-machine-setup", "WARN",
+                    f"this machine has stated nothing beyond its vault — "
+                    f"unstated: {names}",
+                    fix="; ".join(item["how"] for item in missing))
+            return
+        rep.add("A8-machine-setup", "PASS",
+                f"stated: {', '.join(machine_setup.stated(cfg.data))}; "
+                f"unstated (optional): {names}")
+
     _guard(rep, "A1", a1)
     _guard(rep, "A2", a2)
     _guard(rep, "A7", a7)
+    _guard(rep, "A8", a8)
     _guard(rep, "A6", lambda: config_paths_block(rep, cfg))
     _guard(rep, "A3", a3)
     _guard(rep, "A4", a4)
@@ -1096,16 +1124,29 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
         rp = _load_install("register_path")
         st = rp.status()
         if st["is_ours"]:
-            rep.add("D7-cli-on-path", "PASS", f"mb -> {st['resolved']}")
-        elif st["on_path"]:
+            # "ours" is about the ENGINE the command runs, not the directory
+            # its launcher sits in: an editable install into a system Python
+            # lands the script outside the engine and imports it all the same.
+            via = ("" if st.get("in_engine_dir") else
+                   f" (another interpreter, same engine: {st['imports_engine']})")
+            rep.add("D7-cli-on-path", "PASS", f"mb -> {st['resolved']}{via}")
+        elif st["on_path"] and st.get("imports_engine"):
             rep.add("D7-cli-on-path", "WARN",
-                    f"`mb` resolves to {st['resolved']}, not this engine's venv "
-                    f"({st['venv_bin']}) — another Singularity install is "
-                    f"shadowing this one, and the two can disagree about "
-                    f"config, model and daemon state",
+                    f"`mb` resolves to {st['resolved']}, which runs a DIFFERENT "
+                    f"engine ({st['imports_engine']}), not this one "
+                    f"({st['engine']}) — two engines on one vault can disagree "
+                    f"about config, model and daemon state",
                     fix="python install/register_path.py, then put "
                         "the engine venv ahead of it on PATH (or remove the "
                         "other install)")
+        elif st["on_path"]:
+            rep.add("D7-cli-on-path", "WARN",
+                    f"`mb` resolves to {st['resolved']} and it could not be "
+                    f"determined which engine that runs — this engine's venv "
+                    f"is {st['venv_bin']}",
+                    fix="run `mb doctor` through that command and compare the "
+                        "reported engine, or python install/register_path.py "
+                        "to put this engine's venv on PATH")
         else:
             rep.add("D7-cli-on-path", "WARN",
                     "`mb` is not callable by name — every documented `mb …` "

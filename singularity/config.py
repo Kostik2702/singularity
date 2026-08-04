@@ -838,6 +838,14 @@ def migrate_vault_config(cfg: "Config") -> Optional[Path]:
     if _daemon_running(cfg):
         print("[mb] a daemon is running from the pre-migration code and still "
               "reads the old file — run `mb daemon restart`", file=sys.stderr)
+    # The migration is the one moment we know an upgrade just happened, and the
+    # only one where "you never told this machine where X is" is actionable
+    # rather than nagging: a vault that arrived from another machine carries
+    # the settings but not the local answers.
+    from . import machine_setup
+
+    for line in machine_setup.summary_lines(cfg.data):
+        print(line, file=sys.stderr)
     return moved
 
 

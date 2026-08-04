@@ -10,6 +10,30 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.9.1 — the machine is asked, and D7 stops accusing the wrong install
+
+Two follow-ups, both from running the release on a second machine.
+
+- **`A8-machine-setup` and a prompt at the two moments it is actionable.**
+  Making the config per machine turned "a value that is wrong here" into "a
+  value that is absent here" — quieter, and nothing was asking for it. An
+  arriving vault carries the settings and none of the local answers, so the
+  migration and the installer now print what is unstated (`code_repos_dir`,
+  `projects`, `llm`, `imgqa_ml_venv`) with the exact command for each. Every
+  item is optional, which is why it is a prompt at install and migration rather
+  than a standing warning; `A8` reports the same list and WARNs in one case
+  only — a machine that has stated nothing beyond which vault to use.
+- **`D7-cli-on-path` asked the wrong question.** It compared where the `mb`
+  launcher FILE sits against `<engine>/.venv`, so an editable install into a
+  system Python — script outside the engine, importing the engine — was
+  reported as "another Singularity install is shadowing this one", with a fix
+  that tells the user to remove a working install. It now resolves which engine
+  the `mb` on PATH actually imports: same engine through another interpreter is
+  a PASS, a genuinely different engine keeps the warning, and "could not be
+  determined" says that instead of naming a cause.
+
+---
+
 # v0.9.0 — the config leaves the vault, and nothing in the engine names a drive
 
 One owner decision drove all of it: **paths belong in a config created at

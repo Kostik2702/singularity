@@ -672,11 +672,28 @@ def test_d7_pass_when_mb_resolves_into_this_engine(cfg, monkeypatch):
     _stub_externals(monkeypatch)
     _stub_register_path(monkeypatch, {
         "engine": "/engine", "venv_bin": "/engine/.venv/bin",
-        "resolved": "/engine/.venv/bin/mb", "on_path": True, "is_ours": True})
+        "resolved": "/engine/.venv/bin/mb", "on_path": True,
+        "in_engine_dir": True, "imports_engine": None, "is_ours": True})
     doctor.run(cfg, as_json=True)
     d7 = _check(cfg, "D7-cli-on-path")
     assert d7["status"] == "PASS"
     assert "/engine/.venv/bin/mb" in d7["detail"]
+
+
+def test_d7_pass_when_another_interpreter_runs_this_engine(cfg, monkeypatch):
+    """An editable install into a system Python puts `mb` outside the engine
+    and imports the engine all the same. Calling that "another install is
+    shadowing this one" is a false alarm whose fix — remove the other install —
+    breaks a working setup."""
+    _stub_externals(monkeypatch)
+    _stub_register_path(monkeypatch, {
+        "engine": "/engine", "venv_bin": "/engine/.venv/bin",
+        "resolved": "/usr/local/bin/mb", "on_path": True,
+        "in_engine_dir": False, "imports_engine": "/engine", "is_ours": True})
+    doctor.run(cfg, as_json=True)
+    d7 = _check(cfg, "D7-cli-on-path")
+    assert d7["status"] == "PASS"
+    assert "same engine" in d7["detail"]
 
 
 def test_d7_warns_when_mb_is_not_on_path(cfg, monkeypatch):
@@ -698,12 +715,27 @@ def test_d7_warns_when_another_clone_shadows_this_engine(cfg, monkeypatch):
     _stub_externals(monkeypatch)
     _stub_register_path(monkeypatch, {
         "engine": "/engine", "venv_bin": "/engine/.venv/bin",
-        "resolved": "/old-clone/.venv/bin/mb", "on_path": True, "is_ours": False})
+        "resolved": "/old-clone/.venv/bin/mb", "on_path": True,
+        "in_engine_dir": False, "imports_engine": "/old-clone",
+        "is_ours": False})
     doctor.run(cfg, as_json=True)
     d7 = _check(cfg, "D7-cli-on-path")
     assert d7["status"] == "WARN"
     assert "/old-clone/.venv/bin/mb" in d7["detail"]
-    assert "shadowing" in d7["detail"]
+    assert "DIFFERENT engine" in d7["detail"]
+
+
+def test_d7_warns_when_the_engine_behind_mb_cannot_be_determined(cfg, monkeypatch):
+    """Unknown is not the same as wrong: say so instead of naming a cause."""
+    _stub_externals(monkeypatch)
+    _stub_register_path(monkeypatch, {
+        "engine": "/engine", "venv_bin": "/engine/.venv/bin",
+        "resolved": "/somewhere/mb", "on_path": True,
+        "in_engine_dir": False, "imports_engine": None, "is_ours": False})
+    doctor.run(cfg, as_json=True)
+    d7 = _check(cfg, "D7-cli-on-path")
+    assert d7["status"] == "WARN"
+    assert "could not be determined" in d7["detail"]
 
 
 def test_d5_reports_mode_when_enabled(cfg, monkeypatch):

@@ -208,6 +208,18 @@ def main(argv: list[str] | None = None) -> int:
     from singularity import doctor
     doctor_rc = doctor.run(cfg, fix=True)
 
+    # The install asked for the vault and nothing else, because nothing else
+    # blocks a working install. That is exactly why the remaining answers have
+    # to be named HERE: they are optional, so no failure will ever mention
+    # them, and a machine that was never asked stays silently half-configured.
+    from singularity import machine_setup
+
+    lines = machine_setup.summary_lines(cfg.data, prefix="[install] ")
+    if lines:
+        print("== What this machine has not stated yet ==")
+        for line in lines:
+            print(line)
+
     if failures:
         print(f"[install] REQUIRED phase(s) failed: {', '.join(failures)} — "
               "installation incomplete, see errors above", file=sys.stderr)

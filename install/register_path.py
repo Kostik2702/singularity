@@ -31,6 +31,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -205,16 +206,67 @@ def resolved_mb() -> str | None:
     return str(Path(found).resolve()) if found else None
 
 
+def _launcher_interpreter(script: Path) -> Path | None:
+    """The interpreter that owns a console script's directory.
+
+    `pip install -e` puts the script next to the python that installed it —
+    `<prefix>/Scripts/mb.exe` beside `<prefix>/python.exe` on Windows,
+    `<prefix>/bin/mb` beside `<prefix>/bin/python` elsewhere. That neighbour is
+    the interpreter the launcher runs, and asking it where `singularity` lives
+    is the only way to learn what `mb` on PATH actually executes."""
+    d = script.parent
+    for rel in ("python.exe", "python3.exe", "../python.exe",
+                "python", "python3"):
+        candidate = (d / rel)
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def imported_engine(script: Path) -> Path | None:
+    """Which engine directory the `mb` at `script` imports, or None if unknown."""
+    python = _launcher_interpreter(script)
+    if python is None:
+        return None
+    try:
+        out = subprocess.run(
+            [str(python), "-c",
+             "import pathlib, singularity; "
+             "print(pathlib.Path(singularity.__file__).resolve().parent.parent)"],
+            capture_output=True, text=True, timeout=60,
+            # a CWD holding `singularity/` would shadow the real package and
+            # make the probe answer about the current directory (issue #16)
+            cwd=str(Path.home()))
+    except (OSError, subprocess.SubprocessError):
+        return None
+    line = (out.stdout or "").strip().splitlines()
+    if out.returncode != 0 or not line:
+        return None
+    return Path(line[-1])
+
+
 def status() -> dict:
-    """What doctor's D7 needs: is `mb` reachable, and is it OUR `mb`?"""
+    """What doctor's D7 needs: is `mb` reachable, and does it run OUR engine?
+
+    "Ours" used to mean "the launcher FILE sits inside the engine", which is a
+    different question and gets the common case wrong: an editable install into
+    a system Python puts `mb` in that Python's Scripts directory while it
+    imports this very working tree. Reporting that as "another install is
+    shadowing this one" is a false alarm whose fix — remove the other install —
+    would break a working setup."""
     bin_dir = venv_bin_dir()
     found = resolved_mb()
+    in_engine = bool(found and _resolves_into_engine(Path(found)))
+    imports = None if (not found or in_engine) else imported_engine(Path(found))
+    same_engine = bool(imports and imports.resolve() == ENGINE.resolve())
     return {
         "engine": str(ENGINE),
         "venv_bin": str(bin_dir) if bin_dir else None,
         "resolved": found,
         "on_path": found is not None,
-        "is_ours": bool(found and _resolves_into_engine(Path(found))),
+        "in_engine_dir": in_engine,
+        "imports_engine": str(imports) if imports else None,
+        "is_ours": in_engine or same_engine,
     }
 
 
