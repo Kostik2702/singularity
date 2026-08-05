@@ -11,3 +11,8 @@ honest User-Agent. Untrusted web content is never executed — only parsed for
 metadata (titles, links, thumbnail URLs).
 """
 __version__ = "0.1.0"
+
+# Declared here, not in cli.py: `_contract` needs it and `cli` imports
+# `_contract`, so keeping it in the CLI made the two import each other. The
+# package is the one place both can reach without a cycle.
+SCHEMA_VERSION = 1

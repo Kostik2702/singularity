@@ -14,8 +14,12 @@ Heavy ML (rembg/onnxruntime) is deliberately NOT a dependency of this package:
 engine venv that hosts `mb` can never be broken by ML dependency resolution.
 """
 
-__all__ = ["__version__"]
+__all__ = ["__version__", "SCHEMA_VERSION"]
 
 # Versioned independently of the engine release cadence; bumped when the CLI
 # contract (schema_version / exit semantics / subcommand set) changes.
 __version__ = "0.1.0.dev0"
+
+# Declared here rather than in cli.py: `_contract` needs it and `cli` imports
+# `_contract` — the pair imported each other for one integer.
+SCHEMA_VERSION = 2  # frozen 2026-07-14 (+schema-2 amendments) — see CONTRACT.md §6

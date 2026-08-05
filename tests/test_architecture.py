@@ -140,12 +140,12 @@ def test_only_presentation_parses_arguments():
 def test_domain_never_imports_the_cli():
     """The CLI may know the domain; the reverse makes the domain unusable from
     a daemon, a hook or a test without dragging argparse in. `_contract` modules
-    in imgqa/scout import their own package's cli — a real cycle, listed as debt
-    and untangled in step 3.2."""
+    The `_contract` modules in imgqa/scout used to import their own package's
+    cli for one constant; that cycle is gone, so this list is empty."""
     offenders = {m for m, src in _modules().items()
                  if m not in {"cli", "facade", "__main__"} and not m.endswith(".cli")
                  and (_imports_module(src, "cli") or _imports_module(src, "facade"))}
-    _check(offenders, {"imgqa._contract", "scout._contract"}, "import the cli layer")
+    _check(offenders, set(), "import the cli layer")
 
 
 def test_only_config_knows_the_vault_layout():
@@ -161,6 +161,67 @@ def test_only_config_knows_the_vault_layout():
                        if m != "config" and ("cfg.vault /" in src or "self.vault /" in src))
     assert not offenders, (
         f"these build vault paths by hand instead of asking config: {offenders}")
+
+
+# The website/media factory (reel, scout, providers, imgqa, intake, golden,
+# factory) is ~8 000 lines about a different subject than memory. Whether it
+# ever ships as its own distribution is an owner's product decision — but the
+# dependency direction that makes it POSSIBLE is an engineering property, and
+# it holds today: zero imports from the engine into the factory.
+FACTORY = {"reel", "scout", "providers", "imgqa", "intake", "golden", "factory"}
+
+
+def test_the_memory_engine_never_imports_the_media_factory():
+    """One-directional by measurement, not by hope.
+
+    The factory may use the engine (config, search, the vault) — it is built on
+    top. The reverse would weld the two together and make `mb search` depend on
+    a video editor. If this fails, the import is the mistake, not the rule.
+    """
+    offenders = []
+    for module, src in _modules().items():
+        if module.split(".")[0] in FACTORY:
+            continue
+        for pkg in FACTORY:
+            if _imports_module(src, pkg) or f"from .{pkg}" in src or f"from ..{pkg}" in src:
+                offenders.append(f"{module} -> {pkg}")
+    assert not offenders, (
+        "the engine started depending on the media factory: " + ", ".join(sorted(offenders)))
+
+
+def test_no_import_cycles():
+    """Nine cycles existed, all of one shape: `scout`/`imgqa` kept
+    `SCHEMA_VERSION` in `cli.py`, `_contract` needed it, and `cli` imports
+    `_contract` — two modules importing each other for one integer. The
+    constant moved to the package, where both can reach it."""
+    graph: dict[str, set[str]] = {}
+    for module, src in _modules().items():
+        pkg = module.rsplit(".", 1)[0] if "." in module else ""
+        deps: set[str] = set()
+        try:
+            tree = ast.parse(src)
+        except SyntaxError:                                # pragma: no cover
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.level == 1:
+                if node.module:
+                    deps.add(f"{pkg}.{node.module}".strip("."))
+                else:
+                    deps |= {f"{pkg}.{a.name}".strip(".") for a in node.names}
+        graph[module] = deps
+
+    cycles: set[tuple[str, ...]] = set()
+
+    def walk(node: str, stack: list[str]):
+        if node in stack:
+            cycles.add(tuple(sorted(stack[stack.index(node):])))
+            return
+        for dep in graph.get(node, ()):
+            walk(dep, stack + [node])
+
+    for module in list(graph):
+        walk(module, [])
+    assert not cycles, f"import cycles are back: {sorted(cycles)}"
 
 
 def test_the_debt_is_visible_and_finite():

@@ -15,7 +15,7 @@ from ._contract import (EXIT_FAIL, EXIT_PASS, EXIT_TOOL_ERROR, ContractError,
 from .fetch import BudgetLog, Fetcher
 from .registry import load_registry, source_key  # noqa: F401 (source_key: sources cmd)
 
-SCHEMA_VERSION = 1
+from . import SCHEMA_VERSION as SCHEMA_VERSION   # re-export: tests read cli.SCHEMA_VERSION
 
 
 def _cmd_sources(args) -> int:

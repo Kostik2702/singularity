@@ -28,7 +28,7 @@ def tool_versions() -> dict:
 def envelope(command: str, inputs: dict, data: dict | None = None,
              verdict: dict | None = None, outputs: list[str] | None = None,
              error: str | None = None) -> dict:
-    from .cli import SCHEMA_VERSION
+    from . import SCHEMA_VERSION
     env = {
         "schema_version": SCHEMA_VERSION,
         "command": command,
