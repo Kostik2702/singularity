@@ -13,7 +13,8 @@ import threading
 import numpy as np
 import pytest
 
-from singularity import ingest_plan, sources
+from singularity.knowledge import ingest_plan
+from singularity.knowledge import sources
 from singularity.cli import main
 from singularity.config import Config
 from singularity.search import indexer

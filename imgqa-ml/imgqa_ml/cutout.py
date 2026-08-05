@@ -15,12 +15,13 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import NoReturn
 
 SCHEMA_VERSION = 2  # matches imgqa CONTRACT.md — bump together
 DEFAULT_MODEL = "birefnet-general"
 
 
-def _die(msg: str) -> "NoReturn":
+def _die(msg: str) -> NoReturn:
     print(json.dumps({"schema_version": SCHEMA_VERSION, "command": "cutout",
                       "status": "error", "error": msg}))
     sys.exit(1)

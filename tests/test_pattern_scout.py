@@ -11,7 +11,7 @@ from singularity.providers import selftest as ps_selftest
 from singularity.providers.candidate import (CandidateError, import_gate,
                                              make_candidate)
 from singularity.providers.cli import main as ps_main
-from singularity.providers.registry import RegistryError, load_registry
+from singularity.providers.registry import load_registry
 
 
 def test_selftest_green():

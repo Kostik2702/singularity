@@ -11,7 +11,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from . import current_os
 
@@ -71,7 +71,9 @@ def spawn_detached(args: list[str], log_file: Path, cwd: str | None = None) -> i
     caller's CWD is whatever the user happened to be standing in."""
     log_file.parent.mkdir(parents=True, exist_ok=True)
     rotate_log(log_file)                       # bound daemon log growth (AUD-18)
-    log = open(log_file, "ab")
+    # Not a context manager on purpose: this handle is handed to the child as
+    # stdout/stderr and must outlive this function (SIM115).
+    log = open(log_file, "ab")  # noqa: SIM115
     cwd = cwd or module_search_root()
     if current_os() == "windows":
         DETACHED_PROCESS = 0x00000008
@@ -137,14 +139,14 @@ def kill(pid: int) -> bool:
         return False
 
 
-def read_pid(pid_file: Path) -> Optional[int]:
+def read_pid(pid_file: Path) -> int | None:
     try:
         return int(pid_file.read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
         return None
 
 
-def pid_create_time(pid: int) -> Optional[float]:
+def pid_create_time(pid: int) -> float | None:
     """Process creation time (epoch seconds) — a PID-reuse guard. None when the
     process is gone or psutil is unavailable (caller falls back to a best-effort
     liveness check)."""

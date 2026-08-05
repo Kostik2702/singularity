@@ -24,7 +24,8 @@ if str(ENGINE) not in sys.path:
 if str(ENGINE / "install") not in sys.path:
     sys.path.insert(0, str(ENGINE / "install"))
 
-from singularity import doctor, hooks_state
+from singularity import doctor
+from singularity.machine import hooks_state
 from singularity.config import Config
 from singularity.hooks import session_start
 from singularity.platform import scheduler
@@ -121,7 +122,6 @@ def test_indexing_never_moves_or_renames_vault_files(tmp_path):
     original_mtime = note.stat().st_mtime
 
     cfg = Config(vault=vault_dir, data={})
-    from singularity.search.encoder import shared_encoder
 
     class _FakeEncoder:
         def encode(self, texts, progress=False):
@@ -292,7 +292,7 @@ def test_privacy_inventory_no_snapshot_file_contains_a_planted_secret(monkeypatc
     finally:
         indexer_mod.shared_encoder = orig
 
-    from singularity import nightly
+    from singularity.knowledge import nightly
     nightly.run(cfg)
 
     for p in cfg.mb_dir.rglob("*"):

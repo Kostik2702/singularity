@@ -93,7 +93,7 @@ def build_context(event_cwd: str | None = None) -> str:
         # at command names it half-remembers.
         "The rest of the engine: `mb --help` (ten commands) / `mb help --all` (every one)."
     )
-    from singularity.hooks_state import (
+    from singularity.machine.hooks_state import (
         CAPTURE_HOOKS_FRAGMENT,
         VAULT_WRITE_POLICY_FRAGMENT,
     )
@@ -109,8 +109,8 @@ def build_context(event_cwd: str | None = None) -> str:
     # T06: project brain — independent fail-open block. Project detection
     # never touches SessionStart's own operation even if it errors.
     try:
-        from singularity import projects as projects_mod
-        from singularity.context_map import DEFAULT_BRAIN_MAX_LINES, project_brain_block
+        from singularity.machine import projects as projects_mod
+        from singularity.knowledge.context_map import DEFAULT_BRAIN_MAX_LINES, project_brain_block
 
         registry = light_cfg.get("projects")
         registry = registry if isinstance(registry, dict) else {}

@@ -22,7 +22,10 @@ import shutil
 import numpy as np
 import pytest
 
-from singularity import cli, contradictions, gaps, ingest_plan, sources
+from singularity import cli
+from singularity.knowledge import gaps
+from singularity.knowledge import ingest_plan
+from singularity.knowledge import sources
 from singularity.cli import main
 from singularity.config import Config
 from singularity.search import indexer
@@ -290,7 +293,8 @@ def test_no_wiki_loop_module_can_delete_a_source():
 
     package = pathlib.Path(cli.__file__).resolve().parent
     offenders: list[str] = []
-    for name in ("sources.py", "ingest_plan.py", "contradictions.py", "gaps.py"):
+    for name in ("knowledge/sources.py", "knowledge/ingest_plan.py",
+                 "knowledge/contradictions.py", "knowledge/gaps.py"):
         tree = ast.parse((package / name).read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):

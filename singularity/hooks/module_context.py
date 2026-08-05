@@ -62,7 +62,7 @@ def build_additional_context(event: dict) -> str | None:
     registry = light_cfg.get("projects")
     registry = registry if isinstance(registry, dict) else {}
 
-    from singularity import projects as projects_mod
+    from singularity.machine import projects as projects_mod
 
     # Membership is decided by the FILE's own location, not the session cwd
     # (spec §6.3: "target path resolved and required to be inside a
@@ -82,8 +82,8 @@ def build_additional_context(event: dict) -> str | None:
     except (OSError, ValueError):
         return None       # symlink/normalization put the file outside the project after all
 
-    from singularity.context_map import load_context_map
-    from singularity.module_context import (DEFAULT_MODULE_NOTE_MAX_LINES, match_module,
+    from singularity.knowledge.context_map import load_context_map
+    from singularity.knowledge.module_context import (DEFAULT_MODULE_NOTE_MAX_LINES, match_module,
                                             module_marker, module_note_block)
 
     entry = load_context_map(vault).get(project)

@@ -8,7 +8,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from .config import Config
+from ..config import Config
+from ..log import log
 
 DEBOUNCE_SECONDS = 3.0
 HEARTBEAT_FILE = "watch.heartbeat"
@@ -20,7 +21,7 @@ def watch_job(cfg: Config):
     """The at-login watcher job — single source shared by the installer and
     `mb doctor` C2, so the registered argv can't drift from intent (the
     AUD-01 breakage class: a task stored with an unquoted vault path)."""
-    from .platform.scheduler import Job
+    from ..platform.scheduler import Job
 
     return Job(JOB_NAME,
                ["-m", "singularity", "--vault", str(cfg.vault), "watch"],
@@ -80,7 +81,7 @@ def run(cfg: Config) -> None:
     observer.schedule(Handler(), str(cfg.vault), recursive=True)
     observer.start()
     _write_heartbeat(cfg)
-    print(f"[watch] watching {cfg.vault} (debounce {DEBOUNCE_SECONDS}s)", flush=True)
+    log.info(f"[watch] watching {cfg.vault} (debounce {DEBOUNCE_SECONDS}s)")
     try:
         while True:
             time.sleep(1.0)
@@ -106,21 +107,21 @@ def _process_pending(cfg: Config, pending: dict[str, float]) -> None:
     files actually handled this batch are cleared on success, so an edit
     that lands on another file while this batch is in flight survives."""
     files = sorted(pending)
-    from .search import client
+    from ..search import client
 
     try:
         stats = client.run_index(cfg, "update", files)
-        print(f"[watch] updated {files} -> {stats}", flush=True)
+        log.info(f"[watch] updated {files} -> {stats}")
         for rel in files:
             pending.pop(rel, None)
     except client.RemoteIndexError as exc:
         if exc.error_type != "IndexLockedError":
-            print(f"[watch] update failed: {exc}", flush=True)
+            log.info(f"[watch] update failed: {exc}")
         else:
-            print(f"[watch] index locked, will retry: {files}", flush=True)
+            log.info(f"[watch] index locked, will retry: {files}")
         for rel in files:
             pending[rel] = time.monotonic()
     except Exception as exc:  # noqa: BLE001 — watcher must survive bad files
-        print(f"[watch] update failed: {exc}", flush=True)
+        log.info(f"[watch] update failed: {exc}")
         for rel in files:
             pending[rel] = time.monotonic()

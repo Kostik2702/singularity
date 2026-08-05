@@ -10,11 +10,11 @@ import hashlib
 import json
 from typing import Any
 
-from .config import Config
+from ..config import Config
 
 
 def compute(cfg: Config) -> dict[str, Any]:
-    from .search import indexer
+    from ..search import indexer
 
     files = indexer.index_files(cfg.memory_index_dir)
     if files is None:
@@ -70,7 +70,7 @@ def _code_stats(cfg: Config) -> dict[str, Any]:
     `configured` is reported separately from `present`: "you never turned this
     on" and "you turned it on but never built it" are different situations and
     only the second one is a problem."""
-    from .search import indexer
+    from ..search import indexer
 
     configured = cfg.code_repos_dir is not None
     out: dict[str, Any] = {"configured": configured, "present": False}
@@ -112,7 +112,7 @@ def _sources_stats(cfg: Config) -> dict[str, Any]:
     """Ingest layer counts (W11). Metadata only, like the rest of this module:
     never note content, never a model load."""
     from . import sources as sources_mod
-    from .search import indexer
+    from ..search import indexer
 
     records = [r for r in sources_mod.read_registry(cfg)["sources"].values()
                if isinstance(r, dict)]
@@ -131,44 +131,3 @@ def _sources_stats(cfg: Config) -> dict[str, Any]:
     }
 
 
-def run(cfg: Config, as_json: bool = False) -> int:
-    s = compute(cfg)
-    if as_json:
-        print(json.dumps(s, ensure_ascii=False))
-        return 0
-    if not s.get("present"):
-        print(f"index: absent — {s.get('vault_notes', 0)} vault notes, "
-              f"{s.get('unindexed', 0)} unindexed")
-        return 0
-    print(f"notes indexed : {s['notes']} / {s['vault_notes']} vault "
-          f"({s['unindexed']} unindexed)")
-    print(f"chunks        : {s['chunks']} ({s['avg_chunks_per_note']}/note, "
-          f"{s['duplicate_chunks']} duplicate)")
-    print(f"text indexed  : {s['chars_indexed']} chars")
-    print(f"by type       : " + ", ".join(f"{k}={v}" for k, v in s["by_type"].items()))
-    print(f"chunk schema  : {s['chunk_schema']}")
-    src = s.get("sources") or {}
-    if src.get("documents"):
-        print(f"sources       : {src['documents']} documents "
-              f"({', '.join(f'{k}={v}' for k, v in src['by_status'].items())}), "
-              f"{src['chunks']} chunks, {src['derived_notes']} derived notes")
-    code = s.get("code") or {}
-    if code.get("configured"):
-        # shown only when the corpus was switched on: a user who never set
-        # code_repos_dir should not have a permanent empty line about it
-        if code.get("present"):
-            print(f"code          : {len(code['repos'])} repos, {code['files']} files, "
-                  f"{code['chunks']} chunks, built {code['indexed_at']}")
-            # a chunk with no repo lands in the "-" bucket and would otherwise
-            # just inflate the repo count — it reads as one extra repo instead
-            # of as the bug it is
-            if "-" in (code.get("repos") or {}):
-                print(f"                {code['repos']['-']} chunk(s) with NO repo "
-                      f"— report this, every code chunk should have one")
-            if code.get("excluded"):
-                print("                excluded as vendored: "
-                      + ", ".join(code["excluded"]))
-        else:
-            print("code          : configured but not built — "
-                  "run `mb index rebuild --code`")
-    return 0

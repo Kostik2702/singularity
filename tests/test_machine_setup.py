@@ -7,9 +7,8 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
-from singularity import machine_setup
+from singularity.machine import machine_setup
 
 
 def test_empty_config_is_entirely_unstated():

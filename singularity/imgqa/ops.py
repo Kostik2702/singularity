@@ -94,7 +94,7 @@ def _boundary_cells(alpha: np.ndarray, cell: int = 128):
     boundary = binary_dilation(solid) & ~binary_erosion(solid)
     ys, xs = np.nonzero(boundary)
     cells = {}
-    for y, x in zip(ys.tolist(), xs.tolist()):
+    for y, x in zip(ys.tolist(), xs.tolist(), strict=False):
         cells.setdefault((y // cell, x // cell), 0)
         cells[(y // cell, x // cell)] += 1
     return cells, cell

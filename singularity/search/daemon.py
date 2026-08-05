@@ -20,6 +20,8 @@ from datetime import datetime
 from typing import Any
 
 from ..config import Config
+from ..log import log
+from .metrics import Counters
 from ..platform import proc
 from .engine import SearchEngine
 
@@ -31,6 +33,7 @@ class SearchDaemon:
         self.cfg = cfg
         self.engine: SearchEngine | None = None
         self._running = True
+        self.metrics = Counters()
         self.instance_id = uuid.uuid4().hex
 
     # ------------------------------------------------------------------
@@ -92,7 +95,11 @@ class SearchDaemon:
         cmd = req.get("cmd", "search")
         if cmd == "ping":
             return {"status": "ok", "pid": os.getpid(), "instance_id": self.instance_id}
+        if cmd == "metrics":
+            # Shape of the service, never its content (AUD-18).
+            return {"metrics": self.metrics.snapshot()}
         if cmd == "reload":
+            self.metrics.incr("reloads")
             info = self.reload_config()
             counts = self.engine.reload()
             return {"status": "reloaded", **counts, **info}
@@ -108,7 +115,10 @@ class SearchDaemon:
         if cmd == "search":
             t0 = time.perf_counter()
             out = self.engine.search(req)
-            out["time_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+            elapsed = round((time.perf_counter() - t0) * 1000, 1)
+            out["time_ms"] = elapsed
+            self.metrics.incr("searches")
+            self.metrics.observe("search", elapsed)
             return out
         if cmd == "index":
             from . import indexer
@@ -170,9 +180,10 @@ class SearchDaemon:
             try:
                 resp = self._handle(req)
             except Exception as exc:  # noqa: BLE001 — daemon must not die on one request
+                self.metrics.incr("errors")
                 resp = {"error": str(exc)}
             conn.sendall(json.dumps(resp, ensure_ascii=False).encode("utf-8") + b"\n")
-        except socket.timeout:
+        except TimeoutError:
             pass
         finally:
             conn.close()
@@ -181,12 +192,12 @@ class SearchDaemon:
     def run(self) -> None:
         cfg = self.cfg
         cfg.mb_dir.mkdir(parents=True, exist_ok=True)
-        print(f"[daemon] loading model {cfg.model} ...", flush=True)
+        log.info(f"[daemon] loading model {cfg.model} ...")
         t0 = time.perf_counter()
         self.engine = SearchEngine(cfg)
-        print(f"[daemon] model+index ready in {time.perf_counter()-t0:.1f}s "
-              f"(memory={len(self.engine.mem_chunks)}, code={len(self.engine.code_chunks)})",
-              flush=True)
+        log.info("[daemon] model+index ready in %.1fs (memory=%d, code=%d)",
+                 time.perf_counter() - t0, len(self.engine.mem_chunks),
+                 len(self.engine.code_chunks))
 
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -210,7 +221,7 @@ class SearchDaemon:
         })
         cfg.daemon_port_file.write_text(str(port), encoding="utf-8")
         cfg.daemon_pid_file.write_text(str(pid), encoding="utf-8")
-        print(f"[daemon] listening on 127.0.0.1:{port}", flush=True)
+        log.info(f"[daemon] listening on 127.0.0.1:{port}")
 
         def _stop(*_a):
             self._running = False
@@ -222,7 +233,7 @@ class SearchDaemon:
             while self._running:
                 try:
                     conn, _addr = srv.accept()
-                except socket.timeout:
+                except TimeoutError:
                     continue
                 except OSError:
                     break
@@ -230,7 +241,7 @@ class SearchDaemon:
         finally:
             srv.close()
             self._cleanup_state(cfg, pid, self.instance_id)
-            print("[daemon] stopped", flush=True)
+            log.info("[daemon] stopped")
 
     # ------------------------------------------------------------------
     @staticmethod

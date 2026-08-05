@@ -181,7 +181,6 @@ def _synthetic_cutout():
 def run_selftest(args):
     from types import SimpleNamespace
 
-    import numpy as np
     from PIL import Image
 
     from . import ops
@@ -236,5 +235,5 @@ def run_selftest(args):
     if not ok:
         failed = ", ".join(c["check"] for c in checks if not c["ok"])
         raise ContractError(f"selftest failed: {failed} | detail: {json.dumps(checks)}")
-    return {"shell": os.environ.get("SHELL") or os.environ.get("ComSpec", "?")}, \
+    return {"shell": os.environ.get("SHELL") or os.environ.get("COMSPEC", "?")}, \
         {"checks": checks}, None, None

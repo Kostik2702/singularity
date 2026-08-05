@@ -31,10 +31,11 @@ import json
 import os
 import platform
 import re
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
+
+from .log import log
 
 
 def machine_id() -> str:
@@ -54,6 +55,22 @@ def machine_id() -> str:
 # `MB_DEFAULT_VAULT` (os.pathsep-separated) states a machine's own order without
 # editing the source. Nothing in this file names a drive.
 DEFAULT_VAULT_DIRNAME = "memory brain"
+
+# The managed knowledge roots `mb init` creates and `mb doctor` checks for.
+# Declared once: cli.py and doctor.py each carried their own copy of this list,
+# so a new root had to be added twice and a rename could pass one check while
+# failing the other.
+MEMORY_FOLDERS = ["learnings/active", "learnings/archive", "decisions", "howto",
+                  "incidents", "rules", "reference", "changelog", "templates",
+                  "_moc", "daily"]
+
+# The staging area (AUD-21). Deliberately NOT a managed root and never indexed:
+# a capture is a thought nobody has classified yet, so letting it into the
+# search index would rank drafts against knowledge — and `mb inbox suggest`
+# would offer a capture as a duplicate of itself. Excluded here rather than via
+# `skip_dirs` because an existing machine has that key materialised and would
+# not pick up a new default.
+INBOX_DIR = "inbox"
 
 # THE config. One file, per machine, created by the installer, never inside a
 # vault — a vault travels between machines and every absolute path in it is
@@ -90,6 +107,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "schema_version": SCHEMA_VERSION,
     "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     "min_score": 0.30,
+    # AUD-17: blend BM25 with the vector ranking (RRF). Off by default — it
+    # changes result ORDER, and a machine that has tuned its habits around the
+    # current ranking should opt in rather than be surprised. `mb search
+    # --hybrid` turns it on per query regardless.
+    "hybrid_search": False,
+    # AUD-21: `inbox/` staging area. Opt-in — a second place knowledge can sit
+    # is a real cost, and someone happy to classify at capture time gains
+    # nothing from it.
+    "inbox_enabled": False,
     "daemon_port": 0,          # 0 = OS picks a free port; actual port -> .mb/daemon.port
     "excerpt_chars": 150,
     "batch_size": 64,
@@ -168,6 +194,26 @@ def _home_relative(path_str: str, home: Path) -> str:
     except (OSError, ValueError):
         return path_str
     return "~/" + str(rel).replace("\\", "/")
+
+
+class ConfigError(Exception):
+    """The config cannot be used, and only the caller knows what that means.
+
+    This module used to answer with `sys.exit(2)`, which is right for a CLI and
+    wrong for everyone else: `search/daemon.py` could not call `load_config()`
+    at all — a malformed file would have killed a serving process — so it grew
+    its own copy of the validation, i.e. a second source of truth for what a
+    valid config is.
+
+    `lines` carries the diagnostic exactly as it was printed before (`[mb] …`,
+    one entry per line) so the CLI can render it unchanged; `code` is the exit
+    status it used to take.
+    """
+
+    def __init__(self, *lines: str, code: int = 2):
+        super().__init__(lines[0] if lines else "config error")
+        self.lines = list(lines)
+        self.code = code
 
 
 class ConfigKeyError(ValueError):
@@ -365,7 +411,7 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
         if key in data and data[key] is not None and not isinstance(data[key], str):
             errors.append(f"{key}: must be a path string or null")
 
-    from .projects import validate_projects
+    from .machine.projects import validate_projects
     proj_result = validate_projects(data)
     errors.extend(proj_result["errors"])
 
@@ -415,7 +461,7 @@ class Config:
         return self.mb_dir / "code_index"
 
     @property
-    def code_repos_dir(self) -> "Path | None":
+    def code_repos_dir(self) -> Path | None:
         """Root holding the repositories the code corpus indexes, or None when
         the corpus is switched off.
 
@@ -441,6 +487,36 @@ class Config:
         # WIKI-LOOP D2: second search corpus over sources_dir, physically
         # separate from memory_index so wiki analytics cannot be polluted.
         return self.mb_dir / "sources_index"
+
+    def resolve(self, rel: str | Path) -> Path:
+        """Vault-relative path -> absolute.
+
+        Three modules had their own copy of this line, one of them with the
+        separator fix and two without — a note recorded as `howto\\x.md` on
+        Windows then resolved to a file nobody could find on macOS. The layout
+        of a vault is known HERE and nowhere else.
+        """
+        return self.vault / str(rel).replace("\\", "/")
+
+    def memory_folder(self, name: str) -> Path:
+        """One of MEMORY_FOLDERS, as an absolute path."""
+        return self.vault / name
+
+    @property
+    def templates_dir(self) -> Path:
+        return self.vault / "templates"
+
+    @property
+    def learnings_active_dir(self) -> Path:
+        return self.vault / "learnings" / "active"
+
+    @property
+    def obsidian_dir(self) -> Path:
+        return self.vault / ".obsidian"
+
+    @property
+    def git_dir(self) -> Path:
+        return self.vault / ".git"
 
     @property
     def sources_registry_path(self) -> Path:
@@ -644,7 +720,7 @@ def _read_json_object(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def active_config_path(vault: Optional[Path] = None) -> Path:
+def active_config_path(vault: Path | None = None) -> Path:
     """The file that actually answers config reads right now.
 
     Normally the machine config. During the upgrade window — machine config
@@ -661,7 +737,7 @@ def active_config_path(vault: Optional[Path] = None) -> Path:
     return CONFIG_FILE
 
 
-def config_unreadable(vault: Optional[Path] = None) -> bool:
+def config_unreadable(vault: Path | None = None) -> bool:
     """True when the active config EXISTS but cannot be parsed as an object.
 
     `read_config_tolerant` flattens "absent", "malformed" and "not an object"
@@ -679,7 +755,7 @@ def config_unreadable(vault: Optional[Path] = None) -> bool:
         return True
 
 
-def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:
+def resolve_vault(explicit: str | None = None) -> Path | None:
     if explicit:
         return Path(explicit)
     env = os.environ.get("MB_HOME")
@@ -705,36 +781,34 @@ def resolve_vault(explicit: Optional[str] = None) -> Optional[Path]:
     return None
 
 
-def load_config(vault_arg: Optional[str] = None) -> Config:
+def load_config(vault_arg: str | None = None) -> Config:
     vault = resolve_vault(vault_arg)
     if vault is None:
-        print("[mb] no vault configured", file=sys.stderr)
-        print('[mb] pass --vault "/path/to/your/vault", set MB_HOME, or create '
-              '~/.singularity.json with {"vault_path": "/path/to/your/vault"}',
-              file=sys.stderr)
-        sys.exit(2)
+        raise ConfigError(
+            "[mb] no vault configured",
+            '[mb] pass --vault "/path/to/your/vault", set MB_HOME, or create '
+            '~/.singularity.json with {"vault_path": "/path/to/your/vault"}')
     if not vault.exists():
-        print(f"[mb] vault not found: {vault}", file=sys.stderr)
-        print("[mb] set MB_HOME, pass --vault, or create ~/.singularity.json", file=sys.stderr)
-        sys.exit(2)
+        raise ConfigError(
+            f"[mb] vault not found: {vault}",
+            "[mb] set MB_HOME, pass --vault, or create ~/.singularity.json")
     cfg = Config(vault=vault)
     migrate_vault_config(cfg)          # seamless, one-time, pre-0.7 layouts
     if cfg.config_path.exists():
         try:
             cfg.data = json.loads(cfg.config_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            print(f"[mb] broken config {cfg.config_path}: {exc}", file=sys.stderr)
-            sys.exit(2)
+            raise ConfigError(
+                f"[mb] broken config {cfg.config_path}: {exc}") from exc
         if not isinstance(cfg.data, dict):
-            print(f"[mb] config must be a JSON object: {cfg.config_path}", file=sys.stderr)
-            sys.exit(2)
+            raise ConfigError(
+                f"[mb] config must be a JSON object: {cfg.config_path}")
         result = validate_config(cfg.data)
         if result["errors"]:
-            print(f"[mb] invalid config {cfg.config_path}:", file=sys.stderr)
-            for e in result["errors"]:
-                print(f"[mb]   - {e}", file=sys.stderr)
-            print("[mb] fix the values above or run 'mb config validate'", file=sys.stderr)
-            sys.exit(2)
+            raise ConfigError(
+                f"[mb] invalid config {cfg.config_path}:",
+                *(f"[mb]   - {e}" for e in result["errors"]),
+                "[mb] fix the values above or run 'mb config validate'")
         migrated, changed = migrate_config(cfg.data)
         if changed:
             _backup_config(cfg.config_path)   # keep a copy before rewriting
@@ -748,7 +822,7 @@ def load_config(vault_arg: Optional[str] = None) -> Config:
     return cfg
 
 
-def _backup_config(config_path: Path) -> Optional[Path]:
+def _backup_config(config_path: Path) -> Path | None:
     """Copy config aside before a migration rewrites it (never overwrite an
     existing backup)."""
     import datetime
@@ -776,7 +850,7 @@ def legacy_config_path(vault: Path) -> Path:
     return vault / ".mb" / "config.json"
 
 
-def migrate_vault_config(cfg: "Config") -> Optional[Path]:
+def migrate_vault_config(cfg: Config) -> Path | None:
     """Adopt a pre-0.7 vault-resident config into the machine config.
 
     Seamless by design: the user runs nothing. It fires only when the machine
@@ -801,17 +875,15 @@ def migrate_vault_config(cfg: "Config") -> Optional[Path]:
         # Refuse, loudly. Skipping a broken legacy config would start this
         # machine on a fresh empty one and silently drop every setting the user
         # had — the exact silent-loss shape this release exists to remove.
-        print(f"[mb] cannot migrate {legacy}: {exc}", file=sys.stderr)
-        print(f"[mb] fix or move that file, then re-run — nothing was written "
-              f"to {CONFIG_FILE}", file=sys.stderr)
-        sys.exit(2)
+        raise ConfigError(
+            f"[mb] cannot migrate {legacy}: {exc}",
+            f"[mb] fix or move that file, then re-run — nothing was written "
+            f"to {CONFIG_FILE}") from exc
     except OSError as exc:
-        print(f"[mb] cannot read {legacy}: {exc}", file=sys.stderr)
-        sys.exit(2)
+        raise ConfigError(f"[mb] cannot read {legacy}: {exc}") from exc
     if not isinstance(data, dict):
-        print(f"[mb] cannot migrate {legacy}: config must be a JSON object",
-              file=sys.stderr)
-        sys.exit(2)
+        raise ConfigError(
+            f"[mb] cannot migrate {legacy}: config must be a JSON object")
 
     cfg.data = {**data, "vault_path": str(cfg.vault)}
     cfg.save()                          # writes decisions only, defaults dropped
@@ -828,28 +900,28 @@ def migrate_vault_config(cfg: "Config") -> Optional[Path]:
         legacy.replace(moved)
     except OSError:
         moved = legacy                  # could not rename: the copy still stands
-    print(f"[mb] config moved out of the vault -> {cfg.config_path} "
-          f"(was {legacy}, kept as {moved.name})", file=sys.stderr)
+    log.info("[mb] config moved out of the vault -> %s (was %s, kept as %s)",
+             cfg.config_path, legacy, moved.name)
     # A daemon started before this release holds the OLD module: its
     # `config_path` still resolves into the vault, so it keeps serving the file
     # we just renamed and `mb daemon reload` reports nothing changed — the
     # settings look applied everywhere except where they are actually read.
     # Migration is the one moment we know this happened, so say it here.
     if _daemon_running(cfg):
-        print("[mb] a daemon is running from the pre-migration code and still "
-              "reads the old file — run `mb daemon restart`", file=sys.stderr)
+        log.info("[mb] a daemon is running from the pre-migration code and still "
+                 "reads the old file — run `mb daemon restart`")
     # The migration is the one moment we know an upgrade just happened, and the
     # only one where "you never told this machine where X is" is actionable
     # rather than nagging: a vault that arrived from another machine carries
     # the settings but not the local answers.
-    from . import machine_setup
+    from .machine import machine_setup
 
     for line in machine_setup.summary_lines(cfg.data):
-        print(line, file=sys.stderr)
+        log.info("%s", line)
     return moved
 
 
-def _daemon_running(cfg: "Config") -> bool:
+def _daemon_running(cfg: Config) -> bool:
     """Cheap liveness check (pid file only, no socket) for migration notices."""
     try:
         from .platform import proc

@@ -12,7 +12,8 @@ import json
 import numpy as np
 import pytest
 
-from singularity import ingest_plan, sources
+from singularity.knowledge import ingest_plan
+from singularity.knowledge import sources
 from singularity.config import Config
 from singularity.search import indexer
 
@@ -102,7 +103,7 @@ def test_torn_index_reports_status(cfg):
 
 
 def test_source_not_yet_indexed_is_actionable(cfg):
-    sid = _ingest(cfg)["source_id"]
+    _ingest(cfg)
     indexer.rebuild(cfg, progress=False)
     indexer.rebuild(cfg, progress=False, corpus="sources")
     # a SECOND source added after the corpus build is not in it yet

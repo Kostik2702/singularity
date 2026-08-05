@@ -31,8 +31,6 @@ def validate_projects(data: dict[str, Any]) -> dict[str, list[str]]:
                 "warnings": []}
 
     claimed_paths: dict[str, str] = {}   # normalized path -> first id that claimed it
-    groups = {e.get("group") for e in projects.values()
-             if isinstance(e, dict) and isinstance(e.get("group"), str)}
 
     for pid, entry in projects.items():
         if not isinstance(pid, str) or not pid.strip():
@@ -109,11 +107,10 @@ def detect_project(projects: dict[str, Any] | None, cwd: str) -> str | None:
         if not isinstance(path, str) or not path.strip():
             continue
         norm = _normalize(path)
-        if target == norm or target.startswith(norm.rstrip("/\\") + "/") \
-                or target.startswith(norm.rstrip("/\\") + "\\"):
-            if len(norm) > best_len:
-                best_len = len(norm)
-                best_id = pid
+        if (target == norm or target.startswith(norm.rstrip("/\\") + "/") \
+                or target.startswith(norm.rstrip("/\\") + "\\")) and len(norm) > best_len:
+            best_len = len(norm)
+            best_id = pid
     return best_id
 
 

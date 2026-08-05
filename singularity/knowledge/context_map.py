@@ -17,9 +17,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-from .search.chunking import parse_frontmatter
+from ..search.chunking import parse_frontmatter
 
 DEFAULT_BRAIN_MAX_LINES = 40
 
@@ -37,7 +37,7 @@ def load_context_map(vault: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _resolve_within_vault(vault: Path, rel: str) -> Optional[Path]:
+def _resolve_within_vault(vault: Path, rel: str) -> Path | None:
     """Resolve a vault-relative path, rejecting traversal outside the vault
     (`..`, absolute escapes, symlink escapes). None on an empty string or any
     resolution error, never raises."""
@@ -53,7 +53,7 @@ def _resolve_within_vault(vault: Path, rel: str) -> Optional[Path]:
 
 
 def read_note_excerpt(vault: Path, rel_path: Any, max_lines: int, label: str,
-                      default_max_lines: int = DEFAULT_BRAIN_MAX_LINES) -> Optional[str]:
+                      default_max_lines: int = DEFAULT_BRAIN_MAX_LINES) -> str | None:
     """Shared budgeted-excerpt builder: resolve `rel_path` safely within
     `vault`, strip frontmatter, truncate to `max_lines`, and format with a
     real absolute "Read <path>" hint — never a fabricated line range or
@@ -83,8 +83,8 @@ def read_note_excerpt(vault: Path, rel_path: Any, max_lines: int, label: str,
     return "\n".join([header, *shown]) + suffix
 
 
-def project_brain_block(vault: Path, project: Optional[str],
-                        max_lines: int = DEFAULT_BRAIN_MAX_LINES) -> Optional[str]:
+def project_brain_block(vault: Path, project: str | None,
+                        max_lines: int = DEFAULT_BRAIN_MAX_LINES) -> str | None:
     """Compact, line-budgeted project-brain text for SessionStart, or None
     when there is nothing to show — no project, no context.json entry, no
     `brain_note`, path traversal attempt, or an unreadable/missing file. Every

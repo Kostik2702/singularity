@@ -13,7 +13,8 @@ from a committed index generation.
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Callable, Iterable, Optional
+from typing import Any
+from collections.abc import Callable, Iterable
 
 import numpy as np
 
@@ -22,7 +23,7 @@ import numpy as np
 BLOCK_SIZE = 512
 
 
-def mean_pool(embs: np.ndarray, idxs: list[int]) -> Optional[np.ndarray]:
+def mean_pool(embs: np.ndarray, idxs: list[int]) -> np.ndarray | None:
     """Mean of the given chunk rows, re-normalized to unit length. None when
     the mean degenerates to the zero vector (no meaningful direction)."""
     v = embs[idxs].mean(axis=0)
@@ -34,7 +35,7 @@ def mean_pool(embs: np.ndarray, idxs: list[int]) -> Optional[np.ndarray]:
 
 def group_indices(chunks: list[dict[str, Any]],
                   key: Callable[[dict[str, Any]], Any] = lambda c: c.get("file"),
-                  predicate: Optional[Callable[[dict[str, Any]], bool]] = None
+                  predicate: Callable[[dict[str, Any]], bool] | None = None
                   ) -> dict[Any, list[int]]:
     """key -> row indices, in first-appearance order (dict insertion order is
     part of the contract: callers rely on it for stable output ordering)."""
@@ -81,7 +82,7 @@ def blockwise_pairs(embs: np.ndarray, threshold: float,
                 li_idx, lj_idx = np.triu_indices(sim.shape[0], k=1)
                 scores = sim[li_idx, lj_idx]
                 mask = scores > threshold
-                for li, lj, score in zip(li_idx[mask], lj_idx[mask], scores[mask]):
+                for li, lj, score in zip(li_idx[mask], lj_idx[mask], scores[mask], strict=False):
                     pairs.append((bi + int(li), bj + int(lj), float(score)))
             else:
                 for li, lj in np.argwhere(sim > threshold):
@@ -91,7 +92,7 @@ def blockwise_pairs(embs: np.ndarray, threshold: float,
 
 def cross_best_pair(a_embs: np.ndarray, a_idxs: Iterable[int],
                     b_embs: np.ndarray, b_idxs: Iterable[int]
-                    ) -> tuple[Optional[int], Optional[int], float]:
+                    ) -> tuple[int | None, int | None, float]:
     """Highest-scoring (a_row, b_row) pair across two chunk sets — the evidence
     behind a whole-note match ("which passage of the source matches which
     section of the note"). Ties break on the lowest index pair so a repeated

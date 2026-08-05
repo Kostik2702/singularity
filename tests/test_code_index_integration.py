@@ -15,7 +15,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import singularity.search.indexer as indexer_mod
-from singularity import doctor, nightly, stats, status
+from singularity import doctor
+from singularity.knowledge import nightly
+from singularity.knowledge import stats
+from singularity.machine import status
+from singularity import render
 from singularity.config import Config
 from singularity.search import client
 
@@ -130,11 +134,11 @@ def test_stats_stays_quiet_when_the_corpus_is_off(unconfigured):
     assert code == {"configured": False, "present": False}
 
 
-def test_stats_human_output_mentions_code_only_when_configured(built, unconfigured, capsys):
-    stats.run(built)
-    assert "code          :" in capsys.readouterr().out
-    stats.run(unconfigured)
-    assert "code          :" not in capsys.readouterr().out
+def test_stats_human_output_mentions_code_only_when_configured(built, unconfigured):
+    """Rendering is a pure function of the collected data now — no CLI, no
+    stream capture, and the in-memory Config the fixture builds is honoured."""
+    assert "code          :" in render.stats(stats.compute(built))
+    assert "code          :" not in render.stats(stats.compute(unconfigured))
 
 
 def test_stats_says_configured_but_not_built(tmp_path, capsys):
@@ -282,9 +286,7 @@ def test_status_marks_an_empty_code_corpus(tmp_path, monkeypatch, capsys):
     indexer_mod.rebuild(cfg, progress=False)
     indexer_mod.rebuild(cfg, progress=False, corpus="code")
 
-    status.run(cfg)
-
-    out = capsys.readouterr().out
+    out = render.status(status.snapshot(cfg))
     assert "code: 0 chunks from 0 files" in out
     assert "EMPTY" in out
 

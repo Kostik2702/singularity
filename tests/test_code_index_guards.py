@@ -219,7 +219,7 @@ def test_daemon_maps_the_refusal_to_its_own_error_type(built, monkeypatch):
 
 
 def test_nightly_turns_the_refusal_into_a_skip_not_an_error(built, monkeypatch):
-    from singularity import nightly
+    from singularity.knowledge import nightly
     from singularity.search import client
 
     def boom(*_a, **_k):

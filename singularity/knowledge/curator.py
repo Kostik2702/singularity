@@ -20,12 +20,12 @@ import re
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
-from .config import Config
-from .search.chunking import parse_frontmatter, _WIKILINK_RE
+from ..config import INBOX_DIR, Config
+from ..search.chunking import parse_frontmatter, _WIKILINK_RE
 
 # type is enforced only where the note contract applies (MB-08 folders);
 # project/analysis docs need just `created`; title may come from H1
@@ -67,6 +67,10 @@ def _scan_notes(cfg: Config) -> dict[str, dict[str, Any]]:
     left as a parameter nothing passes.)"""
     skip_dirs = set(cfg.get("skip_dirs")) - {"templates"}  # validate templates too? no:
     skip_dirs.add("templates")
+    # A capture in the inbox has no `created:` and no type on purpose — it is a
+    # draft. Reporting it as "missing frontmatter" would make the health report
+    # noisier the more honestly someone uses the staging area.
+    skip_dirs.add(INBOX_DIR)
     notes: dict[str, dict[str, Any]] = {}
     for path in cfg.vault.rglob("*.md"):
         rel = path.relative_to(cfg.vault).as_posix()
@@ -89,7 +93,7 @@ def _scan_notes(cfg: Config) -> dict[str, dict[str, Any]]:
         linkable = re.sub(r"`[^`\n]*`", " ", linkable)
         linkable = linkable.replace("\\|", "|")  # escaped pipe in md tables
         outlinks = [mt.group(1).strip() for mt in _WIKILINK_RE.finditer(linkable)]
-        outlinks = [l for l in outlinks if l and l != "..."]
+        outlinks = [ln for ln in outlinks if ln and ln != "..."]
         notes[rel] = {
             "fm": fm, "title": str(title).strip('"'), "aliases": aliases,
             "outlinks": outlinks, "mtime": path.stat().st_mtime,
@@ -203,8 +207,8 @@ def _note_embeddings(cfg: Config) -> tuple[list[str], np.ndarray]:
     # leaves behind stale (it's whatever the last flat-layout write happened
     # to be, not the current generation). load_committed_index() resolves
     # the actual CURRENT generation the same way digest.plan() already does.
-    from .search import indexer
-    from .search.similarity import group_indices, pooled_vectors
+    from ..search import indexer
+    from ..search.similarity import group_indices, pooled_vectors
 
     embs, chunks, status = indexer.load_committed_index(cfg.memory_index_dir)
     if status != "ok":
@@ -263,9 +267,9 @@ def analyze(cfg: Config) -> dict[str, Any]:
                         reverse=True)
         for score, i, j in scored:
             a, b = files[i], files[j]
-            if a in notes and b in notes:
-                if b in outgoing.get(a, set()) or a in outgoing.get(b, set()):
-                    continue
+            if (a in notes and b in notes
+                    and (b in outgoing.get(a, set()) or a in outgoing.get(b, set()))):
+                continue
             suggestions.append({"a": a, "b": b, "score": round(score, 3),
                                 "suggest": f"[[{Path(b).stem}]] <-> [[{Path(a).stem}]]"})
             if len(suggestions) >= SUGGEST_LIMIT:
@@ -300,7 +304,7 @@ def _blockwise_pairs(embs: np.ndarray, threshold: float,
     W05: the implementation moved to `search.similarity.blockwise_pairs`,
     shared with the contradiction detector — both need the same O(block^2)
     memory bound and the same i<j-by-index rule."""
-    from .search.similarity import blockwise_pairs
+    from ..search.similarity import blockwise_pairs
     return blockwise_pairs(embs, threshold, block_size)
 
 
@@ -309,7 +313,7 @@ def _duplicate_pairs(cfg: Config) -> tuple[list[dict[str, Any]], list[dict[str, 
     score-sorted descending; the caller caps same/cross_file for the report
     but supersession derivation needs the full sorted cross_file list first
     (see _supersession_candidates)."""
-    from .search import indexer
+    from ..search import indexer
 
     embs, chunks, status = indexer.load_committed_index(cfg.memory_index_dir)
     if status != "ok":
@@ -340,7 +344,7 @@ def _duplicate_pairs(cfg: Config) -> tuple[list[dict[str, Any]], list[dict[str, 
     return same_file, cross_file, status
 
 
-def _frontmatter_date(value: Any) -> Optional[float]:
+def _frontmatter_date(value: Any) -> float | None:
     if isinstance(value, _dt.datetime):
         return value.timestamp()
     if isinstance(value, _dt.date):
@@ -390,7 +394,7 @@ def _supersession_candidates(notes: dict[str, dict[str, Any]],
     return candidates
 
 
-def _check_note_budget(project: str, module: Optional[str], vault: Path,
+def _check_note_budget(project: str, module: str | None, vault: Path,
                        rel_path: str, max_lines: int) -> list[dict[str, Any]]:
     from .context_map import _resolve_within_vault
 
@@ -459,57 +463,12 @@ def lint(cfg: Config) -> dict[str, Any]:
 
 # ---------------------------------------------------------------------------
 
-def run(cfg: Config, as_json: bool = False) -> int:
-    issues = validate(cfg)
-    report = analyze(cfg)
-    lint_report = lint(cfg)
-    hard = sum(len(v) for v in issues.values())
 
-    if as_json:
-        print(json.dumps({"issues": issues, **report, "lint": lint_report},
-                         ensure_ascii=False, indent=1))
-        return 1 if issues["broken_links"] else 0
+def collect(cfg: Config) -> dict[str, Any]:
+    """Everything `mb curator` reports, as data.
 
-    print(f"== mb curator — {report['notes']} notes ==")
-    for key, label in (("broken_links", "Broken wikilinks"),
-                       ("missing_frontmatter", "Missing mandatory frontmatter"),
-                       ("decision_no_owner", "Decisions without owner/source"),
-                       ("duplicate_titles", "Duplicate titles"),
-                       ("source_not_in_registry", "Notes citing an unknown source_id"),
-                       ("orphan_source", f"Sources unprocessed >{ORPHAN_SOURCE_DAYS}d")):
-        items = issues[key]
-        print(f"\n[{'FAIL' if items and key == 'broken_links' else 'WARN' if items else 'PASS'}] "
-              f"{label}: {len(items)}")
-        for it in items[:10]:
-            print(f"   - {it}")
-
-    print(f"\nOrphans (no links in/out): {len(report['orphans'])}")
-    for rel in report["orphans"][:10]:
-        print(f"   - {rel}")
-    print(f"Stale active notes (>{STALE_DAYS}d): {len(report['stale'])}")
-    for rel in report["stale"][:10]:
-        print(f"   - {rel}")
-
-    print(f"\nLink suggestions (cosine>{SUGGEST_THRESHOLD}, no existing link) — "
-          f"NOT applied, approve first:")
-    if not report["link_suggestions"]:
-        print("   (none)")
-    for s in report["link_suggestions"]:
-        print(f"   {s['score']:.2f}  {s['a']}  <->  {s['b']}")
-
-    dup = lint_report["duplicates"]
-    print(f"\nDuplicate sections (same file, cosine>{DUPLICATE_THRESHOLD}): {len(dup['same_file'])}")
-    for d in dup["same_file"][:10]:
-        print(f"   {d['score']:.2f}  {d['a']['file']} :: {d['a']['section']}  <->  {d['b']['section']}")
-    print(f"Duplicate sections (cross file, cosine>{DUPLICATE_THRESHOLD}): {len(dup['cross_file'])}")
-    for d in dup["cross_file"][:10]:
-        print(f"   {d['score']:.2f}  {d['a']['file']}::{d['a']['section']}  <->  "
-              f"{d['b']['file']}::{d['b']['section']}")
-    print(f"Supersession candidates (gap>={SUPERSESSION_GAP_DAYS}d): {len(lint_report['supersession'])}")
-    for s in lint_report["supersession"][:10]:
-        print(f"   {s['older']} -> possibly superseded by {s['newer']} (gap {s['gap_days']}d)")
-    print(f"Context budget/reference issues: {len(lint_report['context_issues'])}")
-    for c in lint_report["context_issues"][:10]:
-        where = f"{c['project']}/{c['module']}" if c.get("module") else c["project"]
-        print(f"   [{c['kind']}] {where}: {c['note']}")
-    return 1 if issues["broken_links"] else 0
+    Three collectors that used to be called only from the printing `run()`:
+    keeping them behind one function means the CLI, a future daemon endpoint
+    and the tests all see the same shape.
+    """
+    return {"issues": validate(cfg), "report": analyze(cfg), "lint": lint(cfg)}

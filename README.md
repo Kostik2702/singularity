@@ -245,6 +245,24 @@ mb search "..." --json --full                          # machine-readable / untr
 
 Output is compact by design: `file | score | [type] | title/section | excerpt`. Scores ≥ 0.5 are strong matches; below ~0.3 rephrase the query.
 
+### The inbox — capture now, classify later (opt-in)
+
+`mb learn` and `mb note new` both ask, at the worst possible moment, which type this is and where it goes. When the honest answer is "no idea yet, but I must not lose it":
+
+```bash
+mb config set inbox_enabled true
+mb inbox add "конфиг не перечитывается после set — проверить reload"
+mb inbox list
+mb inbox suggest inbox/конфиг-не-перечитывается.md   # type guess + possible duplicates
+mb inbox approve inbox/конфиг-не-перечитывается.md incident
+```
+
+**Nothing leaves the inbox without you saying so.** `suggest` proposes and writes nothing; `approve` is the only command that files, and it refuses (rather than guesses) on an unknown type or an occupied destination. Captures carry `type: inbox`, are never indexed and never reported by the curator — a draft must not be ranked against knowledge, and `suggest` must not offer a capture as a duplicate of itself. Filing keeps the original `captured:` stamp: provenance is when you thought it, not when you tidied it.
+
+### Exact tokens: hybrid search
+
+Embeddings answer "what is this about", which is why they miss `IndexLockedError` or `--per-signal` — an identifier carries almost no semantic mass. `mb search --hybrid "IndexLockedError"` blends BM25 with the vector ranking (Reciprocal Rank Fusion, so the two incomparable scales are never summed), and `mb config set hybrid_search true` makes it the default. Off until you ask, because it changes result ORDER.
+
 ### Capture knowledge
 
 ```bash
@@ -430,6 +448,8 @@ Reading it: **43 top-level sessions** is the denominator every rate below is mea
 Nothing here is a raw prompt, a tool argument, a session id, or a transcript path — only counts and rates, snapshotted to `.mb/reflect-last.json` and a 90-day trend history. See [Performance & privacy](#performance--privacy) below for how that's verified, not just claimed.
 
 ### Health, stats, backup & config
+
+`mb status` also reports what the running daemon has been doing since it started — searches, errors, reloads, and p50/p95 latency. Counts and durations only: no query text, no paths, nothing that would make a counter unsafe to keep on by default.
 
 ```bash
 mb status

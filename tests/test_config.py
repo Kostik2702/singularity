@@ -1,6 +1,5 @@
 """Vault resolution (github#1: bare Windows default leaked onto macOS)."""
 import json
-from pathlib import Path
 
 from singularity import config
 from singularity.config import Config
@@ -33,7 +32,7 @@ def test_env_mb_home(monkeypatch, tmp_path):
 def test_pointer_file(monkeypatch, tmp_path):
     _isolate(monkeypatch, tmp_path)
     pointer = tmp_path / "pointer.json"
-    pointer.write_text('{"vault_path": "%s"}' % str(tmp_path).replace("\\", "\\\\"),
+    pointer.write_text('{{"vault_path": "{}"}}'.format(str(tmp_path).replace("\\", "\\\\")),
                        encoding="utf-8")
     monkeypatch.setattr(config, "POINTER_FILE", pointer)
     assert config.resolve_vault(None) == tmp_path
@@ -218,7 +217,7 @@ def test_migration_never_overwrites_a_configured_machine(tmp_path, monkeypatch):
     assert (mb / "config.json").exists()          # left alone entirely
 
 
-def test_migration_tells_a_running_daemon_to_restart(tmp_path, monkeypatch, capsys):
+def test_migration_tells_a_running_daemon_to_restart(tmp_path, monkeypatch, caplog):
     """A daemon started before the move holds the OLD module: its config path
     still resolves into the vault, so it keeps serving the file just renamed
     and `mb daemon reload` reports nothing changed. Settings then look applied
@@ -230,22 +229,25 @@ def test_migration_tells_a_running_daemon_to_restart(tmp_path, monkeypatch, caps
     monkeypatch.setenv("MB_HOME", str(tmp_path))
     monkeypatch.setattr(cfgmod, "_daemon_running", lambda cfg: True)
 
-    cfgmod.load_config(str(tmp_path))
+    with caplog.at_level("INFO", logger="mb"):
+        cfgmod.load_config(str(tmp_path))
 
-    err = capsys.readouterr().err
-    assert "mb daemon restart" in err
+    # The notice is a log record now (a daemon or hook must be able to route
+    # it somewhere other than a user's stderr); the CLI prints it verbatim.
+    assert any("mb daemon restart" in r.getMessage() for r in caplog.records)
 
 
-def test_migration_is_quiet_about_a_daemon_that_is_not_running(tmp_path, monkeypatch, capsys):
+def test_migration_is_quiet_about_a_daemon_that_is_not_running(tmp_path, monkeypatch, caplog):
     from singularity import config as cfgmod
     mb = tmp_path / ".mb"; mb.mkdir(parents=True)
     (mb / "config.json").write_text('{"model": "m"}', encoding="utf-8")
     monkeypatch.setenv("MB_HOME", str(tmp_path))
     monkeypatch.setattr(cfgmod, "_daemon_running", lambda cfg: False)
 
-    cfgmod.load_config(str(tmp_path))
+    with caplog.at_level("INFO", logger="mb"):
+        cfgmod.load_config(str(tmp_path))
 
-    assert "daemon restart" not in capsys.readouterr().err
+    assert not any("daemon restart" in r.getMessage() for r in caplog.records)
 
 
 def test_saved_config_records_decisions_not_defaults(tmp_path, monkeypatch):
@@ -316,13 +318,25 @@ def test_validate_nightly_schedule_time_format():
     assert validate_config({"nightly_schedule_time": "03:00"})["errors"] == []
 
 
-def test_load_config_rejects_bad_types_actionably(tmp_path, monkeypatch, capsys):
+def test_load_config_rejects_bad_types_actionably(tmp_path, monkeypatch):
+    """Raises instead of exiting (a daemon must survive a bad file), and the
+    diagnostic it carries is the one the CLI prints verbatim."""
     from singularity import config as cfgmod
     mb = tmp_path / ".mb"; mb.mkdir(parents=True)
     (mb / "config.json").write_text('{"daemon_port": 99999}', encoding="utf-8")
     monkeypatch.setenv("MB_HOME", str(tmp_path))
     import pytest
-    with pytest.raises(SystemExit) as ei:
+    with pytest.raises(cfgmod.ConfigError) as ei:
         cfgmod.load_config(str(tmp_path))
     assert ei.value.code == 2
-    assert "[mb]" in capsys.readouterr().err   # actionable, not a traceback
+    assert any(ln.startswith("[mb]") for ln in ei.value.lines)   # actionable, not a traceback
+
+
+def test_cli_still_reports_a_bad_config_the_same_way(tmp_path, monkeypatch, capsys):
+    """The exception must not change what a user sees: same lines, same code 2."""
+    from singularity import cli
+    mb = tmp_path / ".mb"; mb.mkdir(parents=True)
+    (mb / "config.json").write_text('{"daemon_port": 99999}', encoding="utf-8")
+    monkeypatch.setenv("MB_HOME", str(tmp_path))
+    assert cli.main(["--vault", str(tmp_path), "status"]) == 2
+    assert "[mb]" in capsys.readouterr().err

@@ -35,7 +35,7 @@ def _load(name):
 )
 def test_hook_base_and_event_fields(fixture, event, extra):
     payload = _load(fixture)
-    assert BASE_FIELDS <= set(payload), f"{fixture} missing base fields"
+    assert set(payload) >= BASE_FIELDS, f"{fixture} missing base fields"
     assert payload["hook_event_name"] == event
     assert extra <= set(payload), f"{fixture} missing event fields {extra}"
 
@@ -90,8 +90,8 @@ def test_headless_deny_mutates_output():
 
 
 def test_transcript_is_event_sourced_jsonl():
-    lines = [l for l in (FIX / "transcript_sample.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
-    rows = [json.loads(l) for l in lines]
+    lines = [ln for ln in (FIX / "transcript_sample.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
+    rows = [json.loads(ln) for ln in lines]
     # line 1 = session meta
     assert {"sessionId", "projectHash", "startTime", "kind"} <= set(rows[0])
     # at least one $set mutation and both message types present
@@ -102,7 +102,7 @@ def test_transcript_is_event_sourced_jsonl():
 
 def test_transcript_tooluse_representation():
     """GCLI-04 parser MUST read `toolCalls` on a gemini message, NOT a 'tool_use' string."""
-    rows = [json.loads(l) for l in (FIX / "transcript_tooluse.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    rows = [json.loads(ln) for ln in (FIX / "transcript_tooluse.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
     # no top-level line is typed "tool_use" — the plan's explicit warning
     assert all(r.get("type") != "tool_use" for r in rows)
     gem_with_tools = [r for r in rows if r.get("type") == "gemini" and r.get("toolCalls")]
@@ -126,7 +126,7 @@ def test_before_after_tool_hook_fields():
 
 
 def test_stream_json_event_sequence():
-    rows = [json.loads(l) for l in (FIX / "stream_json_events.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    rows = [json.loads(ln) for ln in (FIX / "stream_json_events.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
     seq = [r["type"] for r in rows]
     assert seq[0] == "init" and seq[-1] == "result"
     assert "tool_use" in seq and "tool_result" in seq

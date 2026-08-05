@@ -3,7 +3,9 @@ import json
 
 import pytest
 
-from singularity import hooks_state, status
+from singularity.machine import hooks_state
+from singularity.machine import status
+from singularity import cli
 from singularity.config import Config
 from singularity.platform import proc, scheduler
 from singularity.search import client
@@ -41,7 +43,7 @@ def test_snapshot_hooks_section_shape(cfg, monkeypatch):
 
 def test_run_human_output_mentions_capture_hooks(cfg, monkeypatch, capsys):
     _stub_all(monkeypatch, home=cfg.vault)
-    status.run(cfg, as_json=False)
+    cli.main(["--vault", str(cfg.vault), "status"])
     assert "capture hooks:" in capsys.readouterr().out
 
 
@@ -62,7 +64,7 @@ def test_probe_failure_is_isolated(cfg, monkeypatch):
 
 def test_run_json_valid(cfg, monkeypatch, capsys):
     _stub_all(monkeypatch, home=cfg.vault)
-    status.run(cfg, as_json=True)
+    cli.main(["--vault", str(cfg.vault), "status", "--json"])
     json.loads(capsys.readouterr().out.strip())
 
 

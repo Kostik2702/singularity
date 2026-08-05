@@ -266,7 +266,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _cmd_recipe(args) -> int:
-    from .recipe import (RECIPE_SCHEMA, RecipeError, load,
+    from .recipe import (RECIPE_SCHEMA, load,
                          scaffold_from_report, validate)
     if args.validate:
         problems = validate(load(Path(args.validate)))

@@ -7,7 +7,6 @@ absent-client skip and the skill-conflict backup are the regression oracle for t
 shared-primitives extraction.
 """
 import importlib.util
-import shutil
 from pathlib import Path
 
 import pytest

@@ -20,10 +20,10 @@ from __future__ import annotations
 import math
 import random
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 from .edl import Grid
 from .fonts import EMOJI_FONT, fit_size, line_width
@@ -269,7 +269,7 @@ def compile_plan(plan: TextPlan) -> dict[str, Any]:
             halo = Image.new("RGBA", r["img"].size, colour + (0,))
             halo.putalpha(a.point(lambda v: min(255, int(v * 1.5))))
             halos.append(halo if reg.pulse > 0 else None)
-        for r, halo in zip(rows, halos):
+        for r, halo in zip(rows, halos, strict=False):
             r["halo"] = halo
             if reg.entry == "light":
                 r["glyphs"] = _glyph_sprites(r["img"], rnd, reg)
@@ -420,7 +420,7 @@ def _light_source(frame, w: int, h: int, lift: int = 420, tint: float = 0.18,
 def _assemble(frame, row, light, e: float, y: int, reg: Register, w: int, h: int) -> None:
     Image, _, ImageFilter, _ = _pil()
     mask_full = row["img"].getchannel("A")
-    for i, g in enumerate(row.get("glyphs", [])):
+    for _i, g in enumerate(row.get("glyphs", [])):
         x0, x1 = g["box"]
         m = mask_full.crop((x0, 0, x1, mask_full.height))
         blur = reg.blur_in * (1 - e)

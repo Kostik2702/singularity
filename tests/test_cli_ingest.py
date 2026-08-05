@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from singularity import sources
+from singularity.knowledge import sources
 from singularity.cli import main
 
 
@@ -97,7 +97,7 @@ def test_url_as_path_is_refused_with_the_working_command(vault, capsys):
 
 def test_stdin_with_origin(vault, capsys, monkeypatch):
     class _Stdin:
-        buffer = io.BytesIO("# Fetched\n\nremote body text".encode("utf-8"))
+        buffer = io.BytesIO(b"# Fetched\n\nremote body text")
     monkeypatch.setattr("sys.stdin", _Stdin())
     code, out, err = _run(["ingest", "add", "--stdin", "--origin",
                            "https://example.com/x", "--json"], capsys)

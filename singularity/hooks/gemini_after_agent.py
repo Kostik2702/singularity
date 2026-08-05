@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from singularity import session_activity as sa  # noqa: E402
+from singularity.telemetry import session_activity as sa  # noqa: E402
 from singularity.hooks.capture_decision import session_marker  # noqa: E402
 
 REMINDER = (
@@ -115,7 +115,7 @@ def main() -> int:
 
     try:
         from singularity.config import resolve_vault
-        from singularity.hooks_state import capture_config_state
+        from singularity.machine.hooks_state import capture_config_state
 
         vault = resolve_vault(None)
         if vault is None or not vault.exists():

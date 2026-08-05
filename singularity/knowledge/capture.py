@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, NamedTuple, Optional
+from typing import Any, NamedTuple
 
 DEDUP_WINDOW = 10
 SIMILARITY_THRESHOLD = 0.9
@@ -46,7 +46,7 @@ class DuplicateMatch(NamedTuple):
 
 
 def find_duplicate(existing_text: str, new_content: str,
-                   window: int = DEDUP_WINDOW) -> Optional[DuplicateMatch]:
+                   window: int = DEDUP_WINDOW) -> DuplicateMatch | None:
     """Compare `new_content` against the BODY of the last `window` sections of
     `existing_text` (bounded, not a full-file scan — an older duplicate outside
     the window is intentionally not caught, T05 acceptance). Match on: exact
@@ -77,9 +77,9 @@ def _under_root(rel_path: str, root: str) -> bool:
     return rel_norm == root_norm or rel_norm.startswith(root_norm + "/")
 
 
-def resolve_capture_project(cfg: Any, explicit: Optional[str],
-                            dest_rel_path: Optional[str] = None
-                            ) -> tuple[Optional[str], Optional[str]]:
+def resolve_capture_project(cfg: Any, explicit: str | None,
+                            dest_rel_path: str | None = None
+                            ) -> tuple[str | None, str | None]:
     """(project_or_None, error_or_None). `project=None` means general (the
     frontmatter key should be omitted, matching chunking.infer_project's
     convention).
@@ -105,7 +105,7 @@ def resolve_capture_project(cfg: Any, explicit: Optional[str],
     resolve to "personal" (a reserved id, never a registrable path) — so
     the only way to land on "personal" is an explicit flag or a configured
     root, never an accidental cwd match."""
-    from . import projects
+    from ..machine import projects
 
     registry = cfg.get("projects", {}) or {}
     if explicit:
@@ -129,7 +129,7 @@ def resolve_capture_project(cfg: Any, explicit: Optional[str],
     return detected, None
 
 
-def with_sources_frontmatter(body: str, source_ids: Optional[list]) -> str:
+def with_sources_frontmatter(body: str, source_ids: list | None) -> str:
     """Insert `sources: [id, ...]` into an already-built frontmatter block —
     the provenance contract (WIKI-LOOP W04): a note derived from an ingested
     document must say which one, or the claim is unverifiable.
@@ -155,7 +155,7 @@ def with_sources_frontmatter(body: str, source_ids: Optional[list]) -> str:
         + block[match.end():] + body[end:]
 
 
-def with_project_frontmatter(body: str, project: Optional[str]) -> str:
+def with_project_frontmatter(body: str, project: str | None) -> str:
     """Insert `project: <id>` into an already-built frontmatter block (works
     uniformly whether `body` came from a user template or the built-in
     fallback). No-op when project is None/general, when `body` has no

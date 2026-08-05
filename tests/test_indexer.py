@@ -138,13 +138,13 @@ def _code_tree(tmp_path: Path) -> Path:
 
 
 def _code_corpus(root: Path, index_dir: Path, **over) -> "indexer_mod.Corpus":
-    kwargs = dict(
-        name="code", root=root, index_dir=index_dir,
-        patterns=("*.py", "*.ts", "*.js"),
-        prune_dirs=("node_modules",),
-        skip_file_patterns=("*.test.*", "*.min.js", "*.d.ts", "*/migrations/*"),
-        chunk_schema=1,
-    )
+    kwargs = {
+        "name": "code", "root": root, "index_dir": index_dir,
+        "patterns": ("*.py", "*.ts", "*.js"),
+        "prune_dirs": ("node_modules",),
+        "skip_file_patterns": ("*.test.*", "*.min.js", "*.d.ts", "*/migrations/*"),
+        "chunk_schema": 1,
+    }
     kwargs.update(over)
     return indexer_mod.Corpus(**kwargs)
 

@@ -6,6 +6,7 @@ tolerate pre-marker installs]]. Gemini/scheduler/daemon are stubbed so this
 stays a pure Claude-settings-mutation test.
 """
 import json
+import shutil
 import pathlib
 
 import pytest
@@ -96,7 +97,7 @@ def test_uninstall_removes_grok_owned_artifacts(home, monkeypatch, capsys):
     rk = _load_register_grok()
     monkeypatch.setattr(rk, "resolve_vault", lambda: home / "vault")
     monkeypatch.setattr(rk, "_grok_version", lambda: (0, 2, 111))
-    monkeypatch.setattr(rk.shutil, "which", lambda _n: None)
+    monkeypatch.setattr(shutil, "which", lambda _n: None)
     (home / ".grok").mkdir()
     (home / "vault").mkdir()
     assert rk.main() == 0

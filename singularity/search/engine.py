@@ -10,11 +10,12 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
 from ..config import Config
+from . import lexical
 from .encoder import shared_encoder
 
 _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n", re.DOTALL)
@@ -28,6 +29,9 @@ class SearchEngine:
         self.mem_chunks: list[dict[str, Any]] = []
         self.code_embs: np.ndarray | None = None
         self.code_chunks: list[dict[str, Any]] = []
+        # Built on first hybrid query and reused; a session that never asks for
+        # one pays nothing, and daemon start time is unchanged (AUD-17).
+        self._bm25: dict[str, Any] = {}
         # W03: ingested raw sources — a third corpus, opted into per query
         self.src_embs: np.ndarray | None = None
         self.src_chunks: list[dict[str, Any]] = []
@@ -37,7 +41,7 @@ class SearchEngine:
 
     # ------------------------------------------------------------------
     def _load_one(self, index_dir: Path
-                  ) -> tuple[Optional[np.ndarray], list[dict], Optional[str]]:
+                  ) -> tuple[np.ndarray | None, list[dict], str | None]:
         """(normalized embeddings, chunks, model name). The model name is read
         here rather than in a second pass because metadata.json holds every
         chunk and is megabytes on a real vault — reading it twice per reload
@@ -113,9 +117,9 @@ class SearchEngine:
             return False
         links = req.get("filter_wikilinks")
         if links:
-            wanted_links = {l.strip().lower() for l in
+            wanted_links = {ln.strip().lower() for ln in
                             (links if isinstance(links, list) else str(links).split(","))}
-            have_links = {str(l).lower() for l in meta.get("wikilinks", [])}
+            have_links = {str(ln).lower() for ln in meta.get("wikilinks", [])}
             # a note also "links to itself": match by title too
             have_links.add(str(meta.get("title", "")).lower())
             if not wanted_links & have_links:
@@ -141,7 +145,7 @@ class SearchEngine:
                 return False
         return True
 
-    def _search_source(self, q_emb: np.ndarray, embs: Optional[np.ndarray],
+    def _search_source(self, q_emb: np.ndarray, embs: np.ndarray | None,
                        chunks: list[dict], source: str,
                        req: dict[str, Any]) -> list[dict[str, Any]]:
         if embs is None or embs.shape[0] == 0:
@@ -153,18 +157,73 @@ class SearchEngine:
         pool = top_k * (20 if has_filters else 3)   # Genevra candidate pool
         scores = embs @ q_emb                        # cosine (normalized)
         order = np.argsort(scores)[::-1][:pool]
+        lexical_hits: set[int] = set()
+        fused_score: dict[int, float] | None = None
+        if self._hybrid_wanted(req):
+            order, lexical_hits, fused_score = self._fuse_with_lexical(
+                order, chunks, source, req, pool)
         results = []
         for idx in order:
             score = float(scores[idx])
             if score < self.cfg.min_score:
-                break
+                # Pure vector search walks a monotonically decreasing list, so
+                # the first miss ends it. Fusion reorders, so `break` there
+                # would throw away exactly what the lexical half found: an
+                # exact-token hit whose cosine is legitimately low. Such a hit
+                # survives; anything neither half supports is skipped.
+                if idx not in lexical_hits and not lexical_hits:
+                    break
+                if idx not in lexical_hits:
+                    continue
             meta = chunks[idx]
             if not self._match_filters(meta, req):
                 continue
-            results.append({"meta": meta, "score": score, "source": source})
+            item = {"meta": meta, "score": score, "source": source}
+            if fused_score is not None:
+                item["fused"] = fused_score.get(int(idx), 0.0)
+            results.append(item)
             if len(results) >= top_k:
                 break
         return results
+
+    # --- hybrid retrieval (AUD-17) -------------------------------------
+
+    def _hybrid_wanted(self, req: dict[str, Any]) -> bool:
+        """Per-request `hybrid` wins over the config default, so a caller can
+        ask for exact-token recall without changing the machine's setting."""
+        explicit = req.get("hybrid")
+        if explicit is not None:
+            return bool(explicit)
+        return bool(self.cfg.get("hybrid_search"))
+
+    def _lexical_for(self, source: str, chunks: list[dict[str, Any]]):
+        index = self._bm25.get(source)
+        if index is None or index[0] != len(chunks):
+            index = (len(chunks), lexical.BM25(lexical.document_text(c) for c in chunks))
+            self._bm25[source] = index
+        return index[1]
+
+    def _fuse_with_lexical(self, order, chunks: list[dict[str, Any]],
+                           source: str, req: dict[str, Any], pool: int):
+        """Blend the vector ranking with BM25 by RANK, not by score.
+
+        Cosine and BM25 are on incomparable scales, so a weighted sum needs a
+        normalisation constant that must be re-tuned per corpus; RRF reads
+        positions only. The vector candidates stay in the pool — fusion can
+        reorder them and pull in exact-token hits the embedding missed, never
+        silently drop what the semantic search found.
+        """
+        query = str(req.get("query") or req.get("q") or "")
+        if not query:
+            return order, set(), None
+        bm = self._lexical_for(source, chunks)
+        lex_rank = lexical.rank_by_score(bm.scores(query), limit=pool)
+        if not lex_rank:
+            return order, set(), None
+        vec_rank = [int(i) for i in order]
+        fused = lexical.rrf([vec_rank, lex_rank])
+        ranked = [i for i, _ in sorted(fused.items(), key=lambda kv: kv[1], reverse=True)]
+        return ranked[:pool], set(lex_rank), fused
 
     # ------------------------------------------------------------------
     def _trim_meta(self, meta: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
@@ -232,7 +291,13 @@ class SearchEngine:
         if req.get("include_sources"):
             results += self._search_source(q_emb, self.src_embs, self.src_chunks,
                                            "sources", req)
-        results.sort(key=lambda r: r["score"], reverse=True)
+        # Fused results are ordered by RANK, not by cosine: sorting them by
+        # score again would undo the fusion and drop exactly the exact-token
+        # hits it was added to surface.
+        if any("fused" in r for r in results):
+            results.sort(key=lambda r: (r.get("fused", 0.0), r["score"]), reverse=True)
+        else:
+            results.sort(key=lambda r: r["score"], reverse=True)
 
         # Per-file diversity: cap chunks per file so one long note's many windows
         # (AUD-03) can't flood the results; order within is unchanged.
@@ -258,6 +323,8 @@ class SearchEngine:
                    "source": r["source"]}
             if explain:
                 out["explain"] = {"semantic": round(r["score"], 4)}
+                if "fused" in r:
+                    out["explain"]["fused"] = round(r["fused"], 5)
             return out
 
         trimmed = [_one(r) for r in results]

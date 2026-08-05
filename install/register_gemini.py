@@ -26,9 +26,7 @@ Return codes: 0 = skipped (absent) or success; 1 = a real partial failure
 from __future__ import annotations
 
 import json
-import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -42,7 +40,7 @@ import client_registration  # noqa: E402  (shared safe-registration primitives)
 import register_skills  # noqa: E402  (reuse the junction helpers, single source)
 import skill_manifest  # noqa: E402  (T15: single source of client->skills)
 from singularity.config import resolve_vault  # noqa: E402  (stdlib-only, pre-deps safe)
-from singularity.hooks_state import (  # noqa: E402  (T02/VSO-01 shared fragments)
+from singularity.machine.hooks_state import (  # noqa: E402  (T02/VSO-01 shared fragments)
     CAPTURE_HOOKS_FRAGMENT,
     VAULT_WRITE_POLICY_FRAGMENT,
 )
@@ -90,7 +88,7 @@ def _gemini_version() -> tuple[int, ...] | None:
     exe, _where = _gemini_exe()
     if not exe:
         return None
-    for attempt in range(2):
+    for _attempt in range(2):
         try:
             out = subprocess.run([exe, "--version"], capture_output=True, text=True,
                                  timeout=30, check=False)

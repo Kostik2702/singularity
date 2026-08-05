@@ -164,7 +164,7 @@ class EDL:
                 problems.append(f"S{i}: negative in-point")
 
         used: dict[str, list[tuple[int, int, int]]] = {}
-        for i, (s, n) in enumerate(zip(self.shots, durs), 1):
+        for i, (s, n) in enumerate(zip(self.shots, durs, strict=False), 1):
             a = self.in_frame(s)
             # a slowed shot eats FEWER source frames than it occupies on the
             # timeline; a sped-up one eats more. Bounds must use the real read.
@@ -208,7 +208,7 @@ class EDL:
             seen_max = st if seen_max is None else max(seen_max, st)
 
         heats = [(i, s.heat) for i, s in enumerate(self.shots, 1) if s.heat is not None]
-        for (i, h), (j, h2) in zip(heats, heats[1:]):
+        for (i, h), (j, h2) in zip(heats, heats[1:], strict=False):
             if h2 < h - 1 and not self.shots[j - 1].reprise:
                 problems.append(
                     f"S{j} drops the emotional ladder from {h} to {h2} after S{i} — "
@@ -225,7 +225,7 @@ class EDL:
         }
 
     @staticmethod
-    def from_dict(d: dict[str, Any]) -> "EDL":
+    def from_dict(d: dict[str, Any]) -> EDL:
         g = d["grid"]
         return EDL(grid=Grid(bpm=float(g["bpm"]), fps=int(g.get("fps", 24)),
                              phase=float(g.get("phase", 0.0)),
@@ -234,7 +234,7 @@ class EDL:
                    sources=dict(d.get("sources", {})))
 
     @staticmethod
-    def load(path: str | Path) -> "EDL":
+    def load(path: str | Path) -> EDL:
         return EDL.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
     def save(self, path: str | Path) -> None:
@@ -244,7 +244,7 @@ class EDL:
     def table(self) -> str:
         rows = ["shot  src   in_f  n_f   t_start  t_end    src_in src_out flip  note"]
         e, durs = self.edges, self.durations
-        for i, (s, n) in enumerate(zip(self.shots, durs), 1):
+        for i, (s, n) in enumerate(zip(self.shots, durs, strict=False), 1):
             a = self.in_frame(s)
             rows.append("S%-4d %-5s %4d  %3d  %7.3f %7.3f  %6.2f %6.2f  %-4s  %s"
                         % (i, s.source, a, n, e[i - 1] / self.grid.fps, e[i] / self.grid.fps,

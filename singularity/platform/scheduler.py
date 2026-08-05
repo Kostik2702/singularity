@@ -248,17 +248,14 @@ def _linux_register(job: Job) -> str:
         d = _systemd_dir()
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{unit}.service").write_text(
-            "[Unit]\nDescription=Singularity %s\n\n[Service]\nType=oneshot\n"
-            "WorkingDirectory=%s\nExecStart=%s\n"
-            % (job.name, _systemd_quote(module_search_root()),
-               _systemd_execstart(exe, job.args)),
+            f"[Unit]\nDescription=Singularity {job.name}\n\n[Service]\nType=oneshot\n"
+            f"WorkingDirectory={_systemd_quote(module_search_root())}\nExecStart={_systemd_execstart(exe, job.args)}\n",
             encoding="utf-8",
         )
         if job.daily_at:
             (d / f"{unit}.timer").write_text(
-                "[Unit]\nDescription=Singularity %s timer\n\n[Timer]\nOnCalendar=*-*-* %s:00\n"
-                "Persistent=true\n\n[Install]\nWantedBy=timers.target\n"
-                % (job.name, job.daily_at),
+                f"[Unit]\nDescription=Singularity {job.name} timer\n\n[Timer]\nOnCalendar=*-*-* {job.daily_at}:00\n"
+                "Persistent=true\n\n[Install]\nWantedBy=timers.target\n",
                 encoding="utf-8",
             )
             _run(["systemctl", "--user", "daemon-reload"])
@@ -266,11 +263,9 @@ def _linux_register(job: Job) -> str:
             return "OK" if res.returncode == 0 else f"FAIL: {res.stderr.strip()}"
         if job.at_login:
             (d / f"{unit}.service").write_text(
-                "[Unit]\nDescription=Singularity %s\n\n[Service]\n"
-                "WorkingDirectory=%s\nExecStart=%s\nRestart=on-failure\n\n"
-                "[Install]\nWantedBy=default.target\n"
-                % (job.name, _systemd_quote(module_search_root()),
-                   _systemd_execstart(exe, job.args)),
+                f"[Unit]\nDescription=Singularity {job.name}\n\n[Service]\n"
+                f"WorkingDirectory={_systemd_quote(module_search_root())}\nExecStart={_systemd_execstart(exe, job.args)}\nRestart=on-failure\n\n"
+                "[Install]\nWantedBy=default.target\n",
                 encoding="utf-8",
             )
             _run(["systemctl", "--user", "daemon-reload"])
@@ -313,7 +308,7 @@ def _linux_unregister(job: Job) -> None:
         _run(["systemctl", "--user", "daemon-reload"])
     current = _run(["crontab", "-l"]).stdout
     if job.task_id in current:
-        new = "\n".join(l for l in current.splitlines() if job.task_id not in l) + "\n"
+        new = "\n".join(ln for ln in current.splitlines() if job.task_id not in ln) + "\n"
         subprocess.run(["crontab", "-"], input=new, text=True)
 
 

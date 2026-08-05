@@ -6,7 +6,7 @@ the max mtime seen, so a later fetch returns only files modified since.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from .base import Connector, ConnectorManifest, NormalizedDoc
 
@@ -31,8 +31,8 @@ class LocalFilesConnector(Connector):
         ok = self.root.is_dir()
         return {"ok": ok, "detail": str(self.root) if ok else f"not a directory: {self.root}"}
 
-    def fetch(self, cursor: Optional[str] = None
-              ) -> tuple[list[NormalizedDoc], Optional[str]]:
+    def fetch(self, cursor: str | None = None
+              ) -> tuple[list[NormalizedDoc], str | None]:
         since = float(cursor) if cursor else -1.0
         docs: list[NormalizedDoc] = []
         newest = since

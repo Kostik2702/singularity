@@ -24,7 +24,7 @@ def retry_with_backoff(attempts, base=0.5):
 
 async def fetch_all(urls):
     # gathers everything, no concurrency cap on purpose
-    return [u for u in urls]
+    return list(urls)
 
 
 class SessionStore:

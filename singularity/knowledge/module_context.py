@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from .context_map import load_context_map, read_note_excerpt
 
@@ -27,7 +27,7 @@ def _normalize_prefix(p: str) -> str:
     return p.replace("\\", "/").strip("/")
 
 
-def match_module(context_map_for_project: Any, project_relative_path: str) -> Optional[str]:
+def match_module(context_map_for_project: Any, project_relative_path: str) -> str | None:
     """Longest-matching module prefix, or None. `project_relative_path` is
     relative to the PROJECT's own root (already stripped of any vault/cwd
     prefix), forward-slash normalized. A glob is treated as a path prefix —
@@ -39,7 +39,7 @@ def match_module(context_map_for_project: Any, project_relative_path: str) -> Op
     if not isinstance(context_map_for_project, dict):
         return None
     target = _normalize_prefix(project_relative_path)
-    best_name: Optional[str] = None
+    best_name: str | None = None
     best_len = -1
     for name, entry in context_map_for_project.items():
         if not isinstance(entry, dict):
@@ -53,10 +53,9 @@ def match_module(context_map_for_project: Any, project_relative_path: str) -> Op
             gp = _normalize_prefix(g)
             if not gp:
                 continue
-            if target == gp or target.startswith(gp + "/"):
-                if len(gp) > best_len:
-                    best_len = len(gp)
-                    best_name = name
+            if (target == gp or target.startswith(gp + "/")) and len(gp) > best_len:
+                best_len = len(gp)
+                best_name = name
     return best_name
 
 
@@ -77,7 +76,7 @@ def module_marker(vault: Path, client: str, session_id: str, project: str, modul
 
 
 def module_note_block(vault: Path, project: str, module: str,
-                      max_lines: int = DEFAULT_MODULE_NOTE_MAX_LINES) -> Optional[str]:
+                      max_lines: int = DEFAULT_MODULE_NOTE_MAX_LINES) -> str | None:
     """Budgeted excerpt of the module's mapped note, or None (no entry, no
     `note` key, traversal attempt, missing/unreadable file — every reason
     fails open silently, same convention as project_brain_block)."""

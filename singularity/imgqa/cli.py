@@ -12,7 +12,7 @@ import sys
 from ._contract import (EXIT_FAIL, EXIT_PASS, EXIT_TOOL_ERROR, ContractError,
                         emit, envelope)
 
-SCHEMA_VERSION = 2  # frozen 2026-07-14 (+schema-2 amendments) — see CONTRACT.md §6
+from . import SCHEMA_VERSION      # re-exported: callers and tests use cli.SCHEMA_VERSION
 
 EVALUATIVE = {"probe", "compare", "contrast", "detect-fringe"}
 

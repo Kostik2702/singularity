@@ -15,7 +15,9 @@ import time
 import numpy as np
 import pytest
 
-from singularity import curator, digest, sources
+from singularity.knowledge import curator
+from singularity.knowledge import digest
+from singularity.knowledge import sources
 from singularity.config import Config
 from singularity.search import client, indexer
 from singularity.search.engine import SearchEngine
@@ -296,10 +298,9 @@ def test_indexing_sources_is_not_blocked_by_a_held_vault_lock(cfg):
         stats = indexer.rebuild(cfg, progress=False, corpus="sources")
     assert stats["files"] == 1
 
-    with indexer._writer_lock(cfg, "sources"):
-        with pytest.raises(indexer.IndexLockedError):
-            with indexer._writer_lock(cfg, "sources"):
-                pass
+    with indexer._writer_lock(cfg, "sources"), pytest.raises(indexer.IndexLockedError):  # noqa: SIM117
+        with indexer._writer_lock(cfg, "sources"):
+            pass
 
 
 def test_concurrent_corpus_writers_both_succeed(cfg):

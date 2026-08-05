@@ -11,7 +11,7 @@ import threading
 
 import pytest
 
-from singularity import sources
+from singularity.knowledge import sources
 from singularity.config import Config
 
 
@@ -317,15 +317,14 @@ def test_export_unknown_id_is_actionable(cfg, tmp_path):
 # --- locking ----------------------------------------------------------------
 
 def test_registry_lock_is_exclusive(cfg):
-    with sources.registry_lock(cfg):
-        with pytest.raises(sources.RegistryLockedError):
-            with sources.registry_lock(cfg, wait_seconds=0.0):
-                pass
+    with sources.registry_lock(cfg), pytest.raises(sources.RegistryLockedError):  # noqa: SIM117
+        with sources.registry_lock(cfg, wait_seconds=0.0):
+            pass
 
 
 def test_registry_lock_loser_does_not_remove_the_holders_lock(cfg):
-    with sources.registry_lock(cfg):
-        with pytest.raises(sources.RegistryLockedError):
+    with sources.registry_lock(cfg):  # noqa: SIM117
+        with pytest.raises(sources.RegistryLockedError):  # noqa: SIM117
             with sources.registry_lock(cfg, wait_seconds=0.0):
                 pass
         assert cfg.ingest_lock_dir.exists(), "loser must never reap the holder's lock"

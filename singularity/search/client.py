@@ -10,11 +10,11 @@ from __future__ import annotations
 import json
 import shutil
 import socket
-import sys
 import time
-from typing import Any, Optional
+from typing import Any
 
 from ..config import Config
+from ..log import log
 from ..platform import proc
 
 START_TIMEOUT_TRIES = 30   # x1s: model load can take ~10-20s on first run
@@ -28,14 +28,14 @@ class RemoteIndexError(RuntimeError):
         self.error_type = error_type
 
 
-def _read_state(cfg: Config) -> Optional[dict[str, Any]]:
+def _read_state(cfg: Config) -> dict[str, Any] | None:
     try:
         return json.loads(cfg.daemon_state_file.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
 
 
-def _read_port(cfg: Config) -> Optional[int]:
+def _read_port(cfg: Config) -> int | None:
     state = _read_state(cfg)
     if state and isinstance(state.get("port"), int):
         return state["port"]
@@ -47,7 +47,7 @@ def _read_port(cfg: Config) -> Optional[int]:
 
 def _request(port: int, payload: dict[str, Any],
              timeout: float = CONNECT_TIMEOUT,
-             read_timeout: float | None = None) -> Optional[dict[str, Any]]:
+             read_timeout: float | None = None) -> dict[str, Any] | None:
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=timeout) as s:
             s.settimeout(read_timeout if read_timeout is not None
@@ -64,7 +64,7 @@ def _request(port: int, payload: dict[str, Any],
         return None
 
 
-def ping(cfg: Config) -> Optional[dict[str, Any]]:
+def ping(cfg: Config) -> dict[str, Any] | None:
     port = _read_port(cfg)
     if port is None:
         return None
@@ -153,7 +153,7 @@ def stop_daemon(cfg: Config) -> bool:
     return ok
 
 
-def reload_daemon(cfg: Config) -> Optional[dict[str, Any]]:
+def reload_daemon(cfg: Config) -> dict[str, Any] | None:
     port = _read_port(cfg)
     if port is None:
         return None
@@ -237,7 +237,7 @@ def status(cfg: Config) -> dict[str, Any]:
     pid_alive = bool(pid and proc.is_running(pid))
     # orphan = we have recorded state but the process is gone (crashed daemon)
     orphan = bool(state and not pid_alive)
-    return {
+    out = {
         "pid": pid,
         "pid_alive": pid_alive,
         "port": _read_port(cfg),
@@ -245,13 +245,20 @@ def status(cfg: Config) -> dict[str, Any]:
         "orphan": orphan,
         "ping": pong,
     }
+    if pong:
+        # Counters describe the SERVING process, so they can only be asked for
+        # while it answers; a dead daemon simply has none (AUD-18).
+        port = _read_port(cfg)
+        answer = (_request(port, {"cmd": "metrics"}, timeout=2.0) or {}) if port else {}
+        if isinstance(answer.get("metrics"), dict):
+            out["metrics"] = answer["metrics"]
+    return out
 
 
 # --------------------------------------------------------------------------
 
 def _cold_search(cfg: Config, payload: dict[str, Any]) -> dict[str, Any]:
-    print("[mb] WARNING: daemon unavailable — cold one-off search (slow)",
-          file=sys.stderr)
+    log.warning("[mb] WARNING: daemon unavailable — cold one-off search (slow)")
     from .engine import SearchEngine
 
     t0 = time.perf_counter()

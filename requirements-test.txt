@@ -12,3 +12,5 @@ pytest>=7.0
 # so CI must install what [project.optional-dependencies] imgqa declares.
 Pillow>=10
 scipy>=1.10
+# lint gate: `ruff check .` must stay at zero (tests/test_lint_gate.py)
+ruff>=0.6

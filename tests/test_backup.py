@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from singularity import backup
+from singularity.machine import backup
 from singularity.config import Config
 
 

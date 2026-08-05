@@ -49,7 +49,7 @@ def test_nightly_human_output(wired, capsys):
 
 
 def test_nightly_exit_code_1_on_step_error(wired, monkeypatch, capsys):
-    import singularity.curator as curator_mod
+    import singularity.knowledge.curator as curator_mod
     monkeypatch.setattr(curator_mod, "validate",
                         lambda cfg: (_ for _ in ()).throw(RuntimeError("x")))
     rc = cli.main(["nightly", "--json"])

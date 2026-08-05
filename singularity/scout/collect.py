@@ -349,7 +349,7 @@ ADAPTERS = {
 
 # --- probe ------------------------------------------------------------------
 
-def run_probe(registry: dict, transport=None) -> tuple[dict, bool, "BudgetLog"]:
+def run_probe(registry: dict, transport=None) -> tuple[dict, bool, BudgetLog]:
     """Health check every source (evaluative, §2). Injectable transport so the
     floor logic and the FAIL branch are offline-testable (review F3)."""
     from .fetch import Fetcher

@@ -20,11 +20,10 @@ returning noise here is worse than refusing, because the caller cannot tell.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
-import numpy as np
 
-from .config import Config
+from ..config import Config
 
 # Housekeeping roots that are never wiki pages (same set curator excludes from
 # orphan/suggestion analysis) plus `learnings/`: active learnings are the INPUT
@@ -82,7 +81,7 @@ def _summary_target(cfg: Config, title: str, source_id: str,
     safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in title).strip()
     rel = f"{folder}/{safe or 'source'}.md"
     return {"file": rel, "type": note_type,
-            "exists": (cfg.vault / rel).exists(),
+            "exists": cfg.resolve(rel).exists(),
             "command": f'mb note new {note_type} "{title}" --from-source {source_id}'}
 
 
@@ -159,16 +158,16 @@ def _new_pages(src_chunks: list[dict[str, Any]], rows: list[int],
     return rows_out[:limit]
 
 
-def plan(cfg: Config, source_id: str, top_k: Optional[int] = None,
-         threshold: Optional[float] = None,
+def plan(cfg: Config, source_id: str, top_k: int | None = None,
+         threshold: float | None = None,
          summary_type: str = DEFAULT_SUMMARY_TYPE) -> dict[str, Any]:
     """Fan-out candidates for one ingested source. Deterministic: a repeated
     run against an unchanged pair of index generations returns byte-identical
     JSON (scores sorted descending, ties broken on file name)."""
     from . import digest
     from . import sources as sources_mod
-    from .search import indexer
-    from .search.similarity import (cross_best_pair, group_indices, mean_pool,
+    from ..search import indexer
+    from ..search.similarity import (cross_best_pair, group_indices, mean_pool,
                                     pooled_vectors)
 
     top_k = int(top_k if top_k is not None else cfg.get("ingest_fanout_top_k"))
@@ -248,7 +247,7 @@ def plan(cfg: Config, source_id: str, top_k: Optional[int] = None,
     scores = vecs @ src_vec
     scored: list[tuple[float, str]] = []
     suppressed = 0
-    for file, score in zip(files, scores):
+    for file, score in zip(files, scores, strict=False):
         target_project = meta_by_file[file].get("project")
         if not digest._compatible(source_project, target_project):
             continue

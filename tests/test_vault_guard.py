@@ -1,7 +1,7 @@
 """T08: client-neutral vault-guard core (singularity/vault_guard.py)."""
 import pytest
 
-from singularity import vault_guard
+from singularity.machine import vault_guard
 
 
 @pytest.fixture

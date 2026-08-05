@@ -143,7 +143,7 @@ def test_code_only_never_returns_a_note(world):
 
 def _analytics(cfg):
     """curator + digest output, the two things that read the memory index."""
-    from singularity import curator, digest
+    from singularity.knowledge import curator, digest
     return (json.dumps(curator.analyze(cfg), ensure_ascii=False, sort_keys=True),
             json.dumps(digest.plan(cfg), ensure_ascii=False, sort_keys=True))
 

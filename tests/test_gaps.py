@@ -7,11 +7,12 @@ show, which is why the per-signal ceiling reports its own truncation.
 from __future__ import annotations
 
 import json
-import time
 
 import pytest
 
-from singularity import curator, gaps, sources
+from singularity.knowledge import curator
+from singularity.knowledge import gaps
+from singularity.knowledge import sources
 from singularity.cli import main
 from singularity.config import Config
 
@@ -158,7 +159,7 @@ def test_recent_learning_sections_are_not_gaps(vault):
 
 
 def test_digest_marked_sections_are_not_gaps(vault):
-    from singularity import digest
+    from singularity.knowledge import digest
     cfg = _cfg(vault)
     p = vault / "learnings" / "active" / "T.md"
     p.parent.mkdir(parents=True)
@@ -288,7 +289,7 @@ def test_top_limits_the_final_list(vault):
 def test_heuristic_is_off_by_default(vault):
     cfg = _cfg(vault)
     for i in range(3):
-        _note(vault, f"reference/n{i}.md", body=f"## Совершенно Новый Термин\n\ntext",
+        _note(vault, f"reference/n{i}.md", body="## Совершенно Новый Термин\n\ntext",
               mtime=NOW)
     default = gaps.report(cfg, now=NOW)
     assert default["heuristic"] is False

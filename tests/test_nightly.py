@@ -14,7 +14,7 @@ import time
 import numpy as np
 import pytest
 
-from singularity import nightly
+from singularity.knowledge import nightly
 from singularity.config import Config
 from singularity.search import client, indexer
 
@@ -150,7 +150,7 @@ def test_trend_line_appends_one_row_per_run(cfg, monkeypatch):
     _no_index_update(monkeypatch)
     nightly.run(cfg)
     nightly.run(cfg)
-    rows = [json.loads(l) for l in
+    rows = [json.loads(ln) for ln in
            (cfg.mb_dir / nightly.TREND_HISTORY_NAME).read_text(encoding="utf-8").splitlines()]
     assert len(rows) == 2
 
@@ -162,7 +162,7 @@ def test_trend_line_prunes_rows_older_than_retention(cfg, monkeypatch):
         json.dumps({"ts": "2020-01-01T00:00:00", "index_status": None}) + "\n", encoding="utf-8")
     cfg.data["nightly_trend_retention_days"] = 1
     nightly.run(cfg)
-    rows = [json.loads(l) for l in
+    rows = [json.loads(ln) for ln in
            (cfg.mb_dir / nightly.TREND_HISTORY_NAME).read_text(encoding="utf-8").splitlines()]
     assert all(r["ts"] != "2020-01-01T00:00:00" for r in rows)
 
@@ -186,7 +186,7 @@ def test_trend_line_no_leftover_tmp(cfg, monkeypatch):
 
 def test_one_failing_step_does_not_sink_the_rest(cfg, monkeypatch):
     _no_index_update(monkeypatch)
-    import singularity.curator as curator_mod
+    import singularity.knowledge.curator as curator_mod
 
     def boom(cfg):
         raise RuntimeError("curator blew up")
@@ -200,7 +200,7 @@ def test_one_failing_step_does_not_sink_the_rest(cfg, monkeypatch):
 
 def test_has_error_true_when_any_step_errors(cfg, monkeypatch):
     _no_index_update(monkeypatch)
-    import singularity.curator as curator_mod
+    import singularity.knowledge.curator as curator_mod
     monkeypatch.setattr(curator_mod, "validate",
                         lambda cfg: (_ for _ in ()).throw(RuntimeError("x")))
     result = nightly.run(cfg)

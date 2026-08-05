@@ -182,7 +182,7 @@ def build_master(edl: EDL, out: str | Path, *, canvas: str = "portrait",
     extra = [(s.dissolve if i < len(edl.shots) - 1 else 0)
              for i, s in enumerate(edl.shots)]
     parts, labels, inputs = [], [], []
-    for i, (shot, n) in enumerate(zip(edl.shots, durs)):
+    for i, (shot, n) in enumerate(zip(edl.shots, durs, strict=False)):
         a = edl.in_frame(shot)
         n_full = n + extra[i]
         read = max(1, round(n_full * shot.source_frames_per_output))

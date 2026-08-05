@@ -33,11 +33,13 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any
+from collections.abc import Iterable
 
 import numpy as np
 
-from .config import Config, atomic_write_json
+from ..config import Config, atomic_write_json
+from ..contracts import ContradictionCandidate, VerdictResult
 
 # Below the floor: different topics. Above the ceiling: curator.lint() already
 # calls it a near-duplicate (curator.DUPLICATE_THRESHOLD = 0.90).
@@ -235,7 +237,7 @@ def _evidence_from_features(fa: dict[str, Any], fb: dict[str, Any]
 
 def evaluate_features(fa: dict[str, Any], fb: dict[str, Any], cosine: float,
                       same_file: bool = False
-                      ) -> Optional[tuple[float, dict[str, list[str]]]]:
+                      ) -> tuple[float, dict[str, list[str]]] | None:
     """(score, evidence), or None when nothing worth reporting fires.
 
     score = cosine x weighted signal mass (capped at 1.0). Both factors matter:
@@ -257,7 +259,7 @@ def evaluate_features(fa: dict[str, Any], fb: dict[str, Any], cosine: float,
 
 
 def evaluate(a_text: str, b_text: str, cosine: float, same_file: bool = False
-             ) -> Optional[tuple[float, dict[str, list[str]]]]:
+             ) -> tuple[float, dict[str, list[str]]] | None:
     """Single-pair convenience wrapper over `features` + `evaluate_features`."""
     return evaluate_features(features(a_text), features(b_text), cosine, same_file)
 
@@ -291,7 +293,7 @@ def read_journal(cfg: Config) -> dict[str, Any]:
 
 
 def record_verdict(cfg: Config, key: str, verdict: str, note: str = "",
-                   now: Optional[str] = None) -> dict[str, Any]:
+                   now: str | None = None) -> VerdictResult:
     """Silence a pair for good. Without this the same false positive resurfaces
     on every run and the report stops being read at all."""
     if verdict not in VERDICTS:
@@ -313,7 +315,8 @@ def _chunk_text(chunk: dict[str, Any]) -> str:
 
 
 def _entry(a: dict[str, Any], b: dict[str, Any], score: float,
-           cosine: float, evidence: dict[str, list[str]]) -> dict[str, Any]:
+           cosine: float,
+           evidence: dict[str, list[str]]) -> ContradictionCandidate:
     return {
         "key": pair_key(str(a.get("file", "")), str(a.get("section", "")),
                         str(b.get("file", "")), str(b.get("section", ""))),
@@ -351,8 +354,8 @@ def scan(cfg: Config, limit: int = DEFAULT_LIMIT,
     while describing different tasks. Opt in with `--same-file` when auditing
     one long note; the report says which mode produced it."""
     from . import curator
-    from .search import indexer
-    from .search.similarity import blockwise_pairs
+    from ..search import indexer
+    from ..search.similarity import blockwise_pairs
 
     low, high = band
     embs, chunks, status = indexer.load_committed_index(cfg.memory_index_dir)
@@ -409,7 +412,7 @@ def scan(cfg: Config, limit: int = DEFAULT_LIMIT,
 def for_source(src_embs: np.ndarray, src_chunks: list[dict[str, Any]],
                src_rows: Iterable[int], mem_embs: np.ndarray,
                mem_chunks: list[dict[str, Any]], mem_rows: Iterable[int],
-               judged: Optional[set] = None, limit: int = DEFAULT_LIMIT,
+               judged: set | None = None, limit: int = DEFAULT_LIMIT,
                band: tuple[float, float] = CONTRADICTION_BAND) -> list[dict[str, Any]]:
     """Cross-corpus variant used by `mb ingest plan`: does this source
     contradict something the wiki already claims?

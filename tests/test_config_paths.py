@@ -6,11 +6,11 @@ one of them and reported `PASS 31 | WARN 1` while local-LLM delegation and four
 project registrations were equally dead.
 """
 import os
-from pathlib import Path
 
 import pytest
 
-from singularity import config_paths, doctor
+from singularity import doctor
+from singularity.machine import config_paths
 from singularity.config import Config
 
 # The reported config, verbatim in shape: forward slashes under `llm`, escaped

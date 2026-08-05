@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from singularity import vault_guard
+from singularity.machine import vault_guard
 
 ENGINE = Path(__file__).resolve().parents[1]
 SKILL = ENGINE / "singularity" / "skills" / "mb-memory" / "SKILL.md"
@@ -30,12 +30,12 @@ ARRIVES_BY_MOVE = {"learnings/archive"}
 
 
 def _folder_by_type() -> dict[str, str]:
-    """The literal from `cli.cmd_note`, read from source.
+    """The literal from `commands.memory.cmd_note`, read from source.
 
     Reached by parsing rather than by calling: `cmd_note` needs a Config, a
     vault and argparse args to run, and the invariant under test is about the
     table itself."""
-    src = (ENGINE / "singularity" / "cli.py").read_text(encoding="utf-8")
+    src = (ENGINE / "singularity" / "commands" / "memory.py").read_text(encoding="utf-8")
     block = re.search(r"folder_by_type = \{(.*?)\}", src, re.S)
     assert block, "cmd_note no longer declares folder_by_type as a literal"
     return dict(re.findall(r'"([^"]+)":\s*"([^"]+)"', block.group(1)))

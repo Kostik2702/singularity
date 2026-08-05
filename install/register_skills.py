@@ -170,7 +170,7 @@ def _link_dir(src: Path, dst: Path, vault: Path | None = None) -> str:
     return status if status == "backed-up" else "copied"
 
 
-def _resolved_vault() -> "Path | None":
+def _resolved_vault() -> Path | None:
     """This machine's vault, through the engine's own resolution order. Guarded:
     registration must still work from a checkout whose deps are not installed."""
     try:

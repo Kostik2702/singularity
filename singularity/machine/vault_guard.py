@@ -20,7 +20,6 @@ always allowed — only NEW-file creation is flagged.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 MANAGED_ROOTS = ["learnings/active", "learnings/archive", "decisions", "howto",
                  "incidents", "rules", "reference", "changelog", "_moc", "daily"]
@@ -32,7 +31,7 @@ EXEMPT_ROOTS = ["templates", "compaction-plans"]
 DEFAULT_IMMUTABLE_ROOTS = [".mb/sources"]
 
 
-def vault_relative(vault: Path, abs_path: Path) -> Optional[str]:
+def vault_relative(vault: Path, abs_path: Path) -> str | None:
     """Forward-slash vault-relative path, or None if `abs_path` resolves
     outside `vault` entirely. Never raises."""
     try:
@@ -50,7 +49,7 @@ def is_config_json(vault: Path, abs_path: Path) -> bool:
     vault-resident copy, which still exists until the migration runs. Dropping
     the second would silently stop guarding it during exactly the window where
     a hand edit is most likely."""
-    from .config import CONFIG_FILE
+    from ..config import CONFIG_FILE
 
     if vault_relative(vault, abs_path) == ".mb/config.json":
         return True
@@ -61,7 +60,7 @@ def is_config_json(vault: Path, abs_path: Path) -> bool:
 
 
 def immutable_root(vault: Path, abs_path: Path,
-                   roots: Optional[list] = None) -> Optional[str]:
+                   roots: list | None = None) -> str | None:
     """The matched immutable-root prefix if `abs_path` falls inside one, else
     None. Applies to EXISTING files as well as new ones — the whole point is
     that an ingested source can never be edited (D6).
@@ -81,7 +80,7 @@ def immutable_root(vault: Path, abs_path: Path,
     return None
 
 
-def new_file_managed_root(vault: Path, abs_path: Path) -> Optional[str]:
+def new_file_managed_root(vault: Path, abs_path: Path) -> str | None:
     """The matched managed-root prefix if `abs_path` is a NEW file (does not
     already exist on disk) under a managed knowledge root and not under an
     exempt carve-out. None otherwise — including when the file already

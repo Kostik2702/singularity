@@ -1,7 +1,6 @@
 """T05: `mb learn --project/--head/--force` and `mb note new --project` CLI
 wiring — backward compatibility, dedup skip/force, cross-project warning,
 project inheritance into frontmatter."""
-import json
 
 import pytest
 
@@ -73,14 +72,14 @@ def test_learn_different_insight_is_not_skipped(wired, cfg):
 def test_learn_head_appears_in_heading_line(wired, cfg):
     cli.main(["learn", "some insight", "--task", "T1", "--head", "Daemon crash root cause"])
     text = (cfg.vault / "learnings" / "active" / "T1.md").read_text(encoding="utf-8")
-    heading_line = next(l for l in text.splitlines() if l.startswith("## "))
+    heading_line = next(ln for ln in text.splitlines() if ln.startswith("## "))
     assert "Daemon crash root cause" in heading_line
 
 
 def test_learn_without_head_uses_bare_timestamp(wired, cfg):
     cli.main(["learn", "some insight", "--task", "T1"])
     text = (cfg.vault / "learnings" / "active" / "T1.md").read_text(encoding="utf-8")
-    heading_line = next(l for l in text.splitlines() if l.startswith("## "))
+    heading_line = next(ln for ln in text.splitlines() if ln.startswith("## "))
     assert "—" not in heading_line
 
 

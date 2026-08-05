@@ -11,7 +11,7 @@ import json
 import time
 from typing import Any
 
-from .config import Config
+from ..config import Config
 
 
 def _guard(fn):
@@ -22,7 +22,7 @@ def _guard(fn):
 
 
 def _index(cfg: Config) -> dict[str, Any]:
-    from .search import indexer
+    from ..search import indexer
     files = indexer.index_files(cfg.memory_index_dir)
     if files is None:
         return {"present": False}
@@ -44,8 +44,8 @@ def _watcher(cfg: Config) -> dict[str, Any]:
 
 
 def _scheduler(cfg: Config) -> dict[str, Any]:
-    from .platform import scheduler
-    from . import nightly
+    from ..platform import scheduler
+    from ..knowledge import nightly
     out = {}
     jobs = {
         nightly.JOB_NAME: nightly.nightly_job(cfg),
@@ -60,7 +60,7 @@ def _scheduler(cfg: Config) -> dict[str, Any]:
 
 
 def _backlog(cfg: Config) -> dict[str, Any]:
-    from . import nightly
+    from ..knowledge import nightly
     path = cfg.mb_dir / nightly.DIGEST_SNAPSHOT_NAME
     if not path.exists():
         return {"present": False}
@@ -76,8 +76,8 @@ def _backlog(cfg: Config) -> dict[str, Any]:
 def _sources(cfg: Config) -> dict[str, Any]:
     """Ingest layer at a glance (W11), including the one number worth acting
     on: how many documents are still waiting to be turned into notes."""
-    from . import sources as sources_mod
-    from .search import indexer
+    from ..knowledge import sources as sources_mod
+    from ..search import indexer
 
     records = [r for r in sources_mod.read_registry(cfg)["sources"].values()
                if isinstance(r, dict)]
@@ -95,7 +95,7 @@ def _code(cfg: Config) -> dict[str, Any]:
     """Code corpus at a glance (C05). `age_hours` is the number that matters:
     with no watcher over repositories (D4) this corpus goes stale silently, and
     a stale code index answers with yesterday's implementation."""
-    from .search import indexer
+    from ..search import indexer
 
     if cfg.code_repos_dir is None:
         return {"present": False, "configured": False}
@@ -113,8 +113,8 @@ def _code(cfg: Config) -> dict[str, Any]:
 
 
 def _cache_age(cfg: Config) -> dict[str, Any]:
-    from . import nightly
-    from . import reflect
+    from ..knowledge import nightly
+    from ..telemetry import reflect
     out: dict[str, Any] = {}
     for name, fname in (("digest", nightly.DIGEST_SNAPSHOT_NAME),
                         ("curator", nightly.CURATOR_SNAPSHOT_NAME),
@@ -142,8 +142,8 @@ def _disk(cfg: Config) -> dict[str, Any]:
 
 
 def snapshot(cfg: Config) -> dict[str, Any]:
-    from .search import client
-    from .config import machine_id
+    from ..search import client
+    from ..config import machine_id
     from . import hooks_state
     return {
         "vault": str(cfg.vault),
@@ -161,48 +161,3 @@ def snapshot(cfg: Config) -> dict[str, Any]:
     }
 
 
-def run(cfg: Config, as_json: bool = False) -> int:
-    snap = snapshot(cfg)
-    if as_json:
-        print(json.dumps(snap, ensure_ascii=False))
-        return 0
-    print(f"vault: {snap['vault']}")
-    idx = snap["index"]
-    if idx.get("present"):
-        print(f"index: {idx.get('chunks')} chunks, {idx.get('layout')}, "
-              f"age {idx.get('age_hours')}h, schema {idx.get('chunk_schema')}")
-    else:
-        print(f"index: {idx.get('error', 'absent')}")
-    dae = snap["daemon"]
-    print(f"daemon: {'up' if dae.get('ping') else 'down'} "
-          f"(pid {dae.get('pid')}, orphan={dae.get('orphan')})")
-    w = snap["watcher"]
-    print(f"watcher: {'alive' if w.get('alive') else 'not running'}"
-          + (f" (heartbeat {w.get('heartbeat_age_s')}s ago)" if w.get("heartbeat_age_s") else ""))
-    for name, s in (snap["scheduler"].items() if isinstance(snap["scheduler"], dict)
-                    and "error" not in snap["scheduler"] else []):
-        print(f"scheduler[{name}]: registered={s.get('registered')}")
-    src = snap["sources"]
-    if src.get("present"):
-        print(f"sources: {src['documents']} documents "
-              f"({src['unprocessed']} unprocessed), {src['chunks']} chunks"
-              + ("" if src.get("corpus_enabled") else ", corpus DISABLED"))
-    code = snap["code"]
-    if code.get("configured"):
-        if code.get("present"):
-            # A built-but-empty corpus is not a small healthy number, it is a
-            # broken feature (issue #13) — do not print it in the same neutral
-            # tone as a real count.
-            empty = "" if code.get("files") else "  <- EMPTY, code search finds nothing"
-            print(f"code: {code['chunks']} chunks from {code['files']} files, "
-                  f"age {code['age_hours']}h{empty}")
-        else:
-            print("code: configured but not built (`mb index rebuild --code`)")
-    print(f"disk(.mb): {snap['disk'].get('mb_dir_mb')} MB")
-    h = snap["hooks"]
-    if "error" not in h:
-        desired = "enabled" if h.get("configured") else "disabled"
-        clients = ", ".join(f"{n}={'yes' if c['installed'] else 'no'}"
-                            for n, c in h.get("clients", {}).items())
-        print(f"capture hooks: {desired} (source: {h.get('source')}); installed: {clients}")
-    return 0

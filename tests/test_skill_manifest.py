@@ -73,7 +73,7 @@ def test_partial_client_support_always_has_a_reason(skill_manifest):
 
 
 def test_full_client_support_has_no_dangling_reason(skill_manifest):
-    for name, meta in skill_manifest.SKILL_MANIFEST.items():
+    for _name, meta in skill_manifest.SKILL_MANIFEST.items():
         if set(meta["clients"]) == set(CLIENTS):
             assert meta.get("reason") is None
 
@@ -167,17 +167,17 @@ def _load_with_sys_path(name: str):
 
 def test_register_skills_matches_manifest(skill_manifest):
     register_skills = _load_with_sys_path("register_skills")
-    assert register_skills.SKILLS == skill_manifest.skills_for_client("claude")
+    assert skill_manifest.skills_for_client("claude") == register_skills.SKILLS
 
 
 def test_register_codex_matches_manifest(skill_manifest):
     register_codex = _load_with_sys_path("register_codex")
-    assert register_codex.CODEX_SKILLS == skill_manifest.skills_for_client("codex")
+    assert skill_manifest.skills_for_client("codex") == register_codex.CODEX_SKILLS
 
 
 def test_register_gemini_matches_manifest(skill_manifest):
     register_gemini = _load_with_sys_path("register_gemini")
-    assert register_gemini.GEMINI_SKILLS == skill_manifest.skills_for_client("gemini")
+    assert skill_manifest.skills_for_client("gemini") == register_gemini.GEMINI_SKILLS
 
 
 def test_client_registration_no_longer_declares_portable_skills():

@@ -11,7 +11,7 @@ import time
 import pytest
 
 from singularity.hooks import session_start
-from singularity.hooks_state import CAPTURE_HOOKS_FRAGMENT
+from singularity.machine.hooks_state import CAPTURE_HOOKS_FRAGMENT
 
 
 @pytest.fixture
