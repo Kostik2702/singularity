@@ -656,18 +656,17 @@ def main() -> None:
 
     snap = {
         "taken_at": datetime.now().isoformat(timespec="seconds"),
-        "note": "v0.12.0 baseline: the same eight surfaces, taken after the "
-                "release that REMOVED a subsystem rather than adding one. "
-                "`singularity/reel` — the Python montage pipeline that predated "
-                "`video-engine` — is gone, with its console script, shims, "
-                "tests and skill, so the launcher and locator sections are "
-                "graded on a smaller surface on purpose. The layout section is "
-                "the one that matters here: it proves the removal is complete "
-                "rather than merely uninstalled. Also fixed in this cycle: the "
-                "architecture scan skipped the skills' own scripts with a "
-                "hardcoded '/skills/', which is true on Linux and false on "
-                "Windows — three invariants had been passing on one platform "
-                "and failing on the other for the same tree",
+        "note": "v0.13.0 baseline: the same eight surfaces, taken after the "
+                "release that moved the agents' rule set OUT of the vault and "
+                "into the engine. The question this release makes askable of a "
+                "baseline is a dependency one: the machine's behaviour must no "
+                "longer vary with which vault is configured, so the sections "
+                "that resolve paths and read config matter more than usual. "
+                "The layout section carries the structural half — the deployed "
+                "preamble is a real engine file that ships with the agents, "
+                "not a note fetched from `{{VAULT}}/rules/` at read time. "
+                "First snapshot on macOS after four on Windows, which is also "
+                "why the launcher/locator rows read differently",
         "version": singularity.__version__,
         "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(REPO),
                                  capture_output=True, text=True).stdout.strip(),
