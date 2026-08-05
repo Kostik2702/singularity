@@ -78,6 +78,10 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("--explain", action="store_true", help="include component scores")
     s.add_argument("--max-per-file", type=int, default=2,
                    help="cap results per file (0 = unlimited)")
+    s.add_argument("--hybrid", action="store_true", default=None,
+                   help="blend BM25 with the vector ranking (RRF) — finds exact "
+                        "tokens (identifiers, flags, filenames) a pure embedding "
+                        "search can miss; config key: hybrid_search")
     s.add_argument("--json", action="store_true")
 
     d = sub.add_parser("daemon", help="daemon control")

@@ -45,6 +45,9 @@ def cmd_search(cfg, args) -> int:
         "cmd": "search",
         "query": args.query,
         "top_k": args.top,
+        # None (flag absent) leaves the decision to `hybrid_search` in config;
+        # True forces it for this query only.
+        "hybrid": getattr(args, "hybrid", None),
         "memory_only": args.memory_only,
         "code_only": args.code_only,
         "include_code": args.with_code,

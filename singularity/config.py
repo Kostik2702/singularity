@@ -99,6 +99,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "schema_version": SCHEMA_VERSION,
     "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     "min_score": 0.30,
+    # AUD-17: blend BM25 with the vector ranking (RRF). Off by default — it
+    # changes result ORDER, and a machine that has tuned its habits around the
+    # current ranking should opt in rather than be surprised. `mb search
+    # --hybrid` turns it on per query regardless.
+    "hybrid_search": False,
     "daemon_port": 0,          # 0 = OS picks a free port; actual port -> .mb/daemon.port
     "excerpt_chars": 150,
     "batch_size": 64,
