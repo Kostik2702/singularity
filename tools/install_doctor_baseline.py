@@ -24,7 +24,7 @@ Every section answers a question the reporter had to answer by hand.
 Run from the repo root of a checkout that HAS the fixes:
 
     PYTHONIOENCODING=utf-8 python tools/install_doctor_baseline.py \
-        > docs/v0.10.0-install-doctor-baseline.json
+        > docs/v0.11.0-install-doctor-baseline.json
 
 PYTHONIOENCODING matters on Windows: a bare redirect encodes stdout in the
 console codepage and mangles every non-ASCII character in the snapshot. In
@@ -592,6 +592,40 @@ def cli_window(tmp: Path) -> dict:
     return {"pass": all(r["pass"] for r in rows), "rows": rows}
 
 
+def package_layout() -> dict:
+    """Grade v0.11.0's own risk: 22 modules moved into bounded contexts.
+
+    An editable install hides the one way that goes wrong — `pip install`
+    building a wheel that omits a new subpackage. The engine would import fine
+    on the developer's machine and fail on the next one with
+    `ModuleNotFoundError`, which is exactly the class of defect a baseline
+    exists to catch before a user does.
+    """
+    import importlib
+
+    from setuptools import find_packages
+
+    expected = ["singularity.knowledge", "singularity.machine",
+                "singularity.telemetry", "singularity.commands"]
+    discovered = set(find_packages(where=str(REPO), include=["singularity*"]))
+    rows = [{"package": name, "discovered": name in discovered} for name in expected]
+
+    imports = []
+    for module in ("singularity.knowledge.sources", "singularity.machine.status",
+                   "singularity.telemetry.reflect", "singularity.commands.memory",
+                   "singularity.render", "singularity.contracts",
+                   "singularity.search.lexical", "singularity.search.metrics"):
+        try:
+            importlib.import_module(module)
+            imports.append({"module": module, "ok": True})
+        except Exception as exc:                            # noqa: BLE001
+            imports.append({"module": module, "ok": False, "error": str(exc)})
+
+    return {"expected_packages": rows, "imports": imports,
+            "package_root_files": sorted(p.name for p in (REPO / "singularity").glob("*.py")),
+            "pass": all(r["discovered"] for r in rows) and all(i["ok"] for i in imports)}
+
+
 def main() -> None:
     pkg = Path(singularity.__file__).resolve().parent
     if pkg.parent != REPO:
@@ -605,13 +639,15 @@ def main() -> None:
         config_write = nested_config_write(tmp)
         machine_cfg = machine_config(tmp)
         window = cli_window(tmp)
+    layout = package_layout()
 
     snap = {
         "taken_at": datetime.now().isoformat(timespec="seconds"),
-        "note": "v0.10.0 baseline: install + doctor honesty, the config write "
+        "note": "v0.11.0 baseline: install + doctor honesty, the config write "
                 "path, the config's move onto the machine, and the CLI window "
                 "this release added — grouped and hosted paths graded against "
-                "their direct commands byte-for-byte",
+                "their direct commands byte-for-byte, and the bounded-context "
+                "split that 22 modules moved through",
         "version": singularity.__version__,
         "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(REPO),
                                  capture_output=True, text=True).stdout.strip(),
@@ -629,6 +665,7 @@ def main() -> None:
         "config_write_path": config_write,
         "v090_machine_config": machine_cfg,
         "v0100_cli_window": window,
+        "v0110_package_layout": layout,
         "tests": [run_pytest("tests/")],
     }
     snap["all_pass"] = (
@@ -637,6 +674,7 @@ def main() -> None:
         and config_write["pass"]
         and machine_cfg["pass"]
         and window["pass"]
+        and layout["pass"]
         and snap["issue_12_live_config_reload"].get("pass", None) is not False
         and all(t["exit_code"] == 0 for t in snap["tests"])
     )
