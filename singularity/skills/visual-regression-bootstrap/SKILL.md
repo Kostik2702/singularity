@@ -31,6 +31,8 @@ node "%USERPROFILE%\.claude\skills\visual-regression-bootstrap\scripts\bootstrap
 3. WebKit-headless не доставляет синтетические Tab/Space; `page.route` не перехватывает `.mp4` (перехватывать manifest) — для e2e-надстроек.
 4. Аномалия в интерактивной Chrome-вкладке = лид для перепроверки чистым Playwright, не баг.
 5. workers:2 — полный параллелизм кладёт static-server (ложные таймауты).
+6. `networkidle` НЕ наступает на странице с реально загружающимся `<video>`: Chromium качает медиа чанками и держит запрос открытым. Тест умирает по таймауту, а не по ассерту — брать `waitUntil: "load"` + poll конкретного условия (`data-state`, счётчик ресурсов).
+7. Byte-identity скриншотов гоняется с `--disable-gpu`: инициализация GPU-процесса даёт равномерный ±1 LSB и ложный UNSTABLE. Допуск-тесты (`toHaveScreenshot`) это поглощают — им GPU не мешает. Признак растеризатора, а не контента: diff «везде равномерно, max_delta=1, structural diff_pixels(>2)=0».
 
 ## Baseline-policy
 

@@ -22,9 +22,13 @@ def test_engine_ships_all_owned_agents():
 
 
 def test_registry_completeness_matches_source_dir():
-    # the deploy list must equal the actual .md files in the engine source dir
+    # Everything the installer deploys must equal the .md files in the engine
+    # source dir — agents plus the shared preamble, which ships with them so the
+    # rules a subagent starts on never depend on a vault being there.
     on_disk = sorted(p.stem for p in register_agents.AGENTS_SRC.glob("*.md"))
-    assert sorted(register_agents.AGENTS) == on_disk
+    assert sorted(register_agents.AGENTS + [register_agents.PREAMBLE]) == on_disk
+    assert register_agents.PREAMBLE not in register_agents.AGENTS, \
+        "the preamble is deployed alongside the agents, it is not one of them"
 
 
 @pytest.fixture

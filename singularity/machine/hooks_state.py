@@ -71,6 +71,42 @@ VERIFICATION_FRAGMENT = """## Green is not the same as verified
   rise means checks switched themselves off.
 """
 
+# The main thread has no preamble. Subagents get eight sections of shared rules
+# at startup; the assistant driving the session gets this hook and nothing else,
+# which is why every rule that lands here has already cost something in the main
+# thread specifically. Two of them lived in the harness-local memory store —
+# exactly the store that is read at the harness's discretion, so "the rule
+# exists" and "the rule was in front of the model" kept coming apart.
+MEMORY_WRITES_FRAGMENT = """## Memory means the vault, and it is written through `mb`
+- "память" / "memory" / "запомни" / `um` in the user's words = THE VAULT. Not the
+  harness-local memory store, not a scratch file. "Закоммить память" = commit and
+  push the vault repo.
+- New note — `mb note new <type> "<title>"` (template, `source:`, routing come
+  with it). Insight — `mb learn "<...>" --task <ID>`. Config — `mb config set`.
+  Editing an EXISTING note with Edit/Write is fine.
+- Before hand-searching the vault, ask whether a command already does it:
+  `mb search` over grep, `mb curator gaps` over walking links.
+- The vault holds KNOWLEDGE. Operating rules, checklists and skill instructions
+  are mechanism and belong with the engine — never make the machine's behaviour
+  depend on which vault is configured."""
+
+# The failure this catches is the one the whole rule set kept repeating: a rule
+# is written down, and then absent at the moment it could have acted. Six
+# defects in a single day (v0.6.1→v0.7.1) had that anatomy. It belongs in the
+# main thread because that is where rules get authored and where "just fix the
+# inconsistency" gets decided.
+RULE_POINT_FRAGMENT = """## A rule only acts where the action is chosen
+- Wrote a rule? Name the decision point and put the text THERE (skill file,
+  agent definition, hook fragment, default in code). A shared list of rules is
+  an archive, not a mechanism. Several points → ONE source, injected into each,
+  plus a test that fails when any copy disappears.
+- Check the counter-text: if the instruction already standing at that point
+  contradicts the new rule, the instruction wins and the rule is decoration.
+- Before "fixing" an inconsistency you found, look for a RECORDED decision —
+  grep test names (`*_cannot_*`, `*_never_*`), their comments, `docs/`, ADRs. In
+  mature code an oddity is more often deliberate than accidental. Disagree with
+  what you find? Say so to the user; never silently overrule it."""
+
 VAULT_WRITE_POLICY_FRAGMENT = """## Vault is the write destination, not a copy of it
 Before the FIRST write of anything destined for the vault, resolve the destination:
 - Write **directly** to the vault path (or through `mb note new` / `mb learn`).

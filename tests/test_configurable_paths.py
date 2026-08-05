@@ -105,11 +105,29 @@ def test_configured_sources_still_win_over_the_defaults(monkeypatch, tmp_path, s
 
 # --- agent definitions -------------------------------------------------------
 
-def test_agent_sources_still_carry_the_template_path_verbatim():
-    """The literal is the template default and must stay greppable — the
-    installer's substitution keys off exactly this string."""
-    src = register_agents.AGENTS_SRC / "investigator.md"
-    assert register_agents.TEMPLATE_VAULT in src.read_text(encoding="utf-8")
+def test_agent_sources_name_paths_only_through_tokens():
+    """Sources must never bake in a machine path — that is what went stale when
+    the authoring machine moved drives. Both tokens stay greppable: the
+    installer's substitution keys off exactly these strings.
+
+    `{{VAULT}}` now appears only where a VAULT path is genuinely meant (optional
+    knowledge an agent may consult). The shared preamble moved to `{{AGENTS}}`
+    deliberately: it is the rule set every subagent starts on, and a mechanism
+    may not depend on which vault — or whether a vault — is configured."""
+    import vault_token
+
+    sources = {p.name: p.read_text(encoding="utf-8")
+               for p in register_agents.AGENTS_SRC.glob("*.md")}
+    assert sources, "no agent sources found"
+
+    for name, text in sources.items():
+        assert "/Users/" not in text and "C:\\" not in text and "E:\\" not in text, \
+            f"{name} bakes in an absolute machine path instead of a token"
+
+    assert any(register_agents.TEMPLATE_VAULT in t for t in sources.values()), \
+        "no source names {{VAULT}} any more — substitution would be untested"
+    assert any(vault_token.AGENTS_TOKEN in t for t in sources.values()), \
+        "no source names {{AGENTS}} — the preamble would be addressed elsewhere"
 
 
 def test_installer_renders_the_real_vault_when_it_differs(tmp_path, monkeypatch):
@@ -121,28 +139,45 @@ def test_installer_renders_the_real_vault_when_it_differs(tmp_path, monkeypatch)
     monkeypatch.setattr(register_agents, "_resolved_vault", lambda: vault)
 
     assert register_agents.main() == 0
-    rendered = (home / ".claude" / "agents" / "investigator.md").read_text(
-        encoding="utf-8")
+    # coder.md is one of the sources that still names a vault path (optional
+    # project rules); investigator.md addresses only the engine-shipped preamble.
+    rendered = (home / ".claude" / "agents" / "coder.md").read_text(encoding="utf-8")
     assert str(vault) in rendered
     assert register_agents.TEMPLATE_VAULT not in rendered
 
+    # and the mechanism half: the preamble is addressed where it is deployed,
+    # not through the vault
+    every = (home / ".claude" / "agents" / "investigator.md").read_text(encoding="utf-8")
+    assert str(home / ".claude" / "agents" / "AGENT_SHARED_PREAMBLE.md") in every
+    assert (home / ".claude" / "agents" / "AGENT_SHARED_PREAMBLE.md").exists(), \
+        "agents point at a preamble the installer did not deploy"
 
-def test_installer_links_verbatim_when_the_vault_matches_the_template(
+
+def test_a_source_without_tokens_is_linked_so_repo_edits_take_effect(
         tmp_path, monkeypatch):
-    """The historic behaviour — and the property that matters: edit the repo,
-    every deployed agent follows without re-running anything."""
+    """The property that matters: edit the repo, the deployed copy follows with
+    no re-install. A file naming no token needs no substitution, so it is
+    symlinked — and the shared preamble is exactly that file, which is why
+    editing the rules every subagent runs on does not require an installer run.
+
+    Sources that DO name a token must be rendered instead; a symlinked
+    `{{AGENTS}}` would send agents to a file called literally "{{AGENTS}}"."""
     home = tmp_path / "home"
     (home / ".claude" / "agents").mkdir(parents=True)
     monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
     monkeypatch.setattr(register_agents, "_resolved_vault",
                         lambda: Path(register_agents.TEMPLATE_VAULT))
-    calls = []
+    linked = []
     real_install = register_agents._install_file
     monkeypatch.setattr(register_agents, "_install_file",
-                        lambda s, d: calls.append(s.name) or real_install(s, d))
+                        lambda s, d: linked.append(s.name) or real_install(s, d))
 
     assert register_agents.main() == 0
-    assert len(calls) == len(register_agents.AGENTS)   # every one took the link path
+    assert linked == [f"{register_agents.PREAMBLE}.md"], \
+        "only the token-free preamble may take the link path"
+    for name in register_agents.AGENTS:
+        deployed = (home / ".claude" / "agents" / f"{name}.md").read_text(encoding="utf-8")
+        assert "{{AGENTS}}" not in deployed, f"{name} deployed with an unresolved token"
 
 
 def test_rendering_is_idempotent(tmp_path, monkeypatch):
@@ -179,7 +214,10 @@ def test_a_users_own_edit_is_backed_up_never_overwritten(tmp_path, monkeypatch):
                if not p.name.endswith(".manifest.txt")]
     assert len(backups) == 1
     assert backups[0].read_text(encoding="utf-8") == "my own agent, do not touch"
-    assert str(vault) in (agents / "critic.md").read_text(encoding="utf-8")
+    # and the replacement is a real rendering for this machine, not the template
+    written = (agents / "critic.md").read_text(encoding="utf-8")
+    assert str(agents / "AGENT_SHARED_PREAMBLE.md") in written
+    assert "{{" not in written
 
 
 def test_unresolvable_vault_falls_back_to_linking(tmp_path, monkeypatch):

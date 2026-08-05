@@ -29,6 +29,7 @@ INTAKE_PROTECTED_ROOTS=<project> component-intake run \
 ## Гейты
 
 - [ ] Кандидат без записи в candidates.json (нет provenance-цепочки) = license unknown = REJECT — не «подсказывать» лицензию руками без проверки источника.
+- [ ] Классификатор читает файл `LICENSE`, а не поле GitHub: `Other`/`NOASSERTION` = «автоопределение не узнало», не «лицензии нет». Если кандидат уже был кем-то рекомендован без чтения текста — рекомендация не является провенансом.
 - [ ] `INTAKE_PROTECTED_ROOTS` выставлен на целевой проект ВСЕГДА.
 - [ ] REJECT не оспаривается скилом; спорные случаи — вопрос владельцу с evidence.
 - [ ] Вердикт и requirements — в learnings (`mb learn`); intake-report.json — evidence для E04.
