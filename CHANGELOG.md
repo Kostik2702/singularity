@@ -10,6 +10,96 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.11.0 — layers, and the three tails the audit left
+
+Two years of features had settled into one flat namespace: 10 263 lines — 43%
+of the engine — sat directly in `singularity/`, `cli.py` had grown to 1 511
+lines holding every handler, and roughly 300 `print` calls lived inside domain
+modules that a daemon or a hook could not reuse because of them. This release
+draws the layers, and then closes what the 2026-07 audit had left open.
+
+### Two nets before touching anything
+
+- **ruff at zero**, not as a backlog: 226 findings auto-fixed, the rest fixed
+  by hand or exempted in `pyproject.toml` with the reason. `test_lint_gate`
+  keeps it there. What it found that 1 909 tests had not: a dead `import
+  shutil` that three test files were patching THROUGH (the patch reached the
+  global `shutil` that `cli_locator` actually calls), an unresolvable
+  `-> NoReturn` annotation, two dead computations, four bound-and-forgotten
+  names.
+- **`test_architecture.py`**: only the presentation layer may print, exit the
+  process or parse arguments; the domain may never import the CLI. Where that
+  was false it was recorded as an EXEMPT list that may only SHRINK — and a
+  stale entry fails the suite exactly like a new offender. Debt went 19 -> 7,
+  with `sys.exit` and `argparse` both at zero.
+
+### The layers
+
+- **`config` raises instead of exiting.** `load_config` called `sys.exit(2)`,
+  which is right for a CLI and unusable elsewhere — and the cost was already
+  paid: `search/daemon.py` carried its own copy of the config validation
+  because "it exits the process, which is fatal for a daemon". Now
+  `ConfigError`, with the CLI printing the same lines and returning the same 2.
+- **Notices left the domain.** `search.client`, `search.daemon` and `watch`
+  stopped printing entirely, `llm` shed 27 of 47. A notice belongs to whoever
+  owns the process (the daemon writes to its log file, a CLI run to stderr, so
+  `mb search --json | jq` still receives only the payload). `_LiveStreamHandler`
+  resolves the stream at emit time — that one property let 44 existing tests
+  keep asserting on user-facing output unchanged.
+- **Reports became data.** `status`, `stats`, `curator` and `gaps` each had a
+  `run(cfg, as_json)` writing the same facts twice; the collectors now return
+  and `render.py` formats. JSON output is byte-identical — it always was
+  "whatever the collector returned".
+- **`cli.py`: 1 511 -> 523 lines**, handlers grouped in `commands/` by subject.
+- **The flat root became bounded contexts**: `knowledge/`, `machine/`,
+  `telemetry/` (22 modules, root 31 -> 10 files). `config`, `doctor`, `llm` and
+  `search/` deliberately stayed — the tests patch them heavily, and moving a
+  monkeypatched module buys failures that appear only under a specific test
+  order. No compatibility shims: one path to each module.
+- **The vault layout is known in one place.** Thirteen call sites built paths
+  by hand; `cfg.vault / rel` existed in three modules, one normalising Windows
+  separators and two not, so `howto\x.md` resolved to a file that does not
+  exist on macOS.
+- **`contracts.py`** declares the four shapes that cross boundaries as
+  TypedDicts (still plain dicts at runtime, so nothing serialised changes), and
+  `test_contracts` compares them to what the code emits in both directions. It
+  immediately found that one `Verdict` described two different shapes.
+- **Nine import cycles removed** — all one mistake: `scout`/`imgqa` kept
+  `SCHEMA_VERSION` in `cli.py` while `cli` imports `_contract`. And the engine
+  does not import the media factory even once, so that ~8 000 lines can be
+  separated whenever the owner decides; a test now fails if that reverses.
+
+### The audit tails (AUD-17, AUD-18, AUD-21)
+
+- **Hybrid retrieval.** Embeddings answer "what is this about" and miss
+  `IndexLockedError` or `--per-signal`. BM25 + Reciprocal Rank Fusion (never a
+  weighted sum: cosine and BM25 are incomparable scales), built on first use,
+  off unless asked (`--hybrid` / `hybrid_search`). The evaluation set AUD-17
+  asked for found two integration defects reasoning had missed: the candidate
+  loop's `break` at the first sub-`min_score` cosine discarded exactly the
+  exact-token hits, and the final sort by cosine undid the fusion.
+- **Daemon counters.** `mb status` said the daemon was up and nothing about
+  whether it answered well. Searches, errors, reloads, p50/p95 — counts and
+  durations only, memory-only, and the tail rather than an average.
+- **The inbox.** Capture now, classify later, file only on approval; `suggest`
+  proposes and writes nothing. Self-review then caught the defect that would
+  have made it worthless: captures were being indexed and reported by the
+  curator, so drafts ranked against knowledge and `suggest` would have offered
+  a capture as a duplicate of itself.
+
+### Also worth knowing
+
+Two silent failures surfaced during the move, both of the same family — code
+that assumed its own location. `reflect` started looking for
+`singularity/install/skill_manifest.py`; worse, `test_wiki_loop_report_only`
+SKIPS a module it cannot find, so three report-only guards switched themselves
+off and the suite stayed green while the invariant stopped being checked. The
+skip count is what caught it (25 -> 28).
+
+Full suite: 1 962 passed, 25 skipped.
+
+---
+
 # v0.10.0 — ten commands on the window, and the rest behind them
 
 `mb` had grown to 23 top-level commands and 60 leaves — an honest reflection of
