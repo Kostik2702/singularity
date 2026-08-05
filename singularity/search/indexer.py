@@ -27,7 +27,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from ..config import Config
+from ..config import INBOX_DIR, Config
 from . import chunking, code_chunking
 from .chunking import extract_chunks, extract_source_chunks, should_skip
 from .encoder import shared_encoder
@@ -140,7 +140,10 @@ class Corpus:
 
 def memory_corpus(cfg: Config) -> Corpus:
     return Corpus(name="memory", root=cfg.vault, index_dir=cfg.memory_index_dir,
-                  skip_dirs=tuple(cfg.get("skip_dirs") or ()),
+                  # INBOX_DIR is not configurable away: a capture is a draft,
+                  # and ranking drafts against knowledge is the failure this
+                  # staging area exists to prevent (AUD-21).
+                  skip_dirs=(*(cfg.get("skip_dirs") or ()), INBOX_DIR),
                   skip_parts=tuple(cfg.get("skip_path_parts") or ()),
                   chunker=extract_chunks,
                   chunk_schema=chunking.CHUNK_SCHEMA_VERSION)

@@ -196,19 +196,35 @@ def test_no_import_cycles():
     constant moved to the package, where both can reach it."""
     graph: dict[str, set[str]] = {}
     for module, src in _modules().items():
-        pkg = module.rsplit(".", 1)[0] if "." in module else ""
+        parts = module.split(".")
         deps: set[str] = set()
         try:
             tree = ast.parse(src)
         except SyntaxError:                                # pragma: no cover
             continue
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.level == 1:
-                if node.module:
-                    deps.add(f"{pkg}.{node.module}".strip("."))
-                else:
-                    deps |= {f"{pkg}.{a.name}".strip(".") for a in node.names}
-        graph[module] = deps
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if node.level:
+                # `.x` resolves against this module's package, `..x` one above.
+                # Counting only level 1 made this test nearly blind after the
+                # bounded-context split moved most imports to `..`: 195 of 311
+                # relative imports were invisible to it.
+                base = parts[:max(0, len(parts) - node.level)]
+                prefix = ".".join(base)
+                root = f"{prefix}.{node.module}".strip(".") if node.module else prefix
+                if root:
+                    deps.add(root)
+                # `from ..machine import status` names a MODULE, not just the
+                # package — without this the graph only ever saw packages and
+                # the probe below could not fail.
+                deps |= {f"{root}.{a.name}".strip(".") for a in node.names}
+            elif (node.module or "").startswith("singularity"):
+                root = node.module.replace("singularity", "", 1).strip(".")
+                if root:
+                    deps.add(root)
+                    deps |= {f"{root}.{a.name}" for a in node.names}
+        graph[module.removesuffix(".__init__")] = {d for d in deps if d}
 
     cycles: set[tuple[str, ...]] = set()
 

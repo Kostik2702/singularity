@@ -64,6 +64,14 @@ MEMORY_FOLDERS = ["learnings/active", "learnings/archive", "decisions", "howto",
                   "incidents", "rules", "reference", "changelog", "templates",
                   "_moc", "daily"]
 
+# The staging area (AUD-21). Deliberately NOT a managed root and never indexed:
+# a capture is a thought nobody has classified yet, so letting it into the
+# search index would rank drafts against knowledge — and `mb inbox suggest`
+# would offer a capture as a duplicate of itself. Excluded here rather than via
+# `skip_dirs` because an existing machine has that key materialised and would
+# not pick up a new default.
+INBOX_DIR = "inbox"
+
 # THE config. One file, per machine, created by the installer, never inside a
 # vault — a vault travels between machines and every absolute path in it is
 # wrong on arrival (issue #14). Everything the machine decides lives here:

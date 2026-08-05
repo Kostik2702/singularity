@@ -109,3 +109,28 @@ def test_the_command_is_off_until_enabled(tmp_path, capsys):
     (tmp_path / ".mb").mkdir(parents=True)
     assert cli.main(["--vault", str(tmp_path), "inbox", "list"]) == 2
     assert "inbox is off" in capsys.readouterr().err
+
+
+def test_a_capture_is_never_indexed_and_never_reported(cfg):
+    """The two ways a staging area leaks into knowledge, both closed.
+
+    Indexing drafts would rank them against real notes — and `suggest` would
+    offer a capture as a duplicate of itself. Reporting them as "missing
+    frontmatter" would make the health report noisier the more honestly the
+    inbox is used.
+    """
+    from singularity.knowledge import curator
+    from singularity.search import indexer
+
+    inbox.capture(cfg, "черновая мысль без типа")
+    assert not [f for f in indexer._scan_vault(cfg) if "inbox" in str(f)]
+    assert not {k: v for k, v in curator.validate(cfg).items() if v}
+
+
+def test_the_exclusion_does_not_depend_on_a_config_key(cfg):
+    """An existing machine has `skip_dirs` materialised, so a new default would
+    never reach it — the exclusion has to be structural."""
+    cfg.data["skip_dirs"] = []
+    inbox.capture(cfg, "ещё одна мысль")
+    from singularity.search import indexer
+    assert not [f for f in indexer._scan_vault(cfg) if "inbox" in str(f)]

@@ -24,7 +24,7 @@ from typing import Any
 
 import numpy as np
 
-from ..config import Config
+from ..config import INBOX_DIR, Config
 from ..search.chunking import parse_frontmatter, _WIKILINK_RE
 
 # type is enforced only where the note contract applies (MB-08 folders);
@@ -67,6 +67,10 @@ def _scan_notes(cfg: Config) -> dict[str, dict[str, Any]]:
     left as a parameter nothing passes.)"""
     skip_dirs = set(cfg.get("skip_dirs")) - {"templates"}  # validate templates too? no:
     skip_dirs.add("templates")
+    # A capture in the inbox has no `created:` and no type on purpose — it is a
+    # draft. Reporting it as "missing frontmatter" would make the health report
+    # noisier the more honestly someone uses the staging area.
+    skip_dirs.add(INBOX_DIR)
     notes: dict[str, dict[str, Any]] = {}
     for path in cfg.vault.rglob("*.md"):
         rel = path.relative_to(cfg.vault).as_posix()

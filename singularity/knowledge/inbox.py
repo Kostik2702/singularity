@@ -22,9 +22,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..config import Config
-
-INBOX_DIR = "inbox"
+from ..config import INBOX_DIR, Config
 DUP_THRESHOLD = 0.75          # cosine above which a hit is offered as "already have this"
 SUGGEST_TOP_K = 5
 
