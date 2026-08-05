@@ -311,7 +311,13 @@ def test_bare_curator_is_unchanged_by_the_new_subcommands(tmp_path, monkeypatch,
     assert main(["curator", "--json"]) == 0
     assert capsys.readouterr().out == first
     payload = json.loads(first)
+    # The invariant is that a SUBCOMMAND cannot leak into the bare report — not
+    # that the report may never grow. `stale_unused`/`usage_tracked_notes` are
+    # findings of `mb curator` itself (2026-08-05), added additively so a
+    # consumer reading known keys is unaffected; a key arriving here from
+    # `contradictions` or `gaps` would still be the bug this guards.
     assert set(payload) == {"issues", "notes", "orphans", "stale",
+                            "stale_unused", "usage_tracked_notes",
                             "link_suggestions", "lint"}, \
         "bare curator's JSON shape must not gain keys from the subcommands"
 

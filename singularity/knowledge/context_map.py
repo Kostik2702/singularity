@@ -78,8 +78,15 @@ def read_note_excerpt(vault: Path, rel_path: Any, max_lines: int, label: str,
     shown = lines[:max_lines]
     more = len(lines) - len(shown)
     header = f"{label} — Read {note_path} for full content:"
-    suffix = (f"\n... ({more} more line{'s' if more != 1 else ''} truncated, "
-             f"max_lines={max_lines})") if more > 0 else ""
+    # The old suffix said only that something was cut. Two things were missing
+    # and both are what makes it actionable: the SCALE (82 lines against 40 is a
+    # different problem from 41 against 40) and the REMEDY. Truncation is not
+    # the fix here — the tail of a brain note is the newest part, not the least
+    # important — so the note wants to become an index with the detail one hop
+    # away, which is exactly what `mb note split` produces.
+    suffix = (f"\n... ({more} more line{'s' if more != 1 else ''} truncated — "
+              f"{len(lines)}/{max_lines} lines; `mb note split {rel_path}`)"
+              ) if more > 0 else ""
     return "\n".join([header, *shown]) + suffix
 
 

@@ -77,6 +77,13 @@ class SearchEngine:
         return None
 
     def reload(self) -> dict[str, int]:
+        # The lexical cache belongs to the generation it was built from. It used
+        # to be created once in __init__ and keyed on len(chunks), so a note
+        # edited without changing its chunk count left BM25 matching text that
+        # no longer existed — invisible, because the vector half kept answering
+        # correctly. Clearing it here also means every construction path has the
+        # attribute, including tests that build the engine via __new__.
+        self._bm25: dict[str, Any] = {}
         self.mem_embs, self.mem_chunks, mem_model = self._load_one(self.cfg.memory_index_dir)
         self.code_embs, self.code_chunks, self.code_warning = None, [], None
         self.src_embs, self.src_chunks, self.sources_warning = None, [], None
@@ -159,7 +166,7 @@ class SearchEngine:
         order = np.argsort(scores)[::-1][:pool]
         lexical_hits: set[int] = set()
         fused_score: dict[int, float] | None = None
-        if self._hybrid_wanted(req):
+        if self._hybrid_wanted(req, source):
             order, lexical_hits, fused_score = self._fuse_with_lexical(
                 order, chunks, source, req, pool)
         results = []
@@ -188,19 +195,36 @@ class SearchEngine:
 
     # --- hybrid retrieval (AUD-17) -------------------------------------
 
-    def _hybrid_wanted(self, req: dict[str, Any]) -> bool:
+    def _hybrid_wanted(self, req: dict[str, Any], source: str = "memory") -> bool:
         """Per-request `hybrid` wins over the config default, so a caller can
-        ask for exact-token recall without changing the machine's setting."""
+        ask for exact-token recall without changing the machine's setting.
+
+        The CODE corpus fuses regardless of the machine setting. On memory the
+        trade-off is real — cross-lingual queries lose recall, because BM25 has
+        nothing to say when query and note are in different languages — so the
+        config gets a vote there. On code, measured over the same 16 pairs in
+        one session, hybrid gains +0.125 recall@1 and +0.083 MRR and costs
+        NOTHING: not one class moves down. Half the value of a code corpus is
+        answering `atomic_write_json`, and that is the query an embedding is
+        worst at. An explicit `--hybrid`/`hybrid: false` still wins — this
+        overrides the default, not the caller.
+        """
         explicit = req.get("hybrid")
         if explicit is not None:
             return bool(explicit)
+        if source == "code":
+            return True
         return bool(self.cfg.get("hybrid_search"))
 
     def _lexical_for(self, source: str, chunks: list[dict[str, Any]]):
-        index = self._bm25.get(source)
+        # The cache is a pure memoization of `chunks`, so it must be derivable
+        # whenever those exist — not only after a particular constructor ran.
+        # `reload()` still clears it, which is what keeps it from going stale.
+        cache = self.__dict__.setdefault("_bm25", {})
+        index = cache.get(source)
         if index is None or index[0] != len(chunks):
             index = (len(chunks), lexical.BM25(lexical.document_text(c) for c in chunks))
-            self._bm25[source] = index
+            cache[source] = index
         return index[1]
 
     def _fuse_with_lexical(self, order, chunks: list[dict[str, Any]],
@@ -294,6 +318,16 @@ class SearchEngine:
         # Fused results are ordered by RANK, not by cosine: sorting them by
         # score again would undo the fusion and drop exactly the exact-token
         # hits it was added to surface.
+        # Ordered by fused RANK when the lexical half ran, by cosine otherwise.
+        #
+        # A usage tie-break lived here briefly on 2026-08-05 — break ties by
+        # how often a note had been opened — and was removed by its own
+        # measurement: at a wide band it cost 0.015 recall@1, at a narrow one it
+        # changed nothing. With usage known for 15 notes the signal is too
+        # sparse to arbitrate, and a plausible ranking idea that no number
+        # supports is exactly what the evaluation set exists to stop. The
+        # counting stays (`.mb/usage.json`, `mb curator`); re-measure before
+        # putting it back in the ranking.
         if any("fused" in r for r in results):
             results.sort(key=lambda r: (r.get("fused", 0.0), r["score"]), reverse=True)
         else:

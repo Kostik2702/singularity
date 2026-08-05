@@ -23,6 +23,18 @@ _FM_PROJECT_RE = re.compile(r"(?m)^project:")
 _FM_SOURCES_LINE_RE = re.compile(r"(?m)^sources:[ \t]*(.*)$")
 
 
+def safe_stem(source: str) -> str:
+    """The vault's filename convention: letters, digits, space, `-` and `_`
+    survive; everything else becomes `_`.
+
+    Lives here rather than inline in the CLI because `mb note split` has to
+    produce names a `[[wikilink]]` will resolve to, and two copies of this rule
+    would drift apart exactly once — silently, into a broken link that only
+    surfaces later as a missing page in `mb curator gaps`.
+    """
+    return "".join(c if c.isalnum() or c in " -_" else "_" for c in source).strip()
+
+
 def normalize_gist(text: str) -> str:
     """Lowercase, strip punctuation, collapse whitespace — the comparison key
     for near-duplicate detection. Never raises."""

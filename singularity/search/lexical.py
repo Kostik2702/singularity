@@ -15,6 +15,11 @@ BM25 parameters are the standard ones (k1=1.5, b=0.75). They are not exposed as
 config on purpose — tuning them without an evaluation set is guessing, and the
 evaluation set (`tests/fixtures/search_eval.json`) is small enough that any
 change it cannot justify should not be made.
+
+Run it: `python tools/search_eval.py run --hybrid both`. Until 2026-08-05 this
+docstring cited the fixture while no such file existed, so the sentence above
+read as evidence and was none. `tests/test_search_eval.py` now fails if the
+fixture goes missing or loses its class quota.
 """
 from __future__ import annotations
 

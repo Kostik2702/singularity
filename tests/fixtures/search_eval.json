@@ -1,0 +1,775 @@
+{
+  "schema": 1,
+  "about": "Query -> expected-note pairs for measuring `mb search` recall. Referenced by singularity/search/lexical.py as the reason BM25/RRF constants are not exposed as config: a change this set cannot justify should not be made.",
+  "ground_truth_method": "Every target note was chosen FIRST, by reading what it is about; the query was then written the way a person would ask for it. No pair was derived from what the current ranking returns, so the set can report a bad number. Queries marked `harvested: true` are verbatim `mb search` invocations taken from real session transcripts.",
+  "classes": {
+    "identifier": "an exact token carries the query - identifier, flag, error name, API symbol. The class BM25 exists for.",
+    "natural": "a question in prose, same language as the note. The class embeddings are good at.",
+    "crosslingual": "query language differs from the note language. The claim the multilingual model exists for; never measured before this set."
+  },
+  "quota": {
+    "identifier": 22,
+    "natural": 22,
+    "crosslingual": 22
+  },
+  "cases": [
+    {
+      "id": "id-01",
+      "class": "identifier",
+      "query": "IndexLockedError",
+      "harvested": true,
+      "expect": [
+        "rules/Rule - a losing lock contender must never clean up the winner's lock.md"
+      ],
+      "why": "lock-contention rule is the note that explains the error, not just mentions it"
+    },
+    {
+      "id": "id-02",
+      "class": "identifier",
+      "query": "utf-8-sig stdin хуков",
+      "expect": [
+        "rules/Rule - stdin хуков читать utf-8-sig.md"
+      ],
+      "why": "BOM handling in hook stdin"
+    },
+    {
+      "id": "id-03",
+      "class": "identifier",
+      "query": "index_files резолвить путь индекса",
+      "expect": [
+        "rules/Rule - every index reader must resolve through index_files, never a raw flat path.md"
+      ],
+      "why": "identifier plus its rule"
+    },
+    {
+      "id": "id-04",
+      "class": "identifier",
+      "query": "networkidle не наступает",
+      "expect": [
+        "rules/Rule - Playwright networkidle не наступает на страницах с большим video.md"
+      ],
+      "why": "Playwright wait state"
+    },
+    {
+      "id": "id-05",
+      "class": "identifier",
+      "query": "--disable-gpu скриншоты",
+      "expect": [
+        "rules/Rule - byte-identity скриншотов требует --disable-gpu.md"
+      ],
+      "why": "flag carrying the whole query"
+    },
+    {
+      "id": "id-06",
+      "class": "identifier",
+      "query": "aeval вместо volume eval=frame",
+      "expect": [
+        "rules/Короткая огибающая в ffmpeg кладётся aeval_ а не volume eval_frame.md"
+      ],
+      "why": "two ffmpeg filter names"
+    },
+    {
+      "id": "id-07",
+      "class": "identifier",
+      "query": "PIPESTATUS exit code за пайпом",
+      "expect": [
+        "rules/Пайп поверх тестовой команды не должен глотать exit-код.md"
+      ],
+      "why": "shell builtin name"
+    },
+    {
+      "id": "id-08",
+      "class": "identifier",
+      "query": "mb config set dotted вложенный ключ конфига",
+      "harvested": true,
+      "expect": [
+        "rules/Rule - вложенные ключи конфига Singularity правятся dotted-путём.md",
+        "rules/Rule - mb config set accepts top-level keys only.md"
+      ],
+      "why": "two notes legitimately answer this - the rule and its correction"
+    },
+    {
+      "id": "id-09",
+      "class": "identifier",
+      "query": "xfade буферизует весь вход",
+      "expect": [
+        "incidents/Error - ffmpeg-граф съел 100 ГБ и повесил машину, четыре причины подряд.md"
+      ],
+      "why": "ffmpeg filter name inside an incident"
+    },
+    {
+      "id": "id-10",
+      "class": "identifier",
+      "query": "zoompan fps буферизация памяти",
+      "expect": [
+        "incidents/Error - ffmpeg-граф съел 100 ГБ и повесил машину, четыре причины подряд.md"
+      ],
+      "why": "same incident, different filter"
+    },
+    {
+      "id": "id-11",
+      "class": "identifier",
+      "query": "Get-Content Set-Content правка исходников",
+      "expect": [
+        "rules/Rule - PowerShell не редактирует исходники через Get-Content Set-Content.md"
+      ],
+      "why": "cmdlet names"
+    },
+    {
+      "id": "id-12",
+      "class": "identifier",
+      "query": "AF_UNIX заменить на TCP",
+      "expect": [
+        "02_New_System_Design/03_Semantic_Vector_Search.md"
+      ],
+      "why": "the design doc that made the call"
+    },
+    {
+      "id": "id-13",
+      "class": "identifier",
+      "query": "brain_max_lines бюджет заметки",
+      "expect": [
+        "03_Tasks/SINGULARITY_INCOMING_FORK_IMPLEMENTATION.md"
+      ],
+      "why": "config key defined in the task spec"
+    },
+    {
+      "id": "id-14",
+      "class": "identifier",
+      "query": "min_score порог отсечки поиска",
+      "expect": [
+        "03_Tasks/TASK-01_Repo_Scaffold_And_CLI.md"
+      ],
+      "why": "config key origin"
+    },
+    {
+      "id": "id-15",
+      "class": "identifier",
+      "query": "currentColor не наследуется img src svg",
+      "expect": [
+        "rules/Rule - img src svg не наследует currentColor - инжектить inline SVG.md"
+      ],
+      "why": "CSS keyword"
+    },
+    {
+      "id": "id-16",
+      "class": "identifier",
+      "query": "CRLF Python текстовый режим",
+      "expect": [
+        "rules/Rule - Python текстовый режим переписывает файл в CRLF.md"
+      ],
+      "why": "line-ending token"
+    },
+    {
+      "id": "id-17",
+      "class": "identifier",
+      "query": "argv ANSI кириллица Windows",
+      "expect": [
+        "rules/Rule - argv на Windows приходит через ANSI, кириллица в аргументах ломается.md"
+      ],
+      "why": "argv plus encoding"
+    },
+    {
+      "id": "id-18",
+      "class": "identifier",
+      "query": "check.ps1 редирект потоков гейт",
+      "expect": [
+        "learnings/archive/singularity-ui/rules/Rule - гейты check.ps1 запускать без редиректа потоков.md"
+      ],
+      "why": "script filename"
+    },
+    {
+      "id": "id-19",
+      "class": "identifier",
+      "query": "git -m вложенные двойные кавычки PowerShell 5.1",
+      "expect": [
+        "rules/Rule - PS 5.1 не передавать вложенные двойные кавычки в git -m.md"
+      ],
+      "why": "command flag plus shell version"
+    },
+    {
+      "id": "id-20",
+      "class": "identifier",
+      "query": "Glob subdir pattern пустой на Windows",
+      "expect": [
+        "incidents/Error - Glob subdir pattern silent empty on Windows.md"
+      ],
+      "why": "tool name in an incident"
+    },
+    {
+      "id": "id-21",
+      "class": "identifier",
+      "query": "TaskCreate без загрузки схемы deferred",
+      "expect": [
+        "incidents/Error - TaskCreate called without loading its deferred schema.md"
+      ],
+      "why": "tool name"
+    },
+    {
+      "id": "id-22",
+      "class": "identifier",
+      "query": "POSIX shim Git Bash exec fallback",
+      "expect": [
+        "incidents/Error - mb POSIX shim silently dies in Git Bash (exec fallback unreachable).md",
+        "rules/Rule - POSIX shim выбирает интерпретатор проверкой, не exec-цепочкой.md"
+      ],
+      "why": "incident and the rule it produced both answer"
+    },
+    {
+      "id": "nat-01",
+      "class": "natural",
+      "query": "почему выбрали не векторную базу данных, а numpy",
+      "expect": [
+        "02_New_System_Design/03_Semantic_Vector_Search.md"
+      ],
+      "why": "core architectural rationale"
+    },
+    {
+      "id": "nat-02",
+      "class": "natural",
+      "query": "как доказывать что новый инвариант действительно ловит нарушение",
+      "harvested": true,
+      "expect": [
+        "rules/Rule - Инвариант доказывается попыткой его сломать.md"
+      ],
+      "why": "the rule, phrased as a question"
+    },
+    {
+      "id": "nat-03",
+      "class": "natural",
+      "query": "тест может пропустить себя и молча отключиться",
+      "harvested": true,
+      "expect": [
+        "rules/Rule - Инвариант доказывается попыткой его сломать.md",
+        "rules/_намеренно не экспортируется_ требует доказательства.md"
+      ],
+      "why": "self-skipping checks"
+    },
+    {
+      "id": "nat-04",
+      "class": "natural",
+      "query": "записи в память делать только через CLI, не редактировать файлы руками",
+      "harvested": true,
+      "expect": [
+        "rules/Rule - записи в vault идут командами mb.md"
+      ],
+      "why": "write discipline"
+    },
+    {
+      "id": "nat-05",
+      "class": "natural",
+      "query": "что владелец называет памятью",
+      "expect": [
+        "rules/Rule - память означает vault.md"
+      ],
+      "why": "terminology rule"
+    },
+    {
+      "id": "nat-06",
+      "class": "natural",
+      "query": "переименование команды ломает существующих потребителей",
+      "harvested": true,
+      "expect": [
+        "rules/Rule - Второе имя для существующей вещи.md"
+      ],
+      "why": "second-name rule"
+    },
+    {
+      "id": "nat-07",
+      "class": "natural",
+      "query": "правило должно звучать там, где принимается решение",
+      "expect": [
+        "rules/Rule - правило звучит в точке принятия решения.md"
+      ],
+      "why": "delivery-point rule"
+    },
+    {
+      "id": "nat-08",
+      "class": "natural",
+      "query": "верификацию гонять той же командой, что запускает пользователь",
+      "harvested": true,
+      "expect": [
+        "rules/Rule - верификация идёт через команду пользователя.md"
+      ],
+      "why": "verification path"
+    },
+    {
+      "id": "nat-09",
+      "class": "natural",
+      "query": "метрика, которую никто не читает, не нужна",
+      "harvested": true,
+      "expect": [
+        "learnings/active/SINGULARITY-AUDIT.md"
+      ],
+      "why": "measurement-without-consumer argument lives in the audit journal"
+    },
+    {
+      "id": "nat-10",
+      "class": "natural",
+      "query": "сначала доказать что конфиг этого не выражает, потом править код",
+      "expect": [
+        "rules/Rule - прежде чем править код, доказать что конфиг этого не выражает.md"
+      ],
+      "why": "config-before-code rule"
+    },
+    {
+      "id": "nat-11",
+      "class": "natural",
+      "query": "как переносить vault и движок на другой диск",
+      "expect": [
+        "howto/Migrate Singularity vault_ engine and projects to another drive.md"
+      ],
+      "why": "RU question, note title is English but body is bilingual - kept in natural because the how-to is the obvious single answer"
+    },
+    {
+      "id": "nat-12",
+      "class": "natural",
+      "query": "как включить поиск по коду",
+      "expect": [
+        "howto/Поиск по коду - корпус code_index.md"
+      ],
+      "why": "howto"
+    },
+    {
+      "id": "nat-13",
+      "class": "natural",
+      "query": "как прогнать документ через ingest до обновления вики",
+      "expect": [
+        "howto/Ingest-цикл - от документа до обновлённой wiki.md"
+      ],
+      "why": "howto"
+    },
+    {
+      "id": "nat-14",
+      "class": "natural",
+      "query": "почему индекс кода не должен попадать в обычную выдачу",
+      "expect": [
+        "decisions/CODE-INDEX D2 - код в выдаче только по флагу.md"
+      ],
+      "why": "decision"
+    },
+    {
+      "id": "nat-15",
+      "class": "natural",
+      "query": "какая приватность у индекса исходников",
+      "expect": [
+        "decisions/CODE-INDEX D5 - приватность индекса кода.md"
+      ],
+      "why": "decision"
+    },
+    {
+      "id": "nat-16",
+      "class": "natural",
+      "query": "почему у корпуса кода своя версия схемы чанков",
+      "expect": [
+        "decisions/CODE-INDEX D3 - пер-корпусная схема чанков.md"
+      ],
+      "why": "decision"
+    },
+    {
+      "id": "nat-17",
+      "class": "natural",
+      "query": "почему по коду не сделали watcher",
+      "expect": [
+        "decisions/CODE-INDEX D4 - без watcher по коду.md"
+      ],
+      "why": "decision"
+    },
+    {
+      "id": "nat-18",
+      "class": "natural",
+      "query": "лицензию библиотеки надо проверять до того, как её советовать",
+      "expect": [
+        "rules/Rule - лицензию библиотеки читать до рекомендации, поле GitHub не показатель.md"
+      ],
+      "why": "licensing rule"
+    },
+    {
+      "id": "nat-19",
+      "class": "natural",
+      "query": "утверждение об отсутствии чего-то требует контрольной проверки",
+      "expect": [
+        "learnings/archive/singularity-ui/rules/Rule - утверждение об отсутствии требует контроля.md"
+      ],
+      "why": "negative-claim rule"
+    },
+    {
+      "id": "nat-20",
+      "class": "natural",
+      "query": "хуки не должны грузить полный валидированный конфиг",
+      "expect": [
+        "rules/Rule - hooks must never use the full validated Config load path.md"
+      ],
+      "why": "RU query, EN title, but the concept is the note's whole subject"
+    },
+    {
+      "id": "nat-21",
+      "class": "natural",
+      "query": "перед архивацией знание надо вынести в индексируемые заметки",
+      "expect": [
+        "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md"
+      ],
+      "why": "archival rule"
+    },
+    {
+      "id": "nat-22",
+      "class": "natural",
+      "query": "экранированные строковые литералы писать инструментом правки, а не heredoc",
+      "expect": [
+        "rules/Rule - строковые литералы с экранированием писать инструментом Edit, не через heredoc.md"
+      ],
+      "why": "authoring rule"
+    },
+    {
+      "id": "xl-01",
+      "class": "crosslingual",
+      "query": "как чинить проигравшего в гонке за блокировку",
+      "expect": [
+        "rules/Rule - a losing lock contender must never clean up the winner's lock.md"
+      ],
+      "why": "RU query -> EN note"
+    },
+    {
+      "id": "xl-02",
+      "class": "crosslingual",
+      "query": "миграция на другой диск не проверена, пока старый путь на месте",
+      "expect": [
+        "rules/A drive migration is unverified until the source path is renamed away.md"
+      ],
+      "why": "RU query -> EN note"
+    },
+    {
+      "id": "xl-03",
+      "class": "crosslingual",
+      "query": "конец сессии с незакрытыми задачами эпика",
+      "expect": [
+        "rules/Session end with remaining epic tasks must produce a ready-to-use continuation prompt.md"
+      ],
+      "why": "RU query -> EN note"
+    },
+    {
+      "id": "xl-04",
+      "class": "crosslingual",
+      "query": "определение владельца хука должно терпеть установки до маркера",
+      "expect": [
+        "rules/Rule - hook ownership detection must tolerate pre-marker installs.md"
+      ],
+      "why": "RU query -> EN note"
+    },
+    {
+      "id": "xl-05",
+      "class": "crosslingual",
+      "query": "внутренний скролл не работает из-за минимального размера грида",
+      "expect": [
+        "incidents/CSS grid minimum size blocks inner scroll container.md"
+      ],
+      "why": "RU query -> EN incident"
+    },
+    {
+      "id": "xl-06",
+      "class": "crosslingual",
+      "query": "агент повторял запрещённые попытки в песочнице, хотя правило было",
+      "expect": [
+        "incidents/Error - Repeated sandbox retries despite known rule.md"
+      ],
+      "why": "RU query -> EN incident"
+    },
+    {
+      "id": "xl-07",
+      "class": "crosslingual",
+      "query": "дубликаты при подготовке записи в память",
+      "expect": [
+        "incidents/Error - Vault staging duplicates.md"
+      ],
+      "why": "RU query -> EN incident, harvested variant"
+    },
+    {
+      "id": "xl-08",
+      "class": "crosslingual",
+      "query": "русская проза читается как перевод с английского",
+      "expect": [
+        "incidents/Error - Story workflow RU prose reads as translationese.md"
+      ],
+      "why": "RU query -> EN incident"
+    },
+    {
+      "id": "xl-09",
+      "class": "crosslingual",
+      "query": "непроизолированный пробник CLI заблокировал диагностику",
+      "expect": [
+        "incidents/Error - Unisolated CLI probe blocked diagnostic batch.md"
+      ],
+      "why": "RU query -> EN incident"
+    },
+    {
+      "id": "xl-10",
+      "class": "crosslingual",
+      "query": "как исключить папки из антивируса через реестр",
+      "expect": [
+        "howto/Avast Free - exclusions in registry and removing it from the network stack.md"
+      ],
+      "why": "RU query -> EN howto"
+    },
+    {
+      "id": "xl-11",
+      "class": "crosslingual",
+      "query": "принципы производства визуальных новелл",
+      "expect": [
+        "howto/How to make RenPy visual novels - production principles.md"
+      ],
+      "why": "RU query -> EN howto"
+    },
+    {
+      "id": "xl-12",
+      "class": "crosslingual",
+      "query": "тестовые фикстуры не должны подделывать версию удалением записи",
+      "expect": [
+        "learnings/archive/singularity-ui/rules/Rule - Test fixtures must not fake a version by deleting a record.md"
+      ],
+      "why": "RU query -> EN rule"
+    },
+    {
+      "id": "xl-13",
+      "class": "crosslingual",
+      "query": "у покрытой тестами функции должен быть реальный потребитель",
+      "expect": [
+        "learnings/archive/singularity-ui/rules/Rule - у покрытой тестами функции должен быть потребитель в композиционном корне.md"
+      ],
+      "why": "RU query -> mixed-language rule"
+    },
+    {
+      "id": "xl-14",
+      "class": "crosslingual",
+      "query": "vault as the canonical source for the UI",
+      "expect": [
+        "learnings/archive/singularity-ui/rules/Rule - Singularity UI uses vault as canonical source.md"
+      ],
+      "why": "EN query -> EN note in a mostly-RU corpus"
+    },
+    {
+      "id": "xl-15",
+      "class": "crosslingual",
+      "query": "why did we choose TCP over a unix socket",
+      "expect": [
+        "02_New_System_Design/03_Semantic_Vector_Search.md"
+      ],
+      "why": "EN query -> RU design doc"
+    },
+    {
+      "id": "xl-16",
+      "class": "crosslingual",
+      "query": "how does the auto-capture hook decide to block session end",
+      "expect": [
+        "02_New_System_Design/02_Automatic_Memory_Obsidian.md"
+      ],
+      "why": "EN query -> RU design doc"
+    },
+    {
+      "id": "xl-17",
+      "class": "crosslingual",
+      "query": "rule about writing to the vault only through the CLI",
+      "expect": [
+        "rules/Rule - записи в vault идут командами mb.md"
+      ],
+      "why": "EN query -> RU rule"
+    },
+    {
+      "id": "xl-18",
+      "class": "crosslingual",
+      "query": "prove an invariant by breaking it on purpose",
+      "expect": [
+        "rules/Rule - Инвариант доказывается попыткой его сломать.md"
+      ],
+      "why": "EN query -> RU rule"
+    },
+    {
+      "id": "xl-19",
+      "class": "crosslingual",
+      "query": "a pipe must not swallow the test command exit status",
+      "expect": [
+        "rules/Пайп поверх тестовой команды не должен глотать exit-код.md"
+      ],
+      "why": "EN query -> RU rule"
+    },
+    {
+      "id": "xl-20",
+      "class": "crosslingual",
+      "query": "evidence instead of confidence when anchoring to reality",
+      "expect": [
+        "rules/Rule - якорь реальности - улики вместо уверенности.md"
+      ],
+      "why": "EN query -> RU rule"
+    },
+    {
+      "id": "xl-21",
+      "class": "crosslingual",
+      "query": "token economy discipline for search output",
+      "expect": [
+        "rules/Core Discipline - Token Economy.md"
+      ],
+      "why": "EN query -> RU-bodied core rule"
+    },
+    {
+      "id": "xl-22",
+      "class": "crosslingual",
+      "query": "search memory before reading files",
+      "expect": [
+        "rules/Core Discipline - SEM-FIRST.md"
+      ],
+      "why": "EN query -> RU-bodied core rule"
+    }
+  ],
+  "code_about": "Same idea for the CODE corpus (`--code-only`). Kept in the same file so a change to the fixture format cannot drift between the two, but scored separately: code and memory are different corpora with different query shapes, and averaging them would hide which one a change helped.",
+  "code_quota": {
+    "identifier": 5,
+    "natural": 6,
+    "crosslingual": 5
+  },
+  "code_cases": [
+    {
+      "id": "c-id-01",
+      "class": "identifier",
+      "query": "reciprocal rank fusion",
+      "expect": [
+        "singularity/singularity/search/lexical.py"
+      ],
+      "why": "the RRF implementation, named by its own term"
+    },
+    {
+      "id": "c-id-02",
+      "class": "identifier",
+      "query": "BM25 okapi idf k1 b",
+      "expect": [
+        "singularity/singularity/search/lexical.py"
+      ],
+      "why": "scoring constants live with the scorer"
+    },
+    {
+      "id": "c-id-03",
+      "class": "identifier",
+      "query": "atomic_write_json",
+      "expect": [
+        "singularity/singularity/config.py"
+      ],
+      "why": "a bare symbol name — the case a text embedding is worst at"
+    },
+    {
+      "id": "c-id-04",
+      "class": "identifier",
+      "query": "code_fingerprint is_stale",
+      "expect": [
+        "singularity/singularity/machine/code_version.py"
+      ],
+      "why": "two symbols, one module"
+    },
+    {
+      "id": "c-id-05",
+      "class": "identifier",
+      "query": "retry_with_backoff",
+      "expect": [
+        "singularity/tests/fixtures/code/sample_service.py"
+      ],
+      "why": "exact function name"
+    },
+    {
+      "id": "c-nat-01",
+      "class": "natural",
+      "query": "warm search daemon speaking newline delimited JSON over TCP",
+      "expect": [
+        "singularity/singularity/search/daemon.py"
+      ],
+      "why": "the daemon, described"
+    },
+    {
+      "id": "c-nat-02",
+      "class": "natural",
+      "query": "incremental index update by mtime and size diff",
+      "expect": [
+        "singularity/singularity/search/indexer.py"
+      ],
+      "why": "the writer"
+    },
+    {
+      "id": "c-nat-03",
+      "class": "natural",
+      "query": "inject memory context into every session start",
+      "expect": [
+        "singularity/singularity/hooks/session_start.py"
+      ],
+      "why": "the hook"
+    },
+    {
+      "id": "c-nat-04",
+      "class": "natural",
+      "query": "block the end of a session until insights are captured",
+      "expect": [
+        "singularity/singularity/hooks/stop_capture.py"
+      ],
+      "why": "the capture gate"
+    },
+    {
+      "id": "c-nat-05",
+      "class": "natural",
+      "query": "report broken wikilinks and orphan notes",
+      "expect": [
+        "singularity/singularity/knowledge/curator.py"
+      ],
+      "why": "curator mechanics"
+    },
+    {
+      "id": "c-nat-06",
+      "class": "natural",
+      "query": "propose merging a learning into an existing reference note",
+      "expect": [
+        "singularity/singularity/knowledge/digest.py"
+      ],
+      "why": "digest planner"
+    },
+    {
+      "id": "c-xl-01",
+      "class": "crosslingual",
+      "query": "маскирование секретов перед записью в заметку",
+      "expect": [
+        "singularity/singularity/knowledge/redact.py"
+      ],
+      "why": "RU query -> EN code"
+    },
+    {
+      "id": "c-xl-02",
+      "class": "crosslingual",
+      "query": "разбить переросшую заметку на индекс и дочерние",
+      "expect": [
+        "singularity/singularity/knowledge/notesplit.py"
+      ],
+      "why": "RU query -> EN code"
+    },
+    {
+      "id": "c-xl-03",
+      "class": "crosslingual",
+      "query": "определение проекта по самому глубокому совпадению пути",
+      "expect": [
+        "singularity/singularity/machine/projects.py"
+      ],
+      "why": "RU query -> EN code"
+    },
+    {
+      "id": "c-xl-04",
+      "class": "crosslingual",
+      "query": "восстановление конфига из бэкапа с контрольной суммой",
+      "expect": [
+        "singularity/singularity/machine/backup.py"
+      ],
+      "why": "RU query -> EN code"
+    },
+    {
+      "id": "c-xl-05",
+      "class": "crosslingual",
+      "query": "страж записи в vault перед вызовом инструмента",
+      "expect": [
+        "singularity/singularity/hooks/vault_guard.py",
+        "singularity/singularity/machine/vault_guard.py"
+      ],
+      "why": "RU query -> EN code; the hook adapter and its core both answer"
+    }
+  ]
+}

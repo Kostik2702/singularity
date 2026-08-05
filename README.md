@@ -189,11 +189,11 @@ A guided tour of every part of the system, grouped by topic, with copyable comma
 
 ```
 Memory   search · learn · note · ingest
-Health   status      (+ stats, reflect)
+Health   status      (+ stats, reflect, journey)
          doctor
 Care     curator     (+ digest, nightly)
 Model    llm
-Machine  service     (daemon, index, model, watch, backup, selftest)
+Machine  service     (daemon, index, model, watch, backup, selftest, sessions)
          setup       (config, project, hooks, init, uninstall)
 ```
 
@@ -275,6 +275,8 @@ mb note new decision "Switch to TCP transport"     # creates a note from templat
 
 Worth recording: the non-obvious, the surprising, anything that took more than one attempt, and decisions (with **owner + source** — a decision nobody owns isn't a decision). Not worth recording: anything git already shows. Code goes in as `file:line`, never pasted. `mb learn` deduplicates against the last 10 sections of the target file automatically (exact match, prefix containment, or ~90% similarity) — a near-repeat insight is skipped with the matched heading printed, not silently re-appended, unless you pass `--force`.
 
+**Secrets are masked before anything reaches disk.** The vault is a git repository, so a key that lands in a note is in history on every machine the vault has ever reached — which is why this runs on the write path and not as a later audit. Known shapes (`sk-`, `ghp_`, `AKIA`, `xox`, `AIza`, PEM blocks, `user:password@host`, `Bearer …`, and `token=`-style assignments carrying real entropy) become `sk-XXXXXXXX`: the type marker survives so a later reader can tell what was here, the entropy does not. The capture is kept, not refused — an insight is worth having with one token removed, and a capture that fails outright teaches the assistant to stop capturing. Honest boundary: this catches known shapes. It is protection against accident, not against an attacker, and not against a credential that looks like prose.
+
 **Mostly you won't do this by hand.** The assistant does it: skills auto-append phase notes to the active task's learnings doc, and the Stop-hook nudges once per substantial session if nothing was captured.
 
 ### Everything indexes itself
@@ -342,6 +344,38 @@ Two SessionStart/PreToolUse mechanisms that hand the assistant exactly the conte
 - **Module context** (opt-in — enable with `mb config set module_context_enabled true`) — before the assistant's first edit in a session to a path matching one of `context_map`'s `globs` (longest-prefix match, e.g. anything under `singularity/hooks/`), it gets a once-per-session excerpt of that module's own `note`. Good for "read this before touching this specific subsystem" rules that don't belong in the general project brain.
 
 Both fail open silently (a missing/unreadable note just means no block that session, never a crash) and both respect the same path-traversal guard, so a malformed `context.json` entry can't leak a file from outside the vault.
+
+### What the vault learned — `mb journey`
+
+```bash
+mb journey --days 30                 # everything that arrived in the window
+mb journey --days 7 --project myproj # scoped
+mb journey --days 30 --json          # machine-readable
+```
+```
+== mb journey — 2026-07-30 .. 2026-08-05 (7d) ==
+  334 entries: learning 130, reference 99, task 39, rule 31, decision 17, howto 12, incident 3
+  learning entries span 21 task(s)
+
+2026-08-05
+  [rule     ] Тёплый демон отдаёт код, с которым стартовал
+  [decision ] SEARCH D1 — гибрид включён по умолчанию
+```
+
+Two sources, because knowledge arrives in two shapes. A **note** counts on the day it was `created:`, never its mtime — a note edited today did not become knowledge today, and mtime would float every touched file to the top and bury the six real decisions of a month. A **learnings file** counts once per timestamped `##` section, not once per file: those files are appended to for months, so the file's own date says nothing. Journal folders (`daily/`, `_moc/`) are excluded for the same reason — sixty dailies would bury six decisions.
+
+Report-only, like every other curation surface here: it proposes nothing and changes nothing.
+
+### Splitting a note that outgrew its budget
+
+A project-brain note is read into every session, so it lives under `brain_max_lines`. Past that line the excerpt is truncated — and truncation is the wrong remedy, because the tail of a brain note is the newest part, not the least important. What the budget wants is a note shaped like an **index**:
+
+```bash
+mb note split "reference/Singularity Brain.md" --dry-run   # show the plan
+mb note split "reference/Singularity Brain.md"
+```
+
+The note becomes a parent holding an intro and a linked list of sections, plus one child per `##` section, linked back. Nothing is lost: every non-blank source line lands in the parent or exactly one child, and the command refuses rather than writing a partial split if any destination is occupied. The truncation notice in the session context now names both the scale and the remedy (`… 82/40 lines; mb note split <path>`).
 
 ### Digest and nightly orchestration
 
@@ -413,13 +447,35 @@ Context budget/reference issues: 2
 
 Here, `Atomic.md` really did have the same paragraph typed twice under different headings (a genuine duplicate, worth trimming); `BigBrain.md` is a registered project-brain note that's grown to 82 lines against a 40-line budget (still works, just silently truncated — worth shortening); and one module's context note points at a file that no longer exists (worth fixing or removing the mapping). `mb curator --json` gives you the same three layers as one machine-readable document.
 
+### Searching your own past sessions (opt-in, off by default)
+
+`mb search` answers from the vault: what somebody decided to write down. A great deal never gets written down, and "where did we discuss `IndexLockedError`" had no answer at all — while the transcripts sat on disk being walked by `mb reflect` every night, counted, and discarded.
+
+```bash
+mb config set session_search_enabled true   # nothing is stored until you do this
+mb sessions index                           # or let `mb nightly` do it
+mb search "IndexLockedError" --sessions
+mb sessions status                          # rows, size, covered clients
+mb sessions purge                           # delete the store outright
+```
+
+**This is the only feature in the engine that stores conversation text**, so the contract is deliberately narrow and was written before the code (`decisions/TRANSCRIPTS D1` in the vault):
+
+* **Off by default**, and `mb sessions status` says which it is — a store that is off and a store that is empty look identical from the outside.
+* **Its own database** (`.mb/sessions.db`), not the memory index. `mb search` without `--sessions` returns exactly what it returned before this existed — by construction, a different store, not by filtering. Verified against the recorded evaluation baseline: 0 drift across 66 queries.
+* **Redacted on the way in**, by the same sanitiser as `mb learn`. A transcript is the likeliest carrier of a secret in the whole system: it holds whatever was on screen, including the output of a command that printed a key.
+* **Finite and deletable.** `session_search_retention_days` (default 90) prunes on every run; `mb sessions purge` removes the store, leaving your transcripts and vault untouched. An opt-in that cannot be undone is not opt-in.
+* **FTS5, not embeddings** — a question about a past session is almost always "where did we talk about *this exact thing*", which is a lexical query. Summaries lose precisely the token you came looking for.
+
+**Coverage is Claude transcripts only.** Gemini and Grok are discovered by `mb reflect` for counting, but their message shapes are not parsed here yet — `mb sessions status` and `mb doctor`'s `B6b-sessions` both say so rather than letting "sessions are searchable" stand while two of four clients are silently absent.
+
 ### Vault guard
 
 PreToolUse check that flags a new note or config edit landing somewhere unexpected — a safety net against "the assistant created a note in the wrong folder" or "edited the machine config by hand instead of through `mb config set`."
 
 **On by default in `audit` mode** since v0.6.3: it only annotates the write, never blocks. The default flipped because the failure it catches is silent by construction — a note written with a client's Write tool skips `templates/`, so the required frontmatter and sections are simply absent and nobody notices for weeks. `"deny"` blocks outright and stays explicit opt-in: watch what `audit` flags for a few sessions first, and switch only once you're confident nothing legitimate trips it.
 
-An install that has ever saved its config already carries an explicit value, so **upgrading does not flip anything** — this default reaches new installs. An unparseable `config.json` makes the hook stay silent rather than act on a default nobody could have expressed.
+A value you set explicitly is now recorded even when it happens to equal the current default, so **pinning it survives the default changing later**. Before v0.11.2 that was not true: `save()` dropped any key equal to `DEFAULT_CONFIG`, which meant an install could never pin the value the default already had — and a later default change reached every machine. If you upgraded across such a change, check the setting rather than assuming it held. An unparseable `config.json` makes the hook stay silent rather than act on a default nobody could have expressed.
 
 ```bash
 mb config set vault_guard_mode deny         # block unexpected writes

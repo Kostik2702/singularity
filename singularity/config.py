@@ -107,11 +107,33 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "schema_version": SCHEMA_VERSION,
     "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
     "min_score": 0.30,
-    # AUD-17: blend BM25 with the vector ranking (RRF). Off by default — it
-    # changes result ORDER, and a machine that has tuned its habits around the
-    # current ranking should opt in rather than be surprised. `mb search
-    # --hybrid` turns it on per query regardless.
-    "hybrid_search": False,
+    # AUD-17: blend BM25 with the vector ranking (RRF). ON by default since
+    # 2026-08-05 — the reason it was off was "it changes result ORDER and we
+    # cannot show it changes it for the better", and that is no longer true:
+    # `tools/search_eval.py` over 66 query->note pairs measures +0.060 recall@1,
+    # +0.030 recall@5 and +0.041 MRR against the same vault in the same session.
+    # The cost is measured too and is real: cross-lingual queries lose 0.091
+    # recall@5, because BM25 has nothing useful to say when the query and the
+    # note are in different languages, and RRF still gives its ranking a vote.
+    # Four damping variants (capped lexical candidates, down-weighted RRF,
+    # reserved slots) were swept; every one of them gave back more than it
+    # recovered. See `decisions/SEARCH D1 - гибрид по умолчанию.md`.
+    # This DOES reach existing installs, and saying otherwise would be false.
+    # `save()` records decisions, not defaults, so a value equal to the default
+    # is dropped — which means no install could ever have pinned `false` while
+    # `false` WAS the default. The v0.6.3 note about vault_guard_enabled
+    # ("an install that has saved its config carries an explicit value") does
+    # not hold for a sparse config either. Flipping a default is therefore a
+    # behaviour change for everyone, and this one is made on a measurement.
+    "hybrid_search": True,
+    # The one feature that stores conversation text. OFF by default and it
+    # stays that way: everything else here is derived from files you wrote, and
+    # this is not. See `decisions/TRANSCRIPTS D1 - приватность транскриптов.md`
+    # for the full contract — separate store, redaction on the way in, finite
+    # retention, `mb sessions purge`.
+    "session_search_enabled": False,
+    "session_search_retention_days": 90,
+    "session_search_max_mb": 200,
     # AUD-21: `inbox/` staging area. Opt-in — a second place knowledge can sit
     # is a real cost, and someone happy to classify at capture time gains
     # nothing from it.
@@ -607,19 +629,26 @@ class Config:
     def save(self) -> None:
         """Persist the config: what this machine DECIDED, nothing else.
 
-        A key whose value equals `DEFAULT_CONFIG` is not written — it is not a
-        decision, and materialising all forty defaults is what made the old
-        file unreadable. `get()` falls back to the defaults, so dropping them
-        changes no behaviour and the file stays small as the schema grows."""
+        Everything in `data` is a decision, and all of it is written. `data`
+        holds the file's own contents plus whatever was set explicitly — nothing
+        materialises defaults into it, so the file stays short on its own.
+
+        Until 2026-08-05 a key whose value equalled `DEFAULT_CONFIG` was dropped
+        here, with the note that "dropping them changes no behaviour". That is
+        true right up to the first time a default changes, and then it inverts:
+        the value could not be PINNED. `mb config set hybrid_search false` while
+        the default was `false` deleted the key, so when the default flipped,
+        every install flipped with it and no install could have opted out —
+        which also falsifies the v0.6.3 promise about `vault_guard_enabled`
+        ("an install that has ever saved its config carries an explicit value").
+        Choosing the current default is a choice, and a config that records
+        decisions has to record that one too."""
         doc: dict[str, Any] = {"schema_version": SCHEMA_VERSION,
                                "vault_path": str(self.vault)}
         for key in sorted(self.data):
             if key in ("schema_version", "vault_path"):
                 continue
-            value = self.data[key]
-            if key in DEFAULT_CONFIG and value == DEFAULT_CONFIG[key]:
-                continue
-            doc[key] = value
+            doc[key] = self.data[key]
         atomic_write_json(self.config_path, doc, indent=2)
         try:
             self._write_sanitized_example({**DEFAULT_CONFIG, **self.data})

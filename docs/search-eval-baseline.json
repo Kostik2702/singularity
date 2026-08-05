@@ -1,0 +1,1933 @@
+{
+ "runs": [
+  {
+   "hybrid": false,
+   "elapsed_s": 0.47,
+   "metrics": {
+    "identifier": {
+     "n": 22,
+     "recall@1": 0.6364,
+     "recall@5": 0.7273,
+     "recall@10": 0.7727,
+     "mrr": 0.6818,
+     "misses": 5
+    },
+    "_overall": {
+     "n": 66,
+     "recall@1": 0.4848,
+     "recall@5": 0.7121,
+     "recall@10": 0.7424,
+     "mrr": 0.5851,
+     "misses": 17
+    },
+    "natural": {
+     "n": 22,
+     "recall@1": 0.4091,
+     "recall@5": 0.7273,
+     "recall@10": 0.7727,
+     "mrr": 0.5606,
+     "misses": 5
+    },
+    "crosslingual": {
+     "n": 22,
+     "recall@1": 0.4091,
+     "recall@5": 0.6818,
+     "recall@10": 0.6818,
+     "mrr": 0.5129,
+     "misses": 7
+    }
+   },
+   "cases": [
+    {
+     "id": "id-01",
+     "class": "identifier",
+     "query": "IndexLockedError",
+     "rank": 3,
+     "expect": [
+      "rules/Rule - a losing lock contender must never clean up the winner's lock.md"
+     ],
+     "got": [
+      "learnings/active/SINGULARITY-AUDIT.md",
+      "rules/Rule - every index reader must resolve through index_files, never a raw flat path.md",
+      "rules/Rule - a losing lock contender must never clean up the winner's lock.md"
+     ]
+    },
+    {
+     "id": "id-02",
+     "class": "identifier",
+     "query": "utf-8-sig stdin хуков",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - stdin хуков читать utf-8-sig.md"
+     ],
+     "got": [
+      "rules/Rule - stdin хуков читать utf-8-sig.md",
+      "learnings/active/SINGULARITY-engine-followups.md",
+      "learnings/active/KREA2-NODES.md"
+     ]
+    },
+    {
+     "id": "id-03",
+     "class": "identifier",
+     "query": "index_files резолвить путь индекса",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - every index reader must resolve through index_files, never a raw flat path.md"
+     ],
+     "got": [
+      "rules/Rule - every index reader must resolve through index_files, never a raw flat path.md",
+      "03_Tasks/TASK-05_Code_Indexer.md",
+      "changelog/2026-07.md"
+     ]
+    },
+    {
+     "id": "id-04",
+     "class": "identifier",
+     "query": "networkidle не наступает",
+     "rank": null,
+     "expect": [
+      "rules/Rule - Playwright networkidle не наступает на страницах с большим video.md"
+     ],
+     "got": [
+      "01_Genevra_Analysis/agents/agent_local-setuper.md",
+      "howto/Avast Free - exclusions in registry and removing it from the network stack.md",
+      "learnings/active/INTELLIGO-HT-PLAN.md"
+     ]
+    },
+    {
+     "id": "id-05",
+     "class": "identifier",
+     "query": "--disable-gpu скриншоты",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - byte-identity скриншотов требует --disable-gpu.md"
+     ],
+     "got": [
+      "rules/Rule - byte-identity скриншотов требует --disable-gpu.md",
+      "learnings/active/KREA2-NODES.md",
+      "reference/photorealism-settings.md"
+     ]
+    },
+    {
+     "id": "id-06",
+     "class": "identifier",
+     "query": "aeval вместо volume eval=frame",
+     "rank": 1,
+     "expect": [
+      "rules/Короткая огибающая в ffmpeg кладётся aeval_ а не volume eval_frame.md"
+     ],
+     "got": [
+      "rules/Короткая огибающая в ffmpeg кладётся aeval_ а не volume eval_frame.md",
+      "howto/Монтаж пачки i2v-клипов в один ролик - пошаговый плейбук.md",
+      "learnings/active/AUTO-REELS.md"
+     ]
+    },
+    {
+     "id": "id-07",
+     "class": "identifier",
+     "query": "PIPESTATUS exit code за пайпом",
+     "rank": 1,
+     "expect": [
+      "rules/Пайп поверх тестовой команды не должен глотать exit-код.md"
+     ],
+     "got": [
+      "rules/Пайп поверх тестовой команды не должен глотать exit-код.md",
+      "changelog/2026-08.md",
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md"
+     ]
+    },
+    {
+     "id": "id-08",
+     "class": "identifier",
+     "query": "mb config set dotted вложенный ключ конфига",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - вложенные ключи конфига Singularity правятся dotted-путём.md",
+      "rules/Rule - mb config set accepts top-level keys only.md"
+     ],
+     "got": [
+      "rules/Rule - mb config set accepts top-level keys only.md",
+      "rules/Rule - вложенные ключи конфига Singularity правятся dotted-путём.md",
+      "learnings/active/CONFIG.md"
+     ]
+    },
+    {
+     "id": "id-09",
+     "class": "identifier",
+     "query": "xfade буферизует весь вход",
+     "rank": 1,
+     "expect": [
+      "incidents/Error - ffmpeg-граф съел 100 ГБ и повесил машину, четыре причины подряд.md"
+     ],
+     "got": [
+      "incidents/Error - ffmpeg-граф съел 100 ГБ и повесил машину, четыре причины подряд.md",
+      "decisions/Покрытие переходов CapCut принять частичным_ бандлы скачать позже.md",
+      "reference/Движок рендера CapCut - стек, слой решения и принципы быстрого экспортёра.md"
+     ]
+    },
+    {
+     "id": "id-10",
+     "class": "identifier",
+     "query": "zoompan fps буферизация памяти",
+     "rank": 2,
+     "expect": [
+      "incidents/Error - ffmpeg-граф съел 100 ГБ и повесил машину, четыре причины подряд.md"
+     ],
+     "got": [
+      "learnings/active/AUTO-REELS.md",
+      "incidents/Error - ffmpeg-граф съел 100 ГБ и повесил машину, четыре причины подряд.md",
+      "reference/Растяжение кадра - гейт, который не виден по числам zoom.md"
+     ]
+    },
+    {
+     "id": "id-11",
+     "class": "identifier",
+     "query": "Get-Content Set-Content правка исходников",
+     "rank": 6,
+     "expect": [
+      "rules/Rule - PowerShell не редактирует исходники через Get-Content Set-Content.md"
+     ],
+     "got": [
+      "03_Tasks/KREAPHOTON_AUDIT_BACKLOG.md",
+      "reference/development-standards-code-patterns.md",
+      "reference/Short-form production playbook для монтажного агента.md"
+     ]
+    },
+    {
+     "id": "id-12",
+     "class": "identifier",
+     "query": "AF_UNIX заменить на TCP",
+     "rank": null,
+     "expect": [
+      "02_New_System_Design/03_Semantic_Vector_Search.md"
+     ],
+     "got": [
+      "03_Tasks/TASK-03_Search_Daemon.md",
+      "01_Genevra_Analysis/infrastructure/Setup_And_Sync.md",
+      "01_Genevra_Analysis/infrastructure/Core_Configuration.md"
+     ]
+    },
+    {
+     "id": "id-13",
+     "class": "identifier",
+     "query": "brain_max_lines бюджет заметки",
+     "rank": null,
+     "expect": [
+      "03_Tasks/SINGULARITY_INCOMING_FORK_IMPLEMENTATION.md"
+     ],
+     "got": [
+      "03_Tasks/_Task_Index.md",
+      "00_INDEX.md",
+      "02_New_System_Design/06_Integrations_Layer.md"
+     ]
+    },
+    {
+     "id": "id-14",
+     "class": "identifier",
+     "query": "min_score порог отсечки поиска",
+     "rank": null,
+     "expect": [
+      "03_Tasks/TASK-01_Repo_Scaffold_And_CLI.md"
+     ],
+     "got": [
+      "03_Tasks/TASK-06_Search_Client_And_TokenEconomy.md",
+      "03_Tasks/TASK-03_Search_Daemon.md",
+      "02_New_System_Design/03_Semantic_Vector_Search.md"
+     ]
+    },
+    {
+     "id": "id-15",
+     "class": "identifier",
+     "query": "currentColor не наследуется img src svg",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - img src svg не наследует currentColor - инжектить inline SVG.md"
+     ],
+     "got": [
+      "rules/Rule - img src svg не наследует currentColor - инжектить inline SVG.md",
+      "learnings/active/WEBSITE-FACTORY.md",
+      "changelog/2026-08.md"
+     ]
+    },
+    {
+     "id": "id-16",
+     "class": "identifier",
+     "query": "CRLF Python текстовый режим",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - Python текстовый режим переписывает файл в CRLF.md"
+     ],
+     "got": [
+      "rules/Rule - Python текстовый режим переписывает файл в CRLF.md",
+      "rules/Rule - строковые литералы с экранированием писать инструментом Edit, не через heredoc.md",
+      "03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md"
+     ]
+    },
+    {
+     "id": "id-17",
+     "class": "identifier",
+     "query": "argv ANSI кириллица Windows",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - argv на Windows приходит через ANSI, кириллица в аргументах ломается.md"
+     ],
+     "got": [
+      "rules/Rule - argv на Windows приходит через ANSI, кириллица в аргументах ломается.md",
+      "reference/NIKA-STUDIO-ASSET-ACQUISITION-PLAN.md",
+      "reference/CUSTOM-FONT-FROM-GLYPH-IMAGES.md"
+     ]
+    },
+    {
+     "id": "id-18",
+     "class": "identifier",
+     "query": "check.ps1 редирект потоков гейт",
+     "rank": null,
+     "expect": [
+      "learnings/archive/singularity-ui/rules/Rule - гейты check.ps1 запускать без редиректа потоков.md"
+     ],
+     "got": [
+      "learnings/active/KREA2-NODES.md",
+      "rules/Rule - верификация идёт через команду пользователя.md",
+      "reference/KreaPhoton v1.2 - comprehensive audit 2026-07-11.md"
+     ]
+    },
+    {
+     "id": "id-19",
+     "class": "identifier",
+     "query": "git -m вложенные двойные кавычки PowerShell 5.1",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - PS 5.1 не передавать вложенные двойные кавычки в git -m.md"
+     ],
+     "got": [
+      "rules/Rule - PS 5.1 не передавать вложенные двойные кавычки в git -m.md",
+      "rules/Rule - PowerShell не редактирует исходники через Get-Content Set-Content.md",
+      "learnings/active/SINGULARITY.md"
+     ]
+    },
+    {
+     "id": "id-20",
+     "class": "identifier",
+     "query": "Glob subdir pattern пустой на Windows",
+     "rank": 1,
+     "expect": [
+      "incidents/Error - Glob subdir pattern silent empty on Windows.md"
+     ],
+     "got": [
+      "incidents/Error - Glob subdir pattern silent empty on Windows.md",
+      "learnings/active/GRK-06.md",
+      "decisions/Универсальный движок эффектов - функция и провайдер вместо вида узла.md"
+     ]
+    },
+    {
+     "id": "id-21",
+     "class": "identifier",
+     "query": "TaskCreate без загрузки схемы deferred",
+     "rank": 1,
+     "expect": [
+      "incidents/Error - TaskCreate called without loading its deferred schema.md"
+     ],
+     "got": [
+      "incidents/Error - TaskCreate called without loading its deferred schema.md",
+      "03_Tasks/TASK-07_Scheduling_And_Watcher.md"
+     ]
+    },
+    {
+     "id": "id-22",
+     "class": "identifier",
+     "query": "POSIX shim Git Bash exec fallback",
+     "rank": 1,
+     "expect": [
+      "incidents/Error - mb POSIX shim silently dies in Git Bash (exec fallback unreachable).md",
+      "rules/Rule - POSIX shim выбирает интерпретатор проверкой, не exec-цепочкой.md"
+     ],
+     "got": [
+      "incidents/Error - mb POSIX shim silently dies in Git Bash (exec fallback unreachable).md",
+      "rules/Rule - POSIX shim выбирает интерпретатор проверкой, не exec-цепочкой.md",
+      "changelog/2026-07.md"
+     ]
+    },
+    {
+     "id": "nat-01",
+     "class": "natural",
+     "query": "почему выбрали не векторную базу данных, а numpy",
+     "rank": null,
+     "expect": [
+      "02_New_System_Design/03_Semantic_Vector_Search.md"
+     ],
+     "got": [
+      "03_Tasks/SINGULARITY_AUDIT_BACKLOG.md",
+      "reference/Singularity - Business Logic Map.md",
+      "rules/Доказательный замер перепроверять при смене популяции_ которую он мерит.md"
+     ]
+    },
+    {
+     "id": "nat-02",
+     "class": "natural",
+     "query": "как доказывать что новый инвариант действительно ловит нарушение",
+     "rank": 3,
+     "expect": [
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md"
+     ],
+     "got": [
+      "rules/Rule - якорь реальности - улики вместо уверенности.md",
+      "rules/AGENT_SHARED_PREAMBLE.md",
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md"
+     ]
+    },
+    {
+     "id": "nat-03",
+     "class": "natural",
+     "query": "тест может пропустить себя и молча отключиться",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md",
+      "rules/_намеренно не экспортируется_ требует доказательства.md"
+     ],
+     "got": [
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md",
+      "rules/Пайп поверх тестовой команды не должен глотать exit-код.md",
+      "rules/Найденное несоответствие сверить с записанным решением до починки.md"
+     ]
+    },
+    {
+     "id": "nat-04",
+     "class": "natural",
+     "query": "записи в память делать только через CLI, не редактировать файлы руками",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - записи в vault идут командами mb.md"
+     ],
+     "got": [
+      "rules/Rule - записи в vault идут командами mb.md",
+      "02_New_System_Design/01_System_Architecture.md",
+      "01_Genevra_Analysis/infrastructure/CLI_Scripts_Integrations.md"
+     ]
+    },
+    {
+     "id": "nat-05",
+     "class": "natural",
+     "query": "что владелец называет памятью",
+     "rank": 2,
+     "expect": [
+      "rules/Rule - память означает vault.md"
+     ],
+     "got": [
+      "learnings/active/GENERAL.md",
+      "rules/Rule - память означает vault.md",
+      "03_Tasks/TASK-09_Auto_Capture_Memory.md"
+     ]
+    },
+    {
+     "id": "nat-06",
+     "class": "natural",
+     "query": "переименование команды ломает существующих потребителей",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - Второе имя для существующей вещи.md"
+     ],
+     "got": [
+      "rules/Rule - Второе имя для существующей вещи.md",
+      "changelog/2026-08.md",
+      "decisions/Ресурсы CapCut - временные, свои их заменят.md"
+     ]
+    },
+    {
+     "id": "nat-07",
+     "class": "natural",
+     "query": "правило должно звучать там, где принимается решение",
+     "rank": 2,
+     "expect": [
+      "rules/Rule - правило звучит в точке принятия решения.md"
+     ],
+     "got": [
+      "rules/Rule - контракт полностью к концу требует перелёта, а не прихода.md",
+      "rules/Rule - правило звучит в точке принятия решения.md",
+      "rules/Rule - решение approval действительно только на соединении, которое спросило.md"
+     ]
+    },
+    {
+     "id": "nat-08",
+     "class": "natural",
+     "query": "верификацию гонять той же командой, что запускает пользователь",
+     "rank": 2,
+     "expect": [
+      "rules/Rule - верификация идёт через команду пользователя.md"
+     ],
+     "got": [
+      "01_Genevra_Analysis/skills/skill_test-task.md",
+      "rules/Rule - верификация идёт через команду пользователя.md",
+      "01_Genevra_Analysis/skills/skill_council.md"
+     ]
+    },
+    {
+     "id": "nat-09",
+     "class": "natural",
+     "query": "метрика, которую никто не читает, не нужна",
+     "rank": null,
+     "expect": [
+      "learnings/active/SINGULARITY-AUDIT.md"
+     ],
+     "got": [
+      "learnings/active/SINGULARITY-CODE.md",
+      "learnings/active/AUTO-REELS.md",
+      "rules/Rule - контракт полностью к концу требует перелёта, а не прихода.md"
+     ]
+    },
+    {
+     "id": "nat-10",
+     "class": "natural",
+     "query": "сначала доказать что конфиг этого не выражает, потом править код",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - прежде чем править код, доказать что конфиг этого не выражает.md"
+     ],
+     "got": [
+      "rules/Rule - прежде чем править код, доказать что конфиг этого не выражает.md",
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md",
+      "reference/Учёт токенов по транскрипту Claude Code.md"
+     ]
+    },
+    {
+     "id": "nat-11",
+     "class": "natural",
+     "query": "как переносить vault и движок на другой диск",
+     "rank": 1,
+     "expect": [
+      "howto/Migrate Singularity vault_ engine and projects to another drive.md"
+     ],
+     "got": [
+      "howto/Migrate Singularity vault_ engine and projects to another drive.md",
+      "learnings/active/CONFIG.md",
+      "changelog/2026-07.md"
+     ]
+    },
+    {
+     "id": "nat-12",
+     "class": "natural",
+     "query": "как включить поиск по коду",
+     "rank": 3,
+     "expect": [
+      "howto/Поиск по коду - корпус code_index.md"
+     ],
+     "got": [
+      "decisions/CODE-INDEX D2 - код в выдаче только по флагу.md",
+      "03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md",
+      "howto/Поиск по коду - корпус code_index.md"
+     ]
+    },
+    {
+     "id": "nat-13",
+     "class": "natural",
+     "query": "как прогнать документ через ingest до обновления вики",
+     "rank": null,
+     "expect": [
+      "howto/Ingest-цикл - от документа до обновлённой wiki.md"
+     ],
+     "got": [
+      "changelog/2026-08.md",
+      "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md",
+      "learnings/active/INTELLIGO-HT-PLAN.md"
+     ]
+    },
+    {
+     "id": "nat-14",
+     "class": "natural",
+     "query": "почему индекс кода не должен попадать в обычную выдачу",
+     "rank": 6,
+     "expect": [
+      "decisions/CODE-INDEX D2 - код в выдаче только по флагу.md"
+     ],
+     "got": [
+      "03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md",
+      "howto/Поиск по коду - корпус code_index.md",
+      "03_Tasks/TASK-05_Code_Indexer.md"
+     ]
+    },
+    {
+     "id": "nat-15",
+     "class": "natural",
+     "query": "какая приватность у индекса исходников",
+     "rank": 2,
+     "expect": [
+      "decisions/CODE-INDEX D5 - приватность индекса кода.md"
+     ],
+     "got": [
+      "howto/Поиск по коду - корпус code_index.md",
+      "decisions/CODE-INDEX D5 - приватность индекса кода.md",
+      "learnings/active/SINGULARITY-CODE.md"
+     ]
+    },
+    {
+     "id": "nat-16",
+     "class": "natural",
+     "query": "почему у корпуса кода своя версия схемы чанков",
+     "rank": null,
+     "expect": [
+      "decisions/CODE-INDEX D3 - пер-корпусная схема чанков.md"
+     ],
+     "got": [
+      "03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md",
+      "reference/Учёт токенов по транскрипту Claude Code.md",
+      "rules/Rule - прежде чем править код, доказать что конфиг этого не выражает.md"
+     ]
+    },
+    {
+     "id": "nat-17",
+     "class": "natural",
+     "query": "почему по коду не сделали watcher",
+     "rank": 1,
+     "expect": [
+      "decisions/CODE-INDEX D4 - без watcher по коду.md"
+     ],
+     "got": [
+      "decisions/CODE-INDEX D4 - без watcher по коду.md",
+      "howto/Поиск по коду - корпус code_index.md",
+      "learnings/active/GENERAL.md"
+     ]
+    },
+    {
+     "id": "nat-18",
+     "class": "natural",
+     "query": "лицензию библиотеки надо проверять до того, как её советовать",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - лицензию библиотеки читать до рекомендации, поле GitHub не показатель.md"
+     ],
+     "got": [
+      "rules/Rule - лицензию библиотеки читать до рекомендации, поле GitHub не показатель.md",
+      "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md",
+      "03_Tasks/TASK-10_Memory_Validation_And_Curator.md"
+     ]
+    },
+    {
+     "id": "nat-19",
+     "class": "natural",
+     "query": "утверждение об отсутствии чего-то требует контрольной проверки",
+     "rank": null,
+     "expect": [
+      "learnings/archive/singularity-ui/rules/Rule - утверждение об отсутствии требует контроля.md"
+     ],
+     "got": [
+      "rules/Найденное несоответствие сверить с записанным решением до починки.md",
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md",
+      "rules/Rule - якорь реальности - улики вместо уверенности.md"
+     ]
+    },
+    {
+     "id": "nat-20",
+     "class": "natural",
+     "query": "хуки не должны грузить полный валидированный конфиг",
+     "rank": 2,
+     "expect": [
+      "rules/Rule - hooks must never use the full validated Config load path.md"
+     ],
+     "got": [
+      "decisions/Сплавление проходов - границу задаёт поточечность, а не число входов.md",
+      "rules/Rule - hooks must never use the full validated Config load path.md",
+      "rules/Rule - прежде чем править код, доказать что конфиг этого не выражает.md"
+     ]
+    },
+    {
+     "id": "nat-21",
+     "class": "natural",
+     "query": "перед архивацией знание надо вынести в индексируемые заметки",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md"
+     ],
+     "got": [
+      "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md",
+      "howto/Ingest-цикл - от документа до обновлённой wiki.md",
+      "reference/Внешнее хранилище библиотеки эффектов - состав, варианты, открытый вопрос.md"
+     ]
+    },
+    {
+     "id": "nat-22",
+     "class": "natural",
+     "query": "экранированные строковые литералы писать инструментом правки, а не heredoc",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - строковые литералы с экранированием писать инструментом Edit, не через heredoc.md"
+     ],
+     "got": [
+      "rules/Rule - строковые литералы с экранированием писать инструментом Edit, не через heredoc.md",
+      "howto/Огненный текст без композитора - глифы как ресурс, SDF вместо блюра.md",
+      "howto/Промо-текст поверх вертикального ролика - типографика, motion и проверка контраста.md"
+     ]
+    },
+    {
+     "id": "xl-01",
+     "class": "crosslingual",
+     "query": "как чинить проигравшего в гонке за блокировку",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - a losing lock contender must never clean up the winner's lock.md"
+     ],
+     "got": [
+      "rules/Rule - a losing lock contender must never clean up the winner's lock.md",
+      "rules/Rule - возможность живёт в движке, скил только маршрутизирует.md",
+      "01_Genevra_Analysis/skills/skill_grill.md"
+     ]
+    },
+    {
+     "id": "xl-02",
+     "class": "crosslingual",
+     "query": "миграция на другой диск не проверена, пока старый путь на месте",
+     "rank": 2,
+     "expect": [
+      "rules/A drive migration is unverified until the source path is renamed away.md"
+     ],
+     "got": [
+      "learnings/active/MIGRATION-DRIVE.md",
+      "rules/A drive migration is unverified until the source path is renamed away.md",
+      "howto/Migrate Singularity vault_ engine and projects to another drive.md"
+     ]
+    },
+    {
+     "id": "xl-03",
+     "class": "crosslingual",
+     "query": "конец сессии с незакрытыми задачами эпика",
+     "rank": 1,
+     "expect": [
+      "rules/Session end with remaining epic tasks must produce a ready-to-use continuation prompt.md"
+     ],
+     "got": [
+      "rules/Session end with remaining epic tasks must produce a ready-to-use continuation prompt.md",
+      "learnings/active/AUTO-REELS.md",
+      "decisions/CAPCUT-BACKEND-EXTENSION-2026-08-01.md"
+     ]
+    },
+    {
+     "id": "xl-04",
+     "class": "crosslingual",
+     "query": "определение владельца хука должно терпеть установки до маркера",
+     "rank": null,
+     "expect": [
+      "rules/Rule - hook ownership detection must tolerate pre-marker installs.md"
+     ],
+     "got": [
+      "rules/Rule - правило звучит в точке принятия решения.md",
+      "rules/Rule - Второе имя для существующей вещи.md",
+      "rules/Rule - память означает vault.md"
+     ]
+    },
+    {
+     "id": "xl-05",
+     "class": "crosslingual",
+     "query": "внутренний скролл не работает из-за минимального размера грида",
+     "rank": 5,
+     "expect": [
+      "incidents/CSS grid minimum size blocks inner scroll container.md"
+     ],
+     "got": [
+      "learnings/active/COMFY-MINIMAX-H3.md",
+      "decisions/Сплавление проходов - границу задаёт поточечность, а не число входов.md",
+      "reference/Растяжение кадра - гейт, который не виден по числам zoom.md"
+     ]
+    },
+    {
+     "id": "xl-06",
+     "class": "crosslingual",
+     "query": "агент повторял запрещённые попытки в песочнице, хотя правило было",
+     "rank": 1,
+     "expect": [
+      "incidents/Error - Repeated sandbox retries despite known rule.md"
+     ],
+     "got": [
+      "incidents/Error - Repeated sandbox retries despite known rule.md",
+      "incidents/Error - Unisolated CLI probe blocked diagnostic batch.md",
+      "rules/Rule - якорь реальности - улики вместо уверенности.md"
+     ]
+    },
+    {
+     "id": "xl-07",
+     "class": "crosslingual",
+     "query": "дубликаты при подготовке записи в память",
+     "rank": null,
+     "expect": [
+      "incidents/Error - Vault staging duplicates.md"
+     ],
+     "got": [
+      "03_Tasks/TASK-09_Auto_Capture_Memory.md",
+      "03_Tasks/_Task_Index.md",
+      "02_New_System_Design/02_Automatic_Memory_Obsidian.md"
+     ]
+    },
+    {
+     "id": "xl-08",
+     "class": "crosslingual",
+     "query": "русская проза читается как перевод с английского",
+     "rank": 1,
+     "expect": [
+      "incidents/Error - Story workflow RU prose reads as translationese.md"
+     ],
+     "got": [
+      "incidents/Error - Story workflow RU prose reads as translationese.md",
+      "howto/Диалоги в прозе _ естественность.md",
+      "decisions/Официальный язык проекта capcut-bridge - английский.md"
+     ]
+    },
+    {
+     "id": "xl-09",
+     "class": "crosslingual",
+     "query": "непроизолированный пробник CLI заблокировал диагностику",
+     "rank": 1,
+     "expect": [
+      "incidents/Error - Unisolated CLI probe blocked diagnostic batch.md"
+     ],
+     "got": [
+      "incidents/Error - Unisolated CLI probe blocked diagnostic batch.md",
+      "changelog/2026-07.md"
+     ]
+    },
+    {
+     "id": "xl-10",
+     "class": "crosslingual",
+     "query": "как исключить папки из антивируса через реестр",
+     "rank": 1,
+     "expect": [
+      "howto/Avast Free - exclusions in registry and removing it from the network stack.md"
+     ],
+     "got": [
+      "howto/Avast Free - exclusions in registry and removing it from the network stack.md",
+      "learnings/active/GRK-02.md",
+      "decisions/CODE-INDEX D5 - приватность индекса кода.md"
+     ]
+    },
+    {
+     "id": "xl-11",
+     "class": "crosslingual",
+     "query": "принципы производства визуальных новелл",
+     "rank": 1,
+     "expect": [
+      "howto/How to make RenPy visual novels - production principles.md"
+     ],
+     "got": [
+      "howto/How to make RenPy visual novels - production principles.md",
+      "reference/Визуальная семантика и доказательные вставки.md"
+     ]
+    },
+    {
+     "id": "xl-12",
+     "class": "crosslingual",
+     "query": "тестовые фикстуры не должны подделывать версию удалением записи",
+     "rank": null,
+     "expect": [
+      "learnings/archive/singularity-ui/rules/Rule - Test fixtures must not fake a version by deleting a record.md"
+     ],
+     "got": [
+      "incidents/Error - Vault staging duplicates.md",
+      "rules/Найденное несоответствие сверить с записанным решением до починки.md",
+      "rules/Пайп поверх тестовой команды не должен глотать exit-код.md"
+     ]
+    },
+    {
+     "id": "xl-13",
+     "class": "crosslingual",
+     "query": "у покрытой тестами функции должен быть реальный потребитель",
+     "rank": null,
+     "expect": [
+      "learnings/archive/singularity-ui/rules/Rule - у покрытой тестами функции должен быть потребитель в композиционном корне.md"
+     ],
+     "got": [
+      "rules/Rule - якорь реальности - улики вместо уверенности.md",
+      "reference/Визуальная семантика и доказательные вставки.md",
+      "01_Genevra_Analysis/agents/agent_reviewer.md"
+     ]
+    },
+    {
+     "id": "xl-14",
+     "class": "crosslingual",
+     "query": "vault as the canonical source for the UI",
+     "rank": null,
+     "expect": [
+      "learnings/archive/singularity-ui/rules/Rule - Singularity UI uses vault as canonical source.md"
+     ],
+     "got": [
+      "incidents/Error - Vault staging duplicates.md",
+      "rules/Рабочие AI-артефакты хранятся в vault.md",
+      "learnings/active/USER-INCOMING-HOOKS.md"
+     ]
+    },
+    {
+     "id": "xl-15",
+     "class": "crosslingual",
+     "query": "why did we choose TCP over a unix socket",
+     "rank": 4,
+     "expect": [
+      "02_New_System_Design/03_Semantic_Vector_Search.md"
+     ],
+     "got": [
+      "reference/CapCutAPI - стек реализации против альтернатив.md",
+      "03_Tasks/TASK-03_Search_Daemon.md",
+      "learnings/active/INTELLIGO-HT-PLAN.md"
+     ]
+    },
+    {
+     "id": "xl-16",
+     "class": "crosslingual",
+     "query": "how does the auto-capture hook decide to block session end",
+     "rank": null,
+     "expect": [
+      "02_New_System_Design/02_Automatic_Memory_Obsidian.md"
+     ],
+     "got": [
+      "reference/Singularity Incoming Fork Integration Specification.md",
+      "rules/Session end with remaining epic tasks must produce a ready-to-use continuation prompt.md",
+      "learnings/active/USER-INCOMING-HOOKS.md"
+     ]
+    },
+    {
+     "id": "xl-17",
+     "class": "crosslingual",
+     "query": "rule about writing to the vault only through the CLI",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - записи в vault идут командами mb.md"
+     ],
+     "got": [
+      "rules/Rule - записи в vault идут командами mb.md",
+      "learnings/active/GROK-CLI-INTEGRATION.md",
+      "rules/Rule - память означает vault.md"
+     ]
+    },
+    {
+     "id": "xl-18",
+     "class": "crosslingual",
+     "query": "prove an invariant by breaking it on purpose",
+     "rank": 3,
+     "expect": [
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md"
+     ],
+     "got": [
+      "rules/Rule - прежде чем править код, доказать что конфиг этого не выражает.md",
+      "rules/AGENT_SHARED_PREAMBLE.md",
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md"
+     ]
+    },
+    {
+     "id": "xl-19",
+     "class": "crosslingual",
+     "query": "a pipe must not swallow the test command exit status",
+     "rank": 1,
+     "expect": [
+      "rules/Пайп поверх тестовой команды не должен глотать exit-код.md"
+     ],
+     "got": [
+      "rules/Пайп поверх тестовой команды не должен глотать exit-код.md",
+      "rules/Rule - egress провайдера это закрытое множество, и де-эскалация не привилегия.md",
+      "changelog/2026-08.md"
+     ]
+    },
+    {
+     "id": "xl-20",
+     "class": "crosslingual",
+     "query": "evidence instead of confidence when anchoring to reality",
+     "rank": 2,
+     "expect": [
+      "rules/Rule - якорь реальности - улики вместо уверенности.md"
+     ],
+     "got": [
+      "rules/AGENT_SHARED_PREAMBLE.md",
+      "rules/Rule - якорь реальности - улики вместо уверенности.md",
+      "reference/Визуальная семантика и доказательные вставки.md"
+     ]
+    },
+    {
+     "id": "xl-21",
+     "class": "crosslingual",
+     "query": "token economy discipline for search output",
+     "rank": 2,
+     "expect": [
+      "rules/Core Discipline - Token Economy.md"
+     ],
+     "got": [
+      "03_Tasks/TASK-06_Search_Client_And_TokenEconomy.md",
+      "rules/Core Discipline - Token Economy.md",
+      "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md"
+     ]
+    },
+    {
+     "id": "xl-22",
+     "class": "crosslingual",
+     "query": "search memory before reading files",
+     "rank": null,
+     "expect": [
+      "rules/Core Discipline - SEM-FIRST.md"
+     ],
+     "got": [
+      "learnings/active/SINGULARITY-WIKI.md",
+      "03_Tasks/TASK-09_Auto_Capture_Memory.md",
+      "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md"
+     ]
+    }
+   ]
+  },
+  {
+   "hybrid": true,
+   "elapsed_s": 0.71,
+   "metrics": {
+    "identifier": {
+     "n": 22,
+     "recall@1": 0.6818,
+     "recall@5": 0.8636,
+     "recall@10": 0.8636,
+     "mrr": 0.7538,
+     "misses": 3
+    },
+    "_overall": {
+     "n": 66,
+     "recall@1": 0.5455,
+     "recall@5": 0.7424,
+     "recall@10": 0.803,
+     "mrr": 0.6258,
+     "misses": 13
+    },
+    "natural": {
+     "n": 22,
+     "recall@1": 0.5909,
+     "recall@5": 0.7727,
+     "recall@10": 0.8636,
+     "mrr": 0.6682,
+     "misses": 3
+    },
+    "crosslingual": {
+     "n": 22,
+     "recall@1": 0.3636,
+     "recall@5": 0.5909,
+     "recall@10": 0.6818,
+     "mrr": 0.4554,
+     "misses": 7
+    }
+   },
+   "cases": [
+    {
+     "id": "id-01",
+     "class": "identifier",
+     "query": "IndexLockedError",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - a losing lock contender must never clean up the winner's lock.md"
+     ],
+     "got": [
+      "rules/Rule - a losing lock contender must never clean up the winner's lock.md",
+      "learnings/active/SINGULARITY-AUDIT.md",
+      "rules/Rule - every index reader must resolve through index_files, never a raw flat path.md"
+     ]
+    },
+    {
+     "id": "id-02",
+     "class": "identifier",
+     "query": "utf-8-sig stdin хуков",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - stdin хуков читать utf-8-sig.md"
+     ],
+     "got": [
+      "rules/Rule - stdin хуков читать utf-8-sig.md",
+      "incidents/Error - Singularity hooks mojibake stdout cp1251.md",
+      "learnings/active/SINGULARITY-engine-followups.md"
+     ]
+    },
+    {
+     "id": "id-03",
+     "class": "identifier",
+     "query": "index_files резолвить путь индекса",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - every index reader must resolve through index_files, never a raw flat path.md"
+     ],
+     "got": [
+      "rules/Rule - every index reader must resolve through index_files, never a raw flat path.md",
+      "learnings/active/SINGULARITY-AUDIT.md",
+      "changelog/2026-07.md"
+     ]
+    },
+    {
+     "id": "id-04",
+     "class": "identifier",
+     "query": "networkidle не наступает",
+     "rank": 3,
+     "expect": [
+      "rules/Rule - Playwright networkidle не наступает на страницах с большим video.md"
+     ],
+     "got": [
+      "reference/HEADLESS-CHROME-TRAPS.md",
+      "01_Genevra_Analysis/agents/agent_local-setuper.md",
+      "rules/Rule - Playwright networkidle не наступает на страницах с большим video.md"
+     ]
+    },
+    {
+     "id": "id-05",
+     "class": "identifier",
+     "query": "--disable-gpu скриншоты",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - byte-identity скриншотов требует --disable-gpu.md"
+     ],
+     "got": [
+      "rules/Rule - byte-identity скриншотов требует --disable-gpu.md",
+      "learnings/active/KREA2-NODES.md",
+      "reference/HEADLESS-CHROME-TRAPS.md"
+     ]
+    },
+    {
+     "id": "id-06",
+     "class": "identifier",
+     "query": "aeval вместо volume eval=frame",
+     "rank": 1,
+     "expect": [
+      "rules/Короткая огибающая в ffmpeg кладётся aeval_ а не volume eval_frame.md"
+     ],
+     "got": [
+      "rules/Короткая огибающая в ffmpeg кладётся aeval_ а не volume eval_frame.md",
+      "learnings/active/AUTO-REELS.md",
+      "decisions/Вспышки и SFX в reel - отдельные подкоманды light и sfx.md"
+     ]
+    },
+    {
+     "id": "id-07",
+     "class": "identifier",
+     "query": "PIPESTATUS exit code за пайпом",
+     "rank": 1,
+     "expect": [
+      "rules/Пайп поверх тестовой команды не должен глотать exit-код.md"
+     ],
+     "got": [
+      "rules/Пайп поверх тестовой команды не должен глотать exit-код.md",
+      "changelog/2026-08.md",
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md"
+     ]
+    },
+    {
+     "id": "id-08",
+     "class": "identifier",
+     "query": "mb config set dotted вложенный ключ конфига",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - вложенные ключи конфига Singularity правятся dotted-путём.md",
+      "rules/Rule - mb config set accepts top-level keys only.md"
+     ],
+     "got": [
+      "rules/Rule - mb config set accepts top-level keys only.md",
+      "learnings/active/CONFIG.md",
+      "rules/Rule - вложенные ключи конфига Singularity правятся dotted-путём.md"
+     ]
+    },
+    {
+     "id": "id-09",
+     "class": "identifier",
+     "query": "xfade буферизует весь вход",
+     "rank": 1,
+     "expect": [
+      "incidents/Error - ffmpeg-граф съел 100 ГБ и повесил машину, четыре причины подряд.md"
+     ],
+     "got": [
+      "incidents/Error - ffmpeg-граф съел 100 ГБ и повесил машину, четыре причины подряд.md",
+      "learnings/active/AUTO-REELS.md",
+      "decisions/Покрытие переходов CapCut принять частичным_ бандлы скачать позже.md"
+     ]
+    },
+    {
+     "id": "id-10",
+     "class": "identifier",
+     "query": "zoompan fps буферизация памяти",
+     "rank": 2,
+     "expect": [
+      "incidents/Error - ffmpeg-граф съел 100 ГБ и повесил машину, четыре причины подряд.md"
+     ],
+     "got": [
+      "learnings/active/AUTO-REELS.md",
+      "incidents/Error - ffmpeg-граф съел 100 ГБ и повесил машину, четыре причины подряд.md",
+      "learnings/active/COMFY-MINIMAX-H3.md"
+     ]
+    },
+    {
+     "id": "id-11",
+     "class": "identifier",
+     "query": "Get-Content Set-Content правка исходников",
+     "rank": 2,
+     "expect": [
+      "rules/Rule - PowerShell не редактирует исходники через Get-Content Set-Content.md"
+     ],
+     "got": [
+      "rules/Rule - лицензию библиотеки читать до рекомендации, поле GitHub не показатель.md",
+      "rules/Rule - PowerShell не редактирует исходники через Get-Content Set-Content.md",
+      "rules/Rule - строковые литералы с экранированием писать инструментом Edit, не через heredoc.md"
+     ]
+    },
+    {
+     "id": "id-12",
+     "class": "identifier",
+     "query": "AF_UNIX заменить на TCP",
+     "rank": null,
+     "expect": [
+      "02_New_System_Design/03_Semantic_Vector_Search.md"
+     ],
+     "got": [
+      "01_Genevra_Analysis/infrastructure/Setup_And_Sync.md",
+      "03_Tasks/TASK-03_Search_Daemon.md",
+      "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md"
+     ]
+    },
+    {
+     "id": "id-13",
+     "class": "identifier",
+     "query": "brain_max_lines бюджет заметки",
+     "rank": 4,
+     "expect": [
+      "03_Tasks/SINGULARITY_INCOMING_FORK_IMPLEMENTATION.md"
+     ],
+     "got": [
+      "03_Tasks/_Task_Index.md",
+      "01_Genevra_Analysis/skills/skill_confidence-calibration.md",
+      "00_INDEX.md"
+     ]
+    },
+    {
+     "id": "id-14",
+     "class": "identifier",
+     "query": "min_score порог отсечки поиска",
+     "rank": null,
+     "expect": [
+      "03_Tasks/TASK-01_Repo_Scaffold_And_CLI.md"
+     ],
+     "got": [
+      "02_New_System_Design/03_Semantic_Vector_Search.md",
+      "decisions/WIKI-LOOP D7 - потолок fan-out 15 страниц.md",
+      "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md"
+     ]
+    },
+    {
+     "id": "id-15",
+     "class": "identifier",
+     "query": "currentColor не наследуется img src svg",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - img src svg не наследует currentColor - инжектить inline SVG.md"
+     ],
+     "got": [
+      "rules/Rule - img src svg не наследует currentColor - инжектить inline SVG.md",
+      "learnings/active/WEBSITE-FACTORY.md",
+      "changelog/2026-08.md"
+     ]
+    },
+    {
+     "id": "id-16",
+     "class": "identifier",
+     "query": "CRLF Python текстовый режим",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - Python текстовый режим переписывает файл в CRLF.md"
+     ],
+     "got": [
+      "rules/Rule - Python текстовый режим переписывает файл в CRLF.md",
+      "rules/Rule - строковые литералы с экранированием писать инструментом Edit, не через heredoc.md",
+      "decisions/CODE-INDEX D6 - языки чанкера Python первичен Ruby не пишем.md"
+     ]
+    },
+    {
+     "id": "id-17",
+     "class": "identifier",
+     "query": "argv ANSI кириллица Windows",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - argv на Windows приходит через ANSI, кириллица в аргументах ломается.md"
+     ],
+     "got": [
+      "rules/Rule - argv на Windows приходит через ANSI, кириллица в аргументах ломается.md",
+      "learnings/active/SINGULARITY-engine-followups.md",
+      "reference/CUSTOM-FONT-FROM-GLYPH-IMAGES.md"
+     ]
+    },
+    {
+     "id": "id-18",
+     "class": "identifier",
+     "query": "check.ps1 редирект потоков гейт",
+     "rank": null,
+     "expect": [
+      "learnings/archive/singularity-ui/rules/Rule - гейты check.ps1 запускать без редиректа потоков.md"
+     ],
+     "got": [
+      "reference/Singularity - Trace Maps.md",
+      "learnings/active/KREA2-NODES.md",
+      "changelog/2026-07.md"
+     ]
+    },
+    {
+     "id": "id-19",
+     "class": "identifier",
+     "query": "git -m вложенные двойные кавычки PowerShell 5.1",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - PS 5.1 не передавать вложенные двойные кавычки в git -m.md"
+     ],
+     "got": [
+      "rules/Rule - PS 5.1 не передавать вложенные двойные кавычки в git -m.md",
+      "learnings/active/SINGULARITY.md",
+      "rules/Rule - PowerShell не редактирует исходники через Get-Content Set-Content.md"
+     ]
+    },
+    {
+     "id": "id-20",
+     "class": "identifier",
+     "query": "Glob subdir pattern пустой на Windows",
+     "rank": 1,
+     "expect": [
+      "incidents/Error - Glob subdir pattern silent empty on Windows.md"
+     ],
+     "got": [
+      "incidents/Error - Glob subdir pattern silent empty on Windows.md",
+      "reference/node-patterns.md",
+      "learnings/active/GRK-06.md"
+     ]
+    },
+    {
+     "id": "id-21",
+     "class": "identifier",
+     "query": "TaskCreate без загрузки схемы deferred",
+     "rank": 1,
+     "expect": [
+      "incidents/Error - TaskCreate called without loading its deferred schema.md"
+     ],
+     "got": [
+      "incidents/Error - TaskCreate called without loading its deferred schema.md",
+      "03_Tasks/TASK-07_Scheduling_And_Watcher.md"
+     ]
+    },
+    {
+     "id": "id-22",
+     "class": "identifier",
+     "query": "POSIX shim Git Bash exec fallback",
+     "rank": 1,
+     "expect": [
+      "incidents/Error - mb POSIX shim silently dies in Git Bash (exec fallback unreachable).md",
+      "rules/Rule - POSIX shim выбирает интерпретатор проверкой, не exec-цепочкой.md"
+     ],
+     "got": [
+      "incidents/Error - mb POSIX shim silently dies in Git Bash (exec fallback unreachable).md",
+      "rules/Rule - POSIX shim выбирает интерпретатор проверкой, не exec-цепочкой.md"
+     ]
+    },
+    {
+     "id": "nat-01",
+     "class": "natural",
+     "query": "почему выбрали не векторную базу данных, а numpy",
+     "rank": null,
+     "expect": [
+      "02_New_System_Design/03_Semantic_Vector_Search.md"
+     ],
+     "got": [
+      "03_Tasks/SINGULARITY_AUDIT_BACKLOG.md",
+      "incidents/Error - ffmpeg-граф съел 100 ГБ и повесил машину, четыре причины подряд.md",
+      "reference/Singularity - Business Logic Map.md"
+     ]
+    },
+    {
+     "id": "nat-02",
+     "class": "natural",
+     "query": "как доказывать что новый инвариант действительно ловит нарушение",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md"
+     ],
+     "got": [
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md",
+      "rules/AGENT_SHARED_PREAMBLE.md",
+      "rules/Доказательный замер перепроверять при смене популяции_ которую он мерит.md"
+     ]
+    },
+    {
+     "id": "nat-03",
+     "class": "natural",
+     "query": "тест может пропустить себя и молча отключиться",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md",
+      "rules/_намеренно не экспортируется_ требует доказательства.md"
+     ],
+     "got": [
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md",
+      "rules/Пайп поверх тестовой команды не должен глотать exit-код.md",
+      "reference/Джудит Уэстон _ Режиссер и актеры _ Вступление.md"
+     ]
+    },
+    {
+     "id": "nat-04",
+     "class": "natural",
+     "query": "записи в память делать только через CLI, не редактировать файлы руками",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - записи в vault идут командами mb.md"
+     ],
+     "got": [
+      "rules/Rule - записи в vault идут командами mb.md",
+      "changelog/2026-08.md",
+      "02_New_System_Design/01_System_Architecture.md"
+     ]
+    },
+    {
+     "id": "nat-05",
+     "class": "natural",
+     "query": "что владелец называет памятью",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - память означает vault.md"
+     ],
+     "got": [
+      "rules/Rule - память означает vault.md",
+      "learnings/active/GENERAL.md",
+      "rules/Rule - live-гейт контракта строится на отказах, потому что они бесплатны.md"
+     ]
+    },
+    {
+     "id": "nat-06",
+     "class": "natural",
+     "query": "переименование команды ломает существующих потребителей",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - Второе имя для существующей вещи.md"
+     ],
+     "got": [
+      "rules/Rule - Второе имя для существующей вещи.md",
+      "howto/Migrate Singularity vault_ engine and projects to another drive.md",
+      "changelog/2026-08.md"
+     ]
+    },
+    {
+     "id": "nat-07",
+     "class": "natural",
+     "query": "правило должно звучать там, где принимается решение",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - правило звучит в точке принятия решения.md"
+     ],
+     "got": [
+      "rules/Rule - правило звучит в точке принятия решения.md",
+      "rules/Rule - решение approval действительно только на соединении, которое спросило.md",
+      "rules/Rule - контракт полностью к концу требует перелёта, а не прихода.md"
+     ]
+    },
+    {
+     "id": "nat-08",
+     "class": "natural",
+     "query": "верификацию гонять той же командой, что запускает пользователь",
+     "rank": 3,
+     "expect": [
+      "rules/Rule - верификация идёт через команду пользователя.md"
+     ],
+     "got": [
+      "01_Genevra_Analysis/skills/skill_test-task.md",
+      "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md",
+      "rules/Rule - верификация идёт через команду пользователя.md"
+     ]
+    },
+    {
+     "id": "nat-09",
+     "class": "natural",
+     "query": "метрика, которую никто не читает, не нужна",
+     "rank": null,
+     "expect": [
+      "learnings/active/SINGULARITY-AUDIT.md"
+     ],
+     "got": [
+      "rules/Rule - контракт полностью к концу требует перелёта, а не прихода.md",
+      "learnings/active/SINGULARITY-CODE.md",
+      "learnings/active/CONFIG.md"
+     ]
+    },
+    {
+     "id": "nat-10",
+     "class": "natural",
+     "query": "сначала доказать что конфиг этого не выражает, потом править код",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - прежде чем править код, доказать что конфиг этого не выражает.md"
+     ],
+     "got": [
+      "rules/Rule - прежде чем править код, доказать что конфиг этого не выражает.md",
+      "decisions/Официальный язык проекта capcut-bridge - английский.md",
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md"
+     ]
+    },
+    {
+     "id": "nat-11",
+     "class": "natural",
+     "query": "как переносить vault и движок на другой диск",
+     "rank": 1,
+     "expect": [
+      "howto/Migrate Singularity vault_ engine and projects to another drive.md"
+     ],
+     "got": [
+      "howto/Migrate Singularity vault_ engine and projects to another drive.md",
+      "howto/Как тестировать и бенчмаркать видеодвижок.md",
+      "rules/Rule - релиз против класса дефекта даёт сканер класса.md"
+     ]
+    },
+    {
+     "id": "nat-12",
+     "class": "natural",
+     "query": "как включить поиск по коду",
+     "rank": 1,
+     "expect": [
+      "howto/Поиск по коду - корпус code_index.md"
+     ],
+     "got": [
+      "howto/Поиск по коду - корпус code_index.md",
+      "03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md",
+      "03_Tasks/TASK-05_Code_Indexer.md"
+     ]
+    },
+    {
+     "id": "nat-13",
+     "class": "natural",
+     "query": "как прогнать документ через ingest до обновления вики",
+     "rank": 6,
+     "expect": [
+      "howto/Ingest-цикл - от документа до обновлённой wiki.md"
+     ],
+     "got": [
+      "changelog/2026-08.md",
+      "reference/WIKI-LOOP design doc - карта интеграции.md",
+      "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md"
+     ]
+    },
+    {
+     "id": "nat-14",
+     "class": "natural",
+     "query": "почему индекс кода не должен попадать в обычную выдачу",
+     "rank": 5,
+     "expect": [
+      "decisions/CODE-INDEX D2 - код в выдаче только по флагу.md"
+     ],
+     "got": [
+      "03_Tasks/TASK-05_Code_Indexer.md",
+      "decisions/CODE-INDEX D4 - без watcher по коду.md",
+      "howto/Поиск по коду - корпус code_index.md"
+     ]
+    },
+    {
+     "id": "nat-15",
+     "class": "natural",
+     "query": "какая приватность у индекса исходников",
+     "rank": 1,
+     "expect": [
+      "decisions/CODE-INDEX D5 - приватность индекса кода.md"
+     ],
+     "got": [
+      "decisions/CODE-INDEX D5 - приватность индекса кода.md",
+      "learnings/active/SINGULARITY-CODE.md",
+      "howto/Поиск по коду - корпус code_index.md"
+     ]
+    },
+    {
+     "id": "nat-16",
+     "class": "natural",
+     "query": "почему у корпуса кода своя версия схемы чанков",
+     "rank": 3,
+     "expect": [
+      "decisions/CODE-INDEX D3 - пер-корпусная схема чанков.md"
+     ],
+     "got": [
+      "03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md",
+      "howto/Огненный текст без композитора - глифы как ресурс, SDF вместо блюра.md",
+      "decisions/CODE-INDEX D3 - пер-корпусная схема чанков.md"
+     ]
+    },
+    {
+     "id": "nat-17",
+     "class": "natural",
+     "query": "почему по коду не сделали watcher",
+     "rank": 2,
+     "expect": [
+      "decisions/CODE-INDEX D4 - без watcher по коду.md"
+     ],
+     "got": [
+      "howto/Поиск по коду - корпус code_index.md",
+      "decisions/CODE-INDEX D4 - без watcher по коду.md",
+      "03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md"
+     ]
+    },
+    {
+     "id": "nat-18",
+     "class": "natural",
+     "query": "лицензию библиотеки надо проверять до того, как её советовать",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - лицензию библиотеки читать до рекомендации, поле GitHub не показатель.md"
+     ],
+     "got": [
+      "rules/Rule - лицензию библиотеки читать до рекомендации, поле GitHub не показатель.md",
+      "rules/Rule - решение approval действительно только на соединении, которое спросило.md",
+      "learnings/active/CAPCUT-BRIDGE-V1.md"
+     ]
+    },
+    {
+     "id": "nat-19",
+     "class": "natural",
+     "query": "утверждение об отсутствии чего-то требует контрольной проверки",
+     "rank": null,
+     "expect": [
+      "learnings/archive/singularity-ui/rules/Rule - утверждение об отсутствии требует контроля.md"
+     ],
+     "got": [
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md",
+      "reference/Визуальная семантика и доказательные вставки.md",
+      "rules/AGENT_SHARED_PREAMBLE.md"
+     ]
+    },
+    {
+     "id": "nat-20",
+     "class": "natural",
+     "query": "хуки не должны грузить полный валидированный конфиг",
+     "rank": 6,
+     "expect": [
+      "rules/Rule - hooks must never use the full validated Config load path.md"
+     ],
+     "got": [
+      "rules/Rule - прежде чем править код, доказать что конфиг этого не выражает.md",
+      "rules/Rule - гейт почти-повторов не видит пачку одной генерации.md",
+      "changelog/2026-08.md"
+     ]
+    },
+    {
+     "id": "nat-21",
+     "class": "natural",
+     "query": "перед архивацией знание надо вынести в индексируемые заметки",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md"
+     ],
+     "got": [
+      "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md",
+      "howto/Ingest-цикл - от документа до обновлённой wiki.md",
+      "02_New_System_Design/02_Automatic_Memory_Obsidian.md"
+     ]
+    },
+    {
+     "id": "nat-22",
+     "class": "natural",
+     "query": "экранированные строковые литералы писать инструментом правки, а не heredoc",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - строковые литералы с экранированием писать инструментом Edit, не через heredoc.md"
+     ],
+     "got": [
+      "rules/Rule - строковые литералы с экранированием писать инструментом Edit, не через heredoc.md",
+      "howto/Огненный текст без композитора - глифы как ресурс, SDF вместо блюра.md",
+      "changelog/2026-08.md"
+     ]
+    },
+    {
+     "id": "xl-01",
+     "class": "crosslingual",
+     "query": "как чинить проигравшего в гонке за блокировку",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - a losing lock contender must never clean up the winner's lock.md"
+     ],
+     "got": [
+      "rules/Rule - a losing lock contender must never clean up the winner's lock.md",
+      "rules/Rule - Performance Risk Assessment (Node event loop).md",
+      "reference/AI-AGENT-SYSTEMS-BUILDING-PRINCIPLES.md"
+     ]
+    },
+    {
+     "id": "xl-02",
+     "class": "crosslingual",
+     "query": "миграция на другой диск не проверена, пока старый путь на месте",
+     "rank": 1,
+     "expect": [
+      "rules/A drive migration is unverified until the source path is renamed away.md"
+     ],
+     "got": [
+      "rules/A drive migration is unverified until the source path is renamed away.md",
+      "howto/Migrate Singularity vault_ engine and projects to another drive.md",
+      "learnings/active/MIGRATION-DRIVE.md"
+     ]
+    },
+    {
+     "id": "xl-03",
+     "class": "crosslingual",
+     "query": "конец сессии с незакрытыми задачами эпика",
+     "rank": 1,
+     "expect": [
+      "rules/Session end with remaining epic tasks must produce a ready-to-use continuation prompt.md"
+     ],
+     "got": [
+      "rules/Session end with remaining epic tasks must produce a ready-to-use continuation prompt.md",
+      "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md",
+      "03_Tasks/WEBSITE-FACTORY-BACKLOG.md"
+     ]
+    },
+    {
+     "id": "xl-04",
+     "class": "crosslingual",
+     "query": "определение владельца хука должно терпеть установки до маркера",
+     "rank": null,
+     "expect": [
+      "rules/Rule - hook ownership detection must tolerate pre-marker installs.md"
+     ],
+     "got": [
+      "howto/Обратный инжиниринг CapCut draft - что можно добавить программно.md",
+      "rules/Rule - правило звучит в точке принятия решения.md",
+      "01_Genevra_Analysis/infrastructure/Hooks_And_Automation.md"
+     ]
+    },
+    {
+     "id": "xl-05",
+     "class": "crosslingual",
+     "query": "внутренний скролл не работает из-за минимального размера грида",
+     "rank": 9,
+     "expect": [
+      "incidents/CSS grid minimum size blocks inner scroll container.md"
+     ],
+     "got": [
+      "reference/Растяжение кадра - гейт, который не виден по числам zoom.md",
+      "learnings/active/COMFY-MINIMAX-H3.md",
+      "reference/reel и capcut-bridge - что продублировано после переноса приёмки.md"
+     ]
+    },
+    {
+     "id": "xl-06",
+     "class": "crosslingual",
+     "query": "агент повторял запрещённые попытки в песочнице, хотя правило было",
+     "rank": 3,
+     "expect": [
+      "incidents/Error - Repeated sandbox retries despite known rule.md"
+     ],
+     "got": [
+      "decisions/Контейнер - это интерфейс, агент работает только фасадами.md",
+      "rules/Rule - возможность живёт в движке, скил только маршрутизирует.md",
+      "incidents/Error - Repeated sandbox retries despite known rule.md"
+     ]
+    },
+    {
+     "id": "xl-07",
+     "class": "crosslingual",
+     "query": "дубликаты при подготовке записи в память",
+     "rank": null,
+     "expect": [
+      "incidents/Error - Vault staging duplicates.md"
+     ],
+     "got": [
+      "03_Tasks/TASK-09_Auto_Capture_Memory.md",
+      "rules/Rule - память означает vault.md",
+      "02_New_System_Design/02_Automatic_Memory_Obsidian.md"
+     ]
+    },
+    {
+     "id": "xl-08",
+     "class": "crosslingual",
+     "query": "русская проза читается как перевод с английского",
+     "rank": 2,
+     "expect": [
+      "incidents/Error - Story workflow RU prose reads as translationese.md"
+     ],
+     "got": [
+      "decisions/Официальный язык проекта capcut-bridge - английский.md",
+      "incidents/Error - Story workflow RU prose reads as translationese.md",
+      "03_Tasks/TASK-04_Vault_Indexer.md"
+     ]
+    },
+    {
+     "id": "xl-09",
+     "class": "crosslingual",
+     "query": "непроизолированный пробник CLI заблокировал диагностику",
+     "rank": 1,
+     "expect": [
+      "incidents/Error - Unisolated CLI probe blocked diagnostic batch.md"
+     ],
+     "got": [
+      "incidents/Error - Unisolated CLI probe blocked diagnostic batch.md",
+      "projects/autoreels/tasks/AR-31-autoreels-cli.md",
+      "learnings/active/CONFIG.md"
+     ]
+    },
+    {
+     "id": "xl-10",
+     "class": "crosslingual",
+     "query": "как исключить папки из антивируса через реестр",
+     "rank": 1,
+     "expect": [
+      "howto/Avast Free - exclusions in registry and removing it from the network stack.md"
+     ],
+     "got": [
+      "howto/Avast Free - exclusions in registry and removing it from the network stack.md",
+      "04_Plans/Integration_Setup_Plan.md",
+      "03_Tasks/SINGULARITY_WIKI_LOOP_IMPLEMENTATION.md"
+     ]
+    },
+    {
+     "id": "xl-11",
+     "class": "crosslingual",
+     "query": "принципы производства визуальных новелл",
+     "rank": 1,
+     "expect": [
+      "howto/How to make RenPy visual novels - production principles.md"
+     ],
+     "got": [
+      "howto/How to make RenPy visual novels - production principles.md",
+      "reference/StoryForge Brain.md",
+      "reference/NIKA-STUDIO-ASSET-ACQUISITION-PLAN.md"
+     ]
+    },
+    {
+     "id": "xl-12",
+     "class": "crosslingual",
+     "query": "тестовые фикстуры не должны подделывать версию удалением записи",
+     "rank": null,
+     "expect": [
+      "learnings/archive/singularity-ui/rules/Rule - Test fixtures must not fake a version by deleting a record.md"
+     ],
+     "got": [
+      "incidents/Error - Vault staging duplicates.md",
+      "reference/J-cut и управление паузами в short-form.md",
+      "rules/Найденное несоответствие сверить с записанным решением до починки.md"
+     ]
+    },
+    {
+     "id": "xl-13",
+     "class": "crosslingual",
+     "query": "у покрытой тестами функции должен быть реальный потребитель",
+     "rank": null,
+     "expect": [
+      "learnings/archive/singularity-ui/rules/Rule - у покрытой тестами функции должен быть потребитель в композиционном корне.md"
+     ],
+     "got": [
+      "rules/Rule - якорь реальности - улики вместо уверенности.md",
+      "changelog/2026-07.md",
+      "reference/Визуальная семантика и доказательные вставки.md"
+     ]
+    },
+    {
+     "id": "xl-14",
+     "class": "crosslingual",
+     "query": "vault as the canonical source for the UI",
+     "rank": null,
+     "expect": [
+      "learnings/archive/singularity-ui/rules/Rule - Singularity UI uses vault as canonical source.md"
+     ],
+     "got": [
+      "incidents/Error - Vault staging duplicates.md",
+      "rules/Рабочие AI-артефакты хранятся в vault.md",
+      "changelog/2026-07.md"
+     ]
+    },
+    {
+     "id": "xl-15",
+     "class": "crosslingual",
+     "query": "why did we choose TCP over a unix socket",
+     "rank": 8,
+     "expect": [
+      "02_New_System_Design/03_Semantic_Vector_Search.md"
+     ],
+     "got": [
+      "01_Genevra_Analysis/infrastructure/Setup_And_Sync.md",
+      "01_Genevra_Analysis/infrastructure/Core_Configuration.md",
+      "reference/CapCutAPI - стек реализации против альтернатив.md"
+     ]
+    },
+    {
+     "id": "xl-16",
+     "class": "crosslingual",
+     "query": "how does the auto-capture hook decide to block session end",
+     "rank": null,
+     "expect": [
+      "02_New_System_Design/02_Automatic_Memory_Obsidian.md"
+     ],
+     "got": [
+      "reference/Singularity Incoming Fork Integration Specification.md",
+      "changelog/2026-07.md",
+      "learnings/active/GRK-04.md"
+     ]
+    },
+    {
+     "id": "xl-17",
+     "class": "crosslingual",
+     "query": "rule about writing to the vault only through the CLI",
+     "rank": 1,
+     "expect": [
+      "rules/Rule - записи в vault идут командами mb.md"
+     ],
+     "got": [
+      "rules/Rule - записи в vault идут командами mb.md",
+      "incidents/Error - Vault staging duplicates.md",
+      "learnings/active/GRK-00.md"
+     ]
+    },
+    {
+     "id": "xl-18",
+     "class": "crosslingual",
+     "query": "prove an invariant by breaking it on purpose",
+     "rank": 5,
+     "expect": [
+      "rules/Rule - Инвариант доказывается попыткой его сломать.md"
+     ],
+     "got": [
+      "rules/Rule - прежде чем править код, доказать что конфиг этого не выражает.md",
+      "reference/Claude-Code-Prompt-Library.md",
+      "rules/AGENT_SHARED_PREAMBLE.md"
+     ]
+    },
+    {
+     "id": "xl-19",
+     "class": "crosslingual",
+     "query": "a pipe must not swallow the test command exit status",
+     "rank": 1,
+     "expect": [
+      "rules/Пайп поверх тестовой команды не должен глотать exit-код.md"
+     ],
+     "got": [
+      "rules/Пайп поверх тестовой команды не должен глотать exit-код.md",
+      "learnings/active/GEMINI-CLI.md",
+      "learnings/active/INTELLIGO-HT-PLAN.md"
+     ]
+    },
+    {
+     "id": "xl-20",
+     "class": "crosslingual",
+     "query": "evidence instead of confidence when anchoring to reality",
+     "rank": 4,
+     "expect": [
+      "rules/Rule - якорь реальности - улики вместо уверенности.md"
+     ],
+     "got": [
+      "01_Genevra_Analysis/skills/skill_confidence-calibration.md",
+      "rules/AGENT_SHARED_PREAMBLE.md",
+      "reference/Story corpus - Romance heartbreak sample 01 - e5af97e6.md"
+     ]
+    },
+    {
+     "id": "xl-21",
+     "class": "crosslingual",
+     "query": "token economy discipline for search output",
+     "rank": 2,
+     "expect": [
+      "rules/Core Discipline - Token Economy.md"
+     ],
+     "got": [
+      "03_Tasks/TASK-06_Search_Client_And_TokenEconomy.md",
+      "rules/Core Discipline - Token Economy.md",
+      "rules/Core Discipline - SEM-FIRST.md"
+     ]
+    },
+    {
+     "id": "xl-22",
+     "class": "crosslingual",
+     "query": "search memory before reading files",
+     "rank": null,
+     "expect": [
+      "rules/Core Discipline - SEM-FIRST.md"
+     ],
+     "got": [
+      "learnings/active/SINGULARITY-WIKI.md",
+      "learnings/active/INTELLIGO-HT-PLAN.md",
+      "03_Tasks/TASK-09_Auto_Capture_Memory.md"
+     ]
+    }
+   ]
+  }
+ ]
+}

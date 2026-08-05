@@ -40,7 +40,11 @@ WINDOW: tuple[tuple[str, tuple[str, ...]], ...] = (
 # A command belongs to exactly one group; `test_cli_facade` fails on an overlap,
 # because two homes means a coin flip every time someone looks for it.
 GROUPS: dict[str, tuple[str, ...]] = {
-    "service": ("daemon", "index", "model", "watch", "backup", "selftest"),
+    # `sessions` is a corpus with a lifecycle — index it, size it, delete it —
+    # which is what everything else in this group is. It is deliberately NOT on
+    # the ten-command window: a store that is off by default should not occupy
+    # a slot on the first screen.
+    "service": ("daemon", "index", "model", "watch", "backup", "selftest", "sessions"),
     "setup": ("config", "project", "hooks", "init", "uninstall"),
 }
 
@@ -60,12 +64,14 @@ HOSTS: dict[str, tuple[str, ...]] = {
     # staging area does not deserve a permanent slot on the first screen.
     "note": ("inbox",),
     # Reports that answer "what is in the memory" rather than "is it healthy":
-    # they hang off `status` instead of taking two more slots on the window.
-    "status": ("stats", "reflect"),
+    # they hang off `status` instead of taking three more slots on the window.
+    # `journey` is the same question along a third axis — stats says how much,
+    # reflect says how often it was used, journey says what arrived and when.
+    "status": ("stats", "reflect", "journey"),
 }
 
 GROUP_BLURB: dict[str, str] = {
-    "service": "daemon, index, model, watcher, backups, selftest",
+    "service": "daemon, index, model, watcher, backups, selftest, sessions",
     "setup": "config, projects, hooks, install/uninstall",
     "curator": "vault health, gaps, contradictions, digest, nightly",
 }

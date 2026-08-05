@@ -276,6 +276,26 @@ def _step_trend(cfg: Config, now: str, steps: dict[str, Any]) -> dict[str, Any]:
 
 # ---------------------------------------------------------------------------
 
+def _step_usage(cfg: Config) -> dict[str, Any]:
+    """Merge note-open counts from transcripts written since the last run.
+
+    Offline and incremental: transcripts are pruned by their clients, so a full
+    recount would silently reset a note's history the moment its session aged
+    out. Nightly is the right home for the same reason the code corpus is here
+    — it reads other people's files and nobody should pay for that mid-session.
+    """
+    from ..telemetry import usage
+    return {"status": "ok", **usage.update(cfg)}
+
+
+def _step_sessions(cfg: Config) -> dict[str, Any]:
+    """Index new sessions into the opt-in store. Skipped unless turned on."""
+    from ..telemetry import sessions
+    if not sessions.enabled(cfg):
+        return {"status": "skipped", "reason": "session_search_enabled=false"}
+    return {"status": "ok", **sessions.store(cfg)}
+
+
 def run(cfg: Config) -> dict[str, Any]:
     now = datetime.now().isoformat(timespec="seconds")
     steps: dict[str, Any] = {}
@@ -288,6 +308,8 @@ def run(cfg: Config) -> dict[str, Any]:
     steps["contradictions"] = _guard(lambda: _step_contradictions(cfg, now))
     steps["sources"] = _guard(lambda: _step_sources(cfg))
     steps["config"] = _guard(lambda: _step_config(cfg, now))
+    steps["usage"] = _guard(lambda: _step_usage(cfg))
+    steps["sessions"] = _guard(lambda: _step_sessions(cfg))
     steps["markers"] = _guard(lambda: _step_markers(cfg))
     steps["ingest_log"] = _guard(lambda: _step_ingest_log(cfg))
     steps["trend"] = _guard(lambda: _step_trend(cfg, now, steps))
