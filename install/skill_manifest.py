@@ -153,15 +153,6 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "consultation (mb search/mb learn) вЂ” authored and GT-tested "
                   "only against Claude Code (WSF-09)",
     },
-    "reel-editor": {
-        "clients": ["claude"], "tools": ["Bash"],
-        "reason": "thin SKILL.md over the `reel` CLI whose every decision step is "
-                  "multimodal: contact sheets and cut sheets are READ as images to "
-                  "judge unusable AI-generation stretches, jump cuts, axis flips and "
-                  "the emotional ladder, and the format/copy gates end with the owner; "
-                  "it also leans on vault consultation (mb search) for the montage "
-                  "method вЂ” that review loop is authored and tested only on Claude Code",
-    },
     "capcut-editor": {
         "clients": ["claude"], "tools": ["MCP:capcut", "Bash"],
         "reason": "requires a CapCut MCP capable of creating or safely cloning editable "

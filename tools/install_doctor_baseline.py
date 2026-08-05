@@ -656,13 +656,18 @@ def main() -> None:
 
     snap = {
         "taken_at": datetime.now().isoformat(timespec="seconds"),
-        "note": "v0.11.2 baseline: the same eight surfaces, taken after the "
-                "release that made a config value pinnable at all — `mb config "
-                "set` no longer drops a key equal to the default, so the "
-                "config-write section is now graded against a promise the "
-                "engine can actually keep. Two checks are new: B6b-sessions "
-                "(the opt-in session store, off) and a B7-daemon that reports "
-                "a process serving modules older than the files on disk",
+        "note": "v0.12.0 baseline: the same eight surfaces, taken after the "
+                "release that REMOVED a subsystem rather than adding one. "
+                "`singularity/reel` — the Python montage pipeline that predated "
+                "`video-engine` — is gone, with its console script, shims, "
+                "tests and skill, so the launcher and locator sections are "
+                "graded on a smaller surface on purpose. The layout section is "
+                "the one that matters here: it proves the removal is complete "
+                "rather than merely uninstalled. Also fixed in this cycle: the "
+                "architecture scan skipped the skills' own scripts with a "
+                "hardcoded '/skills/', which is true on Linux and false on "
+                "Windows — three invariants had been passing on one platform "
+                "and failing on the other for the same tree",
         "version": singularity.__version__,
         "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(REPO),
                                  capture_output=True, text=True).stdout.strip(),

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "singularity"
-version = "0.11.2"
+version = "0.12.0"
 description = "Singularity — personal AI memory system: Obsidian-native automatic memory + semantic search (Memory Brain engine)"
 requires-python = ">=3.10"
 dependencies = [
@@ -46,7 +46,6 @@ imgqa = "singularity.imgqa.cli:main"
 design-scout = "singularity.scout.cli:main"
 pattern-scout = "singularity.providers.cli:main"
 component-intake = "singularity.intake.cli:main"
-reel = "singularity.reel.cli:main"
 golden = "singularity.golden.cli:main"
 factory = "singularity.factory.cli:main"
 
@@ -81,9 +80,6 @@ ignore = [
 # and read secrets from the environment before the package is importable.
 "tools/*.py" = ["E402"]
 "install/*.py" = ["E402"]
-# reel prints fixed-width report tables; %-formatting keeps the column specs
-# readable in one place instead of scattered f-string format mini-languages.
-"singularity/reel/*.py" = ["UP031"]
 "tests/*.py" = ["B011", "E402"]                              # assert False is a valid test failure
 
 [tool.setuptools.packages.find]
