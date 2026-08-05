@@ -124,6 +124,31 @@ WITHOUT_A_POINT: list[tuple[str, str]] = [
      "в движке нет"),
 ]
 
+# Rules that are NOT this engine's to deliver. Recorded so the inventory adds
+# up: 72 rule notes, minus what DELIVERIES covers, minus these, is zero — and
+# an untouched rule cannot hide behind "probably handled somewhere".
+#
+# The distinction that matters: none of these is a gap in Singularity. They are
+# delivered by another repository, dormant on this platform, or already carried
+# by the code they are about.
+NOT_OURS_TO_DELIVER: list[tuple[str, str]] = [
+    ("правила проектов Bringg (2) и singularity-ui (6)",
+     "их точка — в тех репозиториях (код-стандарты, деплой-гейты, адаптеры, "
+     "approval/egress-модель); движок Singularity их не исполняет"),
+    ("правила видео-движка (4): склейки по позициям, перелёт кривой, порог из "
+     "float, «намеренно не экспортируется»",
+     "точка — в репозиториях video-engine / capcut-bridge; после удаления reel "
+     "в v0.12.0 в этом движке видеокода нет"),
+    ("Windows-специфика (6): PowerShell round-trip, CRLF, кавычки в git -m, "
+     "argv через ANSI, check.ps1, оба имени shell-инструмента",
+     "dormant на macOS-машине; правилу нужен платформенный триггер, а не место "
+     "в подсказке, которая платится каждой сессией"),
+    ("инварианты кода движка (11): хуки не зовут load_config, читатели индекса "
+     "через index_files, mkdir-лок, POSIX shim, utf-8-sig, ownership-детект и др.",
+     "уже доставлены там, где пишется этот код: докстринг рядом с реализацией "
+     "плюс тест, который падает при нарушении"),
+]
+
 
 def check() -> list[str]:
     """Missing deliveries, as human-readable lines. Empty list = all present."""

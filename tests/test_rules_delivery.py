@@ -49,6 +49,19 @@ def test_a_rule_without_a_point_is_recorded_rather_than_dropped():
             f"{rule} is listed both as delivered and as pointless"
 
 
+def test_the_inventory_adds_up():
+    """72 rule notes were inventoried: what DELIVERIES covers, plus the one the
+    release orphaned, plus what belongs to another repo / platform / to the code
+    itself. The point is not the arithmetic — it is that an untouched rule
+    cannot hide behind "probably handled somewhere"."""
+    accounted = {r for r, _, _, _ in rules_delivery.DELIVERIES}
+    assert len(accounted) >= 20, "the delivered set shrank unexpectedly"
+    assert rules_delivery.NOT_OURS_TO_DELIVER, \
+        "the out-of-scope groups must stay written down, not remembered"
+    for group, why in rules_delivery.NOT_OURS_TO_DELIVER:
+        assert why.strip(), f"{group}: an out-of-scope group needs a stated reason"
+
+
 def test_the_registry_covers_every_surface_kind():
     """A registry that only ever grew skill entries would silently stop guarding
     the two surfaces that carry the universal rules."""
