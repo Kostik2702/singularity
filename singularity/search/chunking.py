@@ -15,6 +15,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from ..contracts import Chunk
+
 MIN_CHUNK_CHARS = 50
 # A long section is split into overlapping windows instead of being truncated
 # (AUD-03: content past MAX_CHUNK_CHARS used to be silently dropped from the
@@ -178,7 +180,7 @@ def _window_text(content: str,
 
 
 def extract_chunks(path: Path, rel_path: str,
-                   personal_roots: list[str] | None = None) -> list[dict[str, Any]]:
+                   personal_roots: list[str] | None = None) -> list[Chunk]:
     """Chunk one markdown file. rel_path uses forward slashes. personal_roots
     (T08 retrofit) is optional/default-None for callers indifferent to it."""
     try:
@@ -221,7 +223,7 @@ def extract_chunks(path: Path, rel_path: str,
         all_tags = sorted({*fm_tags, *inline_tags})
         windows = _window_text(content)
         for wi, wtext in enumerate(windows):
-            chunk: dict[str, Any] = {
+            chunk: Chunk = {
                 "file": rel_path,
                 "title": title,
                 "section": section,
@@ -247,8 +249,7 @@ def extract_chunks(path: Path, rel_path: str,
 
 
 def extract_source_chunks(path: Path, rel_path: str,
-                          personal_roots: list[str] | None = None
-                          ) -> list[dict[str, Any]]:
+                          personal_roots: list[str] | None = None) -> list[Chunk]:
     """Chunker for the ingested-source corpus (WIKI-LOOP D2).
 
     Identical windowing to the vault chunker — the two corpora must be

@@ -39,6 +39,7 @@ from collections.abc import Iterable
 import numpy as np
 
 from ..config import Config, atomic_write_json
+from ..contracts import ContradictionCandidate, VerdictResult
 
 # Below the floor: different topics. Above the ceiling: curator.lint() already
 # calls it a near-duplicate (curator.DUPLICATE_THRESHOLD = 0.90).
@@ -292,7 +293,7 @@ def read_journal(cfg: Config) -> dict[str, Any]:
 
 
 def record_verdict(cfg: Config, key: str, verdict: str, note: str = "",
-                   now: str | None = None) -> dict[str, Any]:
+                   now: str | None = None) -> VerdictResult:
     """Silence a pair for good. Without this the same false positive resurfaces
     on every run and the report stops being read at all."""
     if verdict not in VERDICTS:
@@ -314,7 +315,8 @@ def _chunk_text(chunk: dict[str, Any]) -> str:
 
 
 def _entry(a: dict[str, Any], b: dict[str, Any], score: float,
-           cosine: float, evidence: dict[str, list[str]]) -> dict[str, Any]:
+           cosine: float,
+           evidence: dict[str, list[str]]) -> ContradictionCandidate:
     return {
         "key": pair_key(str(a.get("file", "")), str(a.get("section", "")),
                         str(b.get("file", "")), str(b.get("section", ""))),
