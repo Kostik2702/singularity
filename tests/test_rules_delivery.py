@@ -38,6 +38,17 @@ def test_every_registered_delivery_is_still_in_place():
     assert missing == [], "delivery lost:\n  " + "\n  ".join(missing)
 
 
+def test_a_rule_without_a_point_is_recorded_rather_than_dropped():
+    """When a delivery point disappears, the entry must not just vanish from
+    DELIVERIES — a silent removal is indistinguishable from a rule that was
+    never delivered. v0.12.0 deleted the reel tool with its skill, which is how
+    this list got its first member."""
+    for rule, why in rules_delivery.WITHOUT_A_POINT:
+        assert why.strip(), f"{rule}: an orphaned rule needs a stated reason"
+        assert not any(r == rule for r, _, _, _ in rules_delivery.DELIVERIES), \
+            f"{rule} is listed both as delivered and as pointless"
+
+
 def test_the_registry_covers_every_surface_kind():
     """A registry that only ever grew skill entries would silently stop guarding
     the two surfaces that carry the universal rules."""

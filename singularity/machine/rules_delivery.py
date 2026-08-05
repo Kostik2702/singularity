@@ -104,8 +104,24 @@ DELIVERIES: list[tuple[str, str, Path, str]] = [
      SKILLS / "website-factory" / "SKILL.md", "coverage self-check"),
     ("возможность живёт в движке, скил только маршрутизирует", "skill",
      SKILLS / "website-factory" / "SKILL.md", "Возможность живёт в движке"),
-    ("короткая огибающая в ffmpeg кладётся aeval", "skill",
-     SKILLS / "reel-editor" / "SKILL.md", "aeval"),
+]
+
+# Rules whose delivery point no longer exists. Kept visible on purpose: an entry
+# silently dropped from DELIVERIES looks exactly like a rule that was never
+# delivered, and the difference matters when the tool comes back.
+#
+# «Короткая огибающая в ffmpeg кладётся aeval, а не volume eval=frame» stood in
+# `reel-editor/SKILL.md` and in the docstring of `reel/render.py::shutter_wav`.
+# v0.12.0 deleted the reel tool with the skill that pointed at it, so both
+# surfaces are gone at once. The rule remains true about ffmpeg and remains in
+# the vault as knowledge; it has no execution point in this engine until
+# something here synthesises audio again. Inventing a home for it in a
+# neighbouring skill would be rule-theatre — nobody writing an envelope would
+# read it there.
+WITHOUT_A_POINT: list[tuple[str, str]] = [
+    ("короткая огибающая в ffmpeg кладётся aeval",
+     "reel-editor + reel/render.py удалены в v0.12.0; замены, синтезирующей звук, "
+     "в движке нет"),
 ]
 
 
