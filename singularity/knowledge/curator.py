@@ -24,8 +24,8 @@ from typing import Any
 
 import numpy as np
 
-from .config import Config
-from .search.chunking import parse_frontmatter, _WIKILINK_RE
+from ..config import Config
+from ..search.chunking import parse_frontmatter, _WIKILINK_RE
 
 # type is enforced only where the note contract applies (MB-08 folders);
 # project/analysis docs need just `created`; title may come from H1
@@ -203,8 +203,8 @@ def _note_embeddings(cfg: Config) -> tuple[list[str], np.ndarray]:
     # leaves behind stale (it's whatever the last flat-layout write happened
     # to be, not the current generation). load_committed_index() resolves
     # the actual CURRENT generation the same way digest.plan() already does.
-    from .search import indexer
-    from .search.similarity import group_indices, pooled_vectors
+    from ..search import indexer
+    from ..search.similarity import group_indices, pooled_vectors
 
     embs, chunks, status = indexer.load_committed_index(cfg.memory_index_dir)
     if status != "ok":
@@ -300,7 +300,7 @@ def _blockwise_pairs(embs: np.ndarray, threshold: float,
     W05: the implementation moved to `search.similarity.blockwise_pairs`,
     shared with the contradiction detector — both need the same O(block^2)
     memory bound and the same i<j-by-index rule."""
-    from .search.similarity import blockwise_pairs
+    from ..search.similarity import blockwise_pairs
     return blockwise_pairs(embs, threshold, block_size)
 
 
@@ -309,7 +309,7 @@ def _duplicate_pairs(cfg: Config) -> tuple[list[dict[str, Any]], list[dict[str, 
     score-sorted descending; the caller caps same/cross_file for the report
     but supersession derivation needs the full sorted cross_file list first
     (see _supersession_candidates)."""
-    from .search import indexer
+    from ..search import indexer
 
     embs, chunks, status = indexer.load_committed_index(cfg.memory_index_dir)
     if status != "ok":

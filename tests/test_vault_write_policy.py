@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from singularity.hooks_state import CAPTURE_HOOKS_FRAGMENT, VAULT_WRITE_POLICY_FRAGMENT
+from singularity.machine.hooks_state import CAPTURE_HOOKS_FRAGMENT, VAULT_WRITE_POLICY_FRAGMENT
 
 ENGINE = Path(__file__).resolve().parents[1]
 SKILL = ENGINE / "singularity" / "skills" / "mb-memory" / "SKILL.md"

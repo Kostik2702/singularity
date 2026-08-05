@@ -4,7 +4,7 @@ see [[SINGULARITY_INCOMING_FORK_IMPLEMENTATION]] T12, AI prompt clause
 "при lock не теряй pending watcher files"."""
 import pytest
 
-from singularity import watch
+from singularity.machine import watch
 from singularity.config import Config
 from singularity.search import client
 

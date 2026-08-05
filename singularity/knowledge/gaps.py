@@ -24,7 +24,7 @@ from collections import Counter
 from datetime import datetime
 from typing import Any
 
-from .config import Config
+from ..config import Config
 
 # Roots that are not knowledge and must never appear as a gap.
 EXCLUDED_PREFIXES = ("_moc/", "changelog/", "daily/", "templates/",

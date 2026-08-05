@@ -15,7 +15,9 @@ import time
 import numpy as np
 import pytest
 
-from singularity import curator, digest, sources
+from singularity.knowledge import curator
+from singularity.knowledge import digest
+from singularity.knowledge import sources
 from singularity.config import Config
 from singularity.search import client, indexer
 from singularity.search.engine import SearchEngine

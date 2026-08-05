@@ -6,7 +6,7 @@ marker/stop_hook_active/disabled short-circuits.
 """
 import pytest
 
-from singularity.session_activity import (Decision, SessionActivity, decide,
+from singularity.telemetry.session_activity import (Decision, SessionActivity, decide,
                                           is_code_edit_path,
                                           is_sanctioned_capture_command,
                                           is_vault_write_path)

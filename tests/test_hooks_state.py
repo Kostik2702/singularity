@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from singularity import hooks_state
+from singularity.machine import hooks_state
 from singularity.config import Config
 
 
@@ -162,7 +162,7 @@ def test_grok_constants_agree_across_modules():
     import importlib.util
     from pathlib import Path as _P
 
-    from singularity import reflect
+    from singularity.telemetry import reflect
 
     engine = _P(__file__).resolve().parents[1]
     spec = importlib.util.spec_from_file_location(

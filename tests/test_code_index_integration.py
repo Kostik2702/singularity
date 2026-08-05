@@ -15,7 +15,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import singularity.search.indexer as indexer_mod
-from singularity import doctor, nightly, stats, status
+from singularity import doctor
+from singularity.knowledge import nightly
+from singularity.knowledge import stats
+from singularity.machine import status
 from singularity import render
 from singularity.config import Config
 from singularity.search import client

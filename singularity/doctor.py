@@ -125,7 +125,7 @@ def config_paths_block(rep: Report, cfg: Config) -> None:
 
     Module-level (not a run() closure) so it is unit-testable, like the client
     blocks below."""
-    from . import config_paths
+    from .machine import config_paths
 
     entries = config_paths.path_entries(cfg.data)
     if not entries:
@@ -392,7 +392,7 @@ def wiki_loop_block(rep: Report, cfg: Config, fix: bool) -> None:
 
     `--fix` here is strictly additive: it may recreate an empty registry or
     catch the corpus up, and it NEVER deletes a raw file."""
-    from . import sources as sources_mod
+    from .knowledge import sources as sources_mod
 
     registry = sources_mod.read_registry(cfg)["sources"]
     stored = {sid: rec for sid, rec in registry.items()
@@ -670,7 +670,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
         # machine states nothing beyond which vault to use — a setup that
         # stopped halfway. Otherwise it reports, and the actionable moments
         # (migration, install) print the same list.
-        from . import machine_setup
+        from .machine import machine_setup
 
         missing = machine_setup.unstated(cfg.data)
         if not missing:
@@ -811,7 +811,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     # ---- Block C: scheduler -------------------------------------------
     def c1():
-        from . import nightly
+        from .knowledge import nightly
 
         job = nightly.nightly_job(cfg)
         state = scheduler.verify(job)
@@ -845,7 +845,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                 f"coalescing={state.get('coalescing')}")
 
     def c2():
-        from . import watch as watch_mod
+        from .machine import watch as watch_mod
 
         # The login task must be registered AND its STORED action must be the
         # argv we intended — a watch task whose --vault path lost its quoting
@@ -976,7 +976,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
         # client, not just a crude "singularity" substring check on Claude.
         # An intentionally disabled capture toggle is a deliberate user choice,
         # never a failure — only a missing registration is worth a WARN.
-        from . import hooks_state
+        from .machine import hooks_state
 
         state = hooks_state.status(cfg.vault)
         if state["source"] == "error":

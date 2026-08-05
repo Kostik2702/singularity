@@ -99,7 +99,7 @@ PRINT_EXEMPT = {
     # Reports: these print the answer their command was asked for. Splitting
     # collection from rendering is the remaining work (plan step 1.3b) —
     # `status.snapshot()` and `curator.analyze()` already return the data.
-    "contradictions", "selftest",
+    "knowledge.contradictions", "machine.selftest",
     "doctor",           # a report generator by nature; kept deliberately
     "llm",              # `llm status|list|add|setup` output, notices already moved
     # Presentation for their own package, just not named `*.cli`:

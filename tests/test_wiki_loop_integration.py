@@ -10,7 +10,11 @@ import json
 
 import pytest
 
-from singularity import doctor, nightly, sources, stats, status
+from singularity import doctor
+from singularity.knowledge import nightly
+from singularity.knowledge import sources
+from singularity.knowledge import stats
+from singularity.machine import status
 from singularity.config import Config
 from singularity.hooks import session_start
 

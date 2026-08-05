@@ -3,7 +3,8 @@ import json
 
 import pytest
 
-from singularity import hooks_state, status
+from singularity.machine import hooks_state
+from singularity.machine import status
 from singularity import cli
 from singularity.config import Config
 from singularity.platform import proc, scheduler

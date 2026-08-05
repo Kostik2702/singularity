@@ -11,7 +11,7 @@ import json
 import numpy as np
 import pytest
 
-from singularity import digest
+from singularity.knowledge import digest
 from singularity.config import Config
 from singularity.search import indexer
 

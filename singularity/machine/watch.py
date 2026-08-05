@@ -8,8 +8,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from .config import Config
-from .log import log
+from ..config import Config
+from ..log import log
 
 DEBOUNCE_SECONDS = 3.0
 HEARTBEAT_FILE = "watch.heartbeat"
@@ -21,7 +21,7 @@ def watch_job(cfg: Config):
     """The at-login watcher job — single source shared by the installer and
     `mb doctor` C2, so the registered argv can't drift from intent (the
     AUD-01 breakage class: a task stored with an unquoted vault path)."""
-    from .platform.scheduler import Job
+    from ..platform.scheduler import Job
 
     return Job(JOB_NAME,
                ["-m", "singularity", "--vault", str(cfg.vault), "watch"],
@@ -107,7 +107,7 @@ def _process_pending(cfg: Config, pending: dict[str, float]) -> None:
     files actually handled this batch are cleared on success, so an edit
     that lands on another file while this batch is in flight survives."""
     files = sorted(pending)
-    from .search import client
+    from ..search import client
 
     try:
         stats = client.run_index(cfg, "update", files)

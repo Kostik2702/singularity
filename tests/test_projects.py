@@ -6,8 +6,8 @@ be pinned deterministically here without touching argv/config.json at all.
 """
 import pytest
 
-from singularity import projects
-from singularity.projects import detect_project, resolve_selector, validate_projects
+from singularity.machine import projects
+from singularity.machine.projects import detect_project, resolve_selector, validate_projects
 
 
 # --- validate_projects ---------------------------------------------------------

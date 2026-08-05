@@ -11,7 +11,7 @@ import json
 import time
 from typing import Any
 
-from .config import Config
+from ..config import Config
 
 
 def _guard(fn):
@@ -22,7 +22,7 @@ def _guard(fn):
 
 
 def _index(cfg: Config) -> dict[str, Any]:
-    from .search import indexer
+    from ..search import indexer
     files = indexer.index_files(cfg.memory_index_dir)
     if files is None:
         return {"present": False}
@@ -44,8 +44,8 @@ def _watcher(cfg: Config) -> dict[str, Any]:
 
 
 def _scheduler(cfg: Config) -> dict[str, Any]:
-    from .platform import scheduler
-    from . import nightly
+    from ..platform import scheduler
+    from ..knowledge import nightly
     out = {}
     jobs = {
         nightly.JOB_NAME: nightly.nightly_job(cfg),
@@ -60,7 +60,7 @@ def _scheduler(cfg: Config) -> dict[str, Any]:
 
 
 def _backlog(cfg: Config) -> dict[str, Any]:
-    from . import nightly
+    from ..knowledge import nightly
     path = cfg.mb_dir / nightly.DIGEST_SNAPSHOT_NAME
     if not path.exists():
         return {"present": False}
@@ -76,8 +76,8 @@ def _backlog(cfg: Config) -> dict[str, Any]:
 def _sources(cfg: Config) -> dict[str, Any]:
     """Ingest layer at a glance (W11), including the one number worth acting
     on: how many documents are still waiting to be turned into notes."""
-    from . import sources as sources_mod
-    from .search import indexer
+    from ..knowledge import sources as sources_mod
+    from ..search import indexer
 
     records = [r for r in sources_mod.read_registry(cfg)["sources"].values()
                if isinstance(r, dict)]
@@ -95,7 +95,7 @@ def _code(cfg: Config) -> dict[str, Any]:
     """Code corpus at a glance (C05). `age_hours` is the number that matters:
     with no watcher over repositories (D4) this corpus goes stale silently, and
     a stale code index answers with yesterday's implementation."""
-    from .search import indexer
+    from ..search import indexer
 
     if cfg.code_repos_dir is None:
         return {"present": False, "configured": False}
@@ -113,8 +113,8 @@ def _code(cfg: Config) -> dict[str, Any]:
 
 
 def _cache_age(cfg: Config) -> dict[str, Any]:
-    from . import nightly
-    from . import reflect
+    from ..knowledge import nightly
+    from ..telemetry import reflect
     out: dict[str, Any] = {}
     for name, fname in (("digest", nightly.DIGEST_SNAPSHOT_NAME),
                         ("curator", nightly.CURATOR_SNAPSHOT_NAME),
@@ -142,8 +142,8 @@ def _disk(cfg: Config) -> dict[str, Any]:
 
 
 def snapshot(cfg: Config) -> dict[str, Any]:
-    from .search import client
-    from .config import machine_id
+    from ..search import client
+    from ..config import machine_id
     from . import hooks_state
     return {
         "vault": str(cfg.vault),

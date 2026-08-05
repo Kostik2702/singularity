@@ -19,7 +19,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .search.chunking import parse_frontmatter
+from ..search.chunking import parse_frontmatter
 
 DEFAULT_BRAIN_MAX_LINES = 40
 

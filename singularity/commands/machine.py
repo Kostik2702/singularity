@@ -112,7 +112,7 @@ def cmd_model(cfg, args) -> int:
     return 0 if daemon_ok else 1
 
 def cmd_backup(cfg, args) -> int:
-    from .. import backup
+    from ..machine import backup
 
     if args.backup_action == "create":
         mf = backup.create(cfg, with_sources=args.with_sources)
@@ -216,7 +216,7 @@ def cmd_config(cfg, args) -> int:
 
 def cmd_project(cfg, args) -> int:
 
-    from .. import projects
+    from ..machine import projects
     from ..config import validate_config
 
     entries = cfg.get("projects", {}) or {}
@@ -287,7 +287,7 @@ def cmd_project(cfg, args) -> int:
     return 1
 
 def cmd_hooks(cfg, args) -> int:
-    from .. import hooks_state
+    from ..machine import hooks_state
 
     if args.hooks_action == "status":
         data = hooks_state.status(cfg.vault)
@@ -314,7 +314,7 @@ def cmd_hooks(cfg, args) -> int:
     return 0
 
 def cmd_reflect(cfg, args) -> int:
-    from .. import reflect
+    from ..telemetry import reflect
 
     result = reflect.run(cfg, days=args.days)
     if args.json:

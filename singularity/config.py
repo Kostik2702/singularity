@@ -394,7 +394,7 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
         if key in data and data[key] is not None and not isinstance(data[key], str):
             errors.append(f"{key}: must be a path string or null")
 
-    from .projects import validate_projects
+    from .machine.projects import validate_projects
     proj_result = validate_projects(data)
     errors.extend(proj_result["errors"])
 
@@ -867,7 +867,7 @@ def migrate_vault_config(cfg: Config) -> Path | None:
     # only one where "you never told this machine where X is" is actionable
     # rather than nagging: a vault that arrived from another machine carries
     # the settings but not the local answers.
-    from . import machine_setup
+    from .machine import machine_setup
 
     for line in machine_setup.summary_lines(cfg.data):
         log.info("%s", line)

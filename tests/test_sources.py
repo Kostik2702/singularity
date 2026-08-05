@@ -11,7 +11,7 @@ import threading
 
 import pytest
 
-from singularity import sources
+from singularity.knowledge import sources
 from singularity.config import Config
 
 

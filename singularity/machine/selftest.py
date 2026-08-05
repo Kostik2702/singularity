@@ -14,7 +14,7 @@ import time
 from typing import Any
 from collections.abc import Callable
 
-from .config import Config
+from ..config import Config
 
 SELFTEST_DIR = "_selftest"
 
@@ -25,7 +25,7 @@ def _token() -> str:
 
 
 def run(cfg: Config, as_json: bool = False) -> int:
-    from .search import client
+    from ..search import client
 
     token = _token()
     rel = f"{SELFTEST_DIR}/{token}.md"

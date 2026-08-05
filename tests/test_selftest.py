@@ -5,7 +5,7 @@ import json
 import pytest
 
 from singularity.config import Config
-from singularity import selftest
+from singularity.machine import selftest
 
 
 @pytest.fixture

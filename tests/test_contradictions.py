@@ -11,7 +11,7 @@ import json
 import numpy as np
 import pytest
 
-from singularity import contradictions
+from singularity.knowledge import contradictions
 from singularity.cli import main
 from singularity.config import Config
 from singularity.search import indexer

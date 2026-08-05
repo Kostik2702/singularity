@@ -12,7 +12,8 @@ import json
 import numpy as np
 import pytest
 
-from singularity import ingest_plan, sources
+from singularity.knowledge import ingest_plan
+from singularity.knowledge import sources
 from singularity.config import Config
 from singularity.search import indexer
 

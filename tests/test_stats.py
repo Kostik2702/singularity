@@ -4,7 +4,7 @@ import json
 import numpy as np
 import pytest
 
-from singularity import stats
+from singularity.knowledge import stats
 from singularity import cli
 from singularity.config import Config
 from singularity.search import indexer

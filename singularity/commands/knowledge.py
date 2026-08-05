@@ -8,8 +8,8 @@ from .. import render
 
 
 def cmd_digest(cfg, args) -> int:
-    from .. import digest
-    from .. import projects as projects_mod
+    from ..knowledge import digest
+    from ..machine import projects as projects_mod
 
     if args.digest_action == "plan":
         project_filter = None
@@ -69,14 +69,14 @@ def cmd_curator(cfg, args) -> int:
     action = getattr(args, "curator_action", None)
 
     if action == "contradictions":
-        from .. import contradictions
+        from ..knowledge import contradictions
         return contradictions.run(cfg, as_json=args.json,
                                   limit=getattr(args, "limit", None)
                                   or contradictions.DEFAULT_LIMIT,
                                   include_same_file=getattr(args, "same_file", False))
 
     if action == "gaps":
-        from .. import gaps
+        from ..knowledge import gaps
         per_signal = getattr(args, "per_signal", None)
         heuristic = getattr(args, "heuristic", False)
         result = gaps.report(cfg, top=getattr(args, "top", None), heuristic=heuristic,
@@ -87,7 +87,7 @@ def cmd_curator(cfg, args) -> int:
         return 0
 
     if action == "verdict":
-        from .. import contradictions
+        from ..knowledge import contradictions
         try:
             result = contradictions.record_verdict(cfg, args.key, args.verdict,
                                                    note=args.note)
@@ -101,7 +101,7 @@ def cmd_curator(cfg, args) -> int:
                   f"({result['total']} total)")
         return 0
 
-    from .. import curator
+    from ..knowledge import curator
     payload = curator.collect(cfg)
     if args.json:
         print(json.dumps({"issues": payload["issues"], **payload["report"],
@@ -116,7 +116,7 @@ def cmd_curator(cfg, args) -> int:
     return 1 if payload["issues"]["broken_links"] else 0
 
 def cmd_nightly(cfg, args) -> int:
-    from .. import nightly
+    from ..knowledge import nightly
 
     result = nightly.run(cfg)
     if args.json:

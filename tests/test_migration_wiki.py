@@ -13,7 +13,8 @@ import json
 
 import pytest
 
-from singularity import backup, sources
+from singularity.machine import backup
+from singularity.knowledge import sources
 from singularity.cli import main
 from singularity.config import (DEFAULT_CONFIG, SCHEMA_VERSION, Config,
                                 migrate_config, validate_config)

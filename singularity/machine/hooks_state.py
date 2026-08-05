@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .config import Config, validate_config
+from ..config import Config, validate_config
 
 CLAUDE_SETTINGS = "settings.json"
 GEMINI_SETTINGS = "settings.json"
@@ -88,7 +88,7 @@ def capture_config_state(vault: Path) -> dict[str, Any]:
     covers, and for the same reason: this decides whether the capture hook
     fires, and defaulting it during an upgrade would silently change
     behaviour."""
-    from .config import CONFIG_FILE, legacy_config_path
+    from ..config import CONFIG_FILE, legacy_config_path
 
     path = CONFIG_FILE
     machine, machine_error = _read_json_tolerant(path)

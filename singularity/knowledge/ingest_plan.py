@@ -23,7 +23,7 @@ import re
 from typing import Any
 
 
-from .config import Config
+from ..config import Config
 
 # Housekeeping roots that are never wiki pages (same set curator excludes from
 # orphan/suggestion analysis) plus `learnings/`: active learnings are the INPUT
@@ -166,8 +166,8 @@ def plan(cfg: Config, source_id: str, top_k: int | None = None,
     JSON (scores sorted descending, ties broken on file name)."""
     from . import digest
     from . import sources as sources_mod
-    from .search import indexer
-    from .search.similarity import (cross_best_pair, group_indices, mean_pool,
+    from ..search import indexer
+    from ..search.similarity import (cross_best_pair, group_indices, mean_pool,
                                     pooled_vectors)
 
     top_k = int(top_k if top_k is not None else cfg.get("ingest_fanout_top_k"))

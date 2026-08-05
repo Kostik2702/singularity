@@ -15,7 +15,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from .config import Config, SCHEMA_VERSION, machine_id
+from ..config import Config, SCHEMA_VERSION, machine_id
 
 RETENTION = 10
 MANIFEST = "manifest.json"
@@ -186,14 +186,14 @@ def restore(cfg: Config, backup_id: str) -> dict[str, Any]:
     registry_added = 0
     src_registry = d / "sources.json"
     if src_registry.is_file():
-        from .config import atomic_write_json
+        from ..config import atomic_write_json
         try:
             backed_up = json.loads(src_registry.read_text(encoding="utf-8-sig"))
         except (OSError, json.JSONDecodeError):
             backed_up = {}
         entries = backed_up.get("sources") if isinstance(backed_up, dict) else None
         if isinstance(entries, dict):
-            from . import sources as sources_mod
+            from ..knowledge import sources as sources_mod
             current = sources_mod.read_registry(cfg)
             for sid, record in entries.items():
                 if sid not in current["sources"]:

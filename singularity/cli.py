@@ -424,7 +424,7 @@ def main(argv: list[str] | None = None) -> int:
         print(plan.payload, file=sys.stderr)
         return 2
     if plan.action == "greeting":
-        from . import status as status_mod
+        from .machine import status as status_mod
         cfg = _load_config_or_report(facade.vault_of(raw))
         if cfg is None:
             return 2
@@ -444,7 +444,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "model":
         return cmd_model(cfg, args)
     if args.command == "watch":
-        from . import watch
+        from .machine import watch
         log_setup.configure_for_cli(stream=sys.stdout)   # watcher log, same as the daemon's
         watch.run(cfg)
         return 0
@@ -454,15 +454,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "curator":
         return cmd_curator(cfg, args)
     if args.command == "selftest":
-        from . import selftest
+        from .machine import selftest
         return selftest.run(cfg, as_json=args.json)
     if args.command == "status":
-        from . import status as status_mod
+        from .machine import status as status_mod
         snap = status_mod.snapshot(cfg)
         print(json.dumps(snap, ensure_ascii=False) if args.json else render.status(snap))
         return 0
     if args.command == "stats":
-        from . import stats as stats_mod
+        from .knowledge import stats as stats_mod
         data = stats_mod.compute(cfg)
         print(json.dumps(data, ensure_ascii=False) if args.json else render.stats(data))
         return 0

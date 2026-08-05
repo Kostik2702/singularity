@@ -9,7 +9,8 @@ import os
 
 import pytest
 
-from singularity import config_paths, doctor
+from singularity import doctor
+from singularity.machine import config_paths
 from singularity.config import Config
 
 # The reported config, verbatim in shape: forward slashes under `llm`, escaped

@@ -14,7 +14,7 @@ import time
 import numpy as np
 import pytest
 
-from singularity import nightly
+from singularity.knowledge import nightly
 from singularity.config import Config
 from singularity.search import client, indexer
 
@@ -186,7 +186,7 @@ def test_trend_line_no_leftover_tmp(cfg, monkeypatch):
 
 def test_one_failing_step_does_not_sink_the_rest(cfg, monkeypatch):
     _no_index_update(monkeypatch)
-    import singularity.curator as curator_mod
+    import singularity.knowledge.curator as curator_mod
 
     def boom(cfg):
         raise RuntimeError("curator blew up")
@@ -200,7 +200,7 @@ def test_one_failing_step_does_not_sink_the_rest(cfg, monkeypatch):
 
 def test_has_error_true_when_any_step_errors(cfg, monkeypatch):
     _no_index_update(monkeypatch)
-    import singularity.curator as curator_mod
+    import singularity.knowledge.curator as curator_mod
     monkeypatch.setattr(curator_mod, "validate",
                         lambda cfg: (_ for _ in ()).throw(RuntimeError("x")))
     result = nightly.run(cfg)

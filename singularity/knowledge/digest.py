@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 
-from .config import Config
+from ..config import Config
 
 SOURCE_PREFIX = "learnings/active/"
 TARGET_TYPES = {"reference", "rule", "howto", "decision"}
@@ -47,7 +47,7 @@ def _read_journal(cfg: Config) -> dict[str, Any]:
 
 
 def _write_journal(cfg: Config, data: dict[str, Any]) -> None:
-    from .config import atomic_write_json
+    from ..config import atomic_write_json
     atomic_write_json(_journal_path(cfg), data)
 
 
@@ -75,7 +75,7 @@ def _pool(embs: np.ndarray, idxs: list[int]) -> np.ndarray | None:
     curator's note vectors and `ingest_plan` — `mb ingest plan` scores source
     chunks against exactly these vectors, so two copies of the aggregation
     would mean two different notions of 'similar'."""
-    from .search.similarity import mean_pool
+    from ..search.similarity import mean_pool
     return mean_pool(embs, idxs)
 
 
@@ -148,7 +148,7 @@ def plan(cfg: Config, project_filter: set[str] | None = None) -> dict[str, Any]:
     with a file-name tiebreak, and entries themselves are ordered by their
     best candidate score (most actionable first) then (file, section) for
     entries with no candidate at all."""
-    from .search import indexer
+    from ..search import indexer
     embs, chunks, status = indexer.load_committed_index(cfg.memory_index_dir)
     if status != "ok":
         return {"entries": [], "index_status": status, "source_count": 0, "target_count": 0}

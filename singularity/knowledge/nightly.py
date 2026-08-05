@@ -18,7 +18,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from .config import Config, atomic_write_json
+from ..config import Config, atomic_write_json
 
 DIGEST_SNAPSHOT_NAME = "digest-last.json"
 CURATOR_SNAPSHOT_NAME = "curator-last.json"
@@ -32,7 +32,7 @@ LEGACY_JOB_NAME = "nightly-index"   # T02 job this one replaces (T12 migration)
 
 
 def nightly_job(cfg: Config):
-    from .platform.scheduler import Job
+    from ..platform.scheduler import Job
 
     return Job(JOB_NAME,
                ["-m", "singularity", "--vault", str(cfg.vault), "nightly"],
@@ -44,7 +44,7 @@ def migrate_scheduler_job(cfg: Config) -> str:
     only ran `index update`) with the "nightly" job (whose first step IS an
     index update, plus digest/curator/config/trend/markers). Single source
     for `mb doctor --fix` and the installer so they can't drift apart."""
-    from .platform import scheduler
+    from ..platform import scheduler
 
     legacy = scheduler.Job(LEGACY_JOB_NAME, [], daily_at="03:00")
     if scheduler.verify(legacy).get("registered"):
@@ -64,7 +64,7 @@ def _guard(fn):
 # ---------------------------------------------------------------------------
 
 def _step_index(cfg: Config) -> dict[str, Any]:
-    from .search import client
+    from ..search import client
 
     try:
         stats = client.run_index(cfg, "update")
@@ -104,7 +104,7 @@ def _step_curator(cfg: Config, now: str) -> dict[str, Any]:
 
 
 def _step_config(cfg: Config, now: str) -> dict[str, Any]:
-    from .config import DEFAULT_CONFIG, validate_config
+    from ..config import DEFAULT_CONFIG, validate_config
 
     merged = {**DEFAULT_CONFIG, **cfg.data}
     result = validate_config(merged)
@@ -122,7 +122,7 @@ def _step_ingest_index(cfg: Config) -> dict[str, Any]:
     a document ingested while the daemon was cold stays unsearchable until
     someone runs `mb ingest index` by hand."""
     from . import sources as sources_mod
-    from .search import client
+    from ..search import client
 
     if not cfg.get("ingest_index_sources"):
         return {"status": "skipped", "reason": "ingest_index_sources=false"}
@@ -148,7 +148,7 @@ def _step_code_index(cfg: Config) -> dict[str, Any]:
     encoder inside the daemon, and code changes precisely when the machine is
     busy doing the work. Nightly is therefore the ONLY thing that keeps this
     corpus fresh, which is also why `mb doctor` warns when it goes stale."""
-    from .search import client
+    from ..search import client
 
     if cfg.code_repos_dir is None:
         return {"status": "skipped", "reason": "code_repos_dir not set"}

@@ -10,11 +10,11 @@ import hashlib
 import json
 from typing import Any
 
-from .config import Config
+from ..config import Config
 
 
 def compute(cfg: Config) -> dict[str, Any]:
-    from .search import indexer
+    from ..search import indexer
 
     files = indexer.index_files(cfg.memory_index_dir)
     if files is None:
@@ -70,7 +70,7 @@ def _code_stats(cfg: Config) -> dict[str, Any]:
     `configured` is reported separately from `present`: "you never turned this
     on" and "you turned it on but never built it" are different situations and
     only the second one is a problem."""
-    from .search import indexer
+    from ..search import indexer
 
     configured = cfg.code_repos_dir is not None
     out: dict[str, Any] = {"configured": configured, "present": False}
@@ -112,7 +112,7 @@ def _sources_stats(cfg: Config) -> dict[str, Any]:
     """Ingest layer counts (W11). Metadata only, like the rest of this module:
     never note content, never a model load."""
     from . import sources as sources_mod
-    from .search import indexer
+    from ..search import indexer
 
     records = [r for r in sources_mod.read_registry(cfg)["sources"].values()
                if isinstance(r, dict)]

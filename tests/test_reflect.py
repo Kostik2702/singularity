@@ -14,7 +14,7 @@ import time
 
 import pytest
 
-from singularity import reflect
+from singularity.telemetry import reflect
 from singularity.config import Config
 
 SECRET = "SECRET_PROMPT_TEXT_MUST_NEVER_APPEAR_IN_OUTPUT"

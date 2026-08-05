@@ -84,7 +84,7 @@ def evaluate(event: dict) -> dict | None:
     except (OSError, ValueError):
         return None
 
-    from singularity import vault_guard
+    from singularity.machine import vault_guard
 
     # WIKI-LOOP D6: immutable roots are checked FIRST and are NOT softened by
     # `vault_guard_mode: audit`. Every other check below keeps the 2026-07-12

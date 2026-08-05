@@ -54,7 +54,8 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
 import singularity  # noqa: E402
-from singularity import config_paths, doctor  # noqa: E402
+from singularity import doctor
+from singularity.machine import config_paths# noqa: E402
 from singularity.config import load_config  # noqa: E402
 from singularity.search import client  # noqa: E402
 

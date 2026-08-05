@@ -8,7 +8,7 @@ from datetime import datetime
 
 
 def cmd_search(cfg, args) -> int:
-    from .. import projects as projects_mod
+    from ..machine import projects as projects_mod
     from ..search import client
 
     filter_project = None
@@ -87,7 +87,7 @@ def _ingest_read_input(args) -> tuple[str, str, str]:
     fetched by an engine that is meant to be offline and deterministic."""
     from pathlib import Path as _P
 
-    from .. import sources as sources_mod
+    from ..knowledge import sources as sources_mod
 
     if args.stdin and args.path:
         raise ValueError("pass either <path> or --stdin, not both")
@@ -134,8 +134,8 @@ def _ingest_catch_up_index(cfg, stored_path: str) -> str:
     return "indexed"
 
 def cmd_ingest(cfg, args) -> int:
-    from .. import capture
-    from .. import sources as sources_mod
+    from ..knowledge import capture
+    from ..knowledge import sources as sources_mod
 
     try:
         if args.ingest_action == "add":
@@ -260,7 +260,7 @@ def cmd_ingest(cfg, args) -> int:
             return 0
 
         if args.ingest_action == "plan":
-            from .. import ingest_plan
+            from ..knowledge import ingest_plan
 
             result = ingest_plan.plan(cfg, args.source_id, top_k=args.top_k,
                                       threshold=args.threshold,
@@ -361,8 +361,8 @@ def cmd_ingest(cfg, args) -> int:
     return 2
 
 def cmd_note(cfg, args) -> int:
-    from .. import capture
-    from .. import sources as sources_mod
+    from ..knowledge import capture
+    from ..knowledge import sources as sources_mod
 
     # Every managed knowledge root the vault guard watches needs a way to
     # create a file in it, or the guard is telling people to use a command that
@@ -444,7 +444,7 @@ def cmd_note(cfg, args) -> int:
 
 def cmd_learn(cfg, args) -> int:
     from ..search.chunking import parse_frontmatter
-    from .. import capture
+    from ..knowledge import capture
 
     path = cfg.vault / "learnings" / "active" / f"{args.task}.md"
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")

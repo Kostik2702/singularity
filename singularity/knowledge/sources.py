@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from .capture import normalize_gist
-from .config import Config, atomic_write_json
+from ..config import Config, atomic_write_json
 
 REGISTRY_SCHEMA_VERSION = 1
 LOG_NAME = "ingest-log.jsonl"   # D3: machine history, sibling of nightly-history.jsonl
@@ -289,7 +289,7 @@ def read_source_text(cfg: Config, source_id: str) -> str | None:
     path = stored_abspath(cfg, record["stored_path"])
     if not path.is_file():
         return None
-    from .search.chunking import parse_frontmatter
+    from ..search.chunking import parse_frontmatter
     # newline="" — no universal-newline translation, so a source stored with
     # CRLF round-trips byte-for-byte (Path.read_text gained `newline` only in
     # 3.13; this project supports 3.10+).
@@ -624,7 +624,7 @@ def _looks_external(value: Any) -> bool:
 
 def _discover_external_refs(cfg: Config) -> tuple[dict[str, set[str]], int, list[str]]:
     """(ref -> notes citing it, notes_scanned, capped_notes)."""
-    from .search.chunking import parse_frontmatter, should_skip
+    from ..search.chunking import parse_frontmatter, should_skip
 
     skip_dirs = list(cfg.get("skip_dirs") or ())
     skip_parts = list(cfg.get("skip_path_parts") or ())

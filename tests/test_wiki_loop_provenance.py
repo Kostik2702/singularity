@@ -12,7 +12,10 @@ import json
 
 import pytest
 
-from singularity import capture, curator, sources, vault_guard
+from singularity.knowledge import capture
+from singularity.knowledge import curator
+from singularity.knowledge import sources
+from singularity.machine import vault_guard
 from singularity import cli
 from singularity.cli import main
 from singularity.config import Config

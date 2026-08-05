@@ -49,7 +49,7 @@ def is_config_json(vault: Path, abs_path: Path) -> bool:
     vault-resident copy, which still exists until the migration runs. Dropping
     the second would silently stop guarding it during exactly the window where
     a hand edit is most likely."""
-    from .config import CONFIG_FILE
+    from ..config import CONFIG_FILE
 
     if vault_relative(vault, abs_path) == ".mb/config.json":
         return True

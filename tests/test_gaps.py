@@ -10,7 +10,9 @@ import json
 
 import pytest
 
-from singularity import curator, gaps, sources
+from singularity.knowledge import curator
+from singularity.knowledge import gaps
+from singularity.knowledge import sources
 from singularity.cli import main
 from singularity.config import Config
 
@@ -157,7 +159,7 @@ def test_recent_learning_sections_are_not_gaps(vault):
 
 
 def test_digest_marked_sections_are_not_gaps(vault):
-    from singularity import digest
+    from singularity.knowledge import digest
     cfg = _cfg(vault)
     p = vault / "learnings" / "active" / "T.md"
     p.parent.mkdir(parents=True)

@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from singularity import context_map
+from singularity.knowledge import context_map
 
 
 @pytest.fixture

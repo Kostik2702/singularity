@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from singularity import sources
+from singularity.knowledge import sources
 from singularity.config import Config
 
 PACKAGE = Path(__file__).resolve().parents[1] / "singularity"
@@ -52,7 +52,17 @@ _WRITE_MODES = ("w", "a", "x", "+")
 
 
 def _module_path(name: str) -> Path:
-    return PACKAGE / name
+    """Find the module wherever its bounded context put it.
+
+    These names used to sit flat in the package; searching instead of assuming
+    means the guard keeps grading the real files after a move, rather than
+    skipping itself into silence (which is exactly what happened once).
+    """
+    direct = PACKAGE / name
+    if direct.exists():
+        return direct
+    matches = sorted(PACKAGE.glob(f"*/{name}"))
+    return matches[0] if matches else direct
 
 
 def _violations(tree: ast.AST, allowed: set[str] = frozenset()) -> list[str]:
@@ -110,7 +120,7 @@ def test_journal_owning_modules_use_only_the_atomic_helper(module_name):
 def test_contradictions_writes_only_its_journal(tmp_path):
     """Black-box companion to the AST check: scanning writes nothing at all,
     and recording a verdict touches exactly one file under .mb/."""
-    from singularity import contradictions
+    from singularity.knowledge import contradictions
 
     vault = tmp_path / "vault"
     (vault / "reference").mkdir(parents=True)

@@ -195,8 +195,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_schedule:
         print("== Phase 5: scheduler ==")
         from singularity.platform import scheduler
-        from singularity import nightly as nightly_mod
-        from singularity import watch as watch_mod
+        from singularity.knowledge import nightly as nightly_mod
+        from singularity.machine import watch as watch_mod
         # single source with `mb doctor --fix` (doctor.py C1/C2) so a re-install
         # on a machine that still has the legacy T02 "nightly-index" job
         # migrates it instead of leaving two competing scheduled jobs (T12),
@@ -212,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
     # blocks a working install. That is exactly why the remaining answers have
     # to be named HERE: they are optional, so no failure will ever mention
     # them, and a machine that was never asked stays silently half-configured.
-    from singularity import machine_setup
+    from singularity.machine import machine_setup
 
     lines = machine_setup.summary_lines(cfg.data, prefix="[install] ")
     if lines:

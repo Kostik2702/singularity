@@ -105,7 +105,7 @@ def resolve_capture_project(cfg: Any, explicit: str | None,
     resolve to "personal" (a reserved id, never a registrable path) — so
     the only way to land on "personal" is an explicit flag or a configured
     root, never an accidental cwd match."""
-    from . import projects
+    from ..machine import projects
 
     registry = cfg.get("projects", {}) or {}
     if explicit:

@@ -38,7 +38,7 @@ from collections.abc import Iterable
 
 import numpy as np
 
-from .config import Config, atomic_write_json
+from ..config import Config, atomic_write_json
 
 # Below the floor: different topics. Above the ceiling: curator.lint() already
 # calls it a near-duplicate (curator.DUPLICATE_THRESHOLD = 0.90).
@@ -352,8 +352,8 @@ def scan(cfg: Config, limit: int = DEFAULT_LIMIT,
     while describing different tasks. Opt in with `--same-file` when auditing
     one long note; the report says which mode produced it."""
     from . import curator
-    from .search import indexer
-    from .search.similarity import blockwise_pairs
+    from ..search import indexer
+    from ..search.similarity import blockwise_pairs
 
     low, high = band
     embs, chunks, status = indexer.load_committed_index(cfg.memory_index_dir)

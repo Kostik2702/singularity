@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from singularity import module_context
+from singularity.knowledge import module_context
 
 
 # --- match_module ------------------------------------------------------------

@@ -15,7 +15,7 @@ import time
 import numpy as np
 import pytest
 
-from singularity import curator
+from singularity.knowledge import curator
 from singularity import cli
 from singularity.config import Config
 from singularity.search import indexer

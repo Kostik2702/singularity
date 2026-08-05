@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from singularity import sources
+from singularity.knowledge import sources
 from singularity.cli import main
 
 

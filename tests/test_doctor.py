@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from singularity import doctor, watch
+from singularity import doctor
+from singularity.machine import watch
 from singularity.config import Config
 from singularity.platform import scheduler
 
@@ -284,7 +285,7 @@ def _check(cfg, check_id):
 
 def test_d1_hooks_warns_when_no_client_registered(cfg, monkeypatch):
     _stub_externals(monkeypatch)
-    import singularity.hooks_state as hooks_state
+    import singularity.machine.hooks_state as hooks_state
     monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: cfg.vault))
     doctor.run(cfg, as_json=True)
     d1 = _check(cfg, "D1-hooks")
@@ -294,7 +295,7 @@ def test_d1_hooks_warns_when_no_client_registered(cfg, monkeypatch):
 
 def test_d1_hooks_pass_when_installed_and_enabled(cfg, monkeypatch):
     _stub_externals(monkeypatch)
-    import singularity.hooks_state as hooks_state
+    import singularity.machine.hooks_state as hooks_state
     monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: cfg.vault))
     settings = cfg.vault / ".claude" / "settings.json"
     settings.parent.mkdir(parents=True)
@@ -310,7 +311,7 @@ def test_d1_hooks_pass_not_fail_when_intentionally_disabled(cfg, monkeypatch):
     """The whole point of T02: a deliberate `mb hooks disable` must never read
     as broken installation."""
     _stub_externals(monkeypatch)
-    import singularity.hooks_state as hooks_state
+    import singularity.machine.hooks_state as hooks_state
     monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: cfg.vault))
     settings = cfg.vault / ".claude" / "settings.json"
     settings.parent.mkdir(parents=True)
@@ -327,7 +328,7 @@ def test_d1_hooks_pass_not_fail_when_intentionally_disabled(cfg, monkeypatch):
 
 def test_d1_hooks_warns_on_malformed_config(cfg, monkeypatch):
     _stub_externals(monkeypatch)
-    import singularity.hooks_state as hooks_state
+    import singularity.machine.hooks_state as hooks_state
     monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: cfg.vault))
     (cfg.vault / ".mb").mkdir(parents=True, exist_ok=True)
     (cfg.vault / ".mb" / "config.json").write_text("{not json", encoding="utf-8")
@@ -341,7 +342,7 @@ def test_d1_hooks_warns_on_malformed_config(cfg, monkeypatch):
 
 def _home(monkeypatch, cfg, home=None):
     monkeypatch.setattr(doctor.Path, "home", classmethod(lambda cls: home or cfg.vault))
-    import singularity.hooks_state as hooks_state
+    import singularity.machine.hooks_state as hooks_state
     monkeypatch.setattr(hooks_state.Path, "home", classmethod(lambda cls: home or cfg.vault))
 
 
