@@ -104,6 +104,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # current ranking should opt in rather than be surprised. `mb search
     # --hybrid` turns it on per query regardless.
     "hybrid_search": False,
+    # AUD-21: `inbox/` staging area. Opt-in — a second place knowledge can sit
+    # is a real cost, and someone happy to classify at capture time gains
+    # nothing from it.
+    "inbox_enabled": False,
     "daemon_port": 0,          # 0 = OS picks a free port; actual port -> .mb/daemon.port
     "excerpt_chars": 150,
     "batch_size": 64,

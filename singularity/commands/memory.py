@@ -485,3 +485,63 @@ def cmd_learn(cfg, args) -> int:
         f.write(f"\n## {heading}\n{args.insight}\n")
     print(str(path))
     return 0
+
+
+def cmd_inbox(cfg, args) -> int:
+    """`mb inbox` — capture now, classify later, file only on approval.
+
+    Every subcommand except `approve` is read-only by construction: the point
+    of a staging area is that nothing leaves it unless a human says so.
+    """
+    from ..knowledge import inbox
+
+    if not inbox.enabled(cfg):
+        print("[mb] inbox is off — enable with `mb config set inbox_enabled true`",
+              file=sys.stderr)
+        return 2
+
+    action = args.inbox_action
+    if action == "add":
+        result = inbox.capture(cfg, args.text, title=args.title)
+        print(json.dumps(result, ensure_ascii=False) if args.json
+              else f"captured: {result['file']}")
+        return 0
+
+    if action == "list":
+        rows = inbox.items(cfg)
+        if args.json:
+            print(json.dumps({"items": rows}, ensure_ascii=False))
+        elif not rows:
+            print("inbox is empty")
+        else:
+            for row in rows:
+                print(f"  {row['file']:<44} {row['title']}")
+        return 0
+
+    if action == "suggest":
+        from ..search import client
+        result = inbox.suggest(cfg, args.file,
+                               search=lambda req: client.search(cfg, req))
+        if result.get("error"):
+            print(f"[mb] {result['error']}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=1))
+            return 0
+        print(f"{result['file']} — {result['title']}")
+        print(f"  suggested type : {result['suggested_type']}  "
+              f"(nothing is applied — run `mb inbox approve <file> <type>`)")
+        for label, key in (("possible duplicates", "duplicates"), ("related", "links")):
+            if result[key]:
+                print(f"  {label}:")
+                for hit in result[key]:
+                    print(f"    {hit['score']:.2f}  {hit['file']}")
+        return 0
+
+    result = inbox.approve(cfg, args.file, args.type, title=args.title)
+    if result.get("error"):
+        print(f"[mb] {result['error']}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, ensure_ascii=False) if args.json
+          else f"filed: {result['from']} -> {result['file']}")
+    return 0

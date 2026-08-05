@@ -55,6 +55,10 @@ GROUPS: dict[str, tuple[str, ...]] = {
 # second one reads better.
 HOSTS: dict[str, tuple[str, ...]] = {
     "curator": ("digest", "nightly"),
+    # A capture in the inbox is a note nobody has classified yet, so `note`
+    # is where someone looks for it. The window stays ten wide: an opt-in
+    # staging area does not deserve a permanent slot on the first screen.
+    "note": ("inbox",),
     # Reports that answer "what is in the memory" rather than "is it healthy":
     # they hang off `status` instead of taking two more slots on the window.
     "status": ("stats", "reflect"),

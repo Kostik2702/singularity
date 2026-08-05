@@ -41,7 +41,8 @@ import sys
 from . import __version__, facade
 from . import log as log_setup
 from . import render
-from .commands.memory import cmd_search, cmd_ingest, cmd_note, cmd_learn
+from .knowledge import inbox
+from .commands.memory import cmd_search, cmd_ingest, cmd_note, cmd_learn, cmd_inbox
 from .commands.knowledge import cmd_digest, cmd_curator, cmd_nightly
 from .commands.machine import cmd_daemon, cmd_index, cmd_model, cmd_backup, cmd_config, cmd_project, cmd_hooks, cmd_reflect, cmd_llm, cmd_uninstall, cmd_init
 from .config import Config, ConfigError, load_config
@@ -342,6 +343,23 @@ def _build_parser() -> argparse.ArgumentParser:
     lrn.add_argument("--head", help="semantic heading appended after the timestamp")
     lrn.add_argument("--force", action="store_true", help="bypass dedup and always append")
 
+    ib = sub.add_parser("inbox", help="staging area for captures not yet classified")
+    ibsub = ib.add_subparsers(dest="inbox_action", required=True)
+    ibc = ibsub.add_parser("add", help="capture text verbatim, decide later")
+    ibc.add_argument("text")
+    ibc.add_argument("--title")
+    ibc.add_argument("--json", action="store_true")
+    ibl = ibsub.add_parser("list", help="what is waiting, oldest first")
+    ibl.add_argument("--json", action="store_true")
+    ibs = ibsub.add_parser("suggest", help="type, duplicates and links — proposed, not applied")
+    ibs.add_argument("file", help="inbox/<name>.md")
+    ibs.add_argument("--json", action="store_true")
+    iba = ibsub.add_parser("approve", help="file a capture into its managed root")
+    iba.add_argument("file")
+    iba.add_argument("type", choices=sorted(inbox.TYPE_ROOTS))
+    iba.add_argument("--title")
+    iba.add_argument("--json", action="store_true")
+
     sub.add_parser("init", help="bind this vault (pointer file) + create folder tree")
     sub.add_parser("uninstall", help="remove hooks/scheduler jobs/daemon (vault untouched)")
     return p
@@ -439,6 +457,8 @@ def main(argv: list[str] | None = None) -> int:
     cfg = _load_config_or_report(args.vault)
     if cfg is None:
         return 2
+    if args.command == "inbox":
+        return cmd_inbox(cfg, args)
     if args.command == "search":
         return cmd_search(cfg, args)
     if args.command == "daemon":
