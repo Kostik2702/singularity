@@ -24,6 +24,17 @@ import json
 from pathlib import Path
 
 TOKEN = "{{VAULT}}"
+
+# `{{AGENTS}}` — where the deployed agent definitions live, for the one thing
+# that must NOT be addressed through the vault: the shared preamble.
+#
+# The preamble is a mechanism, not knowledge. Agents used to read it from
+# `{{VAULT}}/rules/`, which made the rules every subagent runs on a property of
+# whatever vault happened to be configured — swap the vault and eight agents
+# start with no rules at all, silently. Knowledge belongs in the vault and its
+# absence must cost only recall; the operating rules ship with the engine.
+AGENTS_TOKEN = "{{AGENTS}}"
+
 MARKER = ".singularity-owned.json"
 
 # Rendered only for text we author. A binary or an unknown extension is copied
@@ -32,18 +43,27 @@ TEXT_SUFFIXES = {".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".py", ".sh",
                  ".ps1", ".cmd", ".js", ".mjs", ".css", ".html"}
 
 
-def render_text(text: str, vault: Path) -> str:
-    """Every `{{VAULT}}` replaced by this machine's vault path."""
-    return text.replace(TOKEN, str(vault))
+def default_agents_dir() -> Path:
+    """Where `register_agents` deploys agent definitions on this machine."""
+    return Path.home() / ".claude" / "agents"
+
+
+def render_text(text: str, vault: Path, agents: Path | None = None) -> str:
+    """Every `{{VAULT}}` replaced by this machine's vault path, every
+    `{{AGENTS}}` by the deployed-agents directory."""
+    out = text.replace(TOKEN, str(vault))
+    return out.replace(AGENTS_TOKEN, str(agents if agents is not None
+                                         else default_agents_dir()))
 
 
 def file_has_token(path: Path) -> bool:
     if path.suffix.lower() not in TEXT_SUFFIXES:
         return False
     try:
-        return TOKEN in path.read_text(encoding="utf-8", errors="ignore")
+        text = path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         return False
+    return TOKEN in text or AGENTS_TOKEN in text
 
 
 def tree_has_token(root: Path) -> bool:

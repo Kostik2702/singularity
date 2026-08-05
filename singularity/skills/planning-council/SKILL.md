@@ -35,6 +35,7 @@ PLC-5 Weighted-confidence synthesis + report + decision-note offer
 - [ ] Greenfield vs existing-flow decided. Existing flow → collect code anchors (files, entry points). **"Code already written" is NOT greenfield** — a diff shows what changed, not what correct is; the plan still needs the real baseline.
 - [ ] **Grill offer (never force)**: propose the `grill` skill before the council; user decides. Skip → record `Grill: skipped by user`.
 - [ ] **GOAL CONTRACT formulated** — concrete + falsifiable: `GOAL:` what "done" looks like, derived from the user's exact request (not invented); `UNMET if <X>` — observable condition under which it is NOT done; `Owner:` recorded. If it narrows the user's request → confirm BEFORE launch (pre-launch question, allowed). Agents may challenge the contract itself in Round 1.
+- [ ] **Every environment claim in CONSTRAINTS came from a live probe, not from memory.** «X установлен», «Y доступен», «версия Z» проверяется `import`/`--version`/`Test-Path` в момент сборки контекста и с указанием КОНКРЕТНОГО интерпретатора (`<engine>/.venv/bin/python -c "import PIL"`, не просто `python`): «на машине есть» ≠ «в нужном venv есть». В незнакомом окружении — сначала канарейка (тривиальный no-op отдельным вызовом), потом батч; молчание команды не доказывает, что она стартовала — прочитай лог исполнителя, прежде чем писать root cause. Агенты совета вправе и обязаны перепроверять CONSTRAINTS живьём.
 - [ ] PLANNING_CONTEXT assembled (template below)
 
 **PLANNING_CONTEXT** — the SAME package to every agent, verbatim (fairness + prompt-cache reuse):
@@ -105,9 +106,22 @@ PLANNING MISSION: You are the FEASIBILITY & ESTIMATION CHECKER.
 - [ ] Each risk: real vs hypothetical (does existing code already handle it?)
 - [ ] Missing pieces checked: migrations, config/flags, tests, cross-module impact
 - [ ] Each subtask sized on the T-shirt scale: XS (<2h) / S (2-4h) / M (4-8h) / L (1-2d) / XL (2-5d)
+- [ ] EVERY subtask labelled with its COST CLASS, because the two do not convert:
+      `agent-bound` (writing code/text/tests — human-hour intuition overshoots the
+      actual agent wall-clock by 10-20x) vs `wall-clock-bound` (model/browser
+      downloads, install retries, OWNER ACCEPTANCE GATES, deliberately serialized
+      work — these do not compress at all). A blanket multiplier in either
+      direction is an error: dividing everything by 10-20 underestimates exactly
+      the tail that carries the risk.
+- [ ] Agent-bound work is quoted in AGENT SESSIONS (1 session ~ a 1-3h focused run),
+      then converted to calendar days alongside the wall-clock-bound items — never
+      in raw human-hours.
 - [ ] TOTAL along the critical path (parallel work counts once); buffer +30% medium / +50% low confidence
 - [ ] THREE-POINT estimate: BEST / LIKELY / WORST — never a single number
 - [ ] What could make the estimate WRONG (unknowns, blockers)
+- [ ] Token/subscription ceiling named when the plan leans on a fleet of agents:
+      parallelism buys calendar time, not tokens, and on a subscription tier the
+      limit bites before the deadline does.
 ```
 
 *Historian* (`historian`):

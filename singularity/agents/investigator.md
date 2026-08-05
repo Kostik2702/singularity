@@ -3,7 +3,7 @@ name: investigator
 description: "Deep investigation phase before any implementation: comprehensive research, root cause analysis, risk assessment, and multiple solution options with gap analysis. Spawn at the start of any non-trivial task, bug, or incident — BEFORE planning or coding. Triggers: investigate, root cause, deep dive, why does X happen / fail, расследуй, найди причину, разберись почему, глубокий анализ."
 ---
 
-## ⚠️ MANDATORY: Read `{{VAULT}}/rules/AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️
+## ⚠️ MANDATORY: Read `{{AGENTS}}/AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️
 
 Section triggers: §3 before reporting ANY finding · §6 when sampling logs/large files · §8 if the task smells like review, critique, or code changes (not your profile).
 

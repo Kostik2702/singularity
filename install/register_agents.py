@@ -49,6 +49,12 @@ AGENTS = [
     "web-viewer",
 ]
 
+# The shared preamble ships WITH the agents, not through the vault: it is the
+# rule set every subagent starts on, and a mechanism may not depend on which
+# vault (or whether a vault) is configured. It is deployed under the same name
+# the agent sources address as `{{AGENTS}}/AGENT_SHARED_PREAMBLE.md`.
+PREAMBLE = "AGENT_SHARED_PREAMBLE"
+
 
 def _points_to(link: Path, target: Path) -> bool:
     try:
@@ -114,10 +120,14 @@ def _resolved_vault() -> Path | None:
         return None
 
 
-def _render(src: Path, dst: Path, vault: Path) -> str:
-    """Write `dst` with the template vault path replaced by the real one.
+def _render(src: Path, dst: Path, vault: Path | None, agents: Path) -> str:
+    """Write `dst` with the tokens resolved for this machine. `{{AGENTS}}` always
+    resolves; `{{VAULT}}` is left as the token when no vault is configured, so a
+    vaultless install shows an honest placeholder instead of a bogus path.
     Returns 'copied' / 'backed-up', mirroring `_install_file`'s vocabulary."""
-    text = src.read_text(encoding="utf-8").replace(TEMPLATE_VAULT, str(vault))
+    text = vault_token.render_text(src.read_text(encoding="utf-8"),
+                                   Path(TEMPLATE_VAULT) if vault is None else vault,
+                                   agents)
     status = "copied"
     if dst.is_symlink():
         dst.unlink()
@@ -139,29 +149,35 @@ def main() -> int:
     dest_root = Path.home() / ".claude" / "agents"
     dest_root.mkdir(parents=True, exist_ok=True)
     vault = _resolved_vault()
-    # Only render when substitution would actually change something; otherwise
-    # keep the symlink, so the common case stays exactly as it was.
-    retarget = vault is not None and str(vault) != TEMPLATE_VAULT
+    # The preamble deploys alongside the agents that read it — one write, or the
+    # agents point at a file that is not there.
+    owned = AGENTS + [PREAMBLE]
     counts = {"ok": 0, "linked": 0, "copied": 0, "backed-up": 0, "missing": 0}
-    for name in AGENTS:
+    for name in owned:
         src = AGENTS_SRC / f"{name}.md"
         if not src.is_file():
             print(f"[agents] MISSING in repo: {name}", file=sys.stderr)
             counts["missing"] += 1
             continue
         dst = dest_root / f"{name}.md"
-        if retarget and TEMPLATE_VAULT in src.read_text(encoding="utf-8"):
-            status = _render(src, dst, vault)
+        # Render whenever the source names anything this machine has to fill in;
+        # otherwise keep the symlink, so the common case stays as it was.
+        if vault_token.file_has_token(src):
+            status = _render(src, dst, vault, dest_root)
         else:
             status = _install_file(src, dst)
         counts[status] += 1
         if status == "backed-up":
             print(f"[agents] {name}: differing local copy preserved as backup, "
                   f"now points to repo source", file=sys.stderr)
-    if retarget:
+    if vault is not None:
         print(f"[agents] vault path rewritten to {vault} in rendered copies "
               f"(re-run the installer after editing an agent source)")
-    print(f"[agents] {len(AGENTS)} owned: {counts['linked']} linked, "
+    else:
+        print("[agents] no vault configured: {{VAULT}} left as a placeholder; "
+              "the shared rules still deploy — they do not live in the vault")
+    print(f"[agents] {len(owned)} owned ({len(AGENTS)} agents + preamble): "
+          f"{counts['linked']} linked, "
           f"{counts['ok']} already ok, {counts['copied']} copied, "
           f"{counts['backed-up']} backed up, {counts['missing']} missing")
     return 1 if counts["missing"] else 0
