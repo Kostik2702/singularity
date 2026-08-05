@@ -10,6 +10,43 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.11.1 — the verification rule reaches the thread that broke it
+
+A follow-up, and the reason is worth more than the change.
+
+Two rules came out of the v0.11.0 work, both about the same class of failure —
+**a check that is green because it never measured anything**. A `pytest` run
+that never started, because its exit code came from `tail`. Two architecture
+invariants that passed while checking almost nothing: one walked only `from .x`
+imports and went blind when the bounded-context split moved most of them to
+`..`, the other could `pytest.skip` itself when a module moved, so three
+report-only guards switched off in silence and only the skip count (25 -> 28)
+noticed.
+
+Both rules were written into the vault, then into `AGENT_SHARED_PREAMBLE` §2 —
+and that still left them where the failures did NOT happen: the preamble is
+read by subagents, while both mistakes were made in the main thread.
+
+`hooks_state.VERIFICATION_FRAGMENT` closes that: one fragment, stating one
+class rather than two rules, injected into every SessionStart context.
+
+- take the exit code from the COMMAND (`cmd > run.log 2>&1; echo "EXIT=$?"`),
+  never from a pipe;
+- prove a new invariant by PLANTING the violation it must catch, in the form
+  the code actually uses, and watching the suite go red;
+- a check that can skip itself when its target is missing must fail instead,
+  and a rising `skipped` count after a refactor means checks turned themselves
+  off.
+
+`test_verification_fragment_reaches_every_session` asserts the two actions
+rather than the heading — a fragment trimmed to a slogan would still pass a
+title check — and it was verified the way the rule demands: the injection was
+removed, the suite went red, the injection came back.
+
+Full suite: 1 962 passed, 25 skipped.
+
+---
+
 # v0.11.0 — layers, and the three tails the audit left
 
 Two years of features had settled into one flat namespace: 10 263 lines — 43%
