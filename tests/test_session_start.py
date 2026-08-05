@@ -376,3 +376,24 @@ def test_malformed_digest_cache_does_not_crash(monkeypatch, vault):
     _resolve_to(monkeypatch, vault)
     ctx = session_start.build_context()   # must not raise
     assert "SEM-FIRST" in ctx
+
+
+def test_verification_fragment_reaches_every_session(monkeypatch, vault):
+    """The main thread reads no preamble — this hint is its only carrier.
+
+    Both failures behind the rule (an exit code taken from a pipe, an invariant
+    that checked almost nothing) happened in the main thread, where the
+    subagent preamble never arrives. If this fragment stops being injected the
+    rule silently stops existing for the one place it was written for.
+    """
+    from singularity.machine.hooks_state import VERIFICATION_FRAGMENT
+
+    vault.mkdir(exist_ok=True)
+    _resolve_to(monkeypatch, vault)
+    ctx = session_start.build_context()
+    assert VERIFICATION_FRAGMENT in ctx
+    # the two actions, not just the heading — a fragment trimmed to a slogan
+    # would still pass a substring check on its title
+    assert 'echo "EXIT=$?"' in ctx
+    assert "PLANTING the violation" in ctx
+    assert "`skipped` count" in ctx

@@ -52,6 +52,25 @@ confirm scope with the user before running a command."""
 # a hash audit could say which was authoritative. A rule saying "artifacts live
 # in the vault" already existed; it was not present at the moment the write
 # path got chosen, which is the only moment it could have helped.
+# One fragment for one class of failure: a check that is green because it never
+# measured anything. Both halves cost this project real time — a `pytest` run
+# that never started (the exit code came from `tail`) and two invariants that
+# passed while checking almost nothing. Neither was caught by the rule existing
+# in `rules/`; a rule only acts where the action is chosen, which for both of
+# these is the moment a command or a test gets written.
+VERIFICATION_FRAGMENT = """## Green is not the same as verified
+- Take the exit code from the COMMAND, never from a pipe:
+  `cmd > run.log 2>&1; echo "EXIT=$?"` (or `${PIPESTATUS[0]}`). `cmd | tail; echo $?`
+  reports `tail`'s status, so a run that never started looks green.
+- A new test-invariant ("no cycles", "the domain must not print") is proven by
+  PLANTING the violation it must catch and watching the suite go red — in the
+  form the code actually uses. A green invariant on healthy code is
+  indistinguishable from one that checks nothing.
+- A check that can `skip` itself when its target is missing must fail instead;
+  after a refactor compare the `skipped` count with the previous run, because a
+  rise means checks switched themselves off.
+"""
+
 VAULT_WRITE_POLICY_FRAGMENT = """## Vault is the write destination, not a copy of it
 Before the FIRST write of anything destined for the vault, resolve the destination:
 - Write **directly** to the vault path (or through `mb note new` / `mb learn`).
