@@ -10,6 +10,44 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.12.0 — reel removed: the spare path that decided the tool
+
+`singularity/reel` was the Python predecessor of `video-engine` — a whole
+editing pipeline (`build`, `bed`, `mux`, `qa`, `beats`, `sections`, `match`,
+`probe`, `sheets`) written before the engine existed, and kept afterwards as a
+spare path.
+
+The spare path is what made the decision. Asked for a montage, the tool that
+gets chosen is the one that runs, not the one the architecture points at: a
+full-length clip was assembled with `reel` while the owner had twice named
+`video-engine` as the target. The map of the video system lists three tools —
+`capcut-bridge`, `video-engine`, `video-effects-motion-service` — and `reel` was
+in none of them. So it is gone, along with its console script, shims, tests and
+the `reel-editor` skill.
+
+**Removed:** the `reel` package (14 modules), `tests/test_reel.py`, `bin/reel`,
+`bin/reel.cmd`, the `reel` entry point and its ruff exemption.
+
+**Where the capability went**, stated rather than assumed:
+
+| was | now |
+|---|---|
+| `build` — crop, scale, zoom, speed | `video-engine render` |
+| `bed` + `mux` — the music under a cut | `video-engine`, the timeline carries `audio` |
+| `beats` / `sections` — tempo, energy map | `capcut-bridge tempo --sections` |
+| `probe` / `sheets` — intake, contact sheets | `capcut-bridge intake` / `survey` |
+| `match` — colour drift across clips | **not covered** — engine work, filed |
+| look / grain / vignette / dissolve | **not covered** — same |
+| `qa` — WCAG flash count on the rendered file | **not covered** — the only gate here with a medical boundary |
+
+The first four rows are a straight win. The last three are the reason this is a
+minor bump and not a patch: until the engine grows them, a clip it renders is
+flat and its photosensitivity is unverified on the file itself.
+
+Verified: `mb doctor` 38 PASS after reinstall, `reel` resolves to nothing.
+
+---
+
 # v0.11.2 — the sentence that read as evidence
 
 `singularity/search/lexical.py` cited `tests/fixtures/search_eval.json` twice
