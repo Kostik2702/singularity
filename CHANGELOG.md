@@ -10,6 +10,110 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.11.2 — the sentence that read as evidence
+
+`singularity/search/lexical.py` cited `tests/fixtures/search_eval.json` twice
+as the reason BM25's k1/b and RRF's k stay out of config: "tuning them without
+an evaluation set is guessing, and the evaluation set is small enough that any
+change it cannot justify should not be made."
+
+The file did not exist. Not in the repo, not in git history, referenced by
+nothing but that docstring. For a year the sentence read as evidence and was
+none — the same class as a green test that measured nothing, in a form the
+suite cannot catch.
+
+### The set
+
+66 query → note pairs, plus 16 for the code corpus, scored separately because
+averaging two corpora would hide which one a change moved. Quotas per class —
+22 identifier, 22 natural, 22 cross-lingual — so a change that helps exact
+tokens and hurts cross-lingual cannot report "no effect". Every target was
+chosen FIRST, by reading the note; the query was written afterwards, so the set
+can report a bad number. Part of the queries are verbatim `mb search` calls
+lifted from real transcripts.
+
+First honest reading of this vault: **recall@1 0.485, recall@5 0.712, MRR
+0.585.** Cross-lingual — the claim the multilingual model exists for — was the
+weakest class and had never been measured at all.
+
+### What it settled, and what it refused
+
+- **Hybrid on by default**: +0.060 recall@1, +0.030 recall@5, +0.041 MRR. The
+  cost is measured and accepted, not absent: cross-lingual loses 0.091
+  recall@5, because BM25 has nothing to say when the query and the note are in
+  different languages and RRF still gives its ranking a vote. Four damping
+  variants were swept — capped lexical candidates, down-weighted fusion,
+  reserved slots — and every one gave back more than it recovered.
+- **The code corpus fuses unconditionally**, past the machine setting: +0.125
+  recall@1, +0.083 MRR, and there not one class moves down. Half of what a code
+  corpus is for is answering `atomic_write_json`, which is the query an
+  embedding is worst at.
+- **A usage tie-break was implemented and removed by its own measurement.** At
+  a wide band it cost 0.015 recall@1; at a narrow one it changed nothing. With
+  usage known for 15 notes of 556 the signal is too sparse to arbitrate — and
+  sparse data made it harmful, not neutral. The counting stays; the ranking
+  change did not ship.
+
+### Four defects it uncovered
+
+- **A warm daemon serves the modules it started with.** `reload` re-reads the
+  config and the indexes, never the code. The first eval run reported a
+  dead-flat zero delta on all three classes to three decimals — not because
+  fusion does nothing, but because the branch had never been loaded. Recorded,
+  that run would have left "hybrid does not help" under `docs/` permanently,
+  with numbers, reproducibly. `machine/code_version.py` fingerprints the source
+  tree; `mb status` and `B7-daemon` report the gap; "unknown" is deliberately
+  not "stale", because a constant warning is an ignored one.
+- **The lexical cache was never invalidated.** `SearchEngine._bm25` survived
+  `reload()` and was keyed on chunk COUNT, so a note edited without gaining or
+  losing a section left BM25 matching text that no longer existed — invisible,
+  because the vector half went on answering correctly.
+- **A config value could not be pinned.** `save()` dropped any key equal to
+  `DEFAULT_CONFIG`, so while `hybrid_search` defaulted to false, setting it to
+  false deleted the key. No install could have opted out of the flip, and the
+  v0.6.3 promise about `vault_guard_enabled` ("an install that has ever saved
+  its config carries an explicit value") was false for every sparse config.
+  Fixed; README corrected rather than quietly left standing.
+- **The budget notice named neither scale nor remedy.** It said something was
+  truncated, which is why nobody ever acted on it.
+
+### The write path
+
+- **`knowledge/redact.py`** masks known secret shapes before anything reaches
+  the vault — a git repository, where a key is in history on every machine the
+  vault ever reached, which is why this runs on write and not as a later audit.
+  Replace, not refuse: `sk-XXXXXXXX` keeps the type marker so a later reader
+  knows what was here, and the insight survives with one token gone. The notice
+  is derived from what ACTUALLY changed, so a dropped assignment goes quiet
+  instead of announcing a redaction that did not happen.
+- **`mb note split`** turns a note past `brain_max_lines` into an index plus one
+  child per `##` section, linked both ways, all-or-nothing on write. Truncation
+  was the wrong remedy: the tail of a brain note is the newest part, not the
+  least important.
+- **`mb journey`** answers "what did we work out last month" from two sources —
+  notes by `created:` (never mtime, which floats every touched file to the top)
+  and learnings by timestamped section (never by file, which says nothing after
+  months of appends).
+- **`.mb/usage.json`** counts note opens from the transcript walk `mb reflect`
+  already performed and discarded. Accumulating, because transcripts are pruned
+  by their clients and a recount would silently zero a note's history. Applied
+  only where it earns its keep: `mb curator` reports stale AND never-opened, a
+  far smaller set than either signal alone.
+- **`mb sessions`** — an opt-in FTS5 store over your own past sessions, the one
+  feature here that keeps conversation text. Off by default, its own database,
+  redacted on the way in, finite retention, `mb sessions purge`. Claude
+  transcripts only, and both `mb sessions status` and `B6b-sessions` say so
+  rather than letting "sessions are searchable" stand with two of four clients
+  silently absent. The contract was written in the vault before the code.
+
+Every invariant above was proven the way this project requires: by planting its
+violation, watching the suite go red, and restoring it.
+
+Full suite: 2 066 passed, 25 skipped — the skip count unchanged, which is the
+check that no check switched itself off. ruff at zero. `mb doctor` PASS 38.
+
+---
+
 # v0.11.1 — the verification rule reaches the thread that broke it
 
 A follow-up, and the reason is worth more than the change.
