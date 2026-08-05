@@ -53,7 +53,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-import singularity  # noqa: E402
+import singularity
+from singularity.config import DEFAULT_CONFIG  # noqa: E402
 from singularity import doctor
 from singularity.machine import config_paths# noqa: E402
 from singularity.config import load_config  # noqa: E402
@@ -440,13 +441,25 @@ def machine_config(tmp: Path) -> dict:
                  and not legacy.exists() and len(kept) == 1),
     })
 
-    # (2) decisions, not defaults: a value equal to the shipped default is not
-    #     materialised, so the file stays readable instead of listing forty keys
+    # (2) decisions, INCLUDING the ones that agree with the default (v0.11.2).
+    #
+    #     Until v0.11.2 this case asserted the opposite — a value equal to
+    #     `DEFAULT_CONFIG` was dropped so the file "stays readable instead of
+    #     listing forty keys". The file still does, but for the right reason:
+    #     nothing injects defaults INTO `data`, so what nobody set is simply not
+    #     there. Dropping them additionally made a value impossible to PIN —
+    #     while `hybrid_search` defaulted to false, setting it to false deleted
+    #     the key — which is what voided the v0.6.3 promise about
+    #     `vault_guard_enabled` for every sparse config.
+    #
+    #     So the graded promise flips: a key the migrated file carried survives,
+    #     default-valued or not, and the file is still short.
     rows.append({
-        "case": "the migrated file records decisions, not defaults",
+        "case": "the migrated file records every decision, default-valued or not",
         "keys": sorted(data),
         "min_score_persisted": "min_score" in data,
-        "pass": "min_score" not in data and "excerpt_chars" in data,
+        "pass": ("min_score" in data and "excerpt_chars" in data
+                 and len(data) < len(DEFAULT_CONFIG)),
     })
 
     # (3) a configured machine meets a vault that still carries a legacy config
@@ -643,11 +656,13 @@ def main() -> None:
 
     snap = {
         "taken_at": datetime.now().isoformat(timespec="seconds"),
-        "note": "v0.11.0 baseline: install + doctor honesty, the config write "
-                "path, the config's move onto the machine, and the CLI window "
-                "this release added — grouped and hosted paths graded against "
-                "their direct commands byte-for-byte, and the bounded-context "
-                "split that 22 modules moved through",
+        "note": "v0.11.2 baseline: the same eight surfaces, taken after the "
+                "release that made a config value pinnable at all — `mb config "
+                "set` no longer drops a key equal to the default, so the "
+                "config-write section is now graded against a promise the "
+                "engine can actually keep. Two checks are new: B6b-sessions "
+                "(the opt-in session store, off) and a B7-daemon that reports "
+                "a process serving modules older than the files on disk",
         "version": singularity.__version__,
         "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(REPO),
                                  capture_output=True, text=True).stdout.strip(),
