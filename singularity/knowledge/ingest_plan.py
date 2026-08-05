@@ -81,7 +81,7 @@ def _summary_target(cfg: Config, title: str, source_id: str,
     safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in title).strip()
     rel = f"{folder}/{safe or 'source'}.md"
     return {"file": rel, "type": note_type,
-            "exists": (cfg.vault / rel).exists(),
+            "exists": cfg.resolve(rel).exists(),
             "command": f'mb note new {note_type} "{title}" --from-source {source_id}'}
 
 

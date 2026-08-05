@@ -29,7 +29,7 @@ def run(cfg: Config, as_json: bool = False) -> int:
 
     token = _token()
     rel = f"{SELFTEST_DIR}/{token}.md"
-    note = cfg.vault / SELFTEST_DIR / f"{token}.md"
+    note = cfg.resolve(SELFTEST_DIR) / f"{token}.md"
     stages: list[dict[str, Any]] = []
     ok = True
 
@@ -83,7 +83,7 @@ def run(cfg: Config, as_json: bool = False) -> int:
         # cleanup always — even on KeyboardInterrupt during a stage
         try:
             note.unlink(missing_ok=True)
-            d = cfg.vault / SELFTEST_DIR
+            d = cfg.resolve(SELFTEST_DIR)
             if d.exists() and not any(d.iterdir()):
                 d.rmdir()
         except OSError:

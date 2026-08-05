@@ -245,7 +245,7 @@ def stored_relpath(source_id: str, title: str, ingested_at: str) -> str:
 
 
 def stored_abspath(cfg: Config, rel: str) -> Path:
-    return cfg.vault / str(rel).replace("\\", "/")
+    return cfg.resolve(rel)
 
 
 def _yaml_scalar(value: Any) -> str:

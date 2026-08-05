@@ -107,7 +107,7 @@ def _unprocessed_sources(cfg: Config, now: float) -> list[dict[str, Any]]:
         else:
             newest_note = 0.0
             for rel in derived:
-                path = cfg.vault / rel
+                path = cfg.resolve(rel)
                 if path.is_file():
                     newest_note = max(newest_note, path.stat().st_mtime)
             if newest_note and ingested > newest_note:

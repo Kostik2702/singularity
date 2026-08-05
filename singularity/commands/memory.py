@@ -401,7 +401,7 @@ def cmd_note(cfg, args) -> int:
         print(f"[mb] {stem_source!r} leaves nothing usable as a filename",
               file=sys.stderr)
         return 1
-    path = cfg.vault / folder / f"{safe}.md"
+    path = cfg.memory_folder(folder) / f"{safe}.md"
     if path.exists():
         print(f"[mb] already exists: {path}", file=sys.stderr)
         return 1
@@ -424,7 +424,7 @@ def cmd_note(cfg, args) -> int:
         return 1
 
     today = datetime.now().strftime("%Y-%m-%d")
-    template = cfg.vault / "templates" / f"{args.type}.md"
+    template = cfg.templates_dir / f"{args.type}.md"
     if template.exists():
         body = template.read_text(encoding="utf-8")
         body = (body.replace("{{title}}", args.title)
@@ -446,7 +446,7 @@ def cmd_learn(cfg, args) -> int:
     from ..search.chunking import parse_frontmatter
     from ..knowledge import capture
 
-    path = cfg.vault / "learnings" / "active" / f"{args.task}.md"
+    path = cfg.learnings_active_dir / f"{args.task}.md"
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     dest_rel = str(path.relative_to(cfg.vault)).replace("\\", "/")

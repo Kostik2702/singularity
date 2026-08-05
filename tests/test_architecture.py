@@ -148,6 +148,21 @@ def test_domain_never_imports_the_cli():
     _check(offenders, {"imgqa._contract", "scout._contract"}, "import the cli layer")
 
 
+def test_only_config_knows_the_vault_layout():
+    """Where a thing lives inside the vault is `config`'s knowledge alone.
+
+    Thirteen call sites built vault paths by hand, and `cfg.vault / rel`
+    existed in three modules — one of them normalising Windows separators and
+    two not, so a note recorded as `howto\\x.md` resolved to a file that did
+    not exist on macOS. Named accessors (`resolve`, `memory_folder`,
+    `templates_dir`, …) mean a layout change is one edit, not a search.
+    """
+    offenders = sorted(m for m, src in _modules().items()
+                       if m != "config" and ("cfg.vault /" in src or "self.vault /" in src))
+    assert not offenders, (
+        f"these build vault paths by hand instead of asking config: {offenders}")
+
+
 def test_the_debt_is_visible_and_finite():
     """One number to watch across the refactor; it must never grow."""
     total = len(PRINT_EXEMPT) + len(EXIT_EXEMPT) + len(ARGPARSE_EXEMPT)

@@ -433,7 +433,7 @@ def cmd_init(cfg, _args) -> int:
     write_pointer(cfg.vault)
     created = []
     for folder in MEMORY_FOLDERS:
-        p = cfg.vault / folder
+        p = cfg.memory_folder(folder)
         if not p.exists():
             p.mkdir(parents=True, exist_ok=True)
             created.append(folder)

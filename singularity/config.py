@@ -471,6 +471,36 @@ class Config:
         # separate from memory_index so wiki analytics cannot be polluted.
         return self.mb_dir / "sources_index"
 
+    def resolve(self, rel: str | Path) -> Path:
+        """Vault-relative path -> absolute.
+
+        Three modules had their own copy of this line, one of them with the
+        separator fix and two without — a note recorded as `howto\\x.md` on
+        Windows then resolved to a file nobody could find on macOS. The layout
+        of a vault is known HERE and nowhere else.
+        """
+        return self.vault / str(rel).replace("\\", "/")
+
+    def memory_folder(self, name: str) -> Path:
+        """One of MEMORY_FOLDERS, as an absolute path."""
+        return self.vault / name
+
+    @property
+    def templates_dir(self) -> Path:
+        return self.vault / "templates"
+
+    @property
+    def learnings_active_dir(self) -> Path:
+        return self.vault / "learnings" / "active"
+
+    @property
+    def obsidian_dir(self) -> Path:
+        return self.vault / ".obsidian"
+
+    @property
+    def git_dir(self) -> Path:
+        return self.vault / ".git"
+
     @property
     def sources_registry_path(self) -> Path:
         return self.mb_dir / "sources.json"

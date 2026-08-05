@@ -483,7 +483,7 @@ def wiki_loop_block(rep: Report, cfg: Config, fix: bool) -> None:
                 f"{summary.get('chunk_count')} chunk(s), model matches the vault index")
 
     def w3():
-        if not (cfg.vault / ".git").exists():
+        if not cfg.git_dir.exists():
             rep.add("W3-sources-portability", "SKIP", "vault is not a git repo")
             return
         git = shutil.which("git")
@@ -608,19 +608,19 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
         rep.add("A1-config", "PASS", str(cfg.config_path))
 
     def a2():
-        if (cfg.vault / ".obsidian").exists():
+        if cfg.obsidian_dir.exists():
             rep.add("A2-vault-obsidian", "PASS", str(cfg.vault))
         else:
             rep.add("A2-vault-obsidian", "WARN",
                     "no .obsidian/ — vault not opened in Obsidian yet")
 
     def a3():
-        missing = [f for f in MEMORY_FOLDERS if not (cfg.vault / f).exists()]
+        missing = [f for f in MEMORY_FOLDERS if not cfg.memory_folder(f).exists()]
         if not missing:
             rep.add("A3-folders", "PASS", "memory folder tree complete")
         elif fix:
             for f in missing:
-                (cfg.vault / f).mkdir(parents=True, exist_ok=True)
+                cfg.memory_folder(f).mkdir(parents=True, exist_ok=True)
             rep.add("A3-folders", "FIXED", f"created: {', '.join(missing)}")
         else:
             rep.add("A3-folders", "WARN", f"missing: {', '.join(missing)}",
