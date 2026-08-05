@@ -30,7 +30,13 @@ PKG = pathlib.Path(__file__).resolve().parents[1] / "singularity"
 def _modules() -> dict[str, str]:
     out = {}
     for f in sorted(PKG.rglob("*.py")):
-        if "__pycache__" in str(f) or "/skills/" in str(f):
+        # Compared as path PARTS, not as a substring of the rendered path: `"/skills/" in
+        # str(f)` is true on Linux and false on Windows, where the separator is a backslash.
+        # The invariants therefore passed on one platform and failed on the other for the same
+        # tree — the skills' own scripts leaked into a scan of engine modules and were reported
+        # as printing outside the presentation layer, which is exactly what a standalone script
+        # is supposed to do.
+        if "__pycache__" in f.parts or "skills" in f.parts:
             continue
         out[".".join(f.relative_to(PKG).with_suffix("").parts)] = f.read_text(
             encoding="utf-8", errors="replace")
@@ -103,7 +109,7 @@ PRINT_EXEMPT = {
     "doctor",           # a report generator by nature; kept deliberately
     "llm",              # `llm status|list|add|setup` output, notices already moved
     # Presentation for their own package, just not named `*.cli`:
-    "reel.util", "imgqa._contract", "scout._contract",
+    "imgqa._contract", "scout._contract",
 }
 
 # Empty, and it stays that way: `config` raised `ConfigError` instead of
@@ -163,12 +169,15 @@ def test_only_config_knows_the_vault_layout():
         f"these build vault paths by hand instead of asking config: {offenders}")
 
 
-# The website/media factory (reel, scout, providers, imgqa, intake, golden,
-# factory) is ~8 000 lines about a different subject than memory. Whether it
-# ever ships as its own distribution is an owner's product decision — but the
+# The website/media factory (scout, providers, imgqa, intake, golden, factory)
+# is thousands of lines about a different subject than memory. Whether it ever
+# ships as its own distribution is an owner's product decision — but the
 # dependency direction that makes it POSSIBLE is an engineering property, and
 # it holds today: zero imports from the engine into the factory.
-FACTORY = {"reel", "scout", "providers", "imgqa", "intake", "golden", "factory"}
+#
+# `reel` was a member until v0.12.0, when it was removed: the montage pipeline
+# belongs to `video-engine`, and a second one here decided which tool got used.
+FACTORY = {"scout", "providers", "imgqa", "intake", "golden", "factory"}
 
 
 def test_the_memory_engine_never_imports_the_media_factory():
