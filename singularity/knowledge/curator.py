@@ -275,7 +275,19 @@ def analyze(cfg: Config) -> dict[str, Any]:
             if len(suggestions) >= SUGGEST_LIMIT:
                 break
 
+    # Staleness refined by whether anyone ever came back to it. Age alone is a
+    # weak signal in a knowledge vault — a decision from two years ago can be
+    # permanently correct — and "never opened" alone is worse, because a fresh
+    # note has simply not had the chance yet. The INTERSECTION is the small,
+    # actionable set: old AND never once needed. Empty until `mb nightly` has
+    # accumulated some history, which is the honest state, not a bug.
+    from ..telemetry import usage as usage_mod
+    opened = set(usage_mod.reads_by_note(cfg))
+    stale_unused = sorted(rel for rel in stale if rel not in opened)
+
     return {"notes": len(notes), "orphans": sorted(orphans), "stale": sorted(stale),
+            "stale_unused": stale_unused,
+            "usage_tracked_notes": len(opened),
             "link_suggestions": suggestions}
 
 

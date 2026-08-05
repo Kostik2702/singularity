@@ -83,7 +83,17 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="blend BM25 with the vector ranking (RRF) — finds exact "
                         "tokens (identifiers, flags, filenames) a pure embedding "
                         "search can miss; config key: hybrid_search")
+    s.add_argument("--sessions", action="store_true", dest="with_sessions",
+                   help="also search your own past sessions (.mb/sessions.db) — "
+                        "opt-in store, never in the default result set")
     s.add_argument("--json", action="store_true")
+
+    ses = sub.add_parser("sessions", help="the opt-in store of your past sessions")
+    sessub = ses.add_subparsers(dest="sessions_action", required=True)
+    sesst = sessub.add_parser("status", help="rows, size, which clients are covered")
+    sesst.add_argument("--json", action="store_true")
+    sessub.add_parser("index", help="index sessions written since the last run")
+    sessub.add_parser("purge", help="delete the store; transcripts and vault untouched")
 
     d = sub.add_parser("daemon", help="daemon control")
     d.add_argument("action",
@@ -153,6 +163,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
     stt = sub.add_parser("stats", help="memory analytics (notes/chunks/types/coverage)")
     stt.add_argument("--json", action="store_true")
+
+    jrn = sub.add_parser("journey", help="what the vault learned over a window "
+                                         "(notes created + learning entries)")
+    jrn.add_argument("--days", type=int, default=30)
+    jrn.add_argument("--project", help="scope to one project id (else everything)")
+    jrn.add_argument("--limit", type=int, default=60,
+                     help="max entries printed; the counts above always cover the window")
+    jrn.add_argument("--json", action="store_true")
 
     rfl = sub.add_parser("reflect", help="privacy-safe adoption telemetry "
                                          "(offline transcript walk, counts/rates only)")
@@ -303,6 +321,12 @@ def _build_parser() -> argparse.ArgumentParser:
     nn.add_argument("--from-source", dest="from_source", action="append",
                     help="source_id this note is derived from (repeatable) — writes "
                          "`sources:` frontmatter and the registry back-link")
+    ns = nsub.add_parser("split",
+                         help="split a note that outgrew its injection budget into "
+                              "an index + one child note per `##` section")
+    ns.add_argument("path", help="vault-relative path of the note to split")
+    ns.add_argument("--dry-run", action="store_true",
+                    help="show the plan, write nothing")
 
     ll = sub.add_parser("llm", help="local inference server (llama-server + router)")
     llsub = ll.add_subparsers(dest="llm_action", required=True)
@@ -489,6 +513,15 @@ def main(argv: list[str] | None = None) -> int:
         from .knowledge import stats as stats_mod
         data = stats_mod.compute(cfg)
         print(json.dumps(data, ensure_ascii=False) if args.json else render.stats(data))
+        return 0
+    if args.command == "sessions":
+        from .commands.memory import cmd_sessions
+        return cmd_sessions(cfg, args)
+    if args.command == "journey":
+        from .knowledge import journey as journey_mod
+        data = journey_mod.collect(cfg, days=args.days, project=args.project)
+        print(json.dumps(data, ensure_ascii=False) if args.json
+              else render.journey(data, limit=args.limit))
         return 0
     if args.command == "backup":
         return cmd_backup(cfg, args)

@@ -32,6 +32,9 @@ def status(snap: dict[str, Any]) -> str:
     dae = snap["daemon"]
     out.append(f"daemon: {'up' if dae.get('ping') else 'down'} "
                f"(pid {dae.get('pid')}, orphan={dae.get('orphan')})")
+    if dae.get("code_stale"):
+        out.append("  ! serving code older than the files on disk — "
+                   "`mb daemon restart` (reload does not re-read modules)")
     metrics = dae.get("metrics") or {}
     if metrics:
         search_ms = metrics.get("search_ms") or {}
@@ -103,6 +106,11 @@ def curator(payload: dict[str, Any], *, orphan_source_days: int, stale_days: int
     out += [f"   - {rel}" for rel in report["orphans"][:10]]
     out.append(f"Stale active notes (>{stale_days}d): {len(report['stale'])}")
     out += [f"   - {rel}" for rel in report["stale"][:10]]
+    if report.get("usage_tracked_notes"):
+        unused = report.get("stale_unused") or []
+        out.append(f"  of those, never opened in recorded history: {len(unused)} "
+                   f"(usage known for {report['usage_tracked_notes']} notes)")
+        out += [f"   - {rel}" for rel in unused[:10]]
 
     out.append(f"\nLink suggestions (cosine>{suggest_threshold}, no existing link) — "
                f"NOT applied, approve first:")
@@ -193,4 +201,33 @@ def gaps(result: dict[str, Any], heuristic: bool = False) -> str:
                    + "  — raise with --per-signal N")
     if not heuristic:
         out.append("(--heuristic adds frequency-based term guesses, off by default)")
+    return "\n".join(out)
+
+
+def journey(payload: dict[str, Any], *, limit: int = 60) -> str:
+    """One dated list of what the vault gained. Grouped by day because that is
+    how the question is asked — "what came out of last week" — not by folder."""
+    scope = f" project={payload['project']}" if payload.get("project") else ""
+    out = [f"== mb journey — {payload['from']} .. {payload['to']} "
+           f"({payload['days']}d{scope}) =="]
+    kinds = ", ".join(f"{k} {n}" for k, n in payload["by_kind"].items()) or "nothing"
+    out.append(f"  {payload['total']} entries: {kinds}")
+    if payload.get("learning_tasks"):
+        out.append(f"  learning entries span {payload['learning_tasks']} task(s)")
+    if not payload["entries"]:
+        out.append("\n(nothing in this window)")
+        return "\n".join(out)
+
+    shown = payload["entries"][:limit]
+    current = None
+    for e in shown:
+        if e["day"] != current:
+            current = e["day"]
+            out.append(f"\n{current}")
+        label = e.get("label")
+        tail = f" — {label}" if label else ""
+        out.append(f"  [{e['kind']:<9}] {e['title']}{tail}")
+    hidden = len(payload["entries"]) - len(shown)
+    if hidden > 0:
+        out.append(f"\n... {hidden} more (raise --limit, or narrow with --days/--project)")
     return "\n".join(out)

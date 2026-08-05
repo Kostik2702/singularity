@@ -237,6 +237,8 @@ def status(cfg: Config) -> dict[str, Any]:
     pid_alive = bool(pid and proc.is_running(pid))
     # orphan = we have recorded state but the process is gone (crashed daemon)
     orphan = bool(state and not pid_alive)
+    from ..machine.code_version import is_stale
+
     out = {
         "pid": pid,
         "pid_alive": pid_alive,
@@ -244,6 +246,11 @@ def status(cfg: Config) -> dict[str, Any]:
         "instance_id": (state or {}).get("instance_id"),
         "orphan": orphan,
         "ping": pong,
+        # A warm daemon serves the modules it started with; `reload` re-reads
+        # the config and the indexes and never the code. Reporting this is the
+        # difference between "the change did nothing" and "the change was not
+        # running" — two conclusions that look identical from the outside.
+        "code_stale": is_stale((pong or {}).get("code_fingerprint")),
     }
     if pong:
         # Counters describe the SERVING process, so they can only be asked for

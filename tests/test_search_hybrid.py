@@ -151,12 +151,51 @@ def test_hybrid_never_loses_a_semantic_answer_the_vector_half_had(engine):
                 f"for {query!r}")
 
 
-def test_hybrid_is_off_unless_asked(engine, monkeypatch):
-    """Ranking order is a habit; changing it must be opt-in (config or flag)."""
+def test_config_decides_and_the_per_query_flag_overrides_it(engine):
+    """Both directions of the override, independent of what the default is.
+
+    Until 2026-08-05 this test asserted `hybrid_search` was False, which encoded
+    a decision rather than a mechanism: the default flipped once the evaluation
+    set could show the gain (+0.060 recall@1 over 66 pairs) and the assertion
+    went red without anything being wrong. What actually has to hold is that an
+    explicit request beats the machine's setting, in either direction."""
+    engine.cfg.data["hybrid_search"] = False
     assert engine._hybrid_wanted({}) is False
+    assert engine._hybrid_wanted({"hybrid": True}) is True
+
     engine.cfg.data["hybrid_search"] = True
     assert engine._hybrid_wanted({}) is True
     assert engine._hybrid_wanted({"hybrid": False}) is False
+
+
+def test_a_saved_choice_outranks_the_default():
+    """What actually protects an install: a value it wrote down.
+
+    The v0.6.3 note about `vault_guard_enabled` claimed a default change reaches
+    new installs only, "because an install that has ever saved its config
+    carries an explicit value". That was false for a sparse config — `save()`
+    dropped any key equal to the default, so the value could not be pinned at
+    all. Fixed on 2026-08-05; see tests/test_config.py. What remains true, and
+    is asserted here, is the part that never depended on it: a value present in
+    the config wins over `DEFAULT_CONFIG`.
+    """
+    from pathlib import Path
+
+    from singularity.config import DEFAULT_CONFIG, Config
+
+    assert DEFAULT_CONFIG["hybrid_search"] is True
+    assert Config(vault=Path("/nowhere"), data={"hybrid_search": False}
+                  ).get("hybrid_search") is False
+
+
+def test_reload_drops_the_lexical_cache(engine):
+    """The cache is keyed on chunk COUNT, so a note edited without gaining or
+    losing a section would otherwise keep matching text that no longer exists —
+    silent, because the vector half goes on answering correctly."""
+    _search(engine, "IndexLockedError", hybrid=True)
+    assert "memory" in engine.__dict__.get("_bm25", {})
+    engine.reload()
+    assert engine.__dict__.get("_bm25") == {}, "stale lexical index survived a reload"
 
 
 def test_the_lexical_index_is_built_once_and_reused(engine):
@@ -172,3 +211,25 @@ def test_the_index_rebuilds_when_the_corpus_changes(engine):
     engine.mem_embs = engine.mem_embs[:2]
     _search(engine, "IndexLockedError", hybrid=True)
     assert engine._bm25["memory"][1].n == 2, "stale BM25 index served after a reload"
+
+
+def test_the_code_corpus_fuses_even_when_the_machine_turned_hybrid_off(engine):
+    """Different corpora, different trade-offs — and the code one has no cost.
+
+    On memory, fusion is a trade: cross-lingual queries lose recall, so the
+    machine setting gets a vote. On code, measured over the same 16 pairs in one
+    session, hybrid gained +0.125 recall@1 and +0.083 MRR while NOT ONE class
+    moved down. Half of what a code corpus is for is answering
+    `atomic_write_json`, which is precisely the query an embedding is worst at.
+    """
+    engine.cfg.data["hybrid_search"] = False
+    assert engine._hybrid_wanted({}, "memory") is False
+    assert engine._hybrid_wanted({}, "code") is True
+
+
+def test_an_explicit_no_still_beats_the_code_override(engine):
+    """The override replaces the DEFAULT, not the caller. `--hybrid false` has
+    to mean what it says, or the flag is decoration."""
+    engine.cfg.data["hybrid_search"] = True
+    assert engine._hybrid_wanted({"hybrid": False}, "code") is False
+    assert engine._hybrid_wanted({"hybrid": False}, "memory") is False

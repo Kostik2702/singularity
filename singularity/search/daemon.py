@@ -35,6 +35,13 @@ class SearchDaemon:
         self._running = True
         self.metrics = Counters()
         self.instance_id = uuid.uuid4().hex
+        # Which code this process is actually serving. `reload` re-reads the
+        # config and the indexes but never the modules, so without this a
+        # long-lived daemon answers with logic that no longer exists on disk —
+        # silently, which is how an evaluation once measured a fusion branch
+        # that had not been loaded (see machine/code_version.py).
+        from ..machine.code_version import code_fingerprint
+        self.code_fingerprint = code_fingerprint()
 
     # ------------------------------------------------------------------
     def reload_config(self) -> dict[str, Any]:
@@ -94,7 +101,9 @@ class SearchDaemon:
     def _handle(self, req: dict[str, Any]) -> dict[str, Any]:
         cmd = req.get("cmd", "search")
         if cmd == "ping":
-            return {"status": "ok", "pid": os.getpid(), "instance_id": self.instance_id}
+            return {"status": "ok", "pid": os.getpid(),
+                    "instance_id": self.instance_id,
+                    "code_fingerprint": self.code_fingerprint}
         if cmd == "metrics":
             # Shape of the service, never its content (AUD-18).
             return {"metrics": self.metrics.snapshot()}

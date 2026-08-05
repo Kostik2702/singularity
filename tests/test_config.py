@@ -250,21 +250,62 @@ def test_migration_is_quiet_about_a_daemon_that_is_not_running(tmp_path, monkeyp
     assert not any("daemon restart" in r.getMessage() for r in caplog.records)
 
 
-def test_saved_config_records_decisions_not_defaults(tmp_path, monkeypatch):
-    """The file must stay small as the schema grows — forty materialised
-    defaults is what made the old one unreadable."""
+def test_saved_config_stays_small_because_defaults_are_never_injected(tmp_path, monkeypatch):
+    """The file must stay short as the schema grows — forty materialised
+    defaults is what made the old one unreadable.
+
+    That is achieved by never putting defaults INTO `data`, not by filtering
+    them out on the way to disk: what a caller never set is simply not there.
+    """
     from singularity import config as cfgmod
     monkeypatch.setenv("MB_HOME", str(tmp_path))
-    cfg = cfgmod.Config(vault=tmp_path,
-                        data={"model": "custom", "min_score": cfgmod.DEFAULT_CONFIG["min_score"]})
+    cfg = cfgmod.Config(vault=tmp_path, data={"model": "custom"})
     cfg.save()
 
     written = json.loads(cfgmod.CONFIG_FILE.read_text(encoding="utf-8"))
-
-    assert written["model"] == "custom"           # a decision is kept
-    assert "min_score" not in written             # a default is not
-    assert written["vault_path"] == str(tmp_path)
     assert set(written) == {"schema_version", "vault_path", "model"}
+    assert len(written) < len(cfgmod.DEFAULT_CONFIG)
+
+
+def test_a_value_equal_to_the_default_is_still_recorded(tmp_path, monkeypatch):
+    """Choosing what the default happens to be today is a choice, and it has to
+    survive the default changing tomorrow.
+
+    Dropping such keys is what made `hybrid_search` impossible to pin: while the
+    default was `false`, `mb config set hybrid_search false` deleted the key, so
+    when the default flipped every install flipped with it and none could have
+    opted out. The same hole voided the v0.6.3 promise about
+    `vault_guard_enabled` — see `decisions/SEARCH D1 - гибрид по умолчанию.md`.
+    """
+    from singularity import config as cfgmod
+    monkeypatch.setenv("MB_HOME", str(tmp_path))
+    pinned = cfgmod.DEFAULT_CONFIG["min_score"]
+    cfg = cfgmod.Config(vault=tmp_path, data={"min_score": pinned})
+    cfg.save()
+
+    written = json.loads(cfgmod.CONFIG_FILE.read_text(encoding="utf-8"))
+    assert written["min_score"] == pinned, "an explicitly held value was dropped"
+
+
+def test_a_pin_survives_the_default_moving_underneath_it(tmp_path, monkeypatch):
+    """The property the whole change exists for, proven by moving the default.
+
+    A test that only checks the key is written would pass even if `get()` still
+    preferred the new default. This one reloads and reads the effective value
+    after `DEFAULT_CONFIG` has changed under the saved file.
+    """
+    from singularity import config as cfgmod
+    monkeypatch.setenv("MB_HOME", str(tmp_path))
+    old_default = cfgmod.DEFAULT_CONFIG["hybrid_search"]
+    cfg = cfgmod.Config(vault=tmp_path, data={"hybrid_search": old_default})
+    cfg.save()
+
+    monkeypatch.setitem(cfgmod.DEFAULT_CONFIG, "hybrid_search", not old_default)
+    reloaded = cfgmod.Config(
+        vault=tmp_path,
+        data=json.loads(cfgmod.CONFIG_FILE.read_text(encoding="utf-8")))
+    assert reloaded.get("hybrid_search") is old_default, (
+        "the machine followed the new default instead of the value it pinned")
 
 
 def test_write_pointer_keeps_the_other_settings(tmp_path, monkeypatch):

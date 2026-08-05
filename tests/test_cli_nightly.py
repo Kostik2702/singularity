@@ -31,7 +31,7 @@ def test_nightly_json_shape(wired, capsys):
     # "skipped" on a vault with no sources, so the status assertion allows it.
     assert set(data["steps"]) == {"index", "ingest_index", "code_index", "digest",
                                   "curator", "gaps", "contradictions", "sources",
-                                  "config", "markers", "ingest_log", "trend"}
+                                  "config", "usage", "sessions", "markers", "ingest_log", "trend"}
     assert all(s.get("status") in ("ok", "skipped") for s in data["steps"].values())
     assert data["steps"]["ingest_index"]["status"] == "skipped"
     # C05: no code_repos_dir on this fixture vault -> skipped with a reason,

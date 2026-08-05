@@ -762,11 +762,43 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
             rep.add("B4-index", "FAIL", "memory index missing/empty",
                     fix="mb index rebuild  (or mb doctor --fix --heavy)")
 
+    def b6b_sessions():
+        """The opt-in session store: size and reachability.
+
+        Off is a PASS, not a warning — the whole point is that it is a choice.
+        What needs saying out loud is size: transcripts run to tens of MB, and a
+        store that grows silently is discovered last."""
+        from .telemetry import sessions
+        snap = sessions.stats(cfg)
+        if not snap["enabled"]:
+            rep.add("B6b-sessions", "PASS", "off (session_search_enabled=false)")
+            return
+        limit = float(cfg.get("session_search_max_mb") or 200)
+        detail = (f"{snap['messages']} messages, {snap['size_mb']} MB, "
+                  f"clients: {', '.join(snap['covered_clients'])}")
+        if snap["size_mb"] > limit:
+            rep.add("B6b-sessions", "WARN", f"{detail} — over {limit} MB",
+                    fix="mb sessions purge  (or lower session_search_retention_days)")
+        else:
+            rep.add("B6b-sessions", "PASS", detail)
+
     def b7():
+        from .machine.code_version import is_stale
         from .search import client
         pong = client.ping(cfg)
         if pong:
-            rep.add("B7-daemon", "PASS", f"ping ok, pid={pong.get('pid')}")
+            # A daemon that answers is not the same as a daemon that answers
+            # with the code on disk: `reload` re-reads config and indexes, never
+            # modules. Left unreported, an upgraded engine keeps serving the old
+            # logic and every measurement taken against it is quietly about the
+            # previous build (machine/code_version.py records the case).
+            if is_stale(pong.get("code_fingerprint")):
+                rep.add("B7-daemon", "WARN",
+                        f"running (pid={pong.get('pid')}) but serving code older "
+                        f"than the files on disk",
+                        fix="mb daemon restart  (reload does not re-read modules)")
+            else:
+                rep.add("B7-daemon", "PASS", f"ping ok, pid={pong.get('pid')}")
         elif fix:
             ok = client.start_daemon(cfg)
             rep.add("B7-daemon", "FIXED" if ok else "FAIL",
@@ -805,6 +837,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
     _guard(rep, "B2", b2)
     _guard(rep, "B3", b3)
     _guard(rep, "B4", b4)
+    _guard(rep, "B6b", b6b_sessions)
     _guard(rep, "B7", b7)
     _guard(rep, "B8", b8)
     _guard(rep, "B9", b9)

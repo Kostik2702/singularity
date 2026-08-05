@@ -67,6 +67,20 @@ def cmd_search(cfg, args) -> int:
     if "error" in resp:
         print(f"[mb] error: {resp['error']}", file=sys.stderr)
         return 1
+
+    # Sessions are a SEPARATE store queried separately — the same escalation
+    # shape as --with-sources and --with-code, and the reason `mb search` with
+    # no flags still returns exactly what it always returned.
+    session_hits = []
+    if getattr(args, "with_sessions", False):
+        from ..telemetry import sessions as sessions_mod
+        if not sessions_mod.enabled(cfg):
+            print("[mb] --sessions: the session store is off "
+                  "(`mb config set session_search_enabled true`)", file=sys.stderr)
+        else:
+            session_hits = sessions_mod.search(cfg, args.query, limit=args.top,
+                                               project=None)
+            resp["sessions"] = session_hits
     for key in ("sources_warning", "code_warning"):
         if resp.get(key) and not args.json:
             print(f"[mb] warning: {resp[key]}", file=sys.stderr)
@@ -78,6 +92,9 @@ def cmd_search(cfg, args) -> int:
             print("(no results)")
         for idx, line in enumerate(lines, 1):
             print(f"{idx}. {line}")
+        for hit in session_hits:
+            body = " ".join(hit["body"].split())[:150]
+            print(f"[session {hit['day']} {hit['role']}@{hit['project']}] {body}")
         cold = " COLD" if resp.get("cold") else ""
         print(f"-- {resp.get('time_ms', '?')}ms{cold}")
     return 0
@@ -363,9 +380,73 @@ def cmd_ingest(cfg, args) -> int:
         return 1
     return 2
 
+def _cmd_note_split(cfg, args) -> int:
+    """`mb note split` — an over-budget note becomes an index plus children.
+
+    Writes only after the whole plan is known to be safe: content preserved,
+    no destination occupied. A partial split is the worst outcome of the three,
+    because it leaves the vault in a state neither the author nor the tool can
+    describe.
+    """
+    from ..knowledge import notesplit
+
+    src = cfg.resolve(args.path)
+    if not src.is_file():
+        print(f"[mb] no such note: {args.path}", file=sys.stderr)
+        return 1
+    try:
+        raw = src.read_text(encoding="utf-8-sig")
+    except OSError as exc:
+        print(f"[mb] cannot read {args.path}: {exc}", file=sys.stderr)
+        return 1
+
+    rel = str(src.relative_to(cfg.vault)).replace("\\", "/")
+    budget = cfg.get("brain_max_lines", 40)
+    plan = notesplit.plan(raw, rel, datetime.now().strftime("%Y-%m-%d"), budget)
+    if not plan.ok:
+        print(f"[mb] {plan.error}", file=sys.stderr)
+        return 1
+
+    if not notesplit.content_is_preserved(raw, plan):
+        print("[mb] refusing to split: the plan would not preserve every line. "
+              "This is a bug — please report it with the note that triggered it.",
+              file=sys.stderr)
+        return 2
+
+    occupied = [c.rel_path for c in plan.children if cfg.resolve(c.rel_path).exists()]
+    if occupied:
+        print(f"[mb] {len(occupied)} destination(s) already exist; nothing written:",
+              file=sys.stderr)
+        for rel_path in occupied:
+            print(f"   {rel_path}", file=sys.stderr)
+        return 1
+
+    print(f"{rel}: {plan.source_body_lines} lines -> "
+          f"index of {plan.parent_body_lines} + {len(plan.children)} children "
+          f"(brain_max_lines={budget})")
+    for c in plan.children:
+        tail = f" — {c.summary}" if c.summary else ""
+        print(f"   {c.rel_path}{tail}")
+    if args.dry_run:
+        print("[mb] dry run — nothing written")
+        return 0
+
+    for c in plan.children:
+        cfg.resolve(c.rel_path).write_text(c.text, encoding="utf-8")
+    src.write_text(plan.parent_text, encoding="utf-8")
+    if plan.parent_body_lines > budget:
+        print(f"[mb] the index is still {plan.parent_body_lines} lines against a "
+              f"{budget}-line budget — shorten the text above the section list",
+              file=sys.stderr)
+    return 0
+
+
 def cmd_note(cfg, args) -> int:
     from ..knowledge import capture
     from ..knowledge import sources as sources_mod
+
+    if getattr(args, "note_action", "new") == "split":
+        return _cmd_note_split(cfg, args)
 
     # Every managed knowledge root the vault guard watches needs a way to
     # create a file in it, or the guard is telling people to use a command that
@@ -399,7 +480,7 @@ def cmd_note(cfg, args) -> int:
     # prefix in the title, where it does not belong. `--filename` separates the
     # two without changing what happens when it is absent.
     stem_source = args.filename if getattr(args, "filename", None) else args.title
-    safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in stem_source).strip()
+    safe = capture.safe_stem(stem_source)
     if not safe:
         print(f"[mb] {stem_source!r} leaves nothing usable as a filename",
               file=sys.stderr)
@@ -447,7 +528,23 @@ def cmd_note(cfg, args) -> int:
 
 def cmd_learn(cfg, args) -> int:
     from ..search.chunking import parse_frontmatter
-    from ..knowledge import capture
+    from ..knowledge import capture, redact
+
+    # Before dedup, before the file is even opened: the vault is a git
+    # repository, so a key that reaches disk is in history on every machine the
+    # vault has ever touched. Redaction also has to happen BEFORE dedup, or the
+    # same insight captured twice — once raw, once masked — would read as two
+    # different sections and both would be kept.
+    original_insight = args.insight
+    scrubbed = redact.redact(args.insight)
+    args.insight = scrubbed.text
+    # The notice is derived from what ACTUALLY changed, not from what the
+    # sanitizer reported. If the assignment above is ever dropped, this goes
+    # quiet instead of announcing a redaction that did not happen — a false
+    # "redacted" is worse than silence, because it is read as proof.
+    if args.insight != original_insight:
+        for line in redact.format_notice(scrubbed.findings):
+            print(f"[mb] {line}", file=sys.stderr)
 
     path = cfg.learnings_active_dir / f"{args.task}.md"
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -545,3 +642,44 @@ def cmd_inbox(cfg, args) -> int:
     print(json.dumps(result, ensure_ascii=False) if args.json
           else f"filed: {result['from']} -> {result['file']}")
     return 0
+
+
+def cmd_sessions(cfg, args) -> int:
+    """`mb sessions` — the opt-in store of your own past conversations.
+
+    Every subcommand states the enabled/disabled truth rather than acting as if
+    an empty result meant "nothing was said": a store that is off and a store
+    that is empty look identical from the outside, and confusing them is how
+    someone concludes the feature is broken.
+    """
+    from ..telemetry import sessions
+
+    if args.sessions_action == "status":
+        snap = sessions.stats(cfg)
+        if args.json:
+            print(json.dumps(snap, ensure_ascii=False))
+            return 0
+        state = "on" if snap["enabled"] else "off (mb config set session_search_enabled true)"
+        print(f"session search: {state}")
+        print(f"store: {snap['messages']} messages, {snap['size_mb']} MB")
+        print(f"covered clients: {', '.join(snap['covered_clients'])}"
+              " — other clients are counted by `mb reflect` but not indexed here")
+        return 0
+
+    if args.sessions_action == "index":
+        if not sessions.enabled(cfg):
+            print("[mb] session search is off — `mb config set session_search_enabled true`",
+                  file=sys.stderr)
+            return 2
+        result = sessions.store(cfg)
+        print(f"indexed {result['indexed']} messages from {result['sessions']} session(s); "
+              f"{result['redacted']} secret-shaped value(s) masked, "
+              f"{result['pruned']} pruned past retention")
+        return 0
+
+    if args.sessions_action == "purge":
+        print(sessions.purge(cfg)["status"])
+        return 0
+
+    print(f"[mb] unknown sessions action: {args.sessions_action}", file=sys.stderr)
+    return 1

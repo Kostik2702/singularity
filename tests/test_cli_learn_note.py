@@ -253,3 +253,40 @@ def test_note_new_filename_of_separators_is_allowed_but_announced(wired, cfg, ca
     assert cli.main(["note", "new", "rule", "X", "--filename", "///"]) == 0
     assert (cfg.vault / "rules" / "___.md").exists()
     assert "[[___]]" in capsys.readouterr().err
+
+
+# --- mb learn: capture-time redaction is WIRED, not merely available -------
+#
+# tests/test_redact.py proves the sanitizer works. Nothing there proves it is
+# called: delete the `redact.redact(...)` line from `commands/memory.py` and all
+# 26 of those tests still pass while every future capture writes secrets to a
+# git repository. These three tests are the ones that go red.
+
+def test_learn_masks_a_secret_before_it_reaches_disk(wired, cfg, capsys):
+    secret = "sk-abcdefghijklmnopqrstuvwxyz0123456789"
+    rc = cli.main(["learn", f"the deploy failed until we set OPENAI_API_KEY={secret}",
+                   "--task", "SEC"])
+    assert rc == 0
+    written = (cfg.vault / "learnings" / "active" / "SEC.md").read_text(encoding="utf-8")
+    assert secret not in written, "the raw key reached the vault"
+    assert "sk-XXXXXXXX" in written, "the type marker should survive the mask"
+    assert "the deploy failed until we set" in written, "the insight itself must be kept"
+
+
+def test_learn_reports_what_it_redacted_without_printing_it(wired, cfg, capsys):
+    secret = "ghp_16CharsAndThenSomeMore0123456789abcdef"
+    cli.main(["learn", f"token was {secret}", "--task", "SEC"])
+    err = capsys.readouterr().err
+    assert "redacted" in err and "github-token" in err
+    assert "16CharsAndThenSomeMore" not in err, "the notice leaked the value it removed"
+
+
+def test_learn_leaves_ordinary_prose_alone(wired, cfg, capsys):
+    """The other half of the gate: a sanitizer that rewrote everything would
+    pass the two tests above and quietly corrupt every note."""
+    text = "the password was rotated and api_key lives in config/keys.json"
+    cli.main(["learn", text, "--task", "SEC"])
+    written = (cfg.vault / "learnings" / "active" / "SEC.md").read_text(encoding="utf-8")
+    assert text in written
+    assert "XXXXXXXX" not in written
+    assert "redacted" not in capsys.readouterr().err

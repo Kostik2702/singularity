@@ -131,6 +131,10 @@ class ReflectSession:
     code_edits: int = 0
     skill_invocations: int = 0
     parse_warnings: list[str] = field(default_factory=list)
+    # Which vault notes were opened, vault-relative. Deliberately NOT part of
+    # the reflect snapshot: that file is counts-and-rates by contract. This
+    # lives in memory for `telemetry/usage.py`, which writes its own file.
+    note_reads: dict[str, int] = field(default_factory=dict)
 
     @property
     def vault_touch(self) -> bool:
@@ -251,6 +255,22 @@ def _grok_session_paths(root: Path, since: float) -> tuple[list[Path], int]:
 # per-client parsers
 # ---------------------------------------------------------------------------
 
+def _note_opened(activity: ReflectSession, abs_path, vault) -> None:
+    """Record that a vault NOTE was opened, vault-relative.
+
+    Only `.md`: a read of `.mb/config.json` is machinery, not knowledge, and
+    counting it would make the engine's own files look like the most useful
+    notes in the vault.
+    """
+    try:
+        rel = str(abs_path.relative_to(vault)).replace("\\", "/")
+    except ValueError:
+        return
+    if not rel.endswith(".md"):
+        return
+    activity.note_reads[rel] = activity.note_reads.get(rel, 0) + 1
+
+
 def _parse_claude_session(path: Path, vault: Path, known_skills: set[str],
                           registry: dict[str, Any] | None = None) -> ReflectSession:
     activity = ReflectSession(client="claude", session_id=path.stem)
@@ -322,6 +342,7 @@ def _parse_claude_session(path: Path, vault: Path, known_skills: set[str],
                             abs_path = _resolve_arg_path(fp, cwd_path, path.parent)
                             if abs_path is not None and sa.is_vault_write_path(abs_path, vault):
                                 activity.vault_reads += 1
+                                _note_opened(activity, abs_path, vault)
                         elif name in _SHELL_TOOLS:
                             command = tool_input.get("command")
                             if isinstance(command, str) and is_search_command(command):
@@ -522,10 +543,21 @@ def _rate(sessions: list[ReflectSession], pred) -> dict[str, Any]:
             "rate": round(count / total, 3) if total else None}
 
 
-def reflect(cfg: Config, days: int) -> dict[str, Any]:
-    """Compute the adoption snapshot. Never writes anything -- pure read +
-    aggregate. See run() for the persisted-snapshot entry point."""
-    since = time.time() - days * 86400
+def walk_sessions(cfg: Config, since: float) -> list[ReflectSession]:
+    """Parsed sessions from every supported client, newer than `since`.
+
+    Extracted from `reflect()` so `telemetry/usage.py` can consume the same
+    walk instead of growing a second one: two independent readers of the same
+    transcript formats would drift the first time a client changed its shape,
+    and the one that drifted would keep reporting numbers.
+
+    A transcript that cannot be parsed is skipped, never fatal — one bad file
+    must not sink the walk. Callers that need the malformed/warning counts use
+    `_walk()` directly, as `reflect()` does."""
+    return _walk(cfg, since)[0]
+
+
+def _walk(cfg: Config, since: float) -> tuple[list[ReflectSession], int, int]:
     vault = cfg.vault
     registry = cfg.get("projects", {}) or {}
     known_skills = set(_load_install("skill_manifest").SKILL_MANIFEST)
@@ -562,6 +594,14 @@ def reflect(cfg: Config, days: int) -> dict[str, Any]:
             continue
         sessions.append(s)
         parse_warnings += len(s.parse_warnings)
+    return sessions, malformed, parse_warnings
+
+
+def reflect(cfg: Config, days: int) -> dict[str, Any]:
+    """Compute the adoption snapshot. Never writes anything -- pure read +
+    aggregate. See run() for the persisted-snapshot entry point."""
+    since = time.time() - days * 86400
+    sessions, malformed, parse_warnings = _walk(cfg, since)
 
     by_client: dict[str, int] = {}
     by_project: dict[str, int] = {}
