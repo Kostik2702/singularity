@@ -21,6 +21,7 @@ from typing import Any
 
 from ..config import Config
 from ..log import log
+from .metrics import Counters
 from ..platform import proc
 from .engine import SearchEngine
 
@@ -32,6 +33,7 @@ class SearchDaemon:
         self.cfg = cfg
         self.engine: SearchEngine | None = None
         self._running = True
+        self.metrics = Counters()
         self.instance_id = uuid.uuid4().hex
 
     # ------------------------------------------------------------------
@@ -93,7 +95,11 @@ class SearchDaemon:
         cmd = req.get("cmd", "search")
         if cmd == "ping":
             return {"status": "ok", "pid": os.getpid(), "instance_id": self.instance_id}
+        if cmd == "metrics":
+            # Shape of the service, never its content (AUD-18).
+            return {"metrics": self.metrics.snapshot()}
         if cmd == "reload":
+            self.metrics.incr("reloads")
             info = self.reload_config()
             counts = self.engine.reload()
             return {"status": "reloaded", **counts, **info}
@@ -109,7 +115,10 @@ class SearchDaemon:
         if cmd == "search":
             t0 = time.perf_counter()
             out = self.engine.search(req)
-            out["time_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+            elapsed = round((time.perf_counter() - t0) * 1000, 1)
+            out["time_ms"] = elapsed
+            self.metrics.incr("searches")
+            self.metrics.observe("search", elapsed)
             return out
         if cmd == "index":
             from . import indexer
@@ -171,6 +180,7 @@ class SearchDaemon:
             try:
                 resp = self._handle(req)
             except Exception as exc:  # noqa: BLE001 — daemon must not die on one request
+                self.metrics.incr("errors")
                 resp = {"error": str(exc)}
             conn.sendall(json.dumps(resp, ensure_ascii=False).encode("utf-8") + b"\n")
         except TimeoutError:

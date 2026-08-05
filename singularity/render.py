@@ -32,6 +32,14 @@ def status(snap: dict[str, Any]) -> str:
     dae = snap["daemon"]
     out.append(f"daemon: {'up' if dae.get('ping') else 'down'} "
                f"(pid {dae.get('pid')}, orphan={dae.get('orphan')})")
+    metrics = dae.get("metrics") or {}
+    if metrics:
+        search_ms = metrics.get("search_ms") or {}
+        parts = [f"{metrics.get('searches', 0)} searches", f"{metrics.get('errors', 0)} errors",
+                 f"{metrics.get('reloads', 0)} reloads"]
+        if search_ms:
+            parts.append(f"p50 {search_ms['p50']}ms / p95 {search_ms['p95']}ms")
+        out.append(f"  since start ({metrics.get('uptime_s', 0)}s): " + ", ".join(parts))
     w = snap["watcher"]
     out.append(f"watcher: {'alive' if w.get('alive') else 'not running'}"
                + (f" (heartbeat {w.get('heartbeat_age_s')}s ago)"

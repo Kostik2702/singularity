@@ -237,7 +237,7 @@ def status(cfg: Config) -> dict[str, Any]:
     pid_alive = bool(pid and proc.is_running(pid))
     # orphan = we have recorded state but the process is gone (crashed daemon)
     orphan = bool(state and not pid_alive)
-    return {
+    out = {
         "pid": pid,
         "pid_alive": pid_alive,
         "port": _read_port(cfg),
@@ -245,6 +245,14 @@ def status(cfg: Config) -> dict[str, Any]:
         "orphan": orphan,
         "ping": pong,
     }
+    if pong:
+        # Counters describe the SERVING process, so they can only be asked for
+        # while it answers; a dead daemon simply has none (AUD-18).
+        port = _read_port(cfg)
+        answer = (_request(port, {"cmd": "metrics"}, timeout=2.0) or {}) if port else {}
+        if isinstance(answer.get("metrics"), dict):
+            out["metrics"] = answer["metrics"]
+    return out
 
 
 # --------------------------------------------------------------------------
