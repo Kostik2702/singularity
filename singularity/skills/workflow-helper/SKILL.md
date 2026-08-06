@@ -1,15 +1,16 @@
 ---
 name: workflow-helper
-description: Navigate the solo development workflow (Singularity port of Genevra 12-phase flow). Use when the user says fw, wh, next, "следующая фаза", "what phase", "follow workflow", "начни задачу по воркфлоу", or when starting any non-trivial development task. Router + lazy-load - loads ONLY the current phase file from the vault.
+description: Navigate the solo development workflow (Singularity port of Genevra 12-phase flow). Use when the user says fw, wh, next, "следующая фаза", "what phase", "follow workflow", "начни задачу по воркфлоу", or when starting any non-trivial development task. Router + lazy-load - loads ONLY the current phase file, from the ENGINE.
 ---
 
 # workflow-helper — навигация по соло-воркфлоу
 
-Воркфлоу живёт в vault: `{{VAULT}}/workflow/` (router + файлы фаз). Дисциплина lazy-load (правило C9): грузи ТОЛЬКО текущую фазу, не всё сразу.
+Воркфлоу живёт в ДВИЖКЕ: `{{WORKFLOW}}/` (router + файлы фаз). Дисциплина lazy-load (правило C9): грузи ТОЛЬКО текущую фазу, не всё сразу.
 
 ## Протокол
 
-- [ ] 1. Прочитай router: `{{VAULT}}/workflow/_router.md` (карта фаз + сквозные правила). Если уже читал в этой сессии — не перечитывай (cache).
+- [ ] 0. Класс задачи и цепь: `mb route "<задача>"` — печатает класс, цепь фаз и абсолютный путь к первой. Хук `UserPromptSubmit` объявляет то же самое сам, один раз на класс за сессию; эта команда нужна для перепроверки и когда класс спорный.
+- [ ] 1. Прочитай router: `{{WORKFLOW}}/_router.md` (карта фаз + сквозные правила). Если уже читал в этой сессии — не перечитывай (cache).
 - [ ] 2. Определи текущую фазу:
     - новая задача → фаза SB (Step-Back), всегда;
     - иначе — по активному learnings-доку (`learnings/active/<TASK>.md`): последняя запись фазы = текущая позиция; спроси пользователя только если по доку не ясно.

@@ -33,7 +33,7 @@ import skill_manifest  # noqa: E402  (T15: single source of client->skills)
 from singularity.config import resolve_vault  # noqa: E402  (stdlib-only, pre-deps safe)
 from singularity.machine.hooks_state import (  # noqa: E402  (T02/VSO-01 shared fragments)
     CAPTURE_HOOKS_FRAGMENT,
-    VAULT_WRITE_POLICY_FRAGMENT,
+    MEMORY_WRITES_FRAGMENT,
 )
 
 SKILLS_SRC = ENGINE / "singularity" / "skills"
@@ -78,7 +78,7 @@ Dedup with `mb search` before writing. Maintenance: `mb doctor --fix`.
 
 {CAPTURE_HOOKS_FRAGMENT}
 
-{VAULT_WRITE_POLICY_FRAGMENT}
+{MEMORY_WRITES_FRAGMENT}
 
 ## Shortcuts (user may type these)
 - **um** — update memory (capture insight/decision into the vault; dedup first)
@@ -113,19 +113,24 @@ def main() -> int:
 
     dest_root = Path.home() / ".codex" / "skills"
     dest_root.mkdir(parents=True, exist_ok=True)
-    counts = {"ok": 0, "linked": 0, "copied": 0, "backed-up": 0, "missing": 0}
+    counts = {"ok": 0, "linked": 0, "copied": 0, "backed-up": 0, "rendered": 0,
+              "missing": 0}
     for name in CODEX_SKILLS:
         src = SKILLS_SRC / name
         if not src.is_dir():
             print(f"[codex] MISSING in repo: {name}", file=sys.stderr)
             counts["missing"] += 1
             continue
-        status = register_skills._link_dir(src, dest_root / name)
+        # `vault` was computed above and dropped here, so every codex skill was
+        # symlinked and shipped its `{{VAULT}}` token unresolved. Latent until
+        # `_link_dir` stopped gating the whole render on a configured vault.
+        status = register_skills._link_dir(src, dest_root / name, vault)
         counts[status] += 1
         if status == "backed-up":
             print(f"[codex] {name}: differing local copy preserved as backup, "
                   f"now linked to repo source", file=sys.stderr)
     print(f"[codex] {len(CODEX_SKILLS)} skills: {counts['linked']} linked, "
+          f"{counts['rendered']} rendered, "
           f"{counts['ok']} already ok, {counts['copied']} copied, "
           f"{counts['backed-up']} backed up, {counts['missing']} missing")
     return 1 if counts["missing"] else 0

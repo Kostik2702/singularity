@@ -1,0 +1,98 @@
+[
+  {
+    "label": "think-first: carve-out inverted (same words, opposite meaning)",
+    "file": "singularity/machine/hooks_state.py",
+    "old": "The boundary is WHEN, not who.",
+    "new": "This DOES loosen it: stop and ask whenever unsure.",
+    "cmd": [".venv/bin/python", "-m", "pytest", "-q", "tests/test_authoring_discipline.py"],
+    "expect": "RED"
+  },
+  {
+    "label": "surgical: §7 loses the traceability demand",
+    "file": "singularity/agents/AGENT_SHARED_PREAMBLE.md",
+    "old": "прослеживается до запроса",
+    "new": "относится к делу",
+    "cmd": [".venv/bin/python", "-m", "pytest", "-q", "tests/test_authoring_discipline.py"],
+    "expect": "RED"
+  },
+  {
+    "label": "simplicity: §7 loses the senior-engineer question",
+    "file": "singularity/agents/AGENT_SHARED_PREAMBLE.md",
+    "old": "переусложнено",
+    "new": "нормально",
+    "cmd": [".venv/bin/python", "-m", "pytest", "-q", "tests/test_authoring_discipline.py"],
+    "expect": "RED"
+  },
+  {
+    "label": "surgical: a writing agent loses its own scope gate",
+    "file": "singularity/agents/web-implementer.md",
+    "old": "No scope expansion beyond the recipe/verdict",
+    "new": "Scope is flexible",
+    "cmd": [".venv/bin/python", "-m", "pytest", "-q", "tests/test_authoring_discipline.py"],
+    "expect": "RED"
+  },
+  {
+    "label": "K1 returns: a direct write offered as the route for a new note",
+    "file": "singularity/machine/hooks_state.py",
+    "old": "New file in a managed root —",
+    "new": "Write **directly** to the vault path —",
+    "cmd": [".venv/bin/python", "-m", "pytest", "-q", "tests/test_vault_write_policy.py"],
+    "expect": "RED"
+  },
+  {
+    "label": "vault: the staging-mirror prohibition drops out",
+    "file": "singularity/machine/hooks_state.py",
+    "old": "a second working copy is a second source of truth",
+    "new": "copies are fine",
+    "cmd": [".venv/bin/python", "-m", "pytest", "-q", "tests/test_vault_write_policy.py"],
+    "expect": "RED"
+  },
+  {
+    "label": "budget: the aggregate fragment ceiling is breached",
+    "file": "singularity/machine/hooks_state.py",
+    "old": "mb hooks status [--json]",
+    "new": "mb hooks status [--json]\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "cmd": [".venv/bin/python", "-m", "pytest", "-q", "tests/test_rules_delivery.py"],
+    "expect": "RED"
+  },
+  {
+    "label": "routing: a marker fires inside another word again",
+    "file": "singularity/machine/routing.py",
+    "old": "_WORD_START = r\"(?<![0-9a-zа-я_])\"",
+    "new": "_WORD_START = r\"\"",
+    "cmd": [".venv/bin/python", "-m", "pytest", "-q", "tests/test_routing.py"],
+    "expect": "RED"
+  },
+  {
+    "label": "routing: system notifications are classified again",
+    "file": "singularity/machine/routing.py",
+    "old": "    if any(sig in text for sig in SYSTEM_PROMPT_SIGNALS):\n        return None",
+    "new": "    if False:\n        return None",
+    "cmd": [".venv/bin/python", "-m", "pytest", "-q", "tests/test_routing.py"],
+    "expect": "RED"
+  },
+  {
+    "label": "workflow: a phase links a sibling as a vault wikilink again",
+    "file": "singularity/workflow/phase-6-commit.md",
+    "old": "# Phase 6",
+    "new": "# Phase 6\n<!-- [[phase-7-docs-selflearn]] -->",
+    "cmd": [".venv/bin/python", "-m", "pytest", "-q", "tests/test_routing.py"],
+    "expect": "RED"
+  },
+  {
+    "label": "CONTROL: a harmless rewording must not go red",
+    "file": "singularity/machine/hooks_state.py",
+    "old": "Searching is a command too:",
+    "new": "Search is a command too:",
+    "cmd": [".venv/bin/python", "-m", "pytest", "-q", "tests/test_vault_write_policy.py"],
+    "expect": "GREEN"
+  },
+  {
+    "label": "CONTROL: renaming a §7 word the rule does not hinge on",
+    "file": "singularity/agents/AGENT_SHARED_PREAMBLE.md",
+    "old": "Заметил мёртвый код рядом",
+    "new": "Увидел мёртвый код рядом",
+    "cmd": [".venv/bin/python", "-m", "pytest", "-q", "tests/test_authoring_discipline.py"],
+    "expect": "GREEN"
+  }
+]

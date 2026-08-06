@@ -44,7 +44,11 @@ GROUPS: dict[str, tuple[str, ...]] = {
     # which is what everything else in this group is. It is deliberately NOT on
     # the ten-command window: a store that is off by default should not occupy
     # a slot on the first screen.
-    "service": ("daemon", "index", "model", "watch", "backup", "selftest", "sessions"),
+    # `route` is machine-side too: its main caller is the UserPromptSubmit
+    # hook, and a person types it only to re-check a class the hook chose.
+    # It stays off the ten-command window for that reason, not by oversight.
+    "service": ("daemon", "index", "model", "watch", "backup", "selftest",
+                "sessions", "route"),
     "setup": ("config", "project", "hooks", "init", "uninstall"),
 }
 

@@ -1105,6 +1105,42 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
             rep.add("D5-vault-guard", "WARN", f"vault-guard hook not registered, {state}",
                     fix="python install/register_hooks.py")
 
+    def d9():
+        # The task router (UserPromptSubmit). Every other Claude-side hook the
+        # engine registers is observable here — D1 capture, D3 module-context,
+        # D5 vault-guard — and without an entry a full PASS run says nothing
+        # about whether the thing that announces the chain of work is installed.
+        settings = Path.home() / ".claude" / "settings.json"
+        if not settings.exists():
+            rep.add("D9-route-hook", "SKIP", "no ~/.claude/settings.json")
+            return
+        try:
+            data = json.loads(settings.read_text(encoding="utf-8-sig"))
+        except json.JSONDecodeError:
+            rep.add("D9-route-hook", "WARN", "settings.json unparseable")
+            return
+        ups = data.get("hooks", {}).get("UserPromptSubmit", []) if isinstance(data, dict) else []
+        installed = False
+        if isinstance(ups, list):
+            for entry in ups:
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("_mb"):
+                    installed = True
+                    break
+                # pre-marker tolerance, same contract as D1/D3
+                for h in entry.get("hooks", []):
+                    if isinstance(h, dict) and "user_prompt_submit.py" in str(h.get("command", "")):
+                        installed = True
+                        break
+        if installed:
+            rep.add("D9-route-hook", "PASS",
+                    "UserPromptSubmit hook registered (announces the chain of work)")
+        else:
+            rep.add("D9-route-hook", "WARN", "task-router hook not registered — "
+                    "no chain is announced when a task arrives",
+                    fix="python install/register_hooks.py")
+
     def d6():
         # incident 2026-07-14 "mb POSIX shim silently dies in Git Bash": the
         # extensionless bin/mb shadows mb.cmd in Git Bash, so it must actually
@@ -1194,6 +1230,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
     _guard(rep, "D3", d3)
     _guard(rep, "D5", d5)
     _guard(rep, "D6", d6)
+    _guard(rep, "D9", d9)
 
     # ---- Block E: Gemini CLI integration (GCLI-05) --------------------
     _guard(rep, "E-gemini", lambda: gemini_block(rep, fix))
