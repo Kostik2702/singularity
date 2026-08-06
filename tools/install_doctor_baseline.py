@@ -656,17 +656,7 @@ def main() -> None:
 
     snap = {
         "taken_at": datetime.now().isoformat(timespec="seconds"),
-        "note": "v0.13.0 baseline: the same eight surfaces, taken after the "
-                "release that moved the agents' rule set OUT of the vault and "
-                "into the engine. The question this release makes askable of a "
-                "baseline is a dependency one: the machine's behaviour must no "
-                "longer vary with which vault is configured, so the sections "
-                "that resolve paths and read config matter more than usual. "
-                "The layout section carries the structural half — the deployed "
-                "preamble is a real engine file that ships with the agents, "
-                "not a note fetched from `{{VAULT}}/rules/` at read time. "
-                "First snapshot on macOS after four on Windows, which is also "
-                "why the launcher/locator rows read differently",
+        "note": "v0.15.0 baseline: the same eight surfaces, taken on the release merge commit. What this release makes askable of a baseline is a DELIVERY question rather than a feature one: a fourth Claude hook now runs on every prompt (UserPromptSubmit), the ten-phase workflow moved out of the vault into the engine, and the SessionStart payload changed shape — two fragments merged into one, two added. So the rows that matter most are the hook registration, the package layout (the phase files are engine files now, like the preamble since v0.13.0) and the config/path resolution, because the machine must still behave identically with no vault at all. Sixth macOS snapshot after four on Windows",
         "version": singularity.__version__,
         "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(REPO),
                                  capture_output=True, text=True).stdout.strip(),
