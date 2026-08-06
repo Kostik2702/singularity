@@ -26,6 +26,14 @@ _ALL_CLIENTS = ["claude", "codex", "gemini", "grok"]
 # enforced at install time; there is no per-client tool-availability probe.
 # reason: required (non-None) whenever `clients` is not all three -- a skill
 # missing from a client must always have a documented, human-readable why.
+# Skills that used to be here and are not any more
+#
+# `capcut-editor` and `video-visual-review` moved to `E:\Project\studio-orchestration`
+# on 2026-08-06. Both orchestrate MONTAGE, which is not the memory engine's business: shipping
+# them from here meant reinstalling memory in order to get a montage skill, and — once the
+# orchestration repository also carried `video-visual-review` — meant two copies of one skill with
+# nothing diffing them. The engine keeps the skills that ARE its own mechanism (`mb-*`, curator,
+# workflow) and nothing else.
 SKILL_MANIFEST: dict[str, dict[str, Any]] = {
     "mb-search":             {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
     "mb-memory":              {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
@@ -138,13 +146,6 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "the local Playwright provisioning conventions вЂ” GT-tested "
                   "only against Claude Code (WSF-05)",
     },
-    "video-visual-review": {
-        "clients": ["claude"], "tools": ["Bash"],
-        "reason": "interpretation step requires visually reading contact sheets "
-                  "via multimodal Read to judge crop vs letterbox and to surface "
-                  "content-structure questions to the owner (NIKA-03 lesson); "
-                  "GT-tested only against Claude Code (WSF-04)",
-    },
     "design-reference-scout": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "thin SKILL.md over the design-scout CLI; the query-expansion "
@@ -152,13 +153,6 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "gate rely on multimodal Read of the rendered board and vault "
                   "consultation (mb search/mb learn) вЂ” authored and GT-tested "
                   "only against Claude Code (WSF-09)",
-    },
-    "capcut-editor": {
-        "clients": ["claude"], "tools": ["MCP:capcut", "Bash"],
-        "reason": "requires a CapCut MCP capable of creating or safely cloning editable "
-                  "drafts, plus Claude-side inspection of provider tool schemas and an "
-                  "owner visual gate in the CapCut desktop app; no compatible MCP/draft "
-                  "round-trip has been validated on Codex, Gemini or Grok",
     },
     "image-asset-qa": {
         "clients": ["claude"], "tools": ["Bash"],
