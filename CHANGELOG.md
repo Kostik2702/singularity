@@ -10,6 +10,42 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.14.0 — the montage skills leave the memory engine
+
+Singularity shipped two skills that orchestrate MONTAGE: `capcut-editor` and
+`video-visual-review`. Neither is the memory engine's mechanism. Shipping them
+from here meant a machine had to install the memory system in order to get a
+montage skill — and, once a dedicated orchestration repository was created and
+also carried `video-visual-review`, it meant two copies of one skill with
+nothing diffing them.
+
+Both moved to `E:\Project\studio-orchestration`, together with the contract
+tests for `video-report.py`. That script lives *inside* the skill directory,
+which is how the move was caught: removing the directory took the script with
+it and turned fifteen tests red at once, all reporting `JSONDecodeError` —
+a symptom that reads like broken tool output rather than a missing file. The
+manifest guards passed throughout, because they compare names and what broke
+were paths.
+
+**What the engine keeps**: the skills that are its own mechanism — `mb-*`, the
+curator, the workflow router, and the thin wrappers over its own CLIs
+(`imgqa`, `design-scout`, `pattern-scout`, `component-intake`).
+
+**What this means for a user of those two skills**: they are no longer
+installed by `mb`. They install from the orchestration repository, which also
+carries the agents and the routing rules that were previously in no repository
+at all.
+
+A cross-repository dependency was exposed and is now named rather than
+implied: `video-visual-review` builds its contact sheets with `imgqa`, this
+engine's CLI. The skill left; the dependency did not, in the same way it uses
+ffmpeg without owning it.
+
+Removal, so a minor bump — the same reading as v0.12.0, where `reel` was
+removed.
+
+---
+
 # v0.12.0 — reel removed: the spare path that decided the tool
 
 `singularity/reel` was the Python predecessor of `video-engine` — a whole
