@@ -22,6 +22,8 @@ from singularity.machine.hooks_state import (
     CAPTURE_HOOKS_FRAGMENT,
     MEMORY_WRITES_FRAGMENT,
     RULE_POINT_FRAGMENT,
+    THINK_FIRST_FRAGMENT,
+    VERIFICATION_FRAGMENT,
 )
 
 ENGINE = Path(__file__).resolve().parents[1]
@@ -151,11 +153,35 @@ def test_rule_point_fragment_demands_a_point_a_source_and_a_test():
         "do not 'fix' a deliberate decision you have not looked for"
 
 
-@pytest.mark.parametrize("fragment", [MEMORY_WRITES_FRAGMENT, RULE_POINT_FRAGMENT])
-def test_new_fragments_stay_within_the_session_budget(fragment):
+#: EVERY fragment, not the two this test was born with. Review found the
+#: assertion had been hand-copied into three test files over disjoint subsets,
+#: and that VERIFICATION_FRAGMENT was covered by none of them — the pattern
+#: leaks by construction, so the list lives in one place.
+ALL_FRAGMENTS = {
+    "CAPTURE_HOOKS": CAPTURE_HOOKS_FRAGMENT,
+    "MEMORY_WRITES": MEMORY_WRITES_FRAGMENT,
+    "RULE_POINT": RULE_POINT_FRAGMENT,
+    "VERIFICATION": VERIFICATION_FRAGMENT,
+    "THINK_FIRST": THINK_FIRST_FRAGMENT,
+}
+
+
+@pytest.mark.parametrize("name", sorted(ALL_FRAGMENTS))
+def test_every_fragment_stays_within_the_session_budget(name):
     """Every fragment is paid for in every session; CAPTURE_HOOKS_FRAGMENT is
     the established size unit for one."""
-    assert len(fragment) < 2 * len(CAPTURE_HOOKS_FRAGMENT)
+    assert len(ALL_FRAGMENTS[name]) < 2 * len(CAPTURE_HOOKS_FRAGMENT)
+
+
+def test_the_fragments_have_an_aggregate_ceiling_too():
+    """Six fragments each under the per-item limit would pass at 7368 chars,
+    while the cost that matters is the sum — paid every session. The ceiling is
+    the number `docs/rules-delivery.md` documents, so the doc cannot drift from
+    reality without this failing."""
+    total = sum(len(f) for f in ALL_FRAGMENTS.values())
+    assert total <= 4150, (
+        f"fragments total {total} chars; raise the ceiling here AND the figure "
+        f"in docs/rules-delivery.md in the same change, or cut text")
 
 
 def test_both_fragments_reach_every_session(tmp_path, monkeypatch):

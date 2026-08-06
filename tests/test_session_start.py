@@ -366,7 +366,9 @@ def test_missing_digest_cache_is_silent(monkeypatch, vault):
     _resolve_to(monkeypatch, vault)
     ctx = session_start.build_context()
     assert "digest backlog" not in ctx
-    assert "nag" not in ctx.lower()
+    # "nag" is three letters and matched "ma-nag-ed" the moment a fragment
+    # mentioned a managed root. The needle is the nag's own wording.
+    assert "curator suggests" not in ctx.lower()
 
 
 def test_malformed_digest_cache_does_not_crash(monkeypatch, vault):

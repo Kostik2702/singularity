@@ -754,3 +754,55 @@ def test_d5_reports_mode_when_enabled(cfg, monkeypatch):
     d5 = _check(cfg, "D5-vault-guard")
     assert d5["status"] == "PASS"
     assert "mode=deny" in d5["detail"]
+
+
+# --- D9-route-hook (task-router UserPromptSubmit) ------------------------------
+#
+# Every other Claude-side hook the engine registers is observable through
+# doctor — D1 for capture, D3 for module-context, D5 for the vault guard. The
+# router shipped without one, so a 38-PASS run said nothing about whether the
+# thing that announces the chain of work is installed at all.
+
+def test_d9_skips_when_no_claude_settings(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D9-route-hook")["status"] == "SKIP"
+
+
+def test_d9_warns_when_the_router_is_not_registered(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    settings = cfg.vault / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"hooks": {"Stop": []}}), encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    d9 = _check(cfg, "D9-route-hook")
+    assert d9["status"] == "WARN"
+    assert d9["fix"], "a WARN without a runnable recipe is a dead end"
+
+
+def test_d9_pass_when_marked_entry_present(cfg, monkeypatch):
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    settings = cfg.vault / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"hooks": {"UserPromptSubmit": [
+        {"_mb": True, "hooks": [{"type": "command", "command": "x"}]}]}}), encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D9-route-hook")["status"] == "PASS"
+
+
+def test_d9_pass_via_command_path_match_without_marker(cfg, monkeypatch):
+    """Same tolerance D1/D3 carry: a machine configured before the `_mb` marker
+    must still be recognised ([[Rule - hook ownership detection must tolerate
+    pre-marker installs]])."""
+    _stub_externals(monkeypatch)
+    _home(monkeypatch, cfg)
+    settings = cfg.vault / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(json.dumps({"hooks": {"UserPromptSubmit": [
+        {"hooks": [{"type": "command", "command": "py user_prompt_submit.py"}]}]}}),
+        encoding="utf-8")
+    doctor.run(cfg, as_json=True)
+    assert _check(cfg, "D9-route-hook")["status"] == "PASS"

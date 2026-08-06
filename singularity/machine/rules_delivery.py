@@ -40,6 +40,9 @@ DELIVERIES: list[tuple[str, str, Path, str]] = [
     ("записи в vault идут командами mb", "SessionStart",
      ENGINE / "singularity" / "machine" / "hooks_state.py",
      "mb note new <type>"),
+    ("рабочие AI-артефакты хранятся в vault", "SessionStart",
+     ENGINE / "singularity" / "machine" / "hooks_state.py",
+     "second source of truth"),
     ("правило звучит в точке принятия решения", "SessionStart",
      ENGINE / "singularity" / "machine" / "hooks_state.py",
      "RULE_POINT_FRAGMENT"),
@@ -68,6 +71,14 @@ DELIVERIES: list[tuple[str, str, Path, str]] = [
      "recoverable / previous state stands"),
     ("сканер исходника не пишет то, что ищет", "preamble §7", PREAMBLE,
      "игла не должна встречаться"),
+
+    ("каждая изменённая строка прослеживается до запроса", "preamble §7", PREAMBLE,
+     "прослеживается до запроса"),
+    ("минимум кода, ничего спекулятивного", "preamble §7", PREAMBLE,
+     "переусложнено"),
+    ("развилку назвать до работы, а не после", "SessionStart",
+     ENGINE / "singularity" / "machine" / "hooks_state.py",
+     "The boundary is WHEN, not who"),
 
     # --- skills: the rule stands where that class of work is done ------------
     ("Playwright networkidle не наступает на страницах с video", "skill",

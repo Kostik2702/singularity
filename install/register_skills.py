@@ -122,7 +122,13 @@ def _link_dir(src: Path, dst: Path, vault: Path | None = None) -> str:
     — deliberately, because the alternative is shipping a path that is wrong on
     every machine but one. The copy carries an ownership marker so uninstall
     can still recognise it as ours."""
-    if vault is not None and vault_token.tree_has_token(src):
+    # NOT `vault is not None and ...`: `{{WORKFLOW}}` resolves from the engine
+    # and needs no vault, so gating the whole render on one meant that a machine
+    # with no vault — the exact state this addressing exists to survive — got a
+    # symlink with the literal token inside. `{{VAULT}}` falls back to the honest
+    # placeholder, same as register_agents._render.
+    if vault_token.tree_has_token(src):
+        vault = vault if vault is not None else Path(vault_token.TOKEN)
         if vault_token.is_rendered_copy(dst, src):
             # already ours: re-render anyway, the vault path may have changed
             vault_token.render_tree(src, dst, vault)

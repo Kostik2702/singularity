@@ -44,7 +44,7 @@ from . import render
 from .knowledge import inbox
 from .commands.memory import cmd_search, cmd_ingest, cmd_note, cmd_learn, cmd_inbox
 from .commands.knowledge import cmd_digest, cmd_curator, cmd_nightly
-from .commands.machine import cmd_daemon, cmd_index, cmd_model, cmd_backup, cmd_config, cmd_project, cmd_hooks, cmd_reflect, cmd_llm, cmd_uninstall, cmd_init
+from .commands.machine import cmd_daemon, cmd_index, cmd_model, cmd_backup, cmd_config, cmd_project, cmd_hooks, cmd_reflect, cmd_llm, cmd_uninstall, cmd_init, cmd_route
 from .config import Config, ConfigError, load_config
 
 
@@ -117,6 +117,11 @@ def _build_parser() -> argparse.ArgumentParser:
     mdli.add_argument("--json", action="store_true")
 
     sub.add_parser("watch", help="on-save incremental index watcher")
+
+    rt = sub.add_parser("route", help="which chain of work a task belongs to")
+    rt.add_argument("task", nargs="?", help="the task text, as a user would phrase it")
+    rt.add_argument("--phase", help="print the path to one phase file (5, SB, 1.5)")
+    rt.add_argument("--json", action="store_true")
 
     doc = sub.add_parser("doctor", help="installation verification")
     doc.add_argument("--fix", action="store_true")
@@ -478,6 +483,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     args = _build_parser().parse_args(plan.argv)
+    # Before the config load on purpose: the chain of work lives in the engine,
+    # so `mb route` must answer on a machine whose vault is missing, empty or
+    # swapped — the same independence the agent preamble gained in v0.13.0.
+    if args.command == "route":
+        return cmd_route(args)
     cfg = _load_config_or_report(args.vault)
     if cfg is None:
         return 2

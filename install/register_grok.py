@@ -62,7 +62,7 @@ import skill_manifest  # noqa: E402  (T15/GRK-01: single source of client->skill
 from singularity.config import resolve_vault  # noqa: E402  (stdlib-only, pre-deps safe)
 from singularity.machine.hooks_state import (  # noqa: E402  (T02/VSO-01 shared fragments)
     CAPTURE_HOOKS_FRAGMENT,
-    VAULT_WRITE_POLICY_FRAGMENT,
+    MEMORY_WRITES_FRAGMENT,
 )
 
 SKILLS_SRC = ENGINE / "singularity" / "skills"
@@ -158,7 +158,7 @@ Dedup with `mb search` before writing. Maintenance: `mb doctor --fix`.
 
 {CAPTURE_HOOKS_FRAGMENT}
 
-{VAULT_WRITE_POLICY_FRAGMENT}
+{MEMORY_WRITES_FRAGMENT}
 
 ## Shortcuts (user may type these)
 - **um** — update memory (capture insight/decision into the vault; dedup first)

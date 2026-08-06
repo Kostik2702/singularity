@@ -10,6 +10,70 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.15.0 — a chain is announced when a task arrives, and a gate must prove it can fail
+
+Two changes from one session, and the second is the lesson of the first.
+
+## The task router
+
+The engine had three moments when it could push text at the assistant —
+`SessionStart`, `PreToolUse`, `Stop` — and none of them is *a task arrived*.
+SessionStart fires before the task exists, so it can classify nothing;
+PreToolUse fires after the action is chosen, so it can only comment. The
+twelve-phase workflow therefore lived as a **skill**, which is a pull surface:
+across a full working day of real tasks it was never pulled once.
+
+A rule is a constraint and can wait in context. A **chain is a procedure**: it
+has to be entered, and entering happens once, in the first second of a task.
+Prose in a session preamble cannot enter anything.
+
+So `UserPromptSubmit` — an event this engine had never used — now calls
+`mb route`, which classifies the request against a deterministic marker table
+and announces the chain of phases, once per (session, class). Classification
+names the words that chose it: a chain that cannot say why it was picked is a
+guess the reader has no way to correct.
+
+The phase files moved with it, out of `{{VAULT}}/workflow/` and into
+`singularity/workflow/`. A phase is a checkbox gate that must execute, so it is
+mechanism; leaving it in the vault made a ten-phase procedure a property of
+which vault happened to be configured — the same dependency v0.13.0 removed for
+the agent preamble and left standing here.
+
+## The authoring principles, and the gate underneath them
+
+Four behavioural guidelines were audited against the engine. Two were already
+carried, one stood at exactly one point, one was absent and conflicted with an
+existing rule:
+
+- **Surgical changes** lived only in the two agent files that write code. Lifted
+  to preamble §7, where every code-writing agent reads it.
+- **Simplicity first** had only the config-before-code ladder. Added to §7.
+- **Think before coding** collided with `No mid-flight stops`. Resolved by the
+  axis that is actually true — *when*, not *who*: `No mid-flight stops` governs
+  work already in flight, in §2 and in three council skills the main thread
+  executes; the new fragment governs the moment before launch.
+- **Goal-driven execution** was already stated. Its gap was cost: proving a new
+  check can fail meant hand-rolling save/mutate/run/restore every time, so under
+  pressure it was skipped — eight verifiers shipped without it and an
+  independent review then planted 51 defects, of which 12 survived.
+
+`tools/plant.py` makes that cycle one JSON line, with three verdicts rather than
+two: a broken command is `ERROR`, never a catch. And `tests/plants.json` puts
+the plants **in the suite**, because a tool that must be remembered is a tool
+that will not be. A gate that has gone vacuous now fails an ordinary `pytest`
+run while its own test file is still green — which is exactly the state that was
+previously indistinguishable from a working gate.
+
+## Also
+
+`MEMORY_WRITES_FRAGMENT` and `VAULT_WRITE_POLICY_FRAGMENT` were one rule in two
+texts, arriving in the same payload and disagreeing on the case that matters: a
+new note. Merged. The SessionStart payload fell from 5362 to 4956 characters
+even after two fragments were added, and the documented budget figure — stale by
+18% and unnoticed — was replaced by an executable ceiling.
+
+Feature work, so a minor bump.
+
 # v0.14.0 — the montage skills leave the memory engine
 
 Singularity shipped two skills that orchestrate MONTAGE: `capcut-editor` and

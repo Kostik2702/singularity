@@ -42,22 +42,37 @@ After enable/disable, always run `mb hooks status` and report the effective stat
 A vague "выключи все хуки" / "disable all hooks" does NOT mean capture hooks by default —
 confirm scope with the user before running a command."""
 
-# VSO-01: the same one-source treatment for WHERE knowledge is written.
-# Incident 2026-07-13 ([[Error - Vault staging duplicates]]): a client edited 14
-# vault documents as copies under the user's profile root and copied them back,
-# because the sandbox exposed that directory as writable and a mirror looked
-# like the path of least resistance. No unique data was lost — every staging
-# file turned out byte-identical to, or contained in, its canonical version —
-# but for a while the machine had two working sets of the same notes, and only
-# a hash audit could say which was authoritative. A rule saying "artifacts live
-# in the vault" already existed; it was not present at the moment the write
-# path got chosen, which is the only moment it could have helped.
-# One fragment for one class of failure: a check that is green because it never
-# measured anything. Both halves cost this project real time — a `pytest` run
-# that never started (the exit code came from `tail`) and two invariants that
-# passed while checking almost nothing. Neither was caught by the rule existing
-# in `rules/`; a rule only acts where the action is chosen, which for both of
-# these is the moment a command or a test gets written.
+# One fragment, not two. `MEMORY_WRITES_FRAGMENT` and `VAULT_WRITE_POLICY_FRAGMENT`
+# both told the reader how something reaches the vault, arrived in the same payload,
+# and disagreed on the one case that matters: the first said a new note is
+# `mb note new`, the second opened with "write **directly** to the vault path".
+# `mb-memory/SKILL.md` and the guard side with the first. Two texts at one decision
+# point is exactly what [[Rule - правило звучит в точке принятия решения]] forbids,
+# and the counter-text wins by default — so the fix is one text.
+#
+# Incident behind the staging half (2026-07-13, [[Error - Vault staging duplicates]]):
+# 14 vault documents were edited as copies under the user's profile root and copied
+# back, because the sandbox exposed that directory as writable. No unique data was
+# lost, but for a while the machine had two working sets and only a hash audit could
+# say which was authoritative.
+MEMORY_WRITES_FRAGMENT = """## The vault: what it is, and how anything gets into it
+- "память" / "memory" / "запомни" / `um` in the user's words = THE VAULT, not the
+  harness-local store. "Закоммить память" = commit and push it.
+- The vault holds KNOWLEDGE. Rules, checklists and skill instructions are mechanism
+  and ship with the engine — never make the machine's behaviour depend on which
+  vault is configured.
+- Resolve the destination BEFORE the first write. New file in a managed root —
+  `mb note new <type> "<title>"`, always: it brings the template, `source:` and
+  routing, and the guard flags a hand-made one. Insight — `mb learn`. Config —
+  `mb config set`. Editing an EXISTING note with Edit/Write is the normal path.
+- Never build an editable mirror, staging copy or scratch draft of a vault document
+  elsewhere and copy it back — a second working copy is a second source of truth
+  until someone diffs them. External folders are INPUT, or an export that was asked
+  for. Blocked from writing? STOP and say so, then ask for a vault-native path —
+  do not route around it.
+- Searching is a command too: `mb search` over grep, `mb curator gaps` over walking
+  links. Reading vault files, and copying INTO the vault, are always fine."""
+
 VERIFICATION_FRAGMENT = """## Green is not the same as verified
 - Take the exit code from the COMMAND, never from a pipe:
   `cmd > run.log 2>&1; echo "EXIT=$?"` (or `${PIPESTATUS[0]}`). `cmd | tail; echo $?`
@@ -70,25 +85,6 @@ VERIFICATION_FRAGMENT = """## Green is not the same as verified
   after a refactor compare the `skipped` count with the previous run, because a
   rise means checks switched themselves off.
 """
-
-# The main thread has no preamble. Subagents get eight sections of shared rules
-# at startup; the assistant driving the session gets this hook and nothing else,
-# which is why every rule that lands here has already cost something in the main
-# thread specifically. Two of them lived in the harness-local memory store —
-# exactly the store that is read at the harness's discretion, so "the rule
-# exists" and "the rule was in front of the model" kept coming apart.
-MEMORY_WRITES_FRAGMENT = """## Memory means the vault, and it is written through `mb`
-- "память" / "memory" / "запомни" / `um` in the user's words = THE VAULT. Not the
-  harness-local memory store, not a scratch file. "Закоммить память" = commit and
-  push the vault repo.
-- New note — `mb note new <type> "<title>"` (template, `source:`, routing come
-  with it). Insight — `mb learn "<...>" --task <ID>`. Config — `mb config set`.
-  Editing an EXISTING note with Edit/Write is fine.
-- Before hand-searching the vault, ask whether a command already does it:
-  `mb search` over grep, `mb curator gaps` over walking links.
-- The vault holds KNOWLEDGE. Operating rules, checklists and skill instructions
-  are mechanism and belong with the engine — never make the machine's behaviour
-  depend on which vault is configured."""
 
 # The failure this catches is the one the whole rule set kept repeating: a rule
 # is written down, and then absent at the moment it could have acted. Six
@@ -107,17 +103,26 @@ RULE_POINT_FRAGMENT = """## A rule only acts where the action is chosen
   mature code an oddity is more often deliberate than accidental. Disagree with
   what you find? Say so to the user; never silently overrule it."""
 
-VAULT_WRITE_POLICY_FRAGMENT = """## Vault is the write destination, not a copy of it
-Before the FIRST write of anything destined for the vault, resolve the destination:
-- Write **directly** to the vault path (or through `mb note new` / `mb learn`).
-- **Never** create an editable mirror, staging copy or scratch draft of a vault
-  document elsewhere and copy it back — not for an editor, a sandbox, or a patch
-  tool. A second working copy is a second source of truth until someone diffs them.
-- External folders are for INPUT (reading source material) and for an export the
-  user explicitly asked for. Neither authorizes an editable duplicate.
-- If a direct vault write is genuinely blocked (permission, sandbox), STOP and say
-  so, then ask for access or a vault-native path. Do not route around it.
-Reading vault files, and copying INTO the vault, are always fine."""
+# The main thread has no preamble, and §2's `No mid-flight stops` is written for
+# subagents — correctly, because a subagent has no channel to the user and asking
+# would strand it. The main thread does have one, so the same uncertainty has a
+# different right answer there. Putting the two in one place would leave two texts
+# arguing at one point; they are split by surface instead.
+#
+# The cost of not having it, measured: a benchmark pack whose own task budgets sum
+# to 276 minutes was handed over with a 23-minute deadline. The ratio was legible
+# on the first read and went unsaid until asked about afterwards.
+THINK_FIRST_FRAGMENT = """## Name the fork before working, not after
+- A request that admits several readings leading to materially different work:
+  say them and pick one out loud BEFORE starting. Silently choosing is the
+  failure — not choosing wrong. Mark it where the work will be read
+  (`ASSUMED <x> from <source>`).
+- Say plainly when scope, budget or deadline do not fit the goal, and when a
+  simpler approach solves the stated problem. Noticing later costs the attempt.
+- The boundary is WHEN, not who. `No mid-flight stops` — preamble §2 and the
+  council skills — governs work already in flight: once agents are spawned, take
+  a marked default and never pause a round. This governs the moment before that,
+  while there is still someone to ask."""
 
 
 def _read_json_tolerant(path: Path) -> tuple[dict[str, Any], str | None]:

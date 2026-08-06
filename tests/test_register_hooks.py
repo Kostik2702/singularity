@@ -47,11 +47,11 @@ def test_fresh_install_creates_dot_claude_dir_when_absent(home):
     assert (home / ".claude" / "settings.json").exists()
 
 
-def test_fresh_install_registers_all_three_events(home):
+def test_fresh_install_registers_all_four_events(home):
     register_hooks.main()
     data = json.loads(_settings(home).read_text(encoding="utf-8"))
     hooks = data["hooks"]
-    assert set(hooks) == {"SessionStart", "Stop", "PreToolUse"}
+    assert set(hooks) == {"SessionStart", "UserPromptSubmit", "Stop", "PreToolUse"}
 
 
 def test_pretooluse_entries_have_matcher_and_ownership_marker(home):

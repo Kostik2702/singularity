@@ -32,6 +32,18 @@ HOOKS = {
             }],
         }
     ],
+    # The only event that fires when a TASK arrives. SessionStart is too early
+    # to classify anything and PreToolUse is too late to route — see
+    # singularity/machine/routing.py for why a chain needs its own moment.
+    "UserPromptSubmit": [
+        {
+            "_mb": True,
+            "hooks": [{
+                "type": "command",
+                "command": f'"{PYTHON}" "{ENGINE / "singularity" / "hooks" / "user_prompt_submit.py"}"',
+            }],
+        }
+    ],
     "Stop": [
         {
             "_mb": True,
@@ -68,6 +80,7 @@ HOOKS = {
 # T08 vault_guard), each its own matcher-group entry.
 _OWNED_SCRIPTS = {
     "SessionStart": {"session_start.py"},
+    "UserPromptSubmit": {"user_prompt_submit.py"},
     "Stop": {"stop_capture.py"},
     "PreToolUse": {"module_context.py", "vault_guard.py"},
 }

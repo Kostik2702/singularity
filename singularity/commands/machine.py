@@ -442,3 +442,58 @@ def cmd_init(cfg, _args) -> int:
     if created:
         print(f"created folders: {', '.join(created)}")
     return 0
+
+
+def cmd_route(args) -> int:
+    """Which chain of work a task belongs to, and why that one.
+
+    Takes no `cfg`, unlike every other command here: routing is answered from
+    the engine alone, so this must work on a machine whose vault is missing or
+    broken. Same reason the `UserPromptSubmit` hook announces a chain even when
+    `resolve_vault` returns None."""
+    from ..machine import routing
+
+    # Answered before the config load, so `--vault` cannot apply. Silence there
+    # makes a typo'd path look accepted, where every other command exits 2.
+    if getattr(args, "vault", None):
+        print(f"[mb route] --vault {args.vault} проигнорирован: цепь живёт в "
+              f"движке и от волта не зависит", file=sys.stderr)
+
+    if getattr(args, "phase", None):
+        path = routing.resolve_phase(args.phase)
+        if path is None:
+            print(f"нет такой фазы: {args.phase}. Есть: "
+                  + ", ".join(sorted(p.stem[len("phase-"):]
+                                     for p in routing.WORKFLOW.glob("phase-*.md"))),
+                  file=sys.stderr)
+            return 2
+        print(json.dumps({"phase": args.phase, "path": str(path)}, ensure_ascii=False)
+              if args.json else path)
+        return 0
+
+    if not args.task:
+        print("нужен текст задачи либо --phase <id>", file=sys.stderr)
+        return 2
+
+    verdict = routing.classify(args.task)
+    if verdict is None:
+        if args.json:
+            print(json.dumps({"class": None, "reason": "no strong marker "
+                              f"or shorter than {routing.MIN_PROMPT_CHARS} chars"},
+                             ensure_ascii=False))
+        else:
+            print("класс не определён — роутер молчит "
+                  f"(нет сильного маркера либо короче {routing.MIN_PROMPT_CHARS} символов)")
+        return 0
+
+    key, markers = verdict
+    chain = routing.CHAINS[key]
+    if args.json:
+        entry = routing.phase_file(chain["entry"]) if chain["entry"] else None
+        print(json.dumps({"class": key, "title": chain["title"],
+                          "markers": markers, "steps": chain["steps"],
+                          "entry": str(entry) if entry else None,
+                          "note": chain["note"]}, ensure_ascii=False))
+    else:
+        print(routing.render(key, markers))
+    return 0

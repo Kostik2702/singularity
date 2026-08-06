@@ -35,6 +35,13 @@ TOKEN = "{{VAULT}}"
 # absence must cost only recall; the operating rules ship with the engine.
 AGENTS_TOKEN = "{{AGENTS}}"
 
+# `{{WORKFLOW}}` — the phase files of the development flow, for the same reason
+# and with the same history. They lived in `{{VAULT}}/workflow/`, which made a
+# ten-phase procedure a property of which vault was configured: swap it and the
+# whole flow disappears with nothing printed. A phase file is a checkbox gate
+# that must execute, so it is mechanism and ships with the engine.
+WORKFLOW_TOKEN = "{{WORKFLOW}}"
+
 MARKER = ".singularity-owned.json"
 
 # Rendered only for text we author. A binary or an unknown extension is copied
@@ -48,12 +55,28 @@ def default_agents_dir() -> Path:
     return Path.home() / ".claude" / "agents"
 
 
-def render_text(text: str, vault: Path, agents: Path | None = None) -> str:
+def default_workflow_dir() -> Path:
+    """Where the phase files live — inside the engine, never the vault."""
+    return Path(__file__).resolve().parents[1] / "singularity" / "workflow"
+
+
+def render_text(text: str, vault: Path, agents: Path | None = None,
+                workflow: Path | None = None) -> str:
     """Every `{{VAULT}}` replaced by this machine's vault path, every
-    `{{AGENTS}}` by the deployed-agents directory."""
+    `{{AGENTS}}` by the deployed-agents directory, every `{{WORKFLOW}}` by the
+    engine's phase directory.
+
+    `{{WORKFLOW}}` renders via `as_posix()`, the other two via `str()` as
+    before. Not an inconsistency left standing by accident: `str()` on Windows
+    yields backslashes and produces a MIXED separator wherever a template
+    appends `/<file>` — that is issue #17, open and out of scope here, so the
+    two existing tokens keep their current behaviour byte for byte. The new one
+    is simply born on the correct side of it."""
     out = text.replace(TOKEN, str(vault))
-    return out.replace(AGENTS_TOKEN, str(agents if agents is not None
-                                         else default_agents_dir()))
+    out = out.replace(AGENTS_TOKEN, str(agents if agents is not None
+                                        else default_agents_dir()))
+    return out.replace(WORKFLOW_TOKEN, (workflow if workflow is not None
+                                        else default_workflow_dir()).as_posix())
 
 
 def file_has_token(path: Path) -> bool:
@@ -63,7 +86,11 @@ def file_has_token(path: Path) -> bool:
         text = path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         return False
-    return TOKEN in text or AGENTS_TOKEN in text
+    # Every token render_text substitutes must be listed here. A token missing
+    # from this check does not fail — the tree is linked instead of rendered
+    # and the literal `{{...}}` reaches the deployed file, where it reads as a
+    # path and resolves to nothing.
+    return any(t in text for t in (TOKEN, AGENTS_TOKEN, WORKFLOW_TOKEN))
 
 
 def tree_has_token(root: Path) -> bool:
