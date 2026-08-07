@@ -176,7 +176,8 @@ def test_only_config_knows_the_vault_layout():
 # it holds today: zero imports from the engine into the factory.
 #
 # `reel` was a member until v0.12.0, when it was removed: the montage pipeline
-# belongs to `video-engine`, and a second one here decided which tool got used.
+# belongs to a separate project of its own, and a second one here decided which
+# tool got used.
 FACTORY = {"scout", "providers", "imgqa", "intake", "golden", "factory"}
 
 
