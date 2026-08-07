@@ -28,8 +28,11 @@ _ALL_CLIENTS = ["claude", "codex", "gemini", "grok"]
 # missing from a client must always have a documented, human-readable why.
 # Skills that used to be here and are not any more
 #
-# `capcut-editor` and `video-visual-review` moved to `E:\Project\studio-orchestration`
-# on 2026-08-06. Both orchestrate MONTAGE, which is not the memory engine's business: shipping
+# `capcut-editor` and `video-visual-review` moved out to their own orchestration layer on
+# 2026-08-06. Where that layer lives is deliberately not named here: it is a separate project that
+# this engine neither requires nor knows about, and a path written down here would be a promise
+# about someone else's disk.
+# Both orchestrate MONTAGE, which is not the memory engine's business: shipping
 # them from here meant reinstalling memory in order to get a montage skill, and — once the
 # orchestration repository also carried `video-visual-review` — meant two copies of one skill with
 # nothing diffing them. The engine keeps the skills that ARE its own mechanism (`mb-*`, curator,
