@@ -17,8 +17,9 @@ Usage — a JSON list of cases on stdin or in a file:
 Exit code is 0 only when every case matched its expectation, so this can be a
 gate rather than a report someone reads.
 
-Four properties it will not trade. Each was a defect in the first version,
-found by planting violations against this file:
+Five properties it will not trade. Each was a defect found by planting
+violations against this file — the fifth while proving a token-accounting
+invariant on 2026-08-07:
 
 - **Three verdicts, not two.** A non-zero exit means the command failed, not
   that the gate caught anything. `pytest` exits 1 for a failed test and 4 for a
@@ -34,10 +35,16 @@ found by planting violations against this file:
   `git checkout` to fall back on: the loud stop IS the recovery path.
 - **No case may reach outside the root.** The tool's entire job is overwriting
   source files.
+- **The bytecode cache is dropped around every write.** A plant that keeps the
+  file's size — `0.1` -> `1.0` — inside the same second as the last compile
+  matches the `.pyc` header on both (mtime, size), so the stale bytecode runs
+  and the tool reports GREEN about an invariant that does catch its violation.
+  See `_drop_bytecode`.
 """
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
@@ -49,6 +56,39 @@ ROOT = Path(os.environ.get("PLANT_ROOT", Path(__file__).resolve().parents[1]))
 
 def _digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _drop_bytecode(path: Path) -> None:
+    """Delete every cached compile of `path`, so the next run reads the bytes
+    just written.
+
+    CPython invalidates a `.pyc` by comparing the source's (mtime, size) with
+    the pair recorded in the cache header, and mtime is stored with SECOND
+    granularity. A plant that does not change the file's size — `0.1` -> `1.0`,
+    `True` -> `False`, one digit for another — run inside the same second as
+    the previous compile therefore matches on both, and the interpreter loads
+    the STALE bytecode: the planted defect never runs.
+
+    That failure is silent and points the wrong way. The tool reports GREEN,
+    i.e. "this invariant does not catch its violation", about an invariant that
+    catches it perfectly — so the reader goes off to rewrite a healthy test.
+    A gate whose whole purpose is finding checks that cannot fail must not have
+    a case where it cannot fail itself.
+
+    Both the standard cache path (which honours PYTHONPYCACHEPREFIX) and every
+    sibling `__pycache__/<stem>.*.pyc` are removed: pytest's assertion-rewritten
+    copies carry their own tag, so `cache_from_source` alone would miss them.
+    """
+    if path.suffix != ".py":
+        return
+    try:
+        cached = Path(importlib.util.cache_from_source(str(path)))
+    except (ValueError, NotImplementedError):        # pragma: no cover
+        cached = None
+    if cached is not None:
+        cached.unlink(missing_ok=True)
+    for stale in (path.parent / "__pycache__").glob(f"{path.stem}.*.pyc"):
+        stale.unlink(missing_ok=True)
 
 
 def _run(cmd, cwd, timeout) -> tuple[int | None, str]:
@@ -96,10 +136,15 @@ def run_case(case: dict) -> tuple[str, str]:
 
     try:
         path.write_bytes(original.replace(old, new))
+        _drop_bytecode(path)
         code, detail = _run(case["cmd"], cwd, timeout)
     finally:
         try:
             path.write_bytes(original)
+            # The restore needs this as much as the plant does: a cache built
+            # FROM the planted bytes would otherwise survive into the next run
+            # and quietly test the defect instead of the restored file.
+            _drop_bytecode(path)
             restored = _digest(path.read_bytes())
         except OSError as exc:
             raise SystemExit(f"RESTORE FAILED for {path}: {exc} — the planted "

@@ -67,11 +67,12 @@ HOSTS: dict[str, tuple[str, ...]] = {
     # is where someone looks for it. The window stays ten wide: an opt-in
     # staging area does not deserve a permanent slot on the first screen.
     "note": ("inbox",),
-    # Reports that answer "what is in the memory" rather than "is it healthy":
-    # they hang off `status` instead of taking three more slots on the window.
-    # `journey` is the same question along a third axis — stats says how much,
-    # reflect says how often it was used, journey says what arrived and when.
-    "status": ("stats", "reflect", "journey"),
+    # Reports that answer "what happened" rather than "is it healthy": they
+    # hang off `status` instead of taking four more slots on the window.
+    # Each is the same question along another axis — stats says how much is in
+    # the vault, reflect how often it was used, journey what arrived and when,
+    # and usage what a session spent to produce any of it.
+    "status": ("stats", "reflect", "journey", "usage"),
 }
 
 GROUP_BLURB: dict[str, str] = {
