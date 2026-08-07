@@ -231,3 +231,148 @@ def journey(payload: dict[str, Any], *, limit: int = 60) -> str:
     if hidden > 0:
         out.append(f"\n... {hidden} more (raise --limit, or narrow with --days/--project)")
     return "\n".join(out)
+
+
+# --- token usage -------------------------------------------------------------
+
+def _tok(n: int | None) -> str:
+    if n is None:
+        return "-"
+    if abs(n) >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if abs(n) >= 1_000:
+        return f"{n / 1_000:.1f}k"
+    return str(n)
+
+
+def _usd(v: float | None) -> str:
+    return "-" if v is None else (f"${v:.2f}" if abs(v) >= 0.01 else f"${v:.4f}")
+
+
+def usage(p: dict[str, Any], *, turns: bool = False, limit: int = 12) -> str:
+    """Two columns for every step, because either one alone misleads: what the
+    turn was BILLED, and what it ADDED to the context and left there."""
+    if p.get("error"):
+        return f"mb usage: {p['error']} ({p.get('path') or p.get('root', '')})"
+
+    t, ctx = p["totals"], p["context"]
+    models = ", ".join(p["models"]) or "unknown model"
+    out = [f"== mb usage — session {p['session'][:8]} ({models}) ==",
+           f"  {t['turns']} turns · out {_tok(t['output'])} · cache read "
+           f"{_tok(t['cache_read'])} · cache write {_tok(t['cache_write'])} · "
+           f"fresh in {_tok(t['input'])} · {_usd(t['cost_usd'])}"]
+    if p.get("subagent_cost_usd") is not None:
+        out.append(f"  + {len(p['subagents'])} subagent(s): "
+                   f"{_usd(p['subagent_cost_usd'])} — spend the parent's own "
+                   f"usage never shows")
+
+    out.append("")
+    out.append(f"context: {_tok(ctx['start'])} at start → peak {_tok(ctx['peak'])} "
+               f"→ {_tok(ctx['end'])} at end, {ctx['resets']} reset(s)")
+    if ctx.get("baseline_carry_usd") is not None:
+        out.append(f"  the starting prefix alone (system prompt, tool schemas, "
+                   f"CLAUDE.md, memory) was re-read on every later turn: "
+                   f"{_usd(ctx['baseline_carry_usd'])}")
+
+    if p.get("by_source"):
+        out.append("")
+        out.append(f"where the context came from — {_tok(ctx['grew'])} added"
+                   + (f", {_tok(ctx['reclaimed'])} reclaimed by resets"
+                      if ctx.get("reclaimed") else "")
+                   + "  (carry $ = cost of re-reading it on later turns)")
+        for row in p["by_source"]:
+            share = f"{row['share'] * 100:4.1f}%" if row["share"] is not None else "   - "
+            out.append(f"  {row['label'][:44]:<46}{_tok(row['added']):>8}"
+                       f"{share:>7}{_usd(row['carry_usd']):>10}")
+
+    if p["by_tool"]:
+        out.append("")
+        out.append("what grew the context, by tool  "
+                   "(added = estimated share; carried = re-read on later turns)")
+        out.append(f"  {'tool':<22}{'calls':>6}{'returned':>10}{'added':>9}"
+                   f"{'carried':>10}{'carry $':>10}  heaviest call")
+        for row in p["by_tool"]:
+            heaviest = row.get("heaviest") or ""
+            errs = f" ({row['errors']} err)" if row["errors"] else ""
+            # `returned` is measured characters, not tokens — it is what the
+            # tool handed back, before any of it was priced.
+            out.append(f"  {row['name'][:21]:<22}{row['calls']:>6}"
+                       f"{_tok(row['result_chars']):>9}c{_tok(row['added']):>9}"
+                       f"{_tok(row['carry_tokens']):>10}"
+                       f"{_usd(row['carry_usd']):>10}  {heaviest[:38]}{errs}")
+
+    if p["heaviest_steps"]:
+        out.append("")
+        out.append("heaviest steps by context added")
+        for step in p["heaviest_steps"][:limit]:
+            tools = ", ".join(step["tools"][:4]) or "no tool call"
+            out.append(f"  #{step['index']:<4} +{_tok(step['added_to_context']):<8}"
+                       f"prompt {_tok(step['prompt_size']):<8}"
+                       f"{_usd(step['cost_usd']):>9}  {tools}")
+
+    if p["costly_steps"]:
+        out.append("")
+        out.append("most expensive turns")
+        for step in p["costly_steps"][:limit]:
+            tools = ", ".join(step["tools"][:4]) or "no tool call"
+            out.append(f"  #{step['index']:<4} {_usd(step['cost_usd']):<9}"
+                       f"prompt {_tok(step['prompt_size']):<8}"
+                       f"out {_tok(step['output']):<7}  {tools}")
+
+    if p["subagents"]:
+        out.append("")
+        out.append("subagents")
+        for a in p["subagents"]:
+            kind = f" {a['kind'][:34]}" if a["kind"] else ""
+            out.append(f"  {a['agent_id'][:12]:<14}{a['turns']:>4} turns  "
+                       f"peak {_tok(a['peak_prompt']):<8}out {_tok(a['output']):<8}"
+                       f"{_usd(a['cost_usd']):>9} {kind}")
+
+    if turns:
+        out.append("")
+        out.append("every turn")
+        for step in p["turns"]:
+            mark = " RESET" if step["context_reset"] else ""
+            tools = ", ".join(step["tools"][:3])
+            out.append(f"  #{step['index']:<4}{_usd(step['cost_usd']):>9}  "
+                       f"prompt {_tok(step['prompt_size']):<8}"
+                       f"out {_tok(step['output']):<7}"
+                       f"Δctx {_tok(step['added_to_context']):<8}{tools}{mark}")
+
+    for w in p["warnings"]:
+        out.append(f"\nnote: {w}")
+    return "\n".join(out)
+
+
+def usage_brief(p: dict[str, Any]) -> str:
+    """One line, deliberately — this is printed while a phase closes, so the
+    report must not cost more than the step it measures."""
+    if p.get("error"):
+        return f"mb usage: {p['error']}"
+    return (f"{p['session'][:8]} turns {p['from_turn']}-{p['next_turn'] - 1} "
+            f"({p['turns']}) · {_tok(p['tokens'])} tokens · out {_tok(p['output'])} "
+            f"· {_usd(p['cost_usd'])} · next --from {p['next_turn']}")
+
+
+def usage_overview(p: dict[str, Any]) -> str:
+    """Which session to look inside, before looking inside one."""
+    rows = p["sessions"]
+    scanned = p.get("scanned", len(rows))
+    # The total covers the whole window; the table may be shorter. Saying so is
+    # the difference between "this is the spend" and "this is some of it".
+    shown = f", showing top {len(rows)} of {scanned}" if scanned > len(rows) else ""
+    out = [f"== mb usage — last {p['days']}d, {scanned} session(s){shown}, "
+           f"{_usd(p['total_usd'])} =="]
+    if not rows:
+        out.append("  (no transcripts in this window)")
+        return "\n".join(out)
+    out.append(f"  {'session':<10}{'turns':>6}{'output':>9}{'peak ctx':>10}"
+               f"{'agents':>8}{'cost':>10}  project")
+    for r in rows:
+        out.append(f"  {r['session'][:8]:<10}{r['turns']:>6}{_tok(r['output']):>9}"
+                   f"{_tok(r['peak_context']):>10}{r['subagents']:>8}"
+                   f"{_usd(r['cost_usd']):>10}  {r['project'][:34]}")
+    for w in p.get("warnings", []):
+        out.append(f"\nnote: {w}")
+    out.append("\nlook inside one with: mb usage --session <id>")
+    return "\n".join(out)

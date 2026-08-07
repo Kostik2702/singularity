@@ -11,6 +11,7 @@ of the tool that exists to catch it.
 So nothing here reads the source. Every test drives `run_case` and asserts on
 what it returns or raises.
 """
+import importlib.util
 import json
 import subprocess
 import sys
@@ -151,6 +152,78 @@ def test_a_path_outside_the_root_is_refused(target):
     file would let it write anywhere."""
     verdict, _ = plant.run_case(case(file="/tmp/escape-attempt.txt"))
     assert verdict == "SKIP"
+
+
+# --- the bytecode cache cannot outlive a write ---------------------------------
+
+def _pyc_files(module: Path) -> list[Path]:
+    return sorted((module.parent / "__pycache__").glob(f"{module.stem}.*.pyc"))
+
+
+def test_no_compiled_cache_of_the_module_survives_a_case(tmp_path, monkeypatch):
+    """CPython matches a `.pyc` to its source on (mtime, size), and mtime has
+    SECOND granularity — so a plant that keeps the file's length (`0.1` -> `1.0`)
+    inside the same second as the last compile runs the STALE bytecode. The
+    planted defect never executes and the tool reports GREEN, i.e. "this check
+    does not catch its violation", about a check that catches it perfectly.
+
+    Reproduced on 2026-08-07 with two cases against one file: the first one's
+    restore stamped a fresh mtime, and the second (`CACHE_READ = 0.1` -> `1.0`)
+    came back GREEN while the same test went red by hand.
+
+    Asserting on the cache rather than on that race keeps the test
+    deterministic: if a compile from either write survives the case, the next
+    case can read it.
+    """
+    monkeypatch.setattr(plant, "ROOT", tmp_path)
+    module = tmp_path / "subject_mod.py"
+    module.write_text("VALUE = 0.1\n", encoding="utf-8")
+    cmd = [sys.executable, "-c",
+           "import subject_mod, sys; sys.exit(0 if subject_mod.VALUE == 0.1 else 1)"]
+
+    verdict, detail = plant.run_case(
+        {"file": module.name, "old": "VALUE = 0.1", "new": "VALUE = 1.0", "cmd": cmd})
+
+    assert verdict == "RED", detail
+    assert _pyc_files(module) == [], \
+        "a compile of the planted or restored file outlived the case"
+
+
+def test_dropping_bytecode_also_removes_foreign_tagged_caches(tmp_path):
+    """`cache_from_source` names one path; pytest's assertion-rewritten copies
+    carry their own tag and sit next to it. Removing only the first would leave
+    the rewritten copy to be picked up by the next run."""
+    module = tmp_path / "mod.py"
+    module.write_text("VALUE = 1\n", encoding="utf-8")
+    cache = tmp_path / "__pycache__"
+    cache.mkdir()
+    standard = Path(importlib.util.cache_from_source(str(module)))
+    standard.parent.mkdir(parents=True, exist_ok=True)
+    standard.write_bytes(b"stale")
+    rewritten = cache / "mod.cpython-999-pytest-8.9.9.pyc"
+    rewritten.write_bytes(b"stale")
+
+    plant._drop_bytecode(module)
+
+    assert not standard.exists() and not rewritten.exists()
+
+
+def test_a_non_python_target_does_not_evict_a_neighbours_cache(tmp_path):
+    """`cache_from_source("subject.txt")` does not raise — it quietly returns
+    `__pycache__/subject.cpython-XXX.pyc`, which belongs to `subject.py` next
+    to it. A case that plants into `config.json` would then delete the compile
+    of `config.py`, a file it never touched."""
+    sibling = tmp_path / "subject.py"
+    sibling.write_text("VALUE = 1\n", encoding="utf-8")
+    its_cache = Path(importlib.util.cache_from_source(str(sibling)))
+    its_cache.parent.mkdir(parents=True, exist_ok=True)
+    its_cache.write_bytes(b"compiled")
+
+    target = tmp_path / "subject.txt"
+    target.write_text("ANCHOR\n", encoding="utf-8")
+    plant._drop_bytecode(target)          # must not raise, must not evict
+
+    assert its_cache.exists(), "editing subject.txt evicted the cache of subject.py"
 
 
 # --- the batch reports, and the exit code is the gate --------------------------

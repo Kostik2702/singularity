@@ -313,6 +313,38 @@ def cmd_hooks(cfg, args) -> int:
     print(f"capture hooks {'enabled' if enabled else 'disabled'}")
     return 0
 
+def cmd_usage(cfg, args) -> int:
+    """What each step of a session cost, and what it left in the context.
+
+    Read-only by construction: `tokens` never writes, so this command cannot
+    add anything to `.mb/` — the one property that keeps it outside the
+    session-search opt-in ([[TRANSCRIPTS D1 - приватность транскриптов]]).
+    """
+    from .. import render
+    from ..telemetry import tokens
+
+    if getattr(args, "brief", False):
+        data = tokens.brief(args.session, project=args.project, start=args.from_turn)
+        print(json.dumps(data, ensure_ascii=False) if args.json
+              else render.usage_brief(data))
+        return 0 if not data.get("error") else 1
+
+    if getattr(args, "list", False):
+        data = tokens.overview(days=args.days, project=args.project, limit=args.top)
+        print(json.dumps(data, ensure_ascii=False) if args.json
+              else render.usage_overview(data))
+        return 0
+
+    data = tokens.report(args.session, project=args.project, top=args.top,
+                         detail=not args.no_detail,
+                         with_subagents=not args.no_subagents)
+    if args.json:
+        print(json.dumps(data, ensure_ascii=False))
+        return 0 if not data.get("error") else 1
+    print(render.usage(data, turns=args.turns, limit=args.top))
+    return 0 if not data.get("error") else 1
+
+
 def cmd_reflect(cfg, args) -> int:
     from ..telemetry import reflect
 

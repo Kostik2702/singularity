@@ -10,6 +10,83 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.16.0 — what a step cost, and what it left in the context
+
+`mb usage` answers a question the engine could not answer about itself: where
+the tokens went. It reads the client's own transcripts, so nothing new is
+recorded to produce it — and it reports two numbers per step, because either
+one alone misleads.
+
+## Two questions inside "how many tokens did this take"
+
+**What the turn was billed** is the `usage` block, priced per category. It
+finds expensive turns and is useless for finding leaks: on a long session
+nearly every input token is a cache read of the same prefix, so the number
+climbs monotonically no matter what the turn did.
+
+**What the step added to the prefix and left there** is the difference between
+one turn's prompt size and the next one's. That difference is exact — it is a
+subtraction of two reported sizes, not an estimate — and it is the leak
+metric. From it comes `carry`: tokens added at turn *i* are re-read on every
+later turn until the context is reset, so a 40k read early in a 400-turn
+session is not a 40k event, and none of that cost appears in the bill of the
+turn that caused it.
+
+Only the ATTRIBUTION of a step's growth to individual sources is estimated
+(shares proportional to measured size). The report says so where it shows it,
+and the shares are required to ADD UP to the measured growth — `unattributed`
+is a visible row rather than a silent remainder.
+
+## The trap the module exists to avoid
+
+Claude Code writes one JSONL record per content block and repeats the SAME
+`usage` in each. Measured here: 405 messages across 836 records, byte-identical
+usage in every repeat. Summing records instead of messages overstates the bill
+by ~1.8x, and the result looks entirely plausible. The second half of the trap:
+the `tool_use` block is usually not in a message's first record, so a reader
+that keeps the first record loses the tool calls.
+
+## What it found on this machine
+
+The largest single source of context growth in a real session was one `Skill`
+load — 46.6% of all growth, $19.34 in carry. Before the source was recognised
+it was filed as "user input", i.e. the report blamed the person for what a
+capability did. Three more defects of the same shape were found and fixed by
+running the tool against live data rather than against fixtures: a
+client-written `<synthetic>` row with all-zero usage invented a 580k context
+reset and an equal regrowth; hook and reminder text arriving inside user
+messages was counted as typing; and `--list` applied its display limit before
+sorting by cost, so the most expensive session was never opened and the printed
+total covered only the rows that survived the cut ($190.67 against a true
+$493.47).
+
+Delegated work is reported beside the session that caused it: a subagent's
+spend never appears in its parent's `usage`, so a session that fans out looks
+cheap without it. The link to the launching call comes from the client's
+`agent-<id>.meta.json` sidecar — scraping `agentId:` out of tool output only
+ever worked for background launches and additionally matched text that merely
+quoted the pattern.
+
+Read-only by construction: the command writes nothing, which is what keeps it
+outside the session-search opt-in of TRANSCRIPTS D1.
+
+## A gate that could not fail
+
+`tools/plant.py` exists to prove other checks can fail. It reported GREEN — "this
+invariant does not catch its violation" — for an invariant that catches it
+perfectly, whenever the planted string kept the file's SIZE (`0.1` -> `1.0`):
+CPython matches a `.pyc` to its source on (mtime, size), and mtime has second
+granularity, so a plant inside the same second as the previous compile runs the
+stale bytecode. The verdict points the wrong way, sending the reader off to
+rewrite a healthy test. The cache is now dropped around both writes — the plant
+and the restore — and three tests pin it.
+
+The workflow's fuel report shrank to one line per phase (`mb usage --brief
+--from N`): producing it via `--json` cost ~8k tokens, which made measuring the
+spend the largest item of spend.
+
+---
+
 # v0.15.0 — a chain is announced when a task arrives, and a gate must prove it can fail
 
 Two changes from one session, and the second is the lesson of the first.

@@ -28,6 +28,8 @@ mb ingest add <path>|--stdin [--title T] [--origin U] [--dry-run] [--json]
 mb ingest list|show <id>|export <dir>|index [--rebuild]
 mb nightly [--json]   # index update -> digest/curator/config snapshot -> trend -> markers sweep
 mb reflect [--days N] [--json]   # privacy-safe adoption telemetry (offline transcript walk)
+mb usage [--session ID] [--list [--days N]] [--turns] [--top N] [--json]
+                                 # per-step token cost + what each step added to the context
 mb llm start|stop|status|list|logs|code|setup
 mb init            # write ~/.singularity.json pointer + folder tree
 mb uninstall       # remove hooks/scheduler jobs/daemon (vault untouched)
@@ -44,7 +46,7 @@ from . import render
 from .knowledge import inbox
 from .commands.memory import cmd_search, cmd_ingest, cmd_note, cmd_learn, cmd_inbox
 from .commands.knowledge import cmd_digest, cmd_curator, cmd_nightly
-from .commands.machine import cmd_daemon, cmd_index, cmd_model, cmd_backup, cmd_config, cmd_project, cmd_hooks, cmd_reflect, cmd_llm, cmd_uninstall, cmd_init, cmd_route
+from .commands.machine import cmd_daemon, cmd_index, cmd_model, cmd_backup, cmd_config, cmd_project, cmd_hooks, cmd_reflect, cmd_usage, cmd_llm, cmd_uninstall, cmd_init, cmd_route
 from .config import Config, ConfigError, load_config
 
 
@@ -181,6 +183,26 @@ def _build_parser() -> argparse.ArgumentParser:
                                          "(offline transcript walk, counts/rates only)")
     rfl.add_argument("--days", type=int, help="lookback window (default: reflect_window_days config)")
     rfl.add_argument("--json", action="store_true")
+
+    usg = sub.add_parser("usage", help="token cost per step of a session, and what "
+                                       "each step left in the context")
+    usg.add_argument("--session", help="session id or a unique prefix (default: most recent)")
+    usg.add_argument("--project", help="restrict to transcripts of one project dir")
+    usg.add_argument("--list", action="store_true",
+                     help="cost per session over a window instead of one session")
+    usg.add_argument("--brief", action="store_true",
+                     help="one line and nothing else — for closing a workflow phase")
+    usg.add_argument("--from", type=int, default=0, dest="from_turn", metavar="TURN",
+                     help="with --brief: count only turns from this index "
+                          "(the previous phase's `next --from`)")
+    usg.add_argument("--days", type=int, default=7, help="window for --list (default 7)")
+    usg.add_argument("--turns", action="store_true", help="print every turn, not just the extremes")
+    usg.add_argument("--top", type=int, default=12, help="rows per section (default 12)")
+    usg.add_argument("--no-detail", dest="no_detail", action="store_true",
+                     help="omit call targets (file paths, commands) — for sharing the report")
+    usg.add_argument("--no-subagents", dest="no_subagents", action="store_true",
+                     help="skip sidechain transcripts")
+    usg.add_argument("--json", action="store_true")
 
     bk = sub.add_parser("backup", help="backup/restore config + index pointer")
     bksub = bk.add_subparsers(dest="backup_action", required=True)
@@ -549,6 +571,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_nightly(cfg, args)
     if args.command == "reflect":
         return cmd_reflect(cfg, args)
+    if args.command == "usage":
+        return cmd_usage(cfg, args)
     if args.command == "note":
         return cmd_note(cfg, args)
     if args.command == "learn":
