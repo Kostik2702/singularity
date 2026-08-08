@@ -1,4 +1,4 @@
-"""mb — single CLI entry point (replaces the Genevra script sprawl).
+"""mb — single CLI entry point (replaces the earlier sprawl of separate scripts).
 
 The window a human sees is ten commands wide and lives in `facade.py`:
 search · learn · note · ingest · status · doctor · curator · llm · service ·
@@ -120,8 +120,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("watch", help="on-save incremental index watcher")
 
-    rt = sub.add_parser("route", help="which chain of work a task belongs to")
-    rt.add_argument("task", nargs="?", help="the task text, as a user would phrase it")
+    rt = sub.add_parser("route", help="the chains of work, and the path to a phase")
+    rt.add_argument("task", nargs="?", help=argparse.SUPPRESS)
+    rt.add_argument("--class", dest="cls",
+                    help="print one chain in full (dev, research, review, web, "
+                         "image, memory, ops)")
     rt.add_argument("--phase", help="print the path to one phase file (5, SB, 1.5)")
     rt.add_argument("--json", action="store_true")
 

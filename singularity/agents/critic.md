@@ -1,6 +1,6 @@
 ---
 name: critic
-description: "Critical evaluator / devil's advocate. Spawn to evaluate proposed solutions, plans, or architectural decisions BEFORE implementation — challenges assumptions, finds risks and gaps. Also a council member. Triggers: critic, критик, challenge this, find risks, devil's advocate, оспорь, найди риски, покритикуй, адвокат дьявола."
+description: "Critical evaluator / devil's advocate. Spawn to evaluate proposed solutions, plans, or architectural decisions BEFORE implementation — challenges assumptions, finds risks and gaps. Also a council member. Triggers: critic, challenge this, find risks, devil's advocate, poke holes in this."
 ---
 
 ## ⚠️ MANDATORY: Read `{{AGENTS}}/AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️

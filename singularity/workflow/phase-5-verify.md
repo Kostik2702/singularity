@@ -6,18 +6,18 @@ created: 2026-07-03
 status: active
 ---
 
-# Phase 5 — Verify (реально прогнать)
+# Phase 5 — Verify (actually run it)
 
-Родитель: `_router.md`. Evidence before assertions: «работает» — только после наблюдения работы.
+Parent: `_router.md`. Evidence before assertions: "it works" only after the working was observed.
 
-- [ ] Тесты прогнаны (юнит/контрактные) — вывод приложен, не пересказан.
-- [ ] Изменение прогнано END-TO-END через реальный флоу (не только тесты): CLI-команда вызвана, хук скормлен реальным событием, поиск выполнен реальным запросом. (`/verify` skill — если применим.)
-- [ ] Новый гейт объявлен доказанным только после посаженного нарушения: добавь
-      случай в `tests/plants.json` и убедись, что `pytest tests/test_plants.py`
-      краснеет на нём. Это не дисциплина, а часть сьюта — опустевший гейт роняет
-      обычный прогон, даже когда его собственный тест-файл зелёный.
-- [ ] Негативный сценарий: сломай вход/окружение — поведение деградирует предсказуемо (fallback/понятная ошибка), не молча.
-- [ ] Fail → назад в `phase-3-implementation.md` с systematic-debugging; НЕ рапортовать успех при частичном прохождении.
-- [ ] Авто-append: что прогнано, результаты (числа/выводы), незакрытые сценарии.
+- [ ] Tests were run (unit/contract) — the output is attached, not retold.
+- [ ] The change was run END-TO-END through the real flow (not only tests): the CLI command was invoked, the hook was fed a real event, the search was performed with a real query. (The `/verify` skill, where applicable.)
+- [ ] A new gate is declared proven only after a planted violation: add
+      a case to `tests/plants.json` and confirm that `pytest tests/test_plants.py`
+      goes red on it. This is not discipline but part of the suite — an emptied gate
+      fails the ordinary run even when its own test file is green.
+- [ ] The negative scenario: break the input or the environment — the behaviour degrades predictably (a fallback or a clear error), never silently.
+- [ ] Fail → back to `phase-3-implementation.md` with systematic debugging; do NOT report success on a partial pass.
+- [ ] Auto-append: what was run, the results (numbers, outputs), the scenarios left open.
 
-**Выход:** наблюдаемо работает → `phase-6-commit.md`.
+**Exit:** it observably works → `phase-6-commit.md`.

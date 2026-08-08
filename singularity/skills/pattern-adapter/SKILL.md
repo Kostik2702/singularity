@@ -1,46 +1,46 @@
 ---
 name: pattern-adapter
-description: Адаптация внешнего компонента в проект через adaptation recipe — перенос design/motion-ДНК паттерна без demo-блоба: scaffold рецепта из intake-отчёта, разрешение TODO по методике (tokens, timing, breakpoints, reduced/static fallback, cleanup, lazy), валидация, re-intake после адаптации. Тонкая обёртка над `component-intake recipe`. Use when "адаптируй компонент", adaptation, "перенеси паттерн в проект", после ADAPT-вердикта карантина, до какого-либо кода в implementation branch.
+description: Adapting an external component into a project through an adaptation recipe — carrying over the pattern's design/motion DNA without the demo blob: scaffolding the recipe from the intake report, resolving the TODOs by the method (tokens, timing, breakpoints, reduced/static fallback, cleanup, lazy), validation, and a re-intake after adaptation. A thin wrapper over `component-intake recipe`. Use when "adapt the component", adaptation, "port the pattern into the project", after a quarantine ADAPT verdict, before any code in the implementation branch.
 ---
 
-# pattern-adapter — ДНК паттерна, не demo-блоб
+# pattern-adapter — the pattern's DNA, not the demo blob
 
-CLI: `component-intake recipe` (контракт adaptation-recipe/1 в `singularity/intake/recipe.py`). Правило §7 решения: компонент не копируется как есть — создаётся рецепт, и **рецепт с TODO не проходит валидацию** → в implementation branch попадает только полный.
+CLI: `component-intake recipe` (contract adaptation-recipe/1 in `singularity/intake/recipe.py`). Rule §7 of the decision: a component is never copied as-is — a recipe is created, and **a recipe with TODOs does not pass validation** → only a complete one reaches the implementation branch.
 
-## Порядок
+## The order
 
 ```bash
-# 1. Только после intake-вердикта ADAPT (REJECT рецепта не имеет — валидатор не даст)
+# 1. Only after an ADAPT intake verdict (a REJECT has no recipe — the validator will not allow it)
 component-intake recipe --report <workspace>/intake-report.json \
   --out <evidence>/recipe-<candidate>.json --json
-# факты (provenance sha256, license, intake requirements) заполнены; суждения = TODO
+# facts (provenance sha256, license, intake requirements) are filled in; judgements are TODO
 
-# 2. Разрешить TODO по методике ниже (руками/скилом), сверяясь с project manifest
+# 2. Resolve the TODOs by the method below (by hand or by the skill), against the project manifest
 
-# 3. Гейт полноты: exit 0 = рецепт готов, 1 = остались TODO/дыры
+# 3. Completeness gate: exit 0 = the recipe is ready, 1 = TODOs or holes remain
 component-intake recipe --validate <evidence>/recipe-<candidate>.json
 
-# 4. Реализация по рецепту в чистом branch/worktree; upstream-код и локальные
-#    правки различимы (patch_set); затем RE-INTAKE адаптированного результата
-#    (E03 --runtime) и visual acceptance
+# 4. Implementation from the recipe in a clean branch/worktree; upstream code and local
+#    edits stay distinguishable (patch_set); then RE-INTAKE the adapted result
+#    (E03 --runtime) plus visual acceptance
 ```
 
-## Методика разрешения TODO
+## Method for resolving the TODOs
 
-- **preserved_intent** — одно предложение: какую дизайн-функцию берём (напр. «постепенный blur контента при скролле»). Не «весь компонент».
-- **replacements** — цвета/шрифты/размеры → design tokens проекта; демо-тексты/ассеты НЕ переносятся (лицензия демо-контента ≠ лицензия кода).
-- **timing** — durations/easings → motion tokens проекта (единая грамматика, не случайные значения из демо).
-- **breakpoints** — desktop/mobile поведение явно; «как в демо» не ответ.
-- **reduced_motion** — из intake requirements; вариант обязан сохранять контент (не opacity:0 у важного).
-- **static_fallback** — что видит no-JS/бот: смысл и CTA сохраняются.
-- **cleanup** — listeners/rAF/observers/контексты при unmount (проверит motion-qa: rAF-after-settle).
-- **lazy_strategy** — из intake (heavy deps → island); бюджет чанка.
-- **patch_set** — список отличий от upstream: файл, что изменено, зачем.
-- **acceptance** — пути скриншотов/perf-evidence, которыми доказана адаптация.
+- **preserved_intent** — one sentence: which design function we are taking (e.g. "a progressive blur of the content on scroll"). Not "the whole component".
+- **replacements** — colours, fonts and sizes map to the project's design tokens; demo texts and assets are NOT carried over (the licence of demo content is not the licence of the code).
+- **timing** — durations and easings map to the project's motion tokens (a single grammar, not random values from the demo).
+- **breakpoints** — desktop and mobile behaviour stated explicitly; "as in the demo" is not an answer.
+- **reduced_motion** — from the intake requirements; the variant must preserve the content (never opacity:0 on something important).
+- **static_fallback** — what a no-JS client or a bot sees: the meaning and the CTA survive.
+- **cleanup** — listeners, rAF, observers and contexts on unmount (motion-qa checks this: rAF-after-settle).
+- **lazy_strategy** — from the intake (heavy deps → an island); the chunk budget.
+- **patch_set** — the list of differences from upstream: file, what changed, why.
+- **acceptance** — the paths to the screenshots and perf evidence that prove the adaptation.
 
-## Гейты
+## Gates
 
-- [ ] Cross-framework порт (react → static и т.п.) — ОТДЕЛЬНОЕ решение владельца, не по умолчанию.
-- [ ] Attribution-обязательства лицензии — в license.obligations и в реализацию.
-- [ ] После адаптации — re-intake (E03 --runtime) зелёный + visual acceptance владельца.
-- [ ] Рецепт + вердикты — в learnings; рецепт идёт в golden registry при promotion (E07).
+- [ ] A cross-framework port (react → static and the like) is a SEPARATE owner decision, never the default.
+- [ ] The licence's attribution obligations go into license.obligations and into the implementation.
+- [ ] After adaptation — a green re-intake (E03 --runtime) plus the owner's visual acceptance.
+- [ ] The recipe and the verdicts go into the learnings; the recipe enters the golden registry on promotion (E07).

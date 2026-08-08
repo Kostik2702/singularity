@@ -1,40 +1,40 @@
-# Шаблон отчёта design-fidelity-audit
+# design-fidelity-audit report template
 
-Образец реального отчёта этого формата: NIKA `reports/NIKA-VISUAL-AUDIT-2026-07-14.md` (19 задач VIS-00..18, шесть delivery-slices). Отчёт кладётся в `reports/` ЦЕЛЕВОГО workflow (не в аудируемое дерево, если проект read-only — тогда в out-каталог аудита).
+An example of a real report in this format: NIKA `reports/NIKA-VISUAL-AUDIT-2026-07-14.md` (19 tasks VIS-00..18, six delivery slices). The report goes into `reports/` of the TARGET workflow (not into the audited tree; if the project is read-only, into the audit's out directory instead).
 
 ```markdown
 # <PROJECT> — visual fidelity audit <YYYY-MM-DD>
 
 ## Verdict
-<1-3 предложения: масштаб расхождения, главная причина, рекомендация.>
-Evidence: fidelity-metrics.json (<путь>), скриншоты <viewports>, макет <путь>.
+<1-3 sentences: the scale of the divergence, the main cause, the recommendation.>
+Evidence: fidelity-metrics.json (<path>), screenshots <viewports>, mockup <path>.
 
-## Числа
-| Метрика | Макет | 1440 | 768 | 390 |
+## Numbers
+| Metric | Mockup | 1440 | 768 | 390 |
 |---|---|---|---|---|
 | height (px) | ... | ... | ... | ... |
 | proportion (h/w) | ... | ... | ... | ... |
 | hero height | ... | ... | ... | ... |
 | overflow / consoleErrors | — | ... | ... | ... |
 
-## Категория A — чинить (fix-list)
-| # | Секция/селектор | Наблюдение (число/скриншот) | Ожидание из макета | Slice |
+## Category A — to fix (fix list)
+| # | Section/selector | Observation (number/screenshot) | Expectation from the mockup | Slice |
 |---|---|---|---|---|
-| A-01 | #hero | height 1013px > viewport 900 | первый экран целиком | S1 |
+| A-01 | #hero | height 1013px > viewport 900 | the first screen in full | S1 |
 
-## Категория B — намеренно иное (НЕ чинить)
-| # | Расхождение | Основание (решение/линк) |
+## Category B — deliberately different (do NOT fix)
+| # | Divergence | Grounds (decision/link) |
 |---|---|---|
-| B-01 | нет блока цен | truth-policy, decisions/<...> |
+| B-01 | no pricing block | truth policy, decisions/<...> |
 
-## Открытые вопросы владельцу
-<Расхождения, для которых не найдено ни решения в vault, ни очевидной причины.>
+## Open questions for the owner
+<Divergences for which neither a decision in the vault nor an obvious cause was found.>
 
 ## Forbidden shortcuts
-<Что НЕЛЬЗЯ делать при фиксах: ломать truth-gates, копировать unverified-контент макета, глобальные хаки.>
+<What must NOT be done while fixing: breaking truth gates, copying unverified mockup content, global hacks.>
 ```
 
-Правила заполнения:
-- Каждая строка A — с числом или скриншот-референсом; «выглядит не так» без evidence не принимается.
-- B без ссылки на решение не бывает — нет ссылки → это «Открытый вопрос», не B.
-- Slice-колонка группирует фиксы в связные пакеты работ (порядок внедрения).
+Rules for filling it in:
+- Every category A row carries a number or a screenshot reference; "it looks wrong" without evidence is not accepted.
+- A category B entry never exists without a link to a decision — no link means it is an "Open question", not a B.
+- The Slice column groups fixes into coherent packages of work (the order of rollout).

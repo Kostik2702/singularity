@@ -146,3 +146,22 @@ def test_notice_is_summarised_not_enumerated_forever():
     lines = format_notice(out.findings)
     assert lines[0].startswith("redacted 12 secret-shaped value(s)")
     assert any("and 7 more" in ln for ln in lines)
+
+
+def test_a_teaching_word_may_not_be_widened_by_a_rewording():
+    """`_TEACHING_RE` suppresses the `assigned-secret` finding, so every word
+    added to it is a hole in a security check.
+
+    `sample` was added while translating the list into English and had never
+    been in it: a real credential on a line mentioning "sample" stopped being
+    reported AND stopped being masked. The control below is `placeholder`, a
+    word the list genuinely carries — without it this test would also pass
+    against a `_TEACHING_RE` that matched nothing at all."""
+    secret = "Xk9-mZq2Lp7Rt4Ws"
+    widened = redact(f"password: {secret}  # sample config")
+    assert widened.findings, "'sample' must not suppress a credential finding"
+    assert secret not in widened.text, "the credential reached the note unmasked"
+
+    control = redact(f"password: {secret}  # placeholder")
+    assert not control.findings, \
+        "the teaching gate stopped working at all, so the assertion above is vacuous"

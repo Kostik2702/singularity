@@ -3,7 +3,7 @@
 Status: **source unavailable — documentary characterization matrix**.
 Scope: [[SINGULARITY_INCOMING_FORK_IMPLEMENTATION]] task T00.
 Canonical business/technical contract: [[Singularity Incoming Fork Integration Specification]].
-Decision record: [[Интеграция incoming fork в Singularity]].
+Decision record: [[Integrating the incoming fork into Singularity]].
 
 ## 1. Source availability check (this session, 2026-07-12)
 
@@ -43,7 +43,7 @@ upstream behavior is verified and fork-only claims are marked documentary.
 | 12 | No `projects`/`personal_root`/`module_context`/`vault_guard`/`digest`/`reflect` keys anywhere in current config schema | `singularity/config.py` (grep, no matches) | n/a — absence confirmed | VERIFIED (absence) |
 | 13 | No `mb-capture`, `mb-onboard`, `mb-handoff`, `mb-triage` skills in current upstream | `singularity/skills/*` listing: compaction-plan, confidence-calibration, council, error-reports, grill, mb-llm-delegate, mb-memory, mb-search, memory-curator, observation-council, planning-council, report, workflow-helper | n/a — absence confirmed | VERIFIED (absence) |
 
-Rows 1–11 reproduce and re-confirm spec §2 "Подтверждено текущим кодом и тестами" against
+Rows 1–11 reproduce and re-confirm spec §2 "Confirmed by the current code and tests" against
 the current working tree (not just the prior session's notes). Rows 12–13 are new evidence
 gathered in this task: they establish the negative baseline that T03–T15 build on top of.
 
@@ -91,8 +91,8 @@ commit diff, or measured outcome (e.g. the fork's claimed `110 passed`) can be c
 
 ## 5. Acceptance check
 
-Per T00 acceptance criterion ("ни одно дальнейшее задание не ссылается на «как в fork»
-без file/test reference или явно записанного documentary contract"): every fork-only row
+Per the T00 acceptance criterion ("no later task may refer to «the way the fork did it»
+without a file/test reference or an explicitly recorded documentary contract"): every fork-only row
 in §3 is now explicitly labeled *documentary only* with its owning task, and every
 current-upstream claim in §2 carries a re-verified `file:line` plus this session's test
 run. T01–T16 AI prompts may cite this document instead of re-deriving evidence.

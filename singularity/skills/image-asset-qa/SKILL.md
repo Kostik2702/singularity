@@ -1,73 +1,73 @@
 ---
 name: image-asset-qa
-description: QA вырезанных (cutout/alpha) изображений перед публикацией на сайте — есть ли реальная прозрачность, fringe/halo по краям, корректны ли края на 3 фонах. Тонкая обёртка над детерминированным CLI `imgqa`. Use when проверяешь PNG-ассет с прозрачностью, "проверь края вырезки", "есть ли ореол/кайма", "QA ассета", asset QA, alpha/cutout review, перед отдачей hero/product PNG в вёрстку.
+description: QA of cut-out (cutout/alpha) images before they go on a site — is the transparency real, is there fringe/halo along the edges, are the edges correct on 3 backgrounds. A thin wrapper over the deterministic `imgqa` CLI. Use when checking a PNG asset with transparency, "check the cutout edges", "is there a halo or fringe", "asset QA", asset QA, alpha/cutout review, before handing a hero/product PNG to the markup.
 ---
 
-# image-asset-qa — приёмка cutout/alpha-ассетов
+# image-asset-qa — acceptance of cutout/alpha assets
 
-Вся детерминированная работа — в CLI `imgqa` (движок Singularity, контракт `singularity/imgqa/CONTRACT.md`, **schema_version 2**). Скил не содержит логики: он говорит КОГДА применять, КАК читать вывод, ЧТО считать дефектом, и ГДЕ проходит human-gate.
+All the deterministic work lives in the `imgqa` CLI (the Singularity engine, contract `singularity/imgqa/CONTRACT.md`, **schema_version 2**). The skill holds no logic: it says WHEN to apply it, HOW to read the output, WHAT counts as a defect, and WHERE the human gate is.
 
-> **Правило нулевого кода (trajectory-инвариант WSF-13):** если рука тянется написать `*.py`/`*.mjs` чтобы «прочитать/сравнить/отрендерить картинку» — СТОП. Всё это уже есть субкомандой `imgqa`. За QA-сессию должно быть создано **0 новых скриптов**. Новый скрипт = регрессия, а не решение.
+> **Zero-code rule (WSF-13 trajectory invariant):** if your hand reaches for a `*.py`/`*.mjs` to "read/compare/render an image" — STOP. All of it already exists as an `imgqa` subcommand. A QA session must create **0 new scripts**. A new script is a regression, not a solution.
 
-## Когда применять
+## When to apply it
 
-- Пришёл вырезанный ассет (PNG с прозрачностью): hero, product, персонаж — перед вставкой в вёрстку.
-- Нужно решить «край чистый / есть кайма / надо defringe».
-- Проверка «это настоящая alpha или запечённая шахматка?» (в NIKA 24bpp-шахматку приняли за прозрачность — `probe` ловит это категорично).
+- A cut-out asset has arrived (a PNG with transparency): hero, product, character — before it goes into the markup.
+- You need to decide "the edge is clean / there is a fringe / it needs a defringe".
+- Checking "is this real alpha or a baked-in checkerboard?" (in NIKA a 24bpp checkerboard was taken for transparency — `probe` catches this categorically).
 
-Не для: WCAG-контраста текста как отдельной задачи (это `contrast`/скил contrast-and-a11y-check), удаления фона (это [[WSF-03]] `cutout`/bg-remove), видео (video-visual-review).
+Not for: WCAG text contrast as a task of its own (that is `contrast` / the contrast-and-a11y-check skill), background removal (that is [[WSF-03]] `cutout`/bg-remove), video (video-visual-review).
 
-## Жёсткие гейты (не пропускать)
+## Hard gates (do not skip)
 
-- [ ] **QA только по lossless (PNG).** Никогда не судить о крае/alpha по JPEG — JPEG-компрессия фабрикует и преувеличивает кайму (урок NIKA-02, совет H10). Обзорные композиты `*_full.jpg` годятся только для грубого взгляда; решение по краю — по PNG-кропу.
-- [ ] **`probe` ПЕРВЫМ.** Пока не подтверждено, что alpha настоящая (`has_alpha && !baked_checkerboard`) — остальное бессмысленно.
-- [ ] **3 фона обязательны:** чёрный, розовый, белый. Кайма, невидимая на одном фоне, вылезает на другом. Один фон = неполная приёмка.
-- [ ] **200% зум** для осмотра краёв (`edges` рендерит именно так). На 100% дефект в 80-150px не читается.
-- [ ] **`defringe` только param-driven:** bbox'ы даёт `detect-fringe` (или явно человек), **никогда** глобальный порог — глобальный порог убил бы тонкий hair matting (см. defect-catalog, кейс GT-N2). Bbox должен быть щедрым (≥3× feather), иначе кромка маски полулечится и ре-детектится.
-- [ ] **Финальная приёмка края — за человеком.** `detect-fringe` — это ДЕТЕКЦИЯ, не приёмка. LLM/человек остаётся последним гейтом «край ок».
+- [ ] **QA only on lossless (PNG).** Never judge an edge or alpha from a JPEG — JPEG compression fabricates and exaggerates fringing (lesson NIKA-02, council H10). Overview composites `*_full.jpg` are good only for a rough look; the edge decision comes from the PNG crop.
+- [ ] **`probe` FIRST.** Until the alpha is confirmed real (`has_alpha && !baked_checkerboard`), everything else is meaningless.
+- [ ] **3 backgrounds are mandatory:** black, pink, white. A fringe invisible on one background shows up on another. One background is an incomplete acceptance.
+- [ ] **200% zoom** for inspecting edges (`edges` renders exactly that way). At 100% a defect of 80-150px does not read.
+- [ ] **`defringe` is param-driven only:** the bboxes come from `detect-fringe` (or explicitly from a human), **never** a global threshold — a global threshold would have killed the fine hair matting (see defect-catalog, case GT-N2). The bbox must be generous (≥3× feather), otherwise the mask edge is half-repaired and re-detected.
+- [ ] **Final acceptance of the edge belongs to a human.** `detect-fringe` is DETECTION, not acceptance. The LLM or the human remains the last gate on "the edge is fine".
 
-## Порядок (пайплайн приёмки)
+## The order (acceptance pipeline)
 
 ```bash
-# 1. Настоящая ли прозрачность?  (evaluative)
+# 1. Is the transparency real?  (evaluative)
 imgqa probe ASSET.png --json
-#    verdict.result != PASS  → это не usable alpha (запечённая шахматка / нет alpha). Дальше нет смысла.
+#    verdict.result != PASS  -> this is not usable alpha (baked checkerboard / no alpha). Going further is pointless.
 
-# 2. Осмотр на 3 фонах + края 200%  (informational, пишут файлы)
-imgqa backgrounds ASSET.png --out OUTDIR      # чёрный / розовый / белый
-imgqa edges       ASSET.png --out OUTDIR       # lossless 200% кропы границ alpha
-#    → визуально прочитать сгенерированные PNG (multimodal Read), сверить с references/defect-catalog.md
+# 2. Inspection on 3 backgrounds + edges at 200%  (informational, writes files)
+imgqa backgrounds ASSET.png --out OUTDIR      # black / pink / white
+imgqa edges       ASSET.png --out OUTDIR       # lossless 200% crops of the alpha boundary
+#    -> read the generated PNGs visually (multimodal Read), check against references/defect-catalog.md
 
-# 3. Детерминированная детекция каймы  (evaluative → bbox'ы)
+# 3. Deterministic fringe detection  (evaluative -> bboxes)
 imgqa detect-fringe ASSET.png --json
-#    verdict PASS = каймы нет.  FAIL → data.detections[].bbox — кандидаты на ремонт.
+#    verdict PASS = no fringe.  FAIL -> data.detections[].bbox are repair candidates.
 
-# 4. Человек смотрит bbox'ы; при подтверждении — локальный ремонт  (transform)
-imgqa defringe ASSET.png --bbox X,Y,W,H --out OUTDIR   # bbox из шага 3, щедрый
+# 4. A human looks at the bboxes; on confirmation, a local repair  (transform)
+imgqa defringe ASSET.png --bbox X,Y,W,H --out OUTDIR   # bbox from step 3, generous
 
-# 5. Подтвердить, что стало чисто
-imgqa detect-fringe ASSET.png_fixed.png --json         # ожидаем 0 detections
-#    + финальный human-gate по краю на 3 фонах
+# 5. Confirm it came out clean
+imgqa detect-fringe ASSET.png_fixed.png --json         # expect 0 detections
+#    + the final human gate on the edge across 3 backgrounds
 ```
 
-## Как читать вывод (exit-семантика, контракт §2)
+## How to read the output (exit semantics, contract §2)
 
-Каждый вызов с `--json` даёт конверт с `schema_version`, `tool` (версии Pillow/numpy/scipy), `verdict` (у evaluative). **Пинить `schema_version == 2`; при незнакомой версии — падать громко, не угадывать.**
+Every call with `--json` yields an envelope with `schema_version`, `tool` (Pillow/numpy/scipy versions) and, for evaluative commands, `verdict`. **Pin `schema_version == 2`; on an unknown version fail loudly rather than guess.**
 
-| Класс | exit 0 | exit 1 | exit 2 |
+| Class | exit 0 | exit 1 | exit 2 |
 |---|---|---|---|
-| evaluative (`probe`, `compare`, `contrast`, `detect-fringe`) | вердикт **PASS** | вердикт **FAIL / дефекты найдены** | **ошибка инструмента** |
-| informational (`edges`, `backgrounds`, `selftest`) | отработала | — не бывает — | ошибка инструмента |
-| transform (`defringe`, `sheet`) | отработала | — не бывает — | ошибка инструмента |
+| evaluative (`probe`, `compare`, `contrast`, `detect-fringe`) | verdict **PASS** | verdict **FAIL / defects found** | **tool error** |
+| informational (`edges`, `backgrounds`, `selftest`) | it ran | — never happens — | tool error |
+| transform (`defringe`, `sheet`) | it ran | — never happens — | tool error |
 
-- ⚠️ **exit 2 ≠ «дефектов нет».** exit 2 = «инструмент НЕ отработал» (битый файл, bbox вне картинки, decompression-bomb, нет opt-dep). Никогда не интерпретировать как pass. Различать «чисто» и «не отработало» — обязательно.
-- Вердикт читать из типизированного поля `verdict.result`, exit-код — лишь зеркало для shell-гейтинга.
-- `detect-fringe` FAIL сам по себе — не приговор ассету: это список кандидатов для человека, а не автоправка.
+- ⚠️ **exit 2 ≠ "no defects".** exit 2 means "the tool did NOT run" (a corrupt file, a bbox outside the image, a decompression bomb, a missing optional dependency). Never read it as a pass. Telling "clean" apart from "did not run" is mandatory.
+- Read the verdict from the typed `verdict.result` field; the exit code is only a mirror for shell gating.
+- A `detect-fringe` FAIL is not by itself a sentence on the asset: it is a list of candidates for a human, not an auto-fix.
 
-## Каталог дефектов
+## The defect catalogue
 
-Что fringe/halo/hair-matting выглядят как, с ссылками-примерами на реальные NIKA-кропы, и кейсы «неверный метод теста» (svg currentColor, JPEG-превью) — в [`references/defect-catalog.md`](references/defect-catalog.md). Свериться с ним при интерпретации `edges`/`backgrounds`.
+What fringe/halo/hair-matting look like, with example links to real NIKA crops, plus the "wrong test method" cases (svg currentColor, JPEG previews) — in [`references/defect-catalog.md`](references/defect-catalog.md). Check against it when interpreting `edges`/`backgrounds`.
 
-## Фиксация результата
+## Recording the result
 
-Вердикт QA (найденные дефекты, bbox'ы, что пофикшено) — в development history задачи (vault learnings через `mb learn`), как требует контракт §2. Дефект на dogfood-ассете → мелкий сжатый crop в git как versioned benchmark (правило §9 контракта).
+The QA verdict (defects found, bboxes, what was fixed) goes into the task's development history (vault learnings via `mb learn`), as contract §2 requires. A defect on a dogfood asset becomes a small compressed crop in git as a versioned benchmark (rule §9 of the contract).

@@ -8,13 +8,13 @@ status: active
 
 # Phase 2 — Planning
 
-Родитель: `_router.md`. Для S-задач — `[➖]`.
+Parent: `_router.md`. For S-sized tasks, `[➖]`.
 
-- [ ] Декомпозиция на шаги с проверяемым результатом каждого (для XL — полноценная разбивка с зависимостями).
-- [ ] Риски: минимум 1 gap найди в собственном плане (порт «try to find at least one gap») — что сломается первым? какой edge case не покрыт?
-- [ ] Затрагивается бизнес-логика/поведение? → явное решение с owner (Never Decide Alone); рефакторинг сохраняет поведение бит-в-бит.
-- [ ] Для арх. решений — заметка type=decision: альтернативы, выбор, почему, owner+source.
-- [ ] План одобрен (пользователем — или, в автономном режиме, помечен `ASSUMED plan from investigation`).
-- [ ] Авто-append: план + риски в learnings.
+- [ ] Decompose into steps, each with a checkable result (for XL, a full breakdown with dependencies).
+- [ ] Risks: find at least 1 gap in your own plan (the ported "try to find at least one gap") — what breaks first? which edge case is uncovered?
+- [ ] Does it touch business logic or behaviour? → an explicit decision with the owner (Never Decide Alone); a refactor preserves behaviour bit for bit.
+- [ ] For architectural decisions, a note of type=decision: alternatives, the choice, why, owner + source.
+- [ ] The plan is approved (by the user — or, in autonomous mode, marked `ASSUMED plan from investigation`).
+- [ ] Auto-append: the plan plus the risks into the learnings.
 
-**Выход:** план с рисками → `phase-3-implementation.md`.
+**Exit:** a plan with risks → `phase-3-implementation.md`.

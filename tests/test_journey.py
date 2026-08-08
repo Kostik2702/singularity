@@ -130,7 +130,7 @@ def test_a_section_that_is_not_a_date_is_ignored(cfg, monkeypatch):
     monkeypatch.setattr(journey, "_notes", lambda *a, **k: [])
     _index(cfg, [
         {"type": "learning", "file": "learnings/active/T.md", "title": "T",
-         "section": "Обзор подхода"},
+         "section": "Approach overview"},
     ])
     assert journey.collect(cfg, days=7, today=TODAY)["total"] == 0
 

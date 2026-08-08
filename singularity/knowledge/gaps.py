@@ -40,11 +40,46 @@ UNLINKED_EXTRA_EXCLUDED = ("learnings/",)
 # totals; without this one broad signal (measured: 154 unlinked notes against
 # 2 open questions) fills the whole agenda and hides everything else.
 DEFAULT_PER_SIGNAL = 10
-OPEN_QUESTION_HEADINGS = ("open questions", "открытые вопросы", "todo",
-                          "open:", "открыто:", "вопросы")
+#: A heading naming a section of unanswered questions. The engine is written in
+#: English, so the words here are English — but the signal must not be a
+#: property of the language the note happens to be written in, which is why
+#: `_is_open_question_heading` also accepts the language-neutral shapes: a
+#: heading that is itself a question, and the `OPEN:`/`TODO:` markers.
+OPEN_QUESTION_HEADINGS = ("open questions", "open:", "todo", "questions")
 LEARNING_PREFIX = "learnings/active/"
 _HEADING_DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
-_TERM_RE = re.compile(r"[A-ZА-ЯЁ][\w\-]{3,}(?:\s+[A-ZА-ЯЁ][\w\-]{3,})?")
+#: A capitalised term of 4+ characters, one or two words. `[^\W\d_]` is any
+#: LETTER in any script (Python's `re` is Unicode-aware on str), and the case
+#: test is `str.isupper`, which is defined for every alphabet that has case and
+#: simply returns False for those that do not. The previous form spelled out
+#: two alphabets, which silently limited the whole signal to those two.
+_TERM_RE = re.compile(r"[^\W\d_][\w\-]{3,}(?:\s+[^\W\d_][\w\-]{3,})?")
+
+
+def _is_capitalised_term(term: str) -> bool:
+    """EVERY word of the term starts upper case, not just the first.
+
+    The character-range form encoded this in the pattern itself by repeating
+    `[A-Z…]` for the second word. Moving the case test out of the pattern to
+    make it script-agnostic dropped that repetition, and `Ingest loop` began
+    being proposed as a missing page — a sentence fragment, not an entity."""
+    words = term.split()
+    return bool(words) and all(w[:1].isupper() for w in words)
+
+
+def _is_open_question_heading(heading: str) -> bool:
+    """Whether a heading opens a section of unanswered questions.
+
+    Three tests, and the first two carry any language: a heading that ENDS IN A
+    QUESTION MARK is a question wherever it was written, and `OPEN:`/`TODO:` are
+    markers rather than words. The English list is the third and least of them —
+    it exists so an English note is not worse served than a structural one."""
+    low = heading.strip().lower()
+    if low.endswith("?"):
+        return True
+    if low.startswith(("open:", "todo", "fixme")):
+        return True
+    return any(low.startswith(marker) for marker in OPEN_QUESTION_HEADINGS)
 
 # Weight per signal — how strongly a hit of this kind deserves attention.
 # Ranking is weight x age, so a stale gap of a weak kind can still outrank a
@@ -161,8 +196,7 @@ def _open_questions(notes: dict[str, dict[str, Any]], now: float
             items.append(_item("open_questions", rel, age,
                                {"where": "frontmatter status: open"}))
         for heading in info["headings"]:
-            low = heading.strip().lower()
-            if any(low.startswith(marker) for marker in OPEN_QUESTION_HEADINGS):
+            if _is_open_question_heading(heading):
                 items.append(_item("open_questions", f"{rel}#{heading}", age,
                                    {"where": "section", "heading": heading}))
     return items
@@ -244,12 +278,17 @@ def _heuristic_terms(notes: dict[str, dict[str, Any]], names: dict[str, str],
                      min_documents: int, now: float) -> list[dict[str, Any]]:
     """Capitalized multi-word terms that appear across several notes and have
     no page. A GUESS: capitalization is not entity detection, so this stays
-    behind `--heuristic` and is labelled as such in every item."""
+    behind `--heuristic` and is labelled as such in every item.
+
+    Capitalisation is tested with `str.isupper` rather than by a character
+    range, so the signal works in any alphabet that has case — and quietly
+    yields nothing, instead of wrong things, in the ones that do not."""
     document_frequency: Counter = Counter()
     for rel, info in notes.items():
         if rel.startswith(EXCLUDED_PREFIXES):
             continue
-        seen = {t.strip() for t in _TERM_RE.findall(" ".join(info["headings"]))}
+        seen = {t.strip() for t in _TERM_RE.findall(" ".join(info["headings"]))
+                if _is_capitalised_term(t.strip())}
         for term in seen:
             if term.lower() not in names:
                 document_frequency[term] += 1

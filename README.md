@@ -2,7 +2,7 @@
 
 **A personal AI memory system for Claude Code, Codex, Gemini CLI, and Grok Build CLI** — your assistant remembers what matters, finds it in milliseconds, and gets smarter with every mistake.
 
-Singularity turns an [Obsidian](https://obsidian.md) vault into a living, self-maintaining memory for your AI assistant: knowledge is **captured automatically where the client supports hooks**, **indexed on save**, **retrieved semantically** (Russian & English, ~15–70 ms), and **fed back into new Claude/Gemini sessions**. All four clients share the same vault, CLI, and portable skills; Grok gets the capture nudge but static (not injected) recall, and Codex support currently has no runtime hook. A set of disciplined skills, agents, and multi-agent councils keeps the assistant's reasoning honest.
+Singularity turns an [Obsidian](https://obsidian.md) vault into a living, self-maintaining memory for your AI assistant: knowledge is **captured automatically where the client supports hooks**, **indexed on save**, **retrieved semantically** (crosslingual — the query language need not match the note's, ~15–70 ms), and **fed back into new Claude/Gemini sessions**. All four clients share the same vault, CLI, and portable skills; Grok gets the capture nudge but static (not injected) recall, and Codex support currently has no runtime hook. A set of disciplined skills, agents, and multi-agent councils keeps the assistant's reasoning honest.
 
 Since **v0.3.0** the same engine also ships **[Website Factory](#website-factory--reference-to-release-pipeline)** — a reference-to-release pipeline that compiles a brief into a released motion/3D site, letting no unvetted external code into your project without passing a deterministic quarantine and QA gates.
 
@@ -229,7 +229,7 @@ That is the everyday loop: **check → search → work → capture → curate**.
 
 ```bash
 mb search "how does the auto-capture hook decide to block"
-mb search "почему выбрали TCP вместо unix socket"      # RU works too
+mb search "why was TCP chosen over a unix socket"      # any language works
 mb search "reload bug" --top 10                        # more results
 mb search "..." --type decision                        # learning|decision|howto|incident|rule|reference
 mb search "..." --tags search,daemon                   # frontmatter + inline #tags
@@ -251,10 +251,10 @@ Output is compact by design: `file | score | [type] | title/section | excerpt`. 
 
 ```bash
 mb config set inbox_enabled true
-mb inbox add "конфиг не перечитывается после set — проверить reload"
+mb inbox add "config is not re-read after set - check reload"
 mb inbox list
-mb inbox suggest inbox/конфиг-не-перечитывается.md   # type guess + possible duplicates
-mb inbox approve inbox/конфиг-не-перечитывается.md incident
+mb inbox suggest inbox/config-not-re-read.md         # type guess + possible duplicates
+mb inbox approve inbox/config-not-re-read.md incident
 ```
 
 **Nothing leaves the inbox without you saying so.** `suggest` proposes and writes nothing; `approve` is the only command that files, and it refuses (rather than guesses) on an unknown type or an occupied destination. Captures carry `type: inbox`, are never indexed and never reported by the curator — a draft must not be ranked against knowledge, and `suggest` must not offer a capture as a duplicate of itself. Filing keeps the original `captured:` stamp: provenance is when you thought it, not when you tidied it.
@@ -358,8 +358,8 @@ mb journey --days 30 --json          # machine-readable
   learning entries span 21 task(s)
 
 2026-08-05
-  [rule     ] Тёплый демон отдаёт код, с которым стартовал
-  [decision ] SEARCH D1 — гибрид включён по умолчанию
+  [rule     ] A warm daemon serves the code it started with
+  [decision ] SEARCH D1 - hybrid is on by default
 ```
 
 Two sources, because knowledge arrives in two shapes. A **note** counts on the day it was `created:`, never its mtime — a note edited today did not become knowledge today, and mtime would float every touched file to the top and bury the six real decisions of a month. A **learnings file** counts once per timestamped `##` section, not once per file: those files are appended to for months, so the file's own date says nothing. Journal folders (`daily/`, `_moc/`) are excluded for the same reason — sixty dailies would bury six decisions.
@@ -572,19 +572,19 @@ This binds the selected vault in `~/.singularity.json`, creates the standard fol
 
 | Skill | Say… | What happens |
 |---|---|---|
-| `mb-search` | *sem, найди в памяти, what do we know about X* | Semantic search before any grep/file-reading |
-| `mb-memory` | *um, запомни в vault* | Structured capture following the note contract (routes to learning/decision/howto/reference/**personal** via `--project personal`) |
-| `mb-onboard` | *onboard this project, заведи проект в память* | Registers a project (`mb project add`), authors a starter brain note, wires it into `.mb/context.json` |
-| `mb-triage` | *triage this, разберись с этой ошибкой* | Inverse Trust: `mb search` over incidents/rules **before** touching code; captures only a recurring root-cause class |
-| `mb-llm-delegate` | *делегируй локалке, delegate to local model* | Offloads a generation/edit task to the local `mb llm` model while you orchestrate |
+| `mb-search` | *sem, find it in memory, what do we know about X* | Semantic search before any grep/file-reading |
+| `mb-memory` | *um, remember this in the vault* | Structured capture following the note contract (routes to learning/decision/howto/reference/**personal** via `--project personal`) |
+| `mb-onboard` | *onboard this project, add this project to memory* | Registers a project (`mb project add`), authors a starter brain note, wires it into `.mb/context.json` |
+| `mb-triage` | *triage this, sort out this error* | Inverse Trust: `mb search` over incidents/rules **before** touching code; captures only a recurring root-cause class |
+| `mb-llm-delegate` | *delegate to local model* | Offloads a generation/edit task to the local `mb llm` model while you orchestrate |
 | `workflow-helper` | *fw, wh, next* | Guides you through the solo dev workflow, one phase at a time |
-| `grill` | *grill me, прожарь* | Adversarial self-interrogation before a plan/design: hidden assumptions, scope gaps — self-resolves from code+memory first |
+| `grill` | *grill me, grill auto* | Adversarial self-interrogation before a plan/design: hidden assumptions, scope gaps — self-resolves from code+memory first |
 | `confidence-calibration` | *conf, how sure are you* | Confidence computed from an evidence budget (Σ=100 %), never eyeballed |
-| `memory-curator` | *curator, проверь память* | Vault health: broken links, orphans, semantic link suggestions, **chunk-level near-duplicates, supersession candidates, context-budget issues** (approval required, never auto-writes) |
-| `compaction-plan` | *cp, сохрани состояние* | Snapshots session state (≤120 lines) to the vault before a context clear; next session offers to resume, git-reconciles, then deletes the plan |
-| `report` / `error-reports` | *ты ошибся / process reports* | Mistake → PENDING note → preventive rule embedded where it will actually fire → `LEARNED` |
+| `memory-curator` | *curator, check vault health* | Vault health: broken links, orphans, semantic link suggestions, **chunk-level near-duplicates, supersession candidates, context-budget issues** (approval required, never auto-writes) |
+| `compaction-plan` | *cp, save the session state* | Snapshots session state (≤120 lines) to the vault before a context clear; next session offers to resume, git-reconciles, then deletes the plan |
+| `report` / `error-reports` | *you got it wrong / process reports* | Mistake → PENDING note → preventive rule embedded where it will actually fire → `LEARNED` |
 | `council` | *council, X vs Y, trade-off* | Architectural decision by adversarial multi-agent rounds (**Claude-only** — spawns Claude subagent personas; Codex/Gemini have no subagent executor and Grok's `spawn_subagent` is not adapted for them, see `install/skill_manifest.py`) |
-| `planning-council` | *plc, разбей задачу* | Decomposition + Klein pre-mortem + three-point estimation (Claude-only) |
+| `planning-council` | *plc, break down the task* | Decomposition + Klein pre-mortem + three-point estimation (Claude-only) |
 | `observation-council` | *oc, why is X happening* | Hypothesis-driven root cause hunt: every hypothesis must survive a falsification attempt (Claude-only) |
 
 ### Agents — spawned for heavy lifting
@@ -808,7 +808,7 @@ Two new **agents** form the implementation loop (WSF-11): **web-implementer** ap
 
 ```bash
 # conversational: the website-factory skill walks the state graph, one owner gate at a time
-#   say: "сделай сайт по конвейеру" / "what's the next stage" / "resume the factory"
+#   say: "build the site through the pipeline" / "what's the next stage" / "resume the factory"
 
 # pipeline status is COMPUTED, never stored — a stage is "done" when its typed
 # artifact exists and parses, so status is always truthful after any manual edit:
@@ -980,7 +980,7 @@ Logs: `<vault>/.mb/daemon.log`, `watch.log`, `mb.log`. Last doctor run: `.mb/doc
 
 ## Credits
 
-Architecture reverse-engineered from **Genevra**, a production AI memory system (macOS/bash, company-internal), then redesigned cross-platform and personal. The full reverse-engineering study, design docs, task specs, and decision log live in the vault (`01_Genevra_Analysis/`, `02_New_System_Design/`, `03_Tasks/`, `04_Plans/`) — and yes, they're semantically searchable: `mb search "why no vector database"`. See [CHANGELOG.md](CHANGELOG.md) for what shipped and when.
+Architecture reverse-engineered from an earlier production AI memory system (macOS/bash), then redesigned cross-platform and personal. The full reverse-engineering study, design docs, task specs, and decision log live in the vault (`02_New_System_Design/`, `03_Tasks/`, `04_Plans/`) — and yes, they're semantically searchable: `mb search "why no vector database"`. See [CHANGELOG.md](CHANGELOG.md) for what shipped and when.
 
 ---
 

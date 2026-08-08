@@ -1,12 +1,12 @@
 """Vault indexer: full rebuild + incremental update.
 
-Index format (ported from Genevra, no unsafe deserialization):
+Index format (no unsafe deserialization):
   memory_index/embeddings.npy   float32 (chunk_count, dim), allow_pickle=False
   memory_index/metadata.json    {indexed_at, model, chunk_count,
                                  file_meta {rel: [mtime_ms, size]}, chunks[]}
 
 Incremental diff by (mtime_ms int, size) — int avoids float precision loss in
-JSON round-trip (Genevra), size guards against cloud-sync mtime jitter (ours).
+JSON round-trip, size guards against cloud-sync mtime jitter.
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ SUMMARY_FILE = "summary.json"     # tiny sidecar: model/counts without parsing m
 # generation and defeating crash safety. The zero-padded counter disambiguates
 # them while preserving lexical (chronological) sort order.
 _COMMIT_SEQ = itertools.count()
-STALE_LOCK_SECONDS = 6 * 3600     # Genevra 6h rule: take over an abandoned lock
+STALE_LOCK_SECONDS = 6 * 3600     # 6h rule: take over an abandoned lock
 
 
 class IndexLockedError(RuntimeError):
@@ -751,7 +751,7 @@ def _update(cfg: Config, only_files: list[str] | None = None,
             out["excluded"] = excluded
         return out
 
-    # drop chunks of deleted+changed files (Genevra keep-mask)
+    # drop chunks of deleted+changed files (keep-mask)
     dirty = set(deleted) | set(added_or_changed)
     keep = np.array([c["file"] not in dirty for c in meta["chunks"]], dtype=bool)
     embs = embs[keep]

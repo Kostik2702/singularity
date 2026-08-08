@@ -10,6 +10,79 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.17.0 — one language for the engine, none for its behaviour
+
+The repository spoke two languages inside single files: a docstring in one, the
+sentence under it in the other, and — the part that actually mattered — a marker
+list in a third place that made a feature work for speakers of one of them.
+125,976 characters of non-Latin text left the prose. The interesting half of the
+release is what did NOT get translated.
+
+## A word list cannot be made language-neutral by translating it
+
+`machine/routing.py` classified every prompt by matching Russian word stems, so
+the workflow router was a function of the user's keyboard: an English prompt was
+never routed, a Russian one always was. Rendering those stems into English would
+have flipped the bias, not removed it.
+
+So the deciding moved to the reader that understands every language. The
+`UserPromptSubmit` hook now pushes the table of chains once per session and the
+model names the class and the words that chose it. The push moment did not move
+— that was the whole point of the hook — only the deciding. Two filters survive
+in the engine and both count structure rather than words: a client envelope
+marker, and a character length.
+
+`mb route` follows: it prints the table, `--class <key>` prints one chain,
+`--phase <id>` still resolves a path. Every argument a branch does not consume
+says so on stderr, which is the rule the `--vault` notice already stood for.
+
+## Several regexes were narrower than they looked
+
+`\w` is Unicode-aware on `str`, so a character class that spelled a Cyrillic
+range out beside it was that class with decoration — and an explicit
+Latin-plus-Cyrillic uppercase class silently limited a signal to two alphabets.
+Removing the ranges made them work for every script: the structural
+contradiction signals now fire on Latin, Cyrillic, Greek and Japanese alike, and
+`curator gaps` tests whether a heading IS a question before it tests an English
+word list.
+
+Contradiction detection is split honestly rather than universally: structural
+signals read `key: true` and `key=60s` shapes and hold anywhere; the lexical ones
+are English word lists and the module says so, because a word list pretending to
+be universal fails as silence that reads like "no contradictions".
+
+## Genevra and Bringg
+
+A former employer's names are gone from every tracked file. Where a literal
+substitution would have read circularly — "ported from Genevra" inside
+Singularity — the provenance clause went instead of gaining a new name.
+
+## Guards, each proven by planting the violation it must catch
+
+* **`test_engine_speaks_one_language`** scans for letters outside the Latin
+  blocks BY CODE POINT. A guard against "Cyrillic" would have said nothing about
+  a Greek heading pasted in tomorrow. Every exception carries a reason and a size
+  budget, so an allowlisted file cannot quietly become the place new untranslated
+  prose accumulates.
+* **`doctor D10-rules-inventory`** computes what `rules_delivery`'s docstring
+  described in prose. A vault rule note that declares no delivery point and that
+  the engine never names is now counted and named. That is how `Rule - a release
+  against a class of defect gives a scanner for the class` sat undelivered for
+  four days while the inventory "added up" — and that rule is now grafted into
+  preamble §7, where a fix is written.
+* **`code_index_baseline`** refuses a capture taken with a different question set
+  instead of pairing it by id and reporting a displacement number about nothing.
+
+## What deliberately stays non-Latin
+
+Data, not prose: the crosslingual retrieval eval whose whole purpose is proving
+the multilingual claim, the non-ASCII path regressions, recorded search output
+over a vault that is not written in English, and one section heading quoted from
+that vault. Deleting them would delete the evidence that the engine does not care
+which language it is handed, which is the property this release is about.
+
+---
+
 # v0.16.0 — what a step cost, and what it left in the context
 
 `mb usage` answers a question the engine could not answer about itself: where
@@ -505,7 +578,7 @@ The fix removed the second name and split a concept that had been conflated:
 host names must be — plus the invariant that keeps the window honest as the
 engine grows: every parser command is either on the window or inside a group or
 a host, and every name the facade lists exists in the parser. Rule recorded in
-the vault: *Второе имя для существующей вещи оплачивается всеми её потребителями*.
+the vault: *a second name for an existing thing is paid for by all of its consumers*.
 
 ### The measurement loop closes
 
@@ -514,7 +587,7 @@ A coverage check ("which command has a skill that leads to it?") found that
 the 33 skills — including `memory-curator`, whose whole subject is "how is the
 memory doing". T14 shipped those measurements to "decide on further complexity
 from data rather than impressions"; the data had been accumulating unread.
-`memory-curator` gains a *Здоровье по данным* section: thresholds tied to the one
+`memory-curator` gains a *Health from the data* section: thresholds tied to the one
 declared goal (G1, ≥80% of session knowledge lands in the vault) because the
 engine deliberately has none, the denominator checked first (percentages over 3
 sessions mean nothing), and every signal mapped to one action. SessionStart now
@@ -741,7 +814,7 @@ genuinely blocked, **stop and say so** rather than routing around it. Reading
 vault files and copying *into* the vault stay explicitly fine — the rule is
 about editable duplicates, not about the outside world.
 
-`mb-memory/SKILL.md` gains the matching destination gate above the "чем писать"
+`mb-memory/SKILL.md` gains the matching destination gate above the "what to write with"
 gate added in v0.6.4: together they answer *where* and *with what* before the
 first write.
 
@@ -850,8 +923,8 @@ change: three tests fail.
 
 ### The skill said the opposite of the guard
 
-`mb-memory/SKILL.md` is what the assistant actually reads, and it said *"крупные
-записи — редактируй `.md` напрямую (Edit/Write)"*. So the bypass was not a
+`mb-memory/SKILL.md` is what the assistant actually reads, and it said *"for large
+entries, edit the `.md` directly (Edit/Write)"*. So the bypass was not a
 lapse — it was the documented instruction, and the guard was arguing with the
 skill. The skill now carries the gate itself: a NEW file in a managed root goes
 through `mb note new` regardless of size (create with the command, fill in with
@@ -1353,7 +1426,7 @@ of duplicating it** — and in doing so surfaced two seams the spec never had.
   disk already carries the old global number, which is exactly what memory and
   sources now declare.
 - **`search/code_chunking.py`** (C02): regex symbol boundaries, Python-first
-  (69% of the codebase, and the one language Genevra had no chunker for) —
+  (69% of the codebase, and the one language the predecessor had no chunker for) —
   methods as their own chunks, decorators pulled in, docstrings read forward
   from the signature. TS/JS/JSX ported. Ruby deliberately *not* implemented
   (D6: zero `.rb` files exist; it falls back rather than pretending).

@@ -1,80 +1,81 @@
 ---
 name: memory-curator
-description: Vault health check, contradiction adjudication, research agenda AND adoption review for the Singularity memory (Obsidian). Use when the user says curator, куратор, "проверь память", "check vault health", mdoc, "предложи связи", "что исследовать дальше", "есть ли противоречия"; also for "пользуемся ли мы памятью", "работает ли память на меня", adoption, reflect, "статистика памяти", "memory stats", "стоит ли это обслуживать"; or periodically after large writing sessions. Runs mb curator / contradictions / gaps plus mb reflect / stats, reviews findings, proposes fixes - NEVER applies structure changes without user approval.
+description: Vault health check, contradiction adjudication, research agenda AND adoption review for the Singularity memory (Obsidian). Use when the user says curator, "check vault health", mdoc, "suggest links", "what should I research next", "are there contradictions"; also for "are we actually using the memory", "is the memory working for me", adoption, reflect, "memory stats", "is this worth maintaining"; or periodically after large writing sessions. Runs mb curator / contradictions / gaps plus mb reflect / stats, reviews findings, proposes fixes - NEVER applies structure changes without user approval.
 ---
 
-# memory-curator — здоровье vault, противоречия и повестка
+# memory-curator — vault health, contradictions and the agenda
 
-Порт `memory-doctor` из Genevra. Три инструмента, все report-only:
+Three tools, all report-only:
 
-| Команда | Что даёт |
+| Command | What it gives |
 |---|---|
-| `mb curator [--json]` | механическая валидация + семантические предложения связей |
-| `mb curator contradictions [--json] [--limit N] [--same-file]` | КАНДИДАТЫ в противоречия с evidence-токенами |
-| `mb curator gaps [--json] [--top N] [--heuristic]` | чего в памяти не хватает |
+| `mb curator [--json]` | mechanical validation + semantic link suggestions |
+| `mb curator contradictions [--json] [--limit N] [--same-file]` | CANDIDATE contradictions with evidence tokens |
+| `mb curator gaps [--json] [--top N] [--heuristic]` | what the memory is missing |
 
-## Протокол сессии курирования
+## The curation session protocol
 
-- [ ] 1. Запусти `mb curator --json` и разбери вывод (issues / orphans / stale / link_suggestions).
-- [ ] 2. **Битые wikilinks** — почини сам (это механика, не структура): найди правильную цель через `mb search`, исправь ссылку. Если цель не существует — спроси пользователя (удалить ссылку или создать заметку?).
-- [ ] 3. **Missing frontmatter** — дополни из контекста заметки (title из H1, created из file ctime, type из папки). Файлы пользователя вне контракта (корень vault, daily) — НЕ трогай, только сообщи.
-- [ ] 4. **Decisions без owner/source** — НЕ выдумывай владельца (Never Decide Alone): спроси пользователя или пометь `owner: UNRESOLVED`.
-- [ ] 5. **Link suggestions** — покажи пользователю списком «A ↔ B (score)» с 1-строчным обоснованием каждой пары; применяй `[[wikilink]]` ТОЛЬКО одобренные (вставляй в секцию "Связано"/related, не в случайное место текста).
-- [ ] 6. **Orphans** — предложи для каждой: связать (см. suggestions), включить в MOC, или это нормальный standalone (daily/changelog).
-- [ ] 7. **Stale active** (>60 дней) — предложи `status: superseded`/archive; не менять без approve.
-- [ ] 8. Итог: компактный отчёт (исправлено сам / предложено / отклонено) + запись в changelog vault, если были изменения.
+- [ ] 1. Run `mb curator --json` and work through the output (issues / orphans / stale / link_suggestions).
+- [ ] 2. **Broken wikilinks** — fix them yourself (this is mechanics, not structure): find the right target with `mb search`, correct the link. If the target does not exist — ask the user (delete the link or create the note?).
+- [ ] 3. **Missing frontmatter** — fill it in from the note's context (title from H1, created from file ctime, type from the folder). User files outside the contract (vault root, daily) — do NOT touch, only report.
+- [ ] 4. **Decisions without owner/source** — do NOT invent an owner (Never Decide Alone): ask the user or mark `owner: UNRESOLVED`.
+- [ ] 5. **Link suggestions** — show the user a list of "A ↔ B (score)" with a one-line justification per pair; apply `[[wikilink]]` ONLY for approved ones (insert into the "Related" section, not into a random spot in the text).
+- [ ] 6. **Orphans** — for each, propose: link it (see suggestions), fold it into a MOC, or accept it as a legitimate standalone (daily/changelog).
+- [ ] 7. **Stale active** (>60 days) — propose `status: superseded`/archive; never change without approval.
+- [ ] 8. Wrap up: a compact report (fixed myself / proposed / rejected) plus an entry in the vault changelog if anything changed.
 
-## Adjudication противоречий (W07)
+## Contradiction adjudication (W07)
 
-`mb curator contradictions` даёт пары «одна тема — разные утверждения» в полосе cosine 0.72–0.90 (выше — это near-duplicate, им занимается `mb curator`, ниже — разные темы). **Это кандидаты, а не вердикты**: precision без LLM низкая по построению, и именно поэтому каждый кандидат обязан нести `evidence` — токены, которые его вызвали.
+`mb curator contradictions` yields pairs of "one topic — different claims" in the cosine band 0.72–0.90 (above that it is a near-duplicate, which `mb curator` handles; below, they are different topics). **These are candidates, not verdicts**: precision without an LLM is low by construction, which is exactly why every candidate must carry `evidence` — the tokens that raised it.
 
-- [ ] 1. `mb curator contradictions --json`. Читай `evidence`, а не только score: `boolean_flip`/`polarity_flip`/`negation_flip` — сильные сигналы, `numeric_mismatch` — средний, `negation_asymmetry` — модификатор.
-- [ ] 2. По каждому кандидату открой ОБЕ секции целиком. Типовые ложные срабатывания: разный scope («для A включено, для B выключено» — не противоречие), сравнительная таблица, версионированный рецепт (v3 рядом с v4), цитата чужого решения.
-- [ ] 3. Вердикт — только с обоснованием одной строкой. Записывать так:
+- [ ] 1. `mb curator contradictions --json`. Read `evidence`, not just the score: `boolean_flip`/`polarity_flip`/`negation_flip` are strong signals, `numeric_mismatch` is medium, `negation_asymmetry` is a modifier.
+- [ ] 2. For each candidate open BOTH sections in full. Typical false positives: differing scope ("enabled for A, disabled for B" is not a contradiction), a comparison table, a versioned recipe (v3 next to v4), a quotation of somebody else's decision.
+- [ ] 3. A verdict only ever comes with a one-line justification. Record it like this:
 ```bash
-mb curator verdict "<key>" --verdict false_positive --note "разный scope: A про личный vault, B про общий"
-mb curator verdict "<key>" --verdict resolved      --note "поправил reference/x.md, теперь 0.45 в обоих"
-mb curator verdict "<key>" --verdict accepted      --note "реальное противоречие, владелец решает"
+mb curator verdict "<key>" --verdict false_positive --note "different scope: A is about a personal vault, B about a shared one"
+mb curator verdict "<key>" --verdict resolved      --note "fixed reference/x.md, now 0.45 in both"
+mb curator verdict "<key>" --verdict accepted      --note "a real contradiction, the owner decides"
 ```
-Помеченная пара больше не всплывает — без этого один и тот же false positive возвращается каждый прогон и отчёт перестают читать.
-- [ ] 4. **Ни одной правки заметки без approve.** Если вердикт `resolved` требует изменения — сначала покажи пользователю обе стороны и предложи, какую править.
-- [ ] 5. `--same-file` включай только при аудите одной длинной заметки: внутри документа расхождение чисел почти всегда сравнительная таблица.
+A marked pair stops resurfacing — without this the same false positive comes back every run and people stop reading the report.
 
-Опционально: батч-adjudication локальной моделью (`mb llm` + скил `mb-llm-delegate`) за флагом `lint_llm_adjudication` (по умолчанию `false`). Вердикт модели — всё равно предложение, а не применение.
+- [ ] 4. **Not a single note edit without approval.** If a `resolved` verdict requires a change — first show the user both sides and propose which one to edit.
+- [ ] 5. Turn on `--same-file` only when auditing one long note: inside a single document a numeric divergence is almost always a comparison table.
 
-## Повестка исследования (W08)
+Optional: batch adjudication by a local model (`mb llm` + the `mb-llm-delegate` skill) behind the `lint_llm_adjudication` flag (`false` by default). The model's verdict is still a proposal, not an application.
 
-`mb curator gaps` отвечает на «что исследовать дальше», а не «прибрано ли». Шесть сигналов: `unprocessed_sources`, `open_questions`, `missing_pages`, `undigested_learnings`, `decisions_without_review`, `unlinked_from_index`.
+## The research agenda (W08)
 
-- [ ] 1. `mb curator gaps --json`. `counts` — истинные тотали; `items` — шорт-лист после потолка на сигнал; `truncated` говорит, что скрыто.
-- [ ] 2. `unprocessed_sources` → передай в скил `mb-ingest` (цикл не замкнут).
-- [ ] 3. `open_questions` → предложи пользователю выбрать 1–2 и закрыть их сейчас; остальные оставь.
-- [ ] 4. `missing_pages` → это страницы, на которые ссылаются ≥2 заметки и которых нет. Создавать только по approve.
-- [ ] 5. `undigested_learnings` → это вход для `mb digest plan`, а не для ручной правки.
-- [ ] 6. `--heuristic` — догадки по частотности, включай осознанно и помечай их как догадки в отчёте.
+`mb curator gaps` answers "what should I research next", not "is it tidy". Six signals: `unprocessed_sources`, `open_questions`, `missing_pages`, `undigested_learnings`, `decisions_without_review`, `unlinked_from_index`.
 
-## Здоровье по данным (T14)
+- [ ] 1. `mb curator gaps --json`. `counts` are the true totals; `items` is the shortlist after the per-signal ceiling; `truncated` tells you what is hidden.
+- [ ] 2. `unprocessed_sources` → hand it to the `mb-ingest` skill (the loop is not closed).
+- [ ] 3. `open_questions` → offer the user 1–2 to close right now; leave the rest.
+- [ ] 4. `missing_pages` → these are pages referenced by ≥2 notes that do not exist. Create them only on approval.
+- [ ] 5. `undigested_learnings` → this is input for `mb digest plan`, not for a manual edit.
+- [ ] 6. `--heuristic` — guesses by frequency; enable it deliberately and label them as guesses in the report.
 
-Три числа отвечают на вопрос, который `mb curator` не задаёт: **работает ли память на пользователя вообще**. Куратор чинит vault; эта секция решает, стоит ли чинить дальше. Цель T14 дословно: «измерять adoption и принимать решение о дальнейшем усложнении по данным, а не по впечатлениям».
+## Health from the data (T14)
 
-| Команда | Что даёт | На что смотреть |
+Three numbers answer the question `mb curator` never asks: **is the memory working for the user at all**. The curator repairs the vault; this section decides whether repairing it further is worth it. T14's goal, verbatim: "measure adoption and decide about further complexity from data, not from impressions".
+
+| Command | What it gives | What to look at |
 |---|---|---|
-| `mb reflect [--days N] [--json]` | доля сессий с каждым сигналом adoption | `search_then_read`, `vault_touch` на фоне `eligible_research` |
-| `mb stats [--json]` | состав памяти | `sources: new=N`, возраст code-индекса, перекос по типам |
-| `mb nightly --json` | ночной прогон + строка тренда | направление, а не абсолют |
+| `mb reflect [--days N] [--json]` | share of sessions carrying each adoption signal | `search_then_read`, `vault_touch` against `eligible_research` |
+| `mb stats [--json]` | the composition of the memory | `sources: new=N`, age of the code index, skew by type |
+| `mb nightly --json` | the nightly run + a trend line | the direction, not the absolute |
 
-**Порогов в движке нет, и это не упущение**: единственная объявленная цель, к которой их можно привязать — G1 из `02_New_System_Design/00_Vision_And_Principles.md` («≥80% знаний сессии попадает в vault без явной команды»). Всё остальное — суждение по тренду, и в отчёте его нужно назвать суждением.
+**There are no thresholds in the engine, and that is not an oversight**: the only declared goal they could be tied to is G1 from `02_New_System_Design/00_Vision_And_Principles.md` ("≥80% of a session's knowledge reaches the vault without an explicit command"). Everything else is judgement about a trend, and the report has to call it judgement.
 
-- [ ] 1. `mb reflect --days 30`. Сначала ЗНАМЕНАТЕЛЬ — число сессий. На выборке меньше ~10 проценты не значат ничего: скажи это вслух и не делай выводов (сегодня на этой машине их 3).
-- [ ] 2. `eligible_research` — сессии, где знание было, а код не писали (метрика существует именно затем, чтобы они не выпадали из знаменателя). Высокая их доля при низком `vault_touch` = знание не оседает, прямое расхождение с G1. Действие — не «писать больше заметок», а найти разрыв: выключены хуки (`mb hooks status`), не вызываются скиллы (`skill_invocation`).
-- [ ] 3. Низкий `search_then_read` = SEM-FIRST не соблюдается, память ищут реже, чем читают файлы. Действие — проверить, доходит ли SessionStart-подсказка (она и есть носитель правила), а не переписывать скиллы.
-- [ ] 4. `mb stats`: `sources new=N > 0` — цикл ingest не замкнут. Это тот же сигнал, что `unprocessed_sources` в `mb curator gaps`, и уходит туда же — в скил `mb-ingest`, не в ручную правку.
-- [ ] 5. Отчёт ровно в три строки: что измерено → что из этого следует → какое ОДНО действие предлагается. Метрика без предложенного действия — шум, который перестают читать (тот же принцип, что вердикты в adjudication).
-- [ ] 6. Если числа говорят «система используется меньше, чем стоит её обслуживание» — скажи это прямо. T14 построен и для такого вывода тоже, иначе измерение обслуживает само себя.
+- [ ] 1. `mb reflect --days 30`. The DENOMINATOR first — the number of sessions. On a sample below ~10 the percentages mean nothing: say so out loud and draw no conclusions (today on this machine there are 3).
+- [ ] 2. `eligible_research` — sessions where knowledge was present but no code was written (the metric exists precisely so they do not drop out of the denominator). A high share of them with a low `vault_touch` means knowledge is not settling — a direct divergence from G1. The action is not "write more notes" but find the break: hooks disabled (`mb hooks status`), skills not invoked (`skill_invocation`).
+- [ ] 3. A low `search_then_read` means SEM-FIRST is not being followed — memory is searched less often than files are read. The action is to check whether the SessionStart prompt is arriving (it is the carrier of the rule), not to rewrite skills.
+- [ ] 4. `mb stats`: `sources new=N > 0` means the ingest loop is not closed. This is the same signal as `unprocessed_sources` in `mb curator gaps`, and it goes to the same place — the `mb-ingest` skill, not a manual edit.
+- [ ] 5. The report is exactly three lines: what was measured → what follows from it → which ONE action is proposed. A metric with no proposed action is noise that people stop reading (the same principle as verdicts in adjudication).
+- [ ] 6. If the numbers say "the system is used less than it costs to maintain" — say it plainly. T14 was built for that conclusion too, otherwise the measurement only serves itself.
 
-## Write-discipline (из Genevra memory-doctor)
+## Write discipline
 
-- [ ] Ноль структурных записей без явного approve. Автономно можно: чинить битые ссылки с однозначной целью, дополнять механический frontmatter.
-- [ ] **Архивация — точка потери знания, а не смена статуса.** `learnings/archive/` НЕ входит в семантический индекс: что осталось только там, из `mb search` исчезает. Прежде чем ставить `status: archived` и двигать файл: прочитать learning целиком → вынести инсайты, которых нет ни в одной постоянной заметке (факт об инструменте → `reference/`, порядок действий → `howto/`, выбор с последствиями → `decisions/`, повторяющаяся ошибка → `rules/`) → проверить поиском, что вынесенное находится (`mb search "<дословная фраза>"` возвращает новую заметку) → и только потом архивировать. Признак нарушения: между чтением learning и его перемещением не появилось ни одной правки в постоянных заметках.
-- [ ] Вердикты в `.mb/lint.json` — это состояние движка, не структура vault: их можно писать без approve, но каждый с обоснованием.
-- [ ] Дашборды для ручного обзора: `_moc/Dashboard.md`, `_moc/Orphans.md` (Dataview).
+- [ ] Zero structural writes without explicit approval. Autonomously allowed: fixing broken links with an unambiguous target, filling in mechanical frontmatter.
+- [ ] **Archiving is where knowledge is lost, not a change of status.** `learnings/archive/` is NOT part of the semantic index: whatever remains only there disappears from `mb search`. Before setting `status: archived` and moving the file: read the learning in full → lift out the insights that exist in no permanent note (a fact about a tool → `reference/`, an order of operations → `howto/`, a choice with consequences → `decisions/`, a recurring mistake → `rules/`) → verify by search that what you lifted can be found (`mb search "<verbatim phrase>"` returns the new note) → and only then archive. The tell-tale of a violation: between reading the learning and moving it, not one edit appeared in any permanent note.
+- [ ] Verdicts in `.mb/lint.json` are engine state, not vault structure: they may be written without approval, but each with a justification.
+- [ ] Dashboards for manual review: `_moc/Dashboard.md`, `_moc/Orphans.md` (Dataview).

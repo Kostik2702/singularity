@@ -212,12 +212,12 @@ def test_note_new_warning_does_not_change_the_frontmatter_title(wired, cfg):
 # the default untouched.
 
 def test_note_new_filename_overrides_the_stem(wired, cfg):
-    cli.main(["note", "new", "rule", "верификация через команду",
-              "--filename", "Rule - верификация через команду"])
-    path = cfg.vault / "rules" / "Rule - верификация через команду.md"
+    cli.main(["note", "new", "rule", "verification through the command",
+              "--filename", "Rule - verification through the command"])
+    path = cfg.vault / "rules" / "Rule - verification through the command.md"
     assert path.exists()
     fm, _ = parse_frontmatter(path.read_text(encoding="utf-8"))
-    assert fm["title"] == "верификация через команду", "title stays the author's"
+    assert fm["title"] == "verification through the command", "title stays the author's"
 
 
 def test_note_new_filename_is_sanitized_too(wired, cfg, capsys):

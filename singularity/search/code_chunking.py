@@ -9,11 +9,12 @@ behavior we want on a repositories root full of half-finished scratch files.
 Quality of a code hit is decided by what lands in the chunk. A whole file is
 useless (one embedding for 600 lines of unrelated symbols) and a single line is
 useless (no context); the unit is ONE SYMBOL with its signature and its
-docstring. Numbers below are ported from the Genevra reverse-engineering write
+docstring. Numbers below are ported from the reverse-engineering write
 -up (vault: Semantic_Search_Deep_Dive §5.2).
 
-Languages (decision D6 — Python is primary here, the inverse of Genevra):
-  * Python   — 69% of this codebase and entirely new code; Genevra ran `.py`
+Languages (decision D6 — Python is primary here, the inverse of the
+predecessor):
+  * Python   — 69% of this codebase and entirely new code; the predecessor ran `.py`
                through its TS chunker, where it fell into fallback almost every
                time. Triple-quoted docstrings are read FORWARD from the
                signature, which is where Python puts them, unlike a `#` banner
@@ -103,11 +104,10 @@ SKIP_FILE_PATTERNS = (
     "*secret*", "*credential*",
 )
 
-# Repositories excluded wholesale (CODE-INDEX D1): a fixture tree and a vendored
-# copy of the system this one replaced. Erring toward "something extra got
-# indexed" is deliberate — that failure is visible in search results and fixed
-# by one line, whereas an allowlist fails silently by omission.
-SKIP_REPOS = ("test-project", "genevra-portable")
+# Repositories excluded wholesale (CODE-INDEX D1): a fixture tree. Erring toward
+# "something extra got indexed" is deliberate — that failure is visible in search
+# results and fixed by one line, whereas an allowlist fails silently by omission.
+SKIP_REPOS = ("test-project",)
 
 # A source file past this is generated, vendored or a data blob pretending to be
 # code; embedding it costs real time and returns noise.

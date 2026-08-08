@@ -109,6 +109,9 @@ def test_bm25_ranks_the_document_holding_a_rare_token_first():
 def test_bm25_tokenizer_keeps_identifiers_and_handles_cyrillic():
     assert lexical.tokenize("mb config set --per-signal") == [
         "mb", "config", "set", "per", "signal"]
+    #: The tokenizer must not be a Latin-only regex: the vault is indexed in
+    #: whatever the notes are written in, and a tokenizer that drops a script
+    #: makes those notes unfindable by BM25 while leaving the run green.
     assert lexical.tokenize("Демон перечитывает конфиг") == [
         "демон", "перечитывает", "конфиг"]
 

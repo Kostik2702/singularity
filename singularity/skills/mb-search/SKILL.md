@@ -1,39 +1,39 @@
 ---
 name: mb-search
-description: Semantic search over the user's Obsidian memory vault (Singularity, CLI mb). Use when the user says sem, fm, "найди в памяти", "find in memory", "что мы знаем о", "what do we know about", or BEFORE any grep/Read discovery of prior knowledge, decisions, howtos, incidents, project docs. RU and EN queries both work.
+description: Semantic search over the user's Obsidian memory vault (Singularity, CLI mb). Use when the user says sem, fm, "find it in memory", "find in memory", "what do we know about", or BEFORE any grep/Read discovery of prior knowledge, decisions, howtos, incidents, project docs. The index is crosslingual - a query finds a note whatever language either is written in.
 ---
 
-# mb-search — семантический поиск по памяти
+# mb-search — semantic search over the memory
 
-Вольт резолвится сам (`--vault` → `MB_HOME` → `~/.singularity.json`). Демон отвечает ~10-30 мс warm; при мёртвом демоне клиент сам его поднимет (первый запрос ~10 с) или ответит cold.
+The vault resolves itself (`--vault` → `MB_HOME` → `~/.singularity.json`). The daemon answers in ~10-30 ms warm; if it is dead the client starts it itself (the first request takes ~10 s) or answers cold.
 
-## SEM-FIRST правило
+## The SEM-FIRST rule
 
-- [ ] Для ЛЮБОГО поиска знаний (память, решения, прошлые задачи, howto) — сначала `mb search`, и только потом grep/Glob/Read как fallback.
-- [ ] Пропускать sem можно только когда путь уже известен: назван пользователем, получен из предыдущего результата, или детерминирован задачей.
+- [ ] For ANY knowledge search (memory, decisions, past tasks, howtos) — `mb search` first, and only then grep/Glob/Read as a fallback.
+- [ ] Skipping sem is allowed only when the path is already known: named by the user, obtained from a previous result, or determined by the task itself.
 
-## Команды
-
-```bash
-mb search "как настроен поиск"            # top-5, compact-выдача (экономия токенов)
-mb search "reload bug" --top 10           # больше результатов
-mb search "..." --type decision           # только решения (learning|decision|howto|incident|rule|reference)
-mb search "..." --tags search,daemon      # фильтр по тегам (frontmatter + inline)
-mb search "..." --links "Doctor_Plan"     # только заметки, связанные с [[Doctor_Plan]]
-mb search "..." --path-prefix 03_Tasks/   # только в папке
-mb search "..." --json                    # полные объекты (для обработки)
-mb search "..." --full                    # без обрезки excerpt
-```
-
-Выдача compact: `file | score | [type] | title/section | excerpt(150)`. Score < ~0.3 — слабое совпадение; переформулируй запрос (модель мультиязычная, можно смешивать RU/EN).
-
-## Обслуживание (если поиск странный)
+## Commands
 
 ```bash
-mb daemon status          # жив ли демон, порт
-mb index update           # инкрементально доиндексировать (обычно не нужно — watcher следит)
-mb daemon reload          # перечитать индекс
-mb doctor --fix           # полная диагностика + ремонт
+mb search "how is search configured"      # top-5, compact output (token thrift)
+mb search "reload bug" --top 10           # more results
+mb search "..." --type decision           # decisions only (learning|decision|howto|incident|rule|reference)
+mb search "..." --tags search,daemon      # filter by tags (frontmatter + inline)
+mb search "..." --links "Doctor_Plan"     # only notes linked to [[Doctor_Plan]]
+mb search "..." --path-prefix 03_Tasks/   # only inside a folder
+mb search "..." --json                    # full objects (for processing)
+mb search "..." --full                    # no excerpt truncation
 ```
 
-- [ ] Результат для пользователя цитируй как `файл | секция`, не вываливай сырые строки.
+Compact output: `file | score | [type] | title/section | excerpt(150)`. A score below ~0.3 is a weak match; rephrase the query. The embedding model is multilingual, so the query does not have to be in the language the note was written in, and languages may be mixed within one query.
+
+## Maintenance (when search behaves oddly)
+
+```bash
+mb daemon status          # is the daemon alive, and on which port
+mb index update           # incremental top-up (usually unnecessary — the watcher handles it)
+mb daemon reload          # re-read the index
+mb doctor --fix           # full diagnosis plus repair
+```
+
+- [ ] Cite a result to the user as `file | section`; never dump raw lines.

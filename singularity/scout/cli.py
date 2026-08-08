@@ -59,7 +59,7 @@ def _cmd_collect(args) -> int:
     queries = [q for q in (args.query or []) if q.strip()]
     if args.queries_file:
         # utf-8-sig: Notepad/PowerShell BOM must not leak into API queries
-        # (vault rule "stdin хуков читать utf-8-sig", review F6)
+        # (vault rule "read hook stdin as utf-8-sig", review F6)
         text = Path(args.queries_file).read_text(encoding="utf-8-sig")
         queries += [ln.strip() for ln in text.splitlines()
                     if ln.strip() and not ln.strip().startswith("#")]

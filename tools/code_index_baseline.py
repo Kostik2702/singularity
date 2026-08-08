@@ -30,31 +30,34 @@ from typing import Any
 REPO = Path(__file__).resolve().parent.parent
 
 # Ten REAL questions to the memory, not synthetic probes: each one was actually
-# asked (or is the shape of what gets asked) during Singularity work. The `kind`
+# asked (or is the shape of what gets asked) during Singularity work. They were
+# re-worded into English when the engine was standardised on one language, so a
+# capture taken before that cannot be read with these — `_reject_a_foreign_query_set`
+# refuses it rather than pairing by id. The `kind`
 # column is the note type the query is expected to land on -- it documents the
 # coverage claim (decision / howto / incident / reference / rule / learning),
 # and a drift in `kind` is itself a signal worth reading.
 QUERIES: list[dict[str, str]] = [
     {"id": "Q01", "kind": "decision",
-     "query": "почему индекс пересобирается полностью"},
+     "query": "why is the index rebuilt in full"},
     {"id": "Q02", "kind": "howto",
-     "query": "как добавить новый корпус в семантический поиск"},
+     "query": "how to add a new corpus to semantic search"},
     {"id": "Q03", "kind": "incident",
-     "query": "Glob на Windows молча возвращает пустой результат"},
+     "query": "Glob on Windows silently returns an empty result"},
     {"id": "Q04", "kind": "reference",
-     "query": "atomic commit поколений индекса и защита от torn write"},
+     "query": "atomic commit of index generations and torn-write protection"},
     {"id": "Q05", "kind": "incident",
-     "query": "TLS MITM сертификат при загрузке модели с Hugging Face"},
+     "query": "TLS MITM certificate when downloading a model from Hugging Face"},
     {"id": "Q06", "kind": "rule",
-     "query": "что обязательно записывать в память после задачи"},
+     "query": "what must be written to memory after a task"},
     {"id": "Q07", "kind": "reference",
-     "query": "как устроен nightly прогон и из каких шагов состоит"},
+     "query": "how the nightly run works and which steps it has"},
     {"id": "Q08", "kind": "decision",
-     "query": "нужен ли watcher за репозиториями кода"},
+     "query": "is a watcher over code repositories needed"},
     {"id": "Q09", "kind": "reference",
      "query": "markdown chunking overlapping windows and minimum chunk size"},
     {"id": "Q10", "kind": "learning",
-     "query": "почему поиск отвечает медленно и что такое холодный fallback"},
+     "query": "why search answers slowly and what the cold fallback is"},
 ]
 
 TOP_K = 5
@@ -142,7 +145,7 @@ def _table(rows: list[dict[str, Any]]) -> list[str]:
     out: list[str] = []
     for row in rows:
         out.append("")
-        out.append(f"### {row['id']} — «{row['query']}»  ·  ожидаемый тип: `{row['kind']}`")
+        out.append(f"### {row['id']} — «{row['query']}»  ·  expected type: `{row['kind']}`")
         out.append("")
         out.append("| # | score | file | section / name | corpus |")
         out.append("|---|---|---|---|---|")
@@ -151,14 +154,73 @@ def _table(rows: list[dict[str, Any]]) -> list[str]:
             out.append(f"| {i} | {hit['score']:.4f} | `{hit['file']}` | "
                        f"{label} | {hit['source']} |")
         if not row["top"]:
-            out.append("| — | — | *(нет попаданий)* | | |")
+            out.append("| — | — | *(no hits)* | | |")
         out.append("")
         out.append(f"*engine {row['engine_ms']} ms · wall {row['wall_ms']} ms*")
     return out
 
 
+def _reject_a_foreign_query_set(data: dict, src: str) -> str | None:
+    """Why this capture may not be read with the current QUERIES, or None.
+
+    Rows are paired by `id`, so a capture whose Q01 asked a different question
+    still lines up perfectly against today's Q01 and yields a displacement
+    number about nothing. That became reachable on 2026-08-08, when the ten
+    questions were re-worded into English while every recorded capture under
+    `docs/` kept the ones it was taken with — the same shape
+    `tests/test_search_eval.py` already refuses for the retrieval eval set
+    ("the comparison is between different sets and means nothing").
+
+    The test is EQUALITY of the two sets, not agreement on their overlap. The
+    first version compared `recorded.keys() & current.keys()`, which refused the
+    one shape it had just seen — same ids, re-worded text — and accepted a
+    capture whose ids were entirely different, an empty one, and one with no
+    `variants` key at all. The first rendered an empty table and exited 0; the
+    last raised KeyError and exited 1, which in this repo's convention means
+    "defects found" rather than "the tool did not run"."""
+    variants = data.get("variants")
+    if not isinstance(variants, dict) or not isinstance(variants.get("baseline"), list):
+        return (f"{src} is not a capture: no `variants.baseline` list. "
+                f"Take one with `capture`.")
+
+    rows = variants["baseline"]
+    if not all(isinstance(r, dict) and "id" in r for r in rows):
+        return f"{src} has rows without an `id`; it cannot be paired at all."
+
+    recorded = {r["id"]: r.get("query") for r in rows}
+    current = {q["id"]: q["query"] for q in QUERIES}
+    if recorded == current:
+        return None
+
+    missing = sorted(set(current) - set(recorded))
+    extra = sorted(set(recorded) - set(current))
+    drifted = sorted(i for i in recorded.keys() & current.keys()
+                     if recorded[i] != current[i])
+
+    detail = []
+    if drifted:
+        detail.append(f"  {len(drifted)} question(s) re-worded, first {drifted[0]}:\n"
+                      f"    recorded: {recorded[drifted[0]]!r}\n"
+                      f"    current:  {current[drifted[0]]!r}")
+    if missing:
+        detail.append(f"  absent from the capture: {', '.join(missing)}")
+    if extra:
+        detail.append(f"  in the capture but not in QUERIES: {', '.join(extra)}")
+
+    return (f"{src} was captured with a different question set.\n"
+            + "\n".join(detail) + "\n"
+            "Pairing by id across two question sets measures nothing. Either take "
+            "a fresh `capture`, or leave this file alone: a DATED record "
+            "(a release baseline, a pre-corpus slice) documents a state that "
+            "cannot be reproduced, and re-recording it destroys the evidence.")
+
+
 def cmd_render(args: argparse.Namespace) -> int:
     data = json.loads(Path(args.src).read_text(encoding="utf-8"))
+    refusal = _reject_a_foreign_query_set(data, args.src)
+    if refusal:
+        print(refusal, file=sys.stderr)
+        return 2
     lines = _table(data["variants"]["baseline"])
     print("\n".join(lines))
     return 0
@@ -170,13 +232,17 @@ def cmd_compare(args: argparse.Namespace) -> int:
     `displaced` is the number of baseline hits that fell out of the top-5,
     which is the exact quantity decision D2 was argued over."""
     data = json.loads(Path(args.src).read_text(encoding="utf-8"))
+    refusal = _reject_a_foreign_query_set(data, args.src)
+    if refusal:
+        print(refusal, file=sys.stderr)
+        return 2
     base = {r["id"]: r for r in data["variants"]["baseline"]}
     withc = {r["id"]: r for r in data["variants"].get("with_code", [])}
     if not withc:
         print("capture was taken without --both; nothing to compare",
               file=sys.stderr)
         return 2
-    print("| Q | code-хитов в топ-5 | вытеснено заметок | top-1 сменился |")
+    print("| Q | code hits in top-5 | notes displaced | top-1 changed |")
     print("|---|---|---|---|")
     total_code = total_displaced = changed_top1 = 0
     for qid in sorted(base):
@@ -189,9 +255,9 @@ def cmd_compare(args: argparse.Namespace) -> int:
         total_code += code_hits
         total_displaced += displaced
         changed_top1 += int(top1)
-        print(f"| {qid} | {code_hits} | {displaced} | {'да' if top1 else 'нет'} |")
+        print(f"| {qid} | {code_hits} | {displaced} | {'yes' if top1 else 'no'} |")
     n = len(base)
-    print(f"| **итого** | **{total_code}** / {n * TOP_K} | "
+    print(f"| **total** | **{total_code}** / {n * TOP_K} | "
           f"**{total_displaced}** / {n * TOP_K} | **{changed_top1}** / {n} |")
     return 0
 

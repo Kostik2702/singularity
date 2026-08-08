@@ -32,7 +32,7 @@ class FakeEncoder:
         return out
 
 
-SHARED = "векторный поиск индексатор корпус эмбеддинги косинус "
+SHARED = "vector search indexer corpus embeddings cosine "
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def cfg(tmp_path, monkeypatch):
         p = vault / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(f"---\ntype: {rel.split('/')[0].rstrip('s')}\ncreated: 2026-01-01\n"
-                     f"title: {rel}\n{extra}---\n\n# {rel}\n\n## Раздел\n" + SHARED * 4,
+                     f"title: {rel}\n{extra}---\n\n# {rel}\n\n## Section\n" + SHARED * 4,
                      encoding="utf-8")
     (vault / "learnings" / "active").mkdir(parents=True)
     (vault / "learnings" / "active" / "T.md").write_text(
@@ -63,8 +63,8 @@ def cfg(tmp_path, monkeypatch):
 
 def _ingest(cfg, text=None, **kw):
     kw.setdefault("origin_ref", "D:/docs/a.md")
-    body = text or ("# Источник\n\n## Про поиск\n" + SHARED * 5 +
-                    "\n\n## Про индексацию\n" + SHARED * 5)
+    body = text or ("# Source\n\n## About search\n" + SHARED * 5 +
+                    "\n\n## About indexing\n" + SHARED * 5)
     return sources.add(cfg, body, **kw)
 
 
@@ -107,7 +107,7 @@ def test_source_not_yet_indexed_is_actionable(cfg):
     indexer.rebuild(cfg, progress=False)
     indexer.rebuild(cfg, progress=False, corpus="sources")
     # a SECOND source added after the corpus build is not in it yet
-    second = sources.add(cfg, "# Другой\n\n## X\n" + SHARED * 4, origin_ref="b")
+    second = sources.add(cfg, "# Other\n\n## X\n" + SHARED * 4, origin_ref="b")
     out = ingest_plan.plan(cfg, second["source_id"])
     assert "mb ingest index" in out["error"]
 
@@ -218,7 +218,7 @@ def test_personal_source_fans_out_to_nothing(cfg):
 # --- summary target ---------------------------------------------------------
 
 def test_summary_target_matches_the_command_it_prints(cfg):
-    sid = _ingest(cfg, title="Название: с/плохими*символами")["source_id"]
+    sid = _ingest(cfg, title="Title: with/bad*characters")["source_id"]
     _build(cfg)
     st = ingest_plan.plan(cfg, sid)["summary_target"]
     assert st["file"].startswith("reference/") and st["file"].endswith(".md")
@@ -227,7 +227,7 @@ def test_summary_target_matches_the_command_it_prints(cfg):
     # the proposed path is EXACTLY what cmd_note would create for that title
     from singularity.cli import main
     assert main(["--vault", str(cfg.vault), "note", "new", "reference",
-                 "Название: с/плохими*символами", "--from-source", sid]) == 0
+                 "Title: with/bad*characters", "--from-source", sid]) == 0
     assert (cfg.vault / st["file"]).is_file()
 
 
@@ -247,15 +247,15 @@ def test_summary_target_reports_an_existing_file(cfg):
 # --- new pages --------------------------------------------------------------
 
 def test_unresolved_wikilinks_become_new_pages(cfg):
-    body = ("# Источник\n\n## Про поиск\n" + SHARED * 4 +
-            " ссылка на [[Совершенно Новая Страница]] и на [[search]].")
+    body = ("# Source\n\n## About search\n" + SHARED * 4 +
+            " a link to [[A Completely New Page]] and to [[search]].")
     sid = _ingest(cfg, text=body)["source_id"]
     _build(cfg)
     pages = ingest_plan.plan(cfg, sid)["new_pages"]
     names = {p["name"] for p in pages}
-    assert "Совершенно Новая Страница" in names
+    assert "A Completely New Page" in names
     assert "search" not in names, "a link that resolves to an existing note is not a gap"
-    assert next(p for p in pages if p["name"] == "Совершенно Новая Страница"
+    assert next(p for p in pages if p["name"] == "A Completely New Page"
                 )["reason"] == "unresolved_wikilink"
 
 
@@ -263,16 +263,16 @@ def test_source_sections_become_new_pages(cfg):
     sid = _ingest(cfg)["source_id"]
     _build(cfg)
     reasons = {p["name"]: p["reason"] for p in ingest_plan.plan(cfg, sid)["new_pages"]}
-    assert reasons.get("Про поиск") == "source_section"
+    assert reasons.get("About search") == "source_section"
 
 
 @pytest.mark.parametrize("heading", [
-    "4. Карта интеграции с существующим кодом",   # enumerated -> document structure
-    "II. Разбор",
-    "Контекст", "Решение", "Ссылки", "Open questions", "TODO",
+    "4. Integration map with the existing code",   # enumerated -> document structure
+    "II. Analysis",
+    "Context", "Decision", "Links", "Open questions", "TODO",
     "`mb ingest add`",                             # code span
     "a | b",                                       # table fragment
-    "Это предложение, а не название страницы.",    # ends like a sentence
+    "This is a sentence, not a page title.",       # ends like a sentence
     "x" * 61,                                      # too long to be a title
     "ab",                                          # too short
     "42",
@@ -282,21 +282,21 @@ def test_structural_headings_never_become_new_pages(heading):
 
 
 @pytest.mark.parametrize("heading", [
-    "Ingest-цикл", "Corpus abstraction", "Windows-safe slug", "vault guard",
+    "Ingest loop", "Corpus abstraction", "Windows-safe slug", "vault guard",
 ])
 def test_entity_like_headings_are_accepted(heading):
     assert ingest_plan._looks_like_page_name(heading)
 
 
 def test_document_structure_is_filtered_out_of_new_pages(cfg):
-    body = ("# Источник\n\n## 1. Введение\n" + SHARED * 4 +
-            "\n\n## Контекст\n" + SHARED * 4 +
-            "\n\n## Ingest-цикл\n" + SHARED * 4)
+    body = ("# Source\n\n## 1. Introduction\n" + SHARED * 4 +
+            "\n\n## Context\n" + SHARED * 4 +
+            "\n\n## Ingest loop\n" + SHARED * 4)
     sid = _ingest(cfg, text=body)["source_id"]
     _build(cfg)
     names = {p["name"] for p in ingest_plan.plan(cfg, sid)["new_pages"]}
-    assert "Ingest-цикл" in names
-    assert "1. Введение" not in names and "Контекст" not in names
+    assert "Ingest loop" in names
+    assert "1. Introduction" not in names and "Context" not in names
 
 
 def test_new_pages_are_deterministic_and_capped(cfg):

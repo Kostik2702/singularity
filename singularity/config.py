@@ -117,7 +117,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # note are in different languages, and RRF still gives its ranking a vote.
     # Four damping variants (capped lexical candidates, down-weighted RRF,
     # reserved slots) were swept; every one of them gave back more than it
-    # recovered. See `decisions/SEARCH D1 - гибрид по умолчанию.md`.
+    # recovered. See the vault decision SEARCH D1 (hybrid on by default).
     # This DOES reach existing installs, and saying otherwise would be false.
     # `save()` records decisions, not defaults, so a value equal to the default
     # is dropped — which means no install could ever have pinned `false` while
@@ -128,7 +128,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "hybrid_search": True,
     # The one feature that stores conversation text. OFF by default and it
     # stays that way: everything else here is derived from files you wrote, and
-    # this is not. See `decisions/TRANSCRIPTS D1 - приватность транскриптов.md`
+    # this is not. See the vault decision TRANSCRIPTS D1 (transcript privacy)
     # for the full contract — separate store, redaction on the way in, finite
     # retention, `mb sessions purge`.
     "session_search_enabled": False,

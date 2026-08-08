@@ -19,8 +19,10 @@ Two ideas make it usable rather than noisy:
 * **Similarity BAND, not threshold.** Below 0.72 the chunks are different
   topics; above 0.90 `curator.lint()` already reports them as near-duplicates.
   A contradiction lives in between: same subject, different claim.
-* **Lexical divergence signals.** Five stdlib-only RU+EN checks, each of which
-  must produce concrete evidence tokens. A pair with high cosine and NO signal
+* **Divergence signals.** Five stdlib-only checks — two structural (they read
+  `key: true` / `key=60s` shapes and therefore hold in any language) and three
+  lexical (English word lists) — each of which must produce concrete evidence
+  tokens. A pair with high cosine and NO signal
   is not reported at all — a "contradiction" nobody can point at is noise.
 
 Report-only (D5): no function here writes to a note. The verdict journal
@@ -69,9 +71,9 @@ SIGNAL_WEIGHTS = {
 }
 
 # Minimum word-set overlap (Jaccard) at which a one-sided negation stops being
-# incidental and becomes a flip of the same claim: "хук блокирует запись" vs
-# "хук НЕ блокирует запись". Below it, the negation belongs to some other
-# sentence of a long chunk and means nothing.
+# incidental and becomes a flip of the same claim: "the hook blocks the write"
+# vs "the hook does NOT block the write". Below it, the negation belongs to some
+# other sentence of a long chunk and means nothing.
 NEGATION_OVERLAP_MIN = 0.6
 
 # A candidate needs a signal that asserts something, not merely one that
@@ -86,20 +88,26 @@ TRIGGER_SIGNALS = STRONG_SIGNALS | {"numeric_mismatch"}
 
 _WORD_BOUND = r"(?<![\w-])"
 
-# --- signal vocabularies (RU + EN) -----------------------------------------
+# --- the two kinds of signal, and why only one of them can be universal -----
+#
+# STRUCTURAL signals read the SHAPE of a claim: `x: true` against `x: false`,
+# `timeout=60s` against `timeout=90s`. A colon, a digit and a minus sign mean
+# the same thing in every language, so these fire on a vault written in any of
+# them — and they are the two strongest triggers besides.
+#
+# LEXICAL signals read WORDS, and words belong to a language. The vocabularies
+# below are English because the engine is; on a corpus written in something else
+# they simply do not fire, and the structural signals carry the pass. That is
+# stated here rather than hidden, because the failure mode of a word list
+# pretending to be universal is silence that reads as "no contradictions".
+# Adjudication is the model's job either way (`memory-curator`, W07): everything
+# here produces CANDIDATES, and a missed candidate costs recall, never a wrong
+# verdict.
 _NEGATION_MARKERS = (
-    "не", "нет", "нельзя", "никогда", "без", "запрещено", "запрещён", "запрещен",
-    "не следует", "not", "never", "no longer", "cannot", "can't", "don't",
-    "must not", "should not", "disable", "disabled", "forbidden",
+    "not", "never", "no longer", "cannot", "can't", "don't",
+    "must not", "should not", "disable", "disabled", "forbidden", "without",
 )
 _POLARITY_PAIRS = (
-    ("всегда", "никогда"),
-    ("включить", "выключить"),
-    ("включён", "выключен"),
-    ("включен", "выключен"),
-    ("разрешено", "запрещено"),
-    ("обязательно", "нельзя"),
-    ("нужно", "не нужно"),
     ("always", "never"),
     ("enable", "disable"),
     ("enabled", "disabled"),
@@ -109,23 +117,27 @@ _POLARITY_PAIRS = (
     ("required", "optional"),
 )
 _SUPERSEDE_MARKERS = (
-    "deprecated", "superseded", "obsolete", "устарел", "устарело", "устаревший",
-    "заменено", "заменён", "заменен", "выведен", "выведено из эксплуатации",
+    "deprecated", "superseded", "obsolete", "retired",
     "no longer used", "legacy",
 )
 
-_BOOL_RE = re.compile(r"([A-Za-zА-Яа-яЁё_][\w.\-]*)\s*[:=]\s*(true|false|True|False|да|нет)"
-                      r"(?![\w-])")
+#: `[^\W\d]` is "a letter or underscore, in any script" — Python's `re` is
+#: Unicode-aware on str. Spelling two alphabets out, as this once did, made
+#: the structural signals, the only ones that COULD be universal, fire on two
+#: alphabets and no others.
+_KEY_START = r"[^\W\d]"
+_BOOL_RE = re.compile("(" + _KEY_START + r"[\w.\-]*)"                  # key
+                      r"\s*[:=]\s*(true|false|True|False)(?![\w-])")
 _NUM_RE = re.compile(
-    r"([A-Za-zА-Яа-яЁё_][\w.\-]{2,})"          # key, >= 3 chars
+    "(" + _KEY_START + r"[\w.\-]{2,})"         # key, >= 3 chars
     r"(\s*[:=]\s*|\s+)"                        # separator (kept: it is a signal)
     r"[<>≥≤]?"
     r"(\d+(?:[.,]\d+)?)"                       # value
-    r"([%A-Za-zА-Яа-яЁё]{0,6})")               # unit, ADJACENT only
+    r"((?:[%]|[^\W\d_]){0,6})")                # unit, ADJACENT only
 # Two hard-won details, both from the first real-vault run (2026-07-28):
-#   * the unit must TOUCH the number — `60d` is a unit, the `для` in `3.11 для`
-#     is the next word, and allowing whitespace made every key read
-#     `python=3.11для`;
+#   * the unit must TOUCH the number — `60d` is a unit, whereas the word after
+#     `3.11 for python` is the next word; allowing whitespace made every key
+#     read as `3.11for`;
 #   * a bare integer with neither unit nor `:`/`=` is almost always an
 #     enumeration artifact (`step 1`, `w0 3`, `mb-1 5`) rather than a claim.
 #     Requiring a decimal, a unit, or an explicit separator removed the single
@@ -169,7 +181,7 @@ def features(text: str) -> dict[str, Any]:
     booleans: dict[str, set[bool]] = {}
     for match in _BOOL_RE.finditer(norm):
         booleans.setdefault(match.group(1).lower(), set()).add(
-            match.group(2).lower() in {"true", "да"})
+            match.group(2).lower() == "true")
 
     return {
         "numbers": numbers,
@@ -177,7 +189,7 @@ def features(text: str) -> dict[str, Any]:
         "negations": {m for m in _NEGATION_MARKERS if _contains(norm, m)},
         "polarity": {t for t in _POLARITY_TERMS if _contains(norm, t)},
         "supersede": {m for m in _SUPERSEDE_MARKERS if m in norm},
-        # words of 3+ chars: short function words (and the Russian "не" itself)
+        # words of 3+ chars: short function words (and a bare "not" itself)
         # are excluded so the overlap measures "is the REST of the text the same"
         "tokens": frozenset(_TOKEN_RE.findall(norm)),
     }

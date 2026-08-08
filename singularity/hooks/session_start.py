@@ -1,7 +1,6 @@
 """SessionStart hook: inject memory context into every Claude Code session.
 
-Port of Genevra session-start-context.sh (auto-recall level of the memory
-design). MUST be fast: file reads only, no model, no daemon round-trip.
+The auto-recall level of the memory design. MUST be fast: file reads only, no model, no daemon round-trip.
 
 Emits hookSpecificOutput.additionalContext with:
   - date/time + vault location + mb quick reference

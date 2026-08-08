@@ -1,86 +1,92 @@
-# Rules delivery — где какое правило действует
+# Rules delivery — where each rule actually acts
 
-Реестр «правило → точка, где оно звучит». Машинная половина —
-`singularity/machine/rules_delivery.py` (`DELIVERIES`, `check()`), проверка —
-`tests/test_rules_delivery.py`. Этот документ объясняет схему; список инъекций
-не дублируется здесь руками, потому что две копии расходятся — смотри модуль.
+The registry of "rule → the point where it is spoken". The machine half is
+`singularity/machine/rules_delivery.py` (`DELIVERIES`, `check()`), and the check
+is `tests/test_rules_delivery.py`. This document explains the scheme; the list of
+injections is not duplicated here by hand, because two copies drift — read the
+module.
 
-## Разделение, на котором всё держится
+## The split everything rests on
 
-| | Живёт | Что там | Если исчезнет |
+| | Lives in | What is there | If it disappears |
 |---|---|---|---|
-| **Знание** | vault (`rules/`, `decisions/`, `learnings/`) | почему правило существует: инцидент, цена, происхождение, владелец | падает recall, поведение машины не меняется |
-| **Механизм** | движок (`singularity/`) | текст, который читается в момент действия | машина теряет правило — это дефект |
+| **Knowledge** | the vault (`rules/`, `decisions/`, `learnings/`) | why a rule exists: the incident, the cost, the origin, the owner | recall drops, the machine's behaviour does not change |
+| **Mechanism** | the engine (`singularity/`) | the text that is read at the moment of action | the machine loses the rule — that is a defect |
 
-Правило, которое обязано действовать, в vault жить не может. Подмена, обнуление
-или отсутствие vault — легальные состояния: он память, а не часть исполнения.
-До 2026-08-05 восемь субагентов читали `AGENT_SHARED_PREAMBLE.md` из
-`{{VAULT}}/rules/`, то есть весь их свод правил был свойством того, какой vault
-настроен; на машине без vault они стартовали бы вовсе без правил и молча.
+A rule that must act cannot live in the vault. Swapping, emptying or losing the
+vault are legal states: it is memory, not part of execution. Until 2026-08-05
+eight subagents read `AGENT_SHARED_PREAMBLE.md` out of `{{VAULT}}/rules/`, which
+made their entire rule set a property of which vault was configured; on a machine
+with no vault they would have started with no rules at all, and silently.
 
-## Четыре поверхности
+## The four surfaces
 
-| Поверхность | Кто читает | Файл | Когда добавлять сюда |
+| Surface | Who reads it | File | When to add here |
 |---|---|---|---|
-| SessionStart-фрагмент | главный поток, каждая сессия | `singularity/machine/hooks_state.py` | правило универсально И сбой случался в главном потоке |
-| Preamble §1-§8 | все субагенты (§1+§2 обязательны) | `singularity/agents/AGENT_SHARED_PREAMBLE.md` | правило применимо к любой агентной работе |
-| Файл агента | один агент | `singularity/agents/<name>.md` | правило про роль, а не про работу вообще |
-| SKILL.md | тот, кто делает эту работу | `singularity/skills/<skill>/SKILL.md` | правило про класс задач |
+| SessionStart fragment | the main thread, every session | `singularity/machine/hooks_state.py` | the rule is universal AND the failure happened in the main thread |
+| Preamble §1-§8 | every subagent (§1+§2 mandatory) | `singularity/agents/AGENT_SHARED_PREAMBLE.md` | the rule applies to any agent work |
+| Agent file | one agent | `singularity/agents/<name>.md` | the rule is about the role, not about work in general |
+| SKILL.md | whoever does that work | `singularity/skills/<skill>/SKILL.md` | the rule is about a class of task |
 
-Пятая, не текстовая: **докстринг + тест рядом с кодом** — когда правило про то,
-как пишется этот код (`hooks must never use load_config`, `index readers resolve
-through index_files`). Тест и есть доставка.
+A fifth, not textual: **a docstring plus a test next to the code** — for when the
+rule is about how that code gets written (`hooks must never use load_config`,
+`index readers resolve through index_files`). The test IS the delivery.
 
-## Бюджет
+## Budget
 
-SessionStart платится в каждой сессии. Цифру не держим в тексте: она устарела
-на 18% за две недели и никто не заметил. Совокупный потолок фрагментов —
-исполняемый гейт `test_the_fragments_have_an_aggregate_ceiling_too`
-(`tests/test_rules_delivery.py`); поднять его можно только правкой, которая
-поднимает и эту строку. На 2026-08-07 фрагменты занимают ~4.5 тыс. символов. `CAPTURE_HOOKS_FRAGMENT` — размерная единица: тест требует, чтобы
-новый фрагмент был меньше двух таких. Поэтому фрагмент формулирует **класс**
-сбоя, а не по пункту на случай: «зелёное ≠ проверенное» покрывает и exit-код за
-пайпом, и слепой инвариант, и проверку, пропустившую себя.
+SessionStart is paid for in every session. The figure is not kept in prose: it
+went 18% out of date in two weeks and nobody noticed. The aggregate ceiling on
+the fragments is an executable gate, `test_the_fragments_have_an_aggregate_ceiling_too`
+(`tests/test_rules_delivery.py`); raising it takes a change that raises this line
+too. As of 2026-08-07 the fragments occupy ~4.1k characters.
+`CAPTURE_HOOKS_FRAGMENT` is the size unit: the test requires a new fragment to be
+smaller than two of them. That is why a fragment states a **class** of failure
+rather than one bullet per case: "green is not the same as verified" covers the
+exit code behind a pipe, the blind invariant, and the check that skipped itself.
 
-Preamble бюджетируется иначе — lazy-load: §1+§2 читают все, §3-§8 по триггерам
-в файле агента. Универсальное правило идёт в §2, узкое — в свою секцию.
-Прецедент: правило про exit-код сперва поставили в §7, и проверка охвата
-показала, что явный триггер на §7 есть ровно у одного агента из восьми.
+The preamble is budgeted differently — lazy-load: everyone reads §1+§2, and
+§3-§8 arrive on triggers named in the agent's file. A universal rule goes in §2,
+a narrow one in its own section. Precedent: the exit-code rule was first put in
+§7, and a coverage check showed that exactly one agent out of eight had an
+explicit trigger for §7.
 
-## Порядок добавления правила
+## The order for adding a rule
 
-1. `mb note new rule "<title>"` — знание в vault: инцидент, цена, GATE-вопрос
-   «поймало бы правило именно этот сбой?».
-2. Назвать точку по таблице выше. Несколько точек — один источник и инжекция.
-3. Написать текст **исполняемо**: действие в самой строке, не отсылка. В момент
-   написания команды никто не пойдёт по ссылке.
-4. Проверить встречный текст: если в этой точке уже написано обратное,
-   выигрывает инструкция. Прецедент: `mb-memory/SKILL.md` письменно разрешал
-   обход, который guard флагует; и `planning-council` оценивал в человеко-часах
-   при действующем правиле про агент-сессии.
-5. Добавить запись в `DELIVERIES` и **проверить тест посаженным нарушением** —
-   удалить инъекцию, увидеть красное, вернуть.
-6. В vault-заметку — секцию «Где вживлено» с точкой.
+1. `mb note new rule "<title>"` — the knowledge into the vault: the incident, the
+   cost, the GATE question "would this rule have caught precisely this failure?".
+2. Name the point from the table above. Several points — one source, injected.
+3. Write the text **executably**: the action in the line itself, not a reference.
+   At the moment a command is written, nobody follows a link.
+4. Check the counter-text: if the opposite is already written at that point, the
+   instruction wins. Precedent: `mb-memory/SKILL.md` explicitly permitted the
+   bypass the guard flags; and `planning-council` estimated in human-hours while
+   the rule about agent sessions was in force.
+5. Add the entry to `DELIVERIES` and **check the test with a planted violation** —
+   remove the injection, watch it go red, put it back.
+6. Add a "Where it is grafted" section, naming the point, to the vault note.
 
-## Правила без точки и правила не наши
+## Rules with no point, and rules that are not ours
 
-Две списка рядом с `DELIVERIES`, оба в том же модуле:
+Two lists sit beside `DELIVERIES`, both in the same module:
 
-- **`WITHOUT_A_POINT`** — правило верное, но поверхности больше нет. Первый
-  жилец появился сразу: v0.12.0 удалил `reel` вместе со скилом, и правило про
-  `aeval`-огибающую лишилось обеих своих точек за один коммит. Запись остаётся
-  видимой намеренно — молча удалённая строка читается ровно как правило, которое
-  никогда и не доставлялось, а разница важна, если инструмент вернётся.
-- **`NOT_OURS_TO_DELIVER`** — правила проектов (Bringg, singularity-ui),
-  видео-движка, Windows-специфика на macOS-машине и инварианты кода, уже
-  доставленные докстрингом с тестом. Это не пробелы Singularity: у них другой
-  исполнитель, другая платформа или доставка прямо в коде.
+- **`WITHOUT_A_POINT`** — the rule is true but the surface is gone. Its first
+  occupant arrived immediately: v0.12.0 deleted `reel` together with its skill,
+  and the rule about the `aeval` envelope lost both of its points in one commit.
+  The entry stays visible on purpose — a silently deleted line reads exactly like
+  a rule that was never delivered, and the difference matters if the tool returns.
+- **`NOT_OURS_TO_DELIVER`** — rules of other projects (singularity-ui), of the
+  video engine, Windows specifics on a macOS machine, and code invariants already
+  delivered by a docstring with a test. These are not gaps in Singularity: they
+  have a different executor, a different platform, or delivery straight in the
+  code.
 
-Вместе они дают сходящийся баланс: 72 заметки = доставлено + осиротело + не
-наше. Без этих списков «не тронуто» и «покрыто где-то ещё» неразличимы.
+Together they give a balance that adds up: 72 notes = delivered + orphaned + not
+ours. Without those lists, "untouched" and "covered somewhere else" are
+indistinguishable.
 
-## Что реестр не ловит
+## What the registry does not catch
 
-Правило, которого ещё нет. Реестр закрывает разрыв между знанием и действием,
-а не ищет неизвестные дефекты. И он проверяет **присутствие** текста, а не то,
-что модель ему последовала: маркер на месте — правило доставлено, не более.
+A rule that does not exist yet. The registry closes the gap between knowledge and
+action; it does not hunt for unknown defects. And it checks the **presence** of
+the text, not that the model followed it: the marker is in place means the rule
+was delivered, no more.

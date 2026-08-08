@@ -7,7 +7,7 @@ disable->enable->doctor->uninstall flow, SessionStart producing context
 independent of `auto_capture` (both Claude and Gemini share the exact same
 build_context()), and the "existing notes classify general, never moved"
 migration guarantee. Pure verification -- no new business logic, per T16's
-own AI prompt ("release gate, не добавляя новую бизнес-логику").
+own AI prompt ("release gate, without adding new business logic").
 See [[SINGULARITY_INCOMING_FORK_IMPLEMENTATION]] T16.
 """
 from __future__ import annotations

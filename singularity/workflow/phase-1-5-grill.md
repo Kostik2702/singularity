@@ -6,13 +6,13 @@ created: 2026-07-03
 status: active
 ---
 
-# Phase 1.5 — Grill (гейт перед планом/дизайном)
+# Phase 1.5 — Grill (the gate before a plan or design)
 
-Родитель: `_router.md`. Исполняется skill'ом `grill`.
+Parent: `_router.md`. Executed by the `grill` skill.
 
-- [ ] Запусти skill `grill` (auto-режим по умолчанию для соло; normal — если пользователь на связи и задача мутная).
-- [ ] Self-resolve first: скрытые допущения, неопределённые термины, границы scope — сначала ищи ответы сам (код + `mb search`), к пользователю — только survivors.
-- [ ] Результат — блок `## Grill` в learnings: Q → A (source), открытые вопросы со статусом OPEN.
-- [ ] Гейт: план не пишется, пока OPEN-вопросы, влияющие на архитектуру, не закрыты или явно приняты как риск.
+- [ ] Run the `grill` skill (auto mode by default for solo work; normal mode when the user is around and the task is murky).
+- [ ] Self-resolve first: hidden assumptions, undefined terms, the edges of scope — look for the answers yourself first (code + `mb search`), and take only the survivors to the user.
+- [ ] The result is a `## Grill` block in the learnings: Q → A (source), plus open questions marked OPEN.
+- [ ] Gate: the plan is not written while OPEN questions that affect the architecture remain unclosed or not explicitly accepted as a risk.
 
-**Выход:** допущения выявлены и закрыты → `phase-2-planning.md`.
+**Exit:** assumptions surfaced and closed → `phase-2-planning.md`.

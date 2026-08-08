@@ -41,11 +41,13 @@ from singularity.telemetry import session_activity as sa  # noqa: E402
 from singularity.hooks.capture_decision import session_marker  # noqa: E402
 
 REASON = (
-    "[Singularity auto-capture] Перед завершением зафиксируй знания сессии в vault: "
-    "если появились неочевидные инсайты, решения (с owner/source) или сработавшие/провалившиеся "
-    "подходы — запиши их (`mb learn \"<инсайт>\" --task <ID>` или дополни соответствующую заметку; "
-    "критерий: неочевидное / противоречащее / потребовавшее >1 попытки; код только как file:line). "
-    "Если фиксировать нечего — просто заверши ответ, ничего не записывая."
+    "[Singularity auto-capture] Before finishing, record this session's knowledge "
+    "in the vault: if non-obvious insights, decisions (with owner/source) or "
+    "approaches that worked or failed came up — write them down (`mb learn "
+    "\"<insight>\" --task <ID>`, or extend the note they belong to; the criterion "
+    "is non-obvious / contradicting expectations / took more than one attempt; "
+    "code only as file:line). Nothing worth recording — just finish the reply "
+    "and write nothing."
 )
 
 _WRITE_TOOLS = {"Edit", "Write", "MultiEdit"}

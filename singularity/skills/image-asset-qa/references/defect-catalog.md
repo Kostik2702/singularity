@@ -1,42 +1,42 @@
-# Каталог дефектов cutout/alpha — как выглядят и как не спутать
+# Cutout/alpha defect catalogue — what they look like and how not to confuse them
 
-Ground truth — из сессий NIKA (проект `E:\Project\Content Creator website\`). Ссылки ниже — на реальные кропы, чтобы калибровать глаз. Читать при интерпретации `imgqa edges` / `backgrounds` / `detect-fringe`.
+The ground truth comes from the NIKA sessions (project `E:\Project\Content Creator website\`). The references below point at real crops, so you can calibrate your eye. Read this when interpreting `imgqa edges` / `backgrounds` / `detect-fringe`.
 
-Корень эталонов: `E:\Project\Content Creator website\reports\asset-qa\`.
-Исходный GT-ассет (SD3 remove-bg): `references\IMG GEN_SD3 - Remove Background_2026-07-13_05-34-49.png`.
-
----
-
-## Реальные дефекты (флагать)
-
-### fringe (кайма / мягкая тень по краю alpha)
-Полупрозрачный цветной ореол или остаточная тень вдоль границы маски — фон «протёк» в feather-зону. В NIKA — мягкая тень ~80-150px у ботинка seated-hero (эталонный `detect-fringe` positive, score ≈0.896, bbox внутри repair-региона `330,1620,680,428`).
-- **До:** `hero_boot_edge_black_200pct*.png`, `hero_boot_edge_white_200pct_lossless.png` — кайма видна на тёмном/светлом фоне.
-- **После defringe:** `hero_boot_edge_{black,rose,white}_AFTERFIX_200pct.png`, `..._AFTERFIX2_200pct.png`, `..._AFTERFIX3.png` — серия итераций ремонта.
-- Метод: только по lossless PNG-кропу, на 3 фонах. Кайма часто невидима на розовом, но кричит на чёрном (или наоборот).
-
-### halo (светлый ободок)
-Яркое кольцо по краю (пересвеченный feather / неверный un-premultiply). Тот же пайплайн, что fringe: `detect-fringe` помечает `kind: "halo"`; ремонт — `defringe` по bbox.
+Root of the reference set: `E:\Project\Content Creator website\reports\asset-qa\`.
+The original GT asset (SD3 remove-bg): `references\IMG GEN_SD3 - Remove Background_2026-07-13_05-34-49.png`.
 
 ---
 
-## НЕ дефекты (не флагать — иначе ложный fail)
+## Real defects (flag these)
 
-### hair matting (тонкие полупрозрачные пряди)
-Тонкие волоски с частичной alpha — это КОРРЕКТНАЯ вырезка, а не кайма. `detect-fringe` обязан молчать на них (GT-N2: 0 detections на hair-crop того же исходника). Глобальный порог их бы уничтожил — поэтому `defringe` только param-driven по узким bbox'ам.
-- Пример: `hero_hair_{black,rose,white}_200pct.jpg` — так выглядит нормальный matting, не трогать.
+### fringe (a rim or soft shadow along the alpha edge)
+A semi-transparent coloured halo or a residual shadow along the mask boundary — the background "leaked" into the feather zone. In NIKA it was a soft shadow ~80-150px at the boot of the seated hero (the reference `detect-fringe` positive, score ≈0.896, bbox inside the repair region `330,1620,680,428`).
+- **Before:** `hero_boot_edge_black_200pct*.png`, `hero_boot_edge_white_200pct_lossless.png` — the fringe is visible on both dark and light backgrounds.
+- **After defringe:** `hero_boot_edge_{black,rose,white}_AFTERFIX_200pct.png`, `..._AFTERFIX2_200pct.png`, `..._AFTERFIX3.png` — the series of repair iterations.
+- Method: only from a lossless PNG crop, on 3 backgrounds. A fringe is often invisible on pink and screams on black (or the other way round).
+
+### halo (a bright ring)
+A bright ring along the edge (an over-exposed feather or an incorrect un-premultiply). The same pipeline as fringe: `detect-fringe` marks it `kind: "halo"`; the repair is `defringe` over the bbox.
 
 ---
 
-## Кейсы «неверный метод теста» (дефект метода, а не ассета)
+## NOT defects (do not flag these — otherwise you get a false fail)
 
-Прежде чем звать дефект — проверь, не сломан ли сам способ проверки.
+### hair matting (fine semi-transparent strands)
+Fine hairs with partial alpha are a CORRECT cutout, not a fringe. `detect-fringe` must stay silent on them (GT-N2: 0 detections on the hair crop of the same original). A global threshold would have destroyed them — which is why `defringe` is param-driven over narrow bboxes only.
+- Example: `hero_hair_{black,rose,white}_200pct.jpg` — that is what normal matting looks like; leave it alone.
 
-### `<img src=svg>` не наследует `currentColor`
-Иконка «не того цвета» в превью — это **дефект метода превью**, не иконки. Внешний `<img>`/`background:url(svg)` не наследует `currentColor` родителя; чтобы цвет применился, SVG надо инлайнить (inline-inject). Не заводить баг на иконку — чинить способ рендера. (Правило NIKA e / [[WSF-00]].)
+---
 
-### JPEG-превью преувеличивает alpha-дефект (совет H10)
-Судить о крае по `.jpg`-композиту нельзя: JPEG-артефакты фабрикуют кайму, которой нет в lossless-источнике. Обзорные `hero_{black,rose,white}_full.jpg` / `..._FINAL_full.jpg` годятся только для грубого «в целом ок»; любое решение по краю — по PNG (`edges` пишет lossless PNG именно поэтому). Если «дефект» виден на jpg и исчезает на png-кропе — это артефакт jpg, а не ассета.
+## "Wrong test method" cases (a defect of the method, not of the asset)
 
-### запечённая шахматка ≠ прозрачность
-24bpp-изображение с нарисованной серо-белой шахматкой выглядит «прозрачным», но alpha-канала не имеет. `probe` различает категорично (`baked_checkerboard`), глаз — нет. Всегда `probe` первым.
+Before calling something a defect, check whether the way you are checking is itself broken.
+
+### `<img src=svg>` does not inherit `currentColor`
+An icon "in the wrong colour" in a preview is a **defect of the preview method**, not of the icon. An external `<img>` or `background:url(svg)` does not inherit the parent's `currentColor`; for the colour to apply, the SVG has to be inlined (inline-inject). Do not raise a bug against the icon — fix the way it is rendered. (NIKA rule e / [[WSF-00]].)
+
+### A JPEG preview exaggerates an alpha defect (council H10)
+An edge cannot be judged from a `.jpg` composite: JPEG artefacts fabricate a fringe that is not in the lossless source. The overview files `hero_{black,rose,white}_full.jpg` / `..._FINAL_full.jpg` are good only for a rough "broadly fine"; any decision about the edge comes from the PNG (which is exactly why `edges` writes lossless PNG). If a "defect" is visible on the jpg and disappears on the png crop, it is a jpg artefact, not the asset.
+
+### A baked checkerboard is not transparency
+A 24bpp image with a grey-and-white checkerboard painted into it looks "transparent" but has no alpha channel. `probe` tells them apart categorically (`baked_checkerboard`); the eye does not. Always `probe` first.

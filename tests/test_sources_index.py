@@ -56,13 +56,13 @@ def cfg(tmp_path, monkeypatch):
     return c
 
 
-SECRET = ("Кодовое слово камнеломка встречается исключительно "
-          "внутри проглоченного источника и нигде в vault.")
+SECRET = ("The code word saxifrage occurs exclusively inside the swallowed "
+          "source and nowhere in the vault.")
 
 
 def _ingest(cfg, text=SECRET, **kw):
     kw.setdefault("origin_ref", "D:/docs/secret.md")
-    return sources.add(cfg, "# Источник\n\n## Раздел\n" + text, **kw)
+    return sources.add(cfg, "# Source\n\n## Section\n" + text, **kw)
 
 
 # --- corpus definition ------------------------------------------------------

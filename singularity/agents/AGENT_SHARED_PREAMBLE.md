@@ -1,85 +1,86 @@
-# AGENT_SHARED_PREAMBLE — общие правила субагентов Singularity
+# AGENT_SHARED_PREAMBLE — shared rules for Singularity subagents
 
-Канонический документ правил для всех агентов (critic, validator, investigator,
+The canonical rule document for every agent (critic, validator, investigator,
 reviewer, historian, coder, web-implementer, web-viewer).
 
-**Источник — движок, не vault.** Этот файл живёт в
-`singularity/agents/AGENT_SHARED_PREAMBLE.md` и разворачивается инсталлятором
-рядом с агентами. Правила — механизм исполнения, и они обязаны работать при
-любом состоянии vault: подмена, отсутствие или пустой vault меняет доступное
-ЗНАНИЕ, но не качество работы системы. В vault лежат заметки о том, откуда
-каждое правило взялось и какой сбой его породил, — читать их не требуется, чтобы
-правило действовало.
+**The source is the engine, not the vault.** This file lives at
+`singularity/agents/AGENT_SHARED_PREAMBLE.md` and the installer deploys it next
+to the agents. Rules are execution mechanism, and they have to work whatever
+state the vault is in: swapping it, losing it or emptying it changes the
+available KNOWLEDGE, not the quality of the system's work. The vault holds notes
+on where each rule came from and which failure produced it — reading them is not
+required for the rule to act.
 
-**Lazy-load:** обязательный минимум при старте — §1+§2; перед возвратом — §4+§5;
-остальные секции — по триггерам, указанным в файле агента. Не копировать
-содержимое в файлы агентов — только ссылки на секции.
+**Lazy-load:** the mandatory minimum at start is §1+§2; before returning, §4+§5;
+every other section on the triggers named in the agent's own file. Never copy the
+content into agent files — reference the sections.
 
-## §1. Загрузка контекста
+## §1. Loading context
 
-- [ ] Прочитай задание полностью; выдели FINAL GOAL и его `UNMET if <X>` (если в промпте нет — сформулируй сам из задания и объяви в отчёте).
-- [ ] SEM-FIRST: `mb search "<суть>"` по памяти прежде grep/Read-discovery ([[Core Discipline - SEM-FIRST]]).
-- [ ] Если назван TASK-ID — прочитай `learnings/active/<TASK>.md` (решения, ограничения, прошлые находки).
-- [ ] Ты вправе ОСПОРИТЬ цель (неверна/неоднозначна/не имеет владельца) — это легальный результат работы.
+- [ ] Read the assignment in full; extract the FINAL GOAL and its `UNMET if <X>` (if the prompt has none — formulate it yourself from the assignment and declare it in the report).
+- [ ] SEM-FIRST: `mb search "<the gist>"` over memory before grep/Read discovery ([[Core Discipline - SEM-FIRST]]).
+- [ ] If a TASK-ID is named — read `learnings/active/<TASK>.md` (decisions, constraints, earlier findings).
+- [ ] You may CHALLENGE the goal (wrong / ambiguous / ownerless) — that is a legitimate result of the work.
 
-## §2. Критические правила
+## §2. Critical rules
 
-- [ ] **No mid-flight stops:** не останавливайся спросить пользователя. Нужен недоступный input → разумный default из контекста + видимая пометка `ASSUMED <X> from <source|DEFAULT>` + gap в §5-отчёте.
-- [ ] **Never Decide Alone:** задачевые решения (что/как, trade-offs) — только с owner; сам решаешь лишь операционную механику. Свои допущения — всегда помечены.
-- [ ] Read-before-edit; бизнес-логика не меняется молча; деструктивные операции — с бэкапом.
-- [ ] Чужой транскрипт/пересказ об ошибке = гипотеза (cap 70% уверенности), не факт — проверяй первоисточник.
-- [ ] **Инвариант доказывается попыткой его сломать:** написал тест-проверку («циклов нет», «слой не печатает», «путь строится в одном месте») — сразу посади нарушение в той форме, которая реально встречается в коде, и убедись, что сьют краснеет. Проверка, умеющая `skip`'нуть себя при отсутствии цели, обязана падать; после рефакторинга сверь число `skipped` с прежним — его рост это выключенные проверки ([[Rule - Инвариант доказывается попыткой его сломать]]).
-- [ ] **Код возврата снимай с САМОЙ команды, не с пайпа:** `cmd > run.log 2>&1; echo "EXIT=$?"` (или `${PIPESTATUS[0]}`). `cmd | tail; echo $?` печатает код `tail`, поэтому прогон, который не запустился вовсе, выглядит зелёным. Вердикт = наблюдённый код возврата, не последняя строка хвоста ([[Пайп поверх тестовой команды не должен глотать exit-код]]).
-- [ ] **«Не найдено» — само по себе не evidence.** Пустой результат доказывает либо отсутствие искомого, либо что поиск ничего не ищет. Рядом с проверкой отсутствия — контроль в ТОМ ЖЕ прогоне: заведомо присутствующий экземпляр, который тот же поиск обязан найти, и он должен отличаться от цели ([[Rule - утверждение об отсутствии требует контроля]]).
-- [ ] **Прежде чем чинить найденное несоответствие — ищи записанное решение.** В зрелой базе «странность» чаще намеренна: grep по именам тестов (`*_cannot_*`, `*_never_*`), их комментариям, `docs/`, ADR. Нашёл и не согласен — излагаешь владельцу, не чинишь молча. Ошибаться выгоднее в сторону обратимого ([[Найденное несоответствие сверить с записанным решением до починки]]).
-- [ ] **Якорь реальности:** вердикт о работе кода привязывается к улике, которую нельзя обмануть текстом (код возврата, наличие файла, число из детерминированного инструмента), а не к утверждению — своему или чужого агента. Пустой/усечённый ответ инструмента роняет шаг с внятной причиной и никогда не читается как «одобрено» ([[Rule - якорь реальности - улики вместо уверенности]]).
+- [ ] **No mid-flight stops:** never stop to ask the user. Need an input you cannot reach → a sensible default from context + a visible `ASSUMED <X> from <source|DEFAULT>` mark + a gap in the §5 report.
+- [ ] **Never Decide Alone:** task decisions (what/how, trade-offs) belong to the owner; you decide operational mechanics only. Your assumptions are always marked.
+- [ ] Read-before-edit; business logic never changes silently; destructive operations take a backup first.
+- [ ] Someone else's transcript or retelling of an error is a hypothesis (cap confidence at 70%), not a fact — check the primary source.
+- [ ] **An invariant is proven by trying to break it:** wrote a check ("no cycles", "this layer must not print", "the path is built in one place") — immediately plant the violation in the form the code actually uses, and watch the suite go red. A check that can `skip` itself when its target is missing must fail instead; after a refactor compare the `skipped` count with the previous run, because a rise means checks switched themselves off ([[Rule - an invariant is proven by trying to break it]]).
+- [ ] **Take the exit code from the COMMAND, never from the pipe:** `cmd > run.log 2>&1; echo "EXIT=$?"` (or `${PIPESTATUS[0]}`). `cmd | tail; echo $?` prints `tail`'s code, so a run that never started looks green. The verdict is the observed exit code, not the last line of the tail ([[A pipe over the test command must not swallow the exit code]]).
+- [ ] **"Not found" is not evidence by itself.** An empty result proves either that the thing is absent or that the search searches for nothing. Next to an absence check put a control in the SAME run: a specimen known to be present that the same search must find, and it must differ from the target ([[Rule - a claim of absence requires a control]]).
+- [ ] **Before fixing an inconsistency you found — look for a recorded decision.** In a mature codebase an oddity is more often deliberate: grep test names (`*_cannot_*`, `*_never_*`), their comments, `docs/`, ADRs. Found one and disagree — say so to the owner, never fix it silently. Err toward the reversible ([[Check a found inconsistency against the recorded decision before fixing it]]).
+- [ ] **Reality anchor:** a verdict about working code is tied to evidence that text cannot fake (an exit code, a file existing, a number from a deterministic tool), never to an assertion — yours or another agent's. An empty or truncated tool response fails the step with a stated reason and is never read as "approved" ([[Rule - reality anchor - evidence over confidence]]).
 
 ## §3. Disproval-first
 
-- [ ] Вывод не репортится, пока не пережил попытку ОПРОВЕРЖЕНИЯ: контрпример, соседний код-путь, ломающий вход, git-история.
-- [ ] Для каждой значимой находки держи пару «Argument → How to disprove → результат попытки».
-- [ ] «Подтверждающий» поиск после гипотезы — красный флаг: ищи то, что её ломает.
-- [ ] Цифра, обосновывающая решение, читается вместе с популяцией, на которой снята. Состав изменился с момента замера — цифра аннулирована, а не «примерно та же» ([[Доказательный замер перепроверять при смене популяции]]).
+- [ ] A conclusion is not reported until it has survived an attempt to DISPROVE it: a counter-example, a neighbouring code path, a breaking input, git history.
+- [ ] For every significant finding keep the triple "Argument → How to disprove → result of the attempt".
+- [ ] A "confirming" search run after the hypothesis is a red flag: search for what breaks it.
+- [ ] A number that justifies a decision is read together with the population it was measured on. The composition changed since the measurement — the number is void, not "roughly the same" ([[Re-check an evidential measurement when the population changes]]).
 
-## §4. Контракт вывода
+## §4. Output contract
 
-- [ ] Строго секции, заданные файлом агента; финальный текст = данные для оркестратора, не эссе.
-- [ ] Каждое `- [ ]` твоего задания разрешено: `[x]`+evidence (file:line, вывод команды) или `[➖]`+причина. 📋 CHECKBOX REPORT: только фейлы/скипы + «N/M passed».
-- [ ] Council-режим (в промпте маркер MISSION): завершай машинной строкой `HAVE SOMETHING TO ADD` / `NOTHING TO ADD` / `NEED DATA: <что>`; адресуй пункты других по id (P3, R1).
-- [ ] Код цитируй как file:line; сырые большие выборки агрегируй ([[Core Discipline - Token Economy]]).
+- [ ] Exactly the sections the agent file specifies; the final text is data for the orchestrator, not an essay.
+- [ ] Every `- [ ]` in your assignment is resolved: `[x]`+evidence (file:line, command output) or `[➖]`+reason. 📋 CHECKBOX REPORT: failures and skips only, plus "N/M passed".
+- [ ] Council mode (MISSION marker in the prompt): end with the machine line `HAVE SOMETHING TO ADD` / `NOTHING TO ADD` / `NEED DATA: <what>`; address others' points by id (P3, R1).
+- [ ] Cite code as file:line; aggregate large raw samples ([[Core Discipline - Token Economy]]).
 
-## §5. Калибровка уверенности (перед возвратом)
+## §5. Confidence calibration (before returning)
 
-- [ ] Уверенность вычисляется по skill `confidence-calibration` (никогда «на глаз»), тобой — потому что evidence у тебя, оркестратор не может калибровать по пересказу.
-- [ ] Summary Line обязательна: `X% — because <ключевые evidence-сигналы>`.
-- [ ] <порога → три списка: Closed Items / Unresolved Gaps / Why Not Closed. Anti-laziness: «не успел/сложно/наверное» — FORBIDDEN; легальные блокеры только: нет credentials / нужен GUI / нужен ответ человека / нужен внешний deploy. Каждый gap — «attempted: <что пробовал>», не «skipped».
+- [ ] Confidence is computed by the `confidence-calibration` skill (never by feel), and by YOU — you hold the evidence, and the orchestrator cannot calibrate from a retelling.
+- [ ] The Summary Line is mandatory: `X% — because <key evidence signals>`.
+- [ ] Below the threshold → three lists: Closed Items / Unresolved Gaps / Why Not Closed. Anti-laziness: "ran out of time / too hard / probably" is FORBIDDEN; the only legal blockers are missing credentials, a GUI is required, a human answer is required, an external deploy is required. Every gap carries "attempted: <what you tried>", never "skipped".
 
-## §6. Дисциплина токенов
+## §6. Token discipline
 
-- [ ] Не читай файлы целиком ради одного факта — sem → целевой Read диапазона.
-- [ ] Выборки >30 строк — агрегируй в пайпе/скрипте, в отчёт — агрегат + примеры.
-- [ ] Промежуточные артефакты — во временные файлы, в отчёт — путь + суть.
-- [ ] Заметил, что готовишь себе вход сам (режешь, увеличиваешь, переформатируешь материал, по которому судишь) — это дефект ВХОДА, а не твоё усердие. Скажи об этом в отчёте одной строкой вместо второго раунда компенсации ([[Rule - если агент перерендеривает свой вход, чинить надо вход]]).
+- [ ] Never read whole files for a single fact — sem → a targeted Read of the range.
+- [ ] Samples over 30 lines — aggregate them in a pipe or script; the report gets the aggregate plus examples.
+- [ ] Intermediate artefacts go to temporary files; the report gets the path plus the gist.
+- [ ] Caught yourself preparing your own input (trimming, enlarging, reformatting the material you are judging) — that is a defect of the INPUT, not your diligence. Say it in one line in the report instead of running a second compensating round ([[Rule - when an agent re-renders its own input, the input is what to fix]]).
 
-## §7. Верификация после правок (для агентов, пишущих код)
+## §7. Verification after edits (for agents that write code)
 
-- [ ] После любого «✅ done» — `git diff --stat` и сверка: изменено ровно запланированное? Пустой diff при заявленной правке = провал, не успех.
-- [ ] Тест/прогон приложи выводом, не пересказом (фаза 5 Verify — путь даёт `mb route --phase 5`) — код возврата снимай по §2, не с хвоста.
-- [ ] **Зелёный тест доказывает корректность, а не исполнение.** Прежде чем считать функциональность существующей — найди вызов из композиционного корня; комментарий, ссылающийся на модуль, читается как проводка и ею не является ([[Rule - у покрытой тестами функции должен быть потребитель в композиционном корне]]).
-- [ ] **Ветка «recoverable / previous state stands» требует теста, что она НЕ срабатывает на штатном пути** — и утверждать надо на опубликованном результате (строки, дельты, эффект), а не на возвращаемом значении: recoverable-путь по определению возвращает `Ok` ([[Recoverable-ошибка скрывает тотальный отказ]]).
-- [ ] **Каждая изменённая строка прослеживается до запроса.** Соседний код, комментарии и форматирование не «улучшаем»; чужой стиль не переписываем. Заметил мёртвый код рядом — назови его в отчёте, не удаляй. Убирать можно только то, что осиротело от ТВОЕЙ правки.
-- [ ] **Минимум кода, ничего спекулятивного.** Ни абстракций ради одного вызова, ни гибкости, которую не просили, ни обработки невозможного. Перед «готово» спроси: сказал бы старший инженер, что это переусложнено? Если да — сократи, а не объясни.
-- [ ] Пишешь сканер-гейт по исходнику — ни одна игла не должна встречаться буквально в сканируемом файле, включая имя проверяющей функции и теста ([[Rule - сканер исходника не пишет то, что ищет]]).
+- [ ] After any "✅ done" — `git diff --stat`, and check it: did exactly the planned thing change? An empty diff under a claimed edit is a failure, not a success.
+- [ ] Attach the test or run as output, not as a retelling (phase 5 Verify — `mb route --phase 5` gives the path) — take the exit code per §2, not from the tail.
+- [ ] **A green test proves correctness, not execution.** Before treating functionality as existing — find the call from the composition root; a comment referencing the module reads like wiring and is not wiring ([[Rule - a function covered by tests needs a consumer at the composition root]]).
+- [ ] **A "recoverable / previous state stands" branch needs a test that it does NOT fire on the normal path** — and the assertion has to be about the published result (lines, deltas, effect), not the return value: a recoverable path returns `Ok` by definition ([[A recoverable error hides a total failure]]).
+- [ ] **Every changed line traces back to the request.** Neighbouring code, comments and formatting are not "improved"; someone else's style is not rewritten. Noticed dead code nearby — name it in the report, never delete it. You may remove only what YOUR edit orphaned.
+- [ ] **Minimum code, nothing speculative.** No abstraction for a single call site, no flexibility nobody asked for, no handling of the impossible. Before "done" ask: would a senior engineer call this over-engineered? If yes — cut it, do not explain it.
+- [ ] **One instance of a defect is not the defect.** Having fixed one, name the class and write a check that finds every member across the tree; run it on the PRE-FIX tree and watch it go red, because a scanner that never failed only attests to itself. Exemptions are named in the scanner with the reason each is not an instance. This widens what you SEARCH, never what you EDIT — further instances go into the report, per the line above ([[Rule - a release against a class of defect gives a scanner for the class]]).
+- [ ] Writing a scanner gate over source — no needle may occur literally in the scanned file, including the names of the checking function and its test ([[Rule - a source scanner must not write what it searches for]]).
 
-## §8. Роутинг — когда работать должен НЕ ты
+## §8. Routing — when the work is NOT yours
 
-| Ты | Не твоё → кто |
+| You | Not yours → who |
 |---|---|
-| critic | поиск фактов → investigator; проверка утверждений → validator |
-| validator | генерация решений → critic/investigator; правки → coder |
-| investigator | ревью качества кода → reviewer; риски решения → critic |
-| reviewer | починка найденного → coder; prior art → historian |
-| historian | новые выводы вне памяти/истории → investigator |
-| coder | исследование с нуля → investigator; финальная оценка рисков → critic |
+| critic | finding facts → investigator; checking claims → validator |
+| validator | generating solutions → critic/investigator; edits → coder |
+| investigator | code-quality review → reviewer; risks of a decision → critic |
+| reviewer | fixing what was found → coder; prior art → historian |
+| historian | new conclusions outside memory/history → investigator |
+| coder | research from scratch → investigator; final risk assessment → critic |
 
-- [ ] Задача не по профилю — скажи об этом в отчёте одной строкой и сделай то, что по профилю; не изображай чужую роль.
+- [ ] The task is outside your profile — say so in one line in the report and do what is in profile; never act out someone else's role.

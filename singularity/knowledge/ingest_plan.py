@@ -40,17 +40,20 @@ _MIN_NEW_PAGE_CHARS = 3
 _MAX_NEW_PAGE_CHARS = 60
 # "1. ", "4) ", "II. " — an enumerator marks DOCUMENT STRUCTURE, not an entity.
 # Verified on the real vault: without this filter every numbered section of an
-# ingested design doc ("4. Карта интеграции...") was proposed as a wiki page.
+# ingested design doc ("4. Integration map...") was proposed as a wiki page.
 _ENUMERATOR_RE = re.compile(r"^\s*(?:\d+|[ivxlcIVXLC]+)[.)]\s+")
-# Headings that are a document's skeleton in this vault's note templates.
+# Headings that are a document's skeleton rather than an entity. The list is
+# English, like the rest of the engine; the language-neutral filters above it
+# (an enumerator prefix, the length bounds) do the heavy lifting, and a
+# structural heading that slips through costs one rejected suggestion in a
+# plan the user approves item by item.
 _STRUCTURAL_HEADINGS = {
-    "контекст", "решение", "решения", "ссылки", "кто и когда", "суть", "находки",
-    "итог", "итоги", "выводы", "результат", "результаты", "риски", "шаги",
-    "пример", "примеры", "приложение", "открытые вопросы", "что дальше",
-    "бизнес-цель", "технический scope", "acceptance", "размер", "происхождение",
-    "summary", "overview", "context", "decision", "links", "notes", "todo",
-    "open questions", "appendix", "example", "examples", "lesson", "steps",
-    "corrective actions", "diagnostic questions", "what was expected",
+    "summary", "overview", "context", "decision", "decisions", "links", "notes",
+    "todo", "open questions", "appendix", "example", "examples", "lesson",
+    "lessons", "steps", "results", "result", "risks", "findings", "outcome",
+    "conclusions", "who and when", "origin", "scope", "size", "acceptance",
+    "what next", "corrective actions", "diagnostic questions",
+    "what was expected", "references", "background",
 }
 
 

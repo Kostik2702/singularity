@@ -1,6 +1,6 @@
 """Memory curator (MB-10): vault health + semantic link suggestions.
 
-Two layers (port of Genevra memory-validation + memory-doctor):
+Two layers (memory validation + memory doctor):
   1. Mechanics (zero tokens, no model): broken wikilinks, mandatory
      frontmatter, decisions without owner/source, duplicate titles.
   2. Semantics (reuses the EXISTING index, no re-encoding): note-level

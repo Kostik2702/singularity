@@ -7,7 +7,7 @@ one was absent.
 
 The audit mattered more than the text. Each principle is delivered where its
 decision is made, not collected into a list — a shared list of rules is an
-archive ([[Rule - правило звучит в точке принятия решения]]):
+archive ([[Rule - a rule is spoken at the point of decision]]):
 
   #4 Goal-Driven      already carried by §1 (FINAL GOAL / UNMET if) and §2
                       (plant the violation). Not re-stated; the gap was that
@@ -51,8 +51,9 @@ def test_surgical_changes_reaches_every_code_writing_agent():
     `web-implementer.md:28`); the review agents and the main thread never saw
     it. §7 is the section every code-writing agent is told to read."""
     s7 = _section("§7.")
-    assert "прослеж" in s7, "§7 must demand every changed line trace to the request"
-    assert "не удаляй" in s7 or "назови" in s7, \
+    assert "traces back to the request" in s7, \
+        "§7 must demand every changed line trace to the request"
+    assert "name it in the report" in s7 or "never delete it" in s7, \
         "§7 must say that noticed dead code is reported, not deleted"
 
 
@@ -60,7 +61,7 @@ def test_surgical_changes_reaches_every_code_writing_agent():
 def test_the_writing_agents_keep_their_stricter_wording(agent):
     """Lifting the rule to §7 must not quietly delete the places it already
     worked — that would trade coverage for a regression at the two points that
-    had it ([[Найденное несоответствие сверить с записанным решением до починки]]).
+    had it ([[Check a found inconsistency against the recorded decision before fixing it]]).
 
     Three texts now carry one rule. By the engine's four-surface table an agent
     file MAY hold a stricter role-specific version, so this is legitimate — but
@@ -69,15 +70,16 @@ def test_the_writing_agents_keep_their_stricter_wording(agent):
     binding: all three must stand, and §7 must remain the general one."""
     body = (ENGINE / "singularity" / "agents" / f"{agent}.md").read_text(encoding="utf-8")
     assert "No scope expansion" in body, f"{agent} lost its scope gate"
-    assert "прослеж" in _section("§7."), "the general rule left §7 while copies remain"
+    assert "traces back to the request" in _section("§7."), \
+        "the general rule left §7 while copies remain"
 
 
 # --- #2 Simplicity First ------------------------------------------------------
 
 def test_simplicity_is_asked_before_done_not_after_review():
     s7 = _section("§7.")
-    assert "переусложн" in s7, "§7 must carry the senior-engineer question"
-    assert "спекулят" in s7 or "не просили" in s7, \
+    assert "over-engineered" in s7, "§7 must carry the senior-engineer question"
+    assert "speculative" in s7 or "nobody asked for" in s7, \
         "§7 must reject unrequested flexibility/abstraction"
 
 
@@ -119,7 +121,7 @@ def test_no_mid_flight_stops_survives_unchanged():
     counter-text rule warns about."""
     s2 = _section("§2.")
     assert "No mid-flight stops" in s2
-    assert "не останавливайся спросить" in s2
+    assert "never stop to ask the user" in s2
     assert "ASSUMED" in s2
 
 
@@ -166,9 +168,9 @@ def test_no_fragment_is_lost_to_truncation(tmp_path, monkeypatch):
 # --- the registry knows about all of it ---------------------------------------
 
 @pytest.mark.parametrize("rule", [
-    "каждая изменённая строка прослеживается до запроса",
-    "минимум кода, ничего спекулятивного",
-    "развилку назвать до работы, а не после",
+    "every changed line traces back to the request",
+    "minimum code, nothing speculative",
+    "name the fork before the work, not after",
 ])
 def test_each_principle_is_registered(rule):
     """Unregistered delivery is how the four Core Disciplines ended up holding
@@ -185,7 +187,7 @@ def test_the_mutation_harness_exists():
     an f-string, so the asserts survived deleting the restore check and
     survived swapping the exit code for a substring match on stdout. Behaviour
     is asserted in `tests/test_plant.py`, which never reads the source
-    ([[Rule - сканер исходника не пишет то, что ищет]])."""
+    ([[Rule - a source scanner must not write what it searches for]])."""
     assert (ENGINE / "tools" / "plant.py").is_file()
     assert (ENGINE / "tests" / "test_plant.py").is_file(), \
         "the tool the whole discipline rests on needs behavioural tests"

@@ -1,6 +1,6 @@
 ---
 name: council
-description: Multi-agent architectural council for design decisions, implementation approaches, and technical strategy. Spawns investigator, critic, validator, historian in adversarial parallel rounds with a consensus loop. Triggers - "council", "совет", "созови совет", "архитектурное решение", "X vs Y", "trade-off", "trade-offs", "which approach", "какой подход лучше", "design decision", "стоит ли переходить на".
+description: Multi-agent architectural council for design decisions, implementation approaches, and technical strategy. Spawns investigator, critic, validator, historian in adversarial parallel rounds with a consensus loop. Triggers - "council", "convene a council", "architectural decision", "X vs Y", "trade-off", "trade-offs", "which approach", "which approach is better", "design decision", "should we move to".
 ---
 
 # Architectural Council — Decision Making

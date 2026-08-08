@@ -516,7 +516,7 @@ def cmd_note(cfg, args) -> int:
     else:
         body = (f"---\ntype: {args.type}\ntitle: \"{args.title}\"\ntags: []\n"
                 f"created: {today}\nstatus: active\nsource: \"\"\nowner: user\n---\n\n"
-                f"# {args.title}\n\n## Контекст\n\n\n## Суть\n\n")
+                f"# {args.title}\n\n## Context\n\n\n## Substance\n\n")
     body = capture.with_project_frontmatter(body, project)
     body = capture.with_sources_frontmatter(body, from_sources)
     path.parent.mkdir(parents=True, exist_ok=True)

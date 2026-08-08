@@ -313,7 +313,7 @@ def _delegating_session(tmp_path, *, synchronous: bool = False):
     the agent's REPORT, with no launch envelope naming an agentId anywhere —
     the case that used to leave the delegation unidentified.
     """
-    launch_result = ("Тут был длинный отчёт агента." if synchronous else
+    launch_result = ("A long agent report stood here." if synchronous else
                      "Async agent launched successfully. agentId: abc123def456 (internal)")
     main = _write(tmp_path / "sess.jsonl", [
         _asst("m1", _usage(read=1_000, out=10),
@@ -327,10 +327,10 @@ def _delegating_session(tmp_path, *, synchronous: bool = False):
     # main-thread test.
     _write(tmp_path / "sess" / "subagents" / "agent-abc123def456.jsonl", [
         _asst("s1", _usage(read=50_000, w5=1_000, w1h=1_000, out=2_000),
-              [{"type": "text", "text": "работаю"}], sidechain=True),
+              [{"type": "text", "text": "working"}], sidechain=True),
     ])
     (tmp_path / "sess" / "subagents" / "agent-abc123def456.meta.json").write_text(
-        json.dumps({"agentType": "reviewer", "description": "Ревью изменений",
+        json.dumps({"agentType": "reviewer", "description": "Review of the changes",
                     "toolUseId": "t1", "spawnDepth": 1}), encoding="utf-8")
     return main
 

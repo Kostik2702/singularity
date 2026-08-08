@@ -1,22 +1,22 @@
 ---
 name: mb-triage
-description: Inverse-Trust bug/incident triage -- search memory before touching code, and capture only when the root cause is a recurring class. Use when the user reports a bug, error, or unexpected behavior, or says triage this, "разберись с этой ошибкой", "почему это не работает".
+description: Inverse-Trust bug/incident triage -- search memory before touching code, and capture only when the root cause is a recurring class. Use when the user reports a bug, error, or unexpected behavior, or says triage this, "sort out this error", "why is this not working".
 ---
 
-# mb-triage — Inverse Trust для багов/инцидентов
+# mb-triage — Inverse Trust for bugs and incidents
 
-Два принципа "Inverse Trust": (1) не доверяй первому впечатлению о причине — vault мог уже видеть этот класс проблемы, проверь ДО того как начнёшь читать код; (2) не доверяй импульсу "надо это записать" — большинство багов одноразовые, запись оправдана только для ПОВТОРЯЮЩЕГОСЯ класса причины.
+Two "Inverse Trust" principles: (1) do not trust your first impression of the cause — the vault may already have seen this class of problem, so check BEFORE you start reading code; (2) do not trust the impulse "this needs recording" — most bugs are one-offs, and a record is justified only for a RECURRING class of cause.
 
-## Протокол
+## Protocol
 
-- [ ] 1. **SEM-FIRST, до кода**: `mb search "<симптом/сообщение об ошибке своими словами>"` (RU и EN формулировки, если не уверен на каком языке заведена заметка). Это ОТДЕЛЬНЫЙ шаг от обычного SEM-FIRST для знаний — здесь цель конкретно `incidents`/`rules`, не любые заметки.
-- [ ] 2. Есть релевантное совпадение (`--type incident` или `--type rule`, score>0.5)? Прочитай заметку целиком, примени зафиксированное решение, процитируй источник пользователю. Не начинай расследование заново — это и есть экономия, которую даёт memory.
-- [ ] 3. Совпадения нет — проведи расследование обычным образом (используй `superpowers:systematic-debugging`, если доступен, или стандартный debugging-процесс проекта). mb-triage не заменяет процесс отладки — он только гейтит его SEM-FIRST-проверкой в начале.
-- [ ] 4. **После фикса** — прежде чем решать, записывать ли: явно ответь на вопрос «эта причина повторится в другом файле/модуле/проекте, или это одноразовая случайность (опечатка, забытый импорт, разовая гонка окружения)?». Записывай ТОЛЬКО recurring-класс.
-- [ ] 5. Recurring — `mb note new incident "<короткое название класса причины>"` (не "заголовок конкретного бага", а название ПАТТЕРНА, чтобы будущий `mb search` по похожему симптому его нашёл). Одноразовое — не создавай заметку; при желании можно `mb learn` одной строкой в текущий learnings-док чисто для журнала сессии, без создания incident.
+- [ ] 1. **SEM-FIRST, before the code**: `mb search "<the symptom or error message in your own words>"`. Phrase it however you would naturally say it — retrieval is crosslingual, so a note does not have to be written in the language you ask in. This is a SEPARATE step from the usual SEM-FIRST for knowledge — here the target is specifically `incidents`/`rules`, not notes in general.
+- [ ] 2. Is there a relevant match (`--type incident` or `--type rule`, score>0.5)? Read the note in full, apply the recorded solution, and cite the source to the user. Do not start the investigation from scratch — that saving is exactly what the memory is for.
+- [ ] 3. No match — investigate the normal way (use `superpowers:systematic-debugging` if it is available, or the project's standard debugging process). mb-triage does not replace the debugging process; it only gates it with a SEM-FIRST check at the start.
+- [ ] 4. **After the fix** — before deciding whether to record it, answer this question explicitly: "will this cause recur in another file, module or project, or is it a one-off accident (a typo, a forgotten import, a one-time environment race)?". Record ONLY the recurring class.
+- [ ] 5. Recurring — `mb note new incident "<a short name for the class of cause>"` (not "the title of this particular bug", but the name of the PATTERN, so a future `mb search` on a similar symptom finds it). One-off — do not create a note; if you like, `mb learn` one line into the current learnings document purely for the session journal, with no incident created.
 
-## Не делай
+## Do not
 
-- [ ] Не пропускай шаг 1 «потому что и так понятно, в чём причина» — именно такие случаи чаще всего оказываются уже задокументированным инцидентом с неочевидным на первый взгляд решением.
-- [ ] Не создавай incident-заметку на каждый пойманный баг — это токен-инфляция vault'а, GATE (как в `mb-memory`): «поймала бы эта заметка именно ЭТОТ повторный случай, будь она уже написана?» — если нет, не пиши.
-- [ ] Не путай triage-поиск (шаг 1, `--type incident,rule`) с обычным SEM-FIRST по знаниям вообще — они ищут разное и по разным типам заметок.
+- [ ] Do not skip step 1 "because the cause is obvious anyway" — those are exactly the cases that most often turn out to be an already documented incident with a solution that was not obvious at first glance.
+- [ ] Do not create an incident note for every bug you catch — that is token inflation of the vault. The GATE (as in `mb-memory`): "would this note have caught precisely THIS repeat occurrence, had it already been written?" — if not, do not write it.
+- [ ] Do not confuse the triage search (step 1, `--type incident,rule`) with the ordinary SEM-FIRST over knowledge in general — they look for different things across different note types.

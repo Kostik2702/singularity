@@ -35,7 +35,7 @@ from ..search.chunking import parse_frontmatter
 from .capture import safe_stem
 
 _SECTION_RE = re.compile(r"^## +(.+?)\s*$", re.MULTILINE)
-INDEX_HEADING = "Разделы"
+INDEX_HEADING = "Sections"
 # Frontmatter keys a child inherits. `created` is re-stamped (the child is new),
 # `status`/`owner`/`source` are the parent's editorial state and would be a
 # claim the child cannot back up.

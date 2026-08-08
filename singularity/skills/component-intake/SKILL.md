@@ -1,35 +1,35 @@
 ---
 name: component-intake
-description: Карантин внешнего компонента до какого-либо попадания в проект — fetch без исполнения, sha256-провенанс, лицензионный классификатор, запрет lifecycle-скриптов, скан скрытых network/eval, обзор зависимостей, esbuild-проверка, вердикт PASS/ADAPT/REJECT. Тонкая обёртка над CLI `component-intake`. Use when "проверь компонент", "можно ли брать этот компонент", intake, quarantine, перед установкой/адаптацией любого внешнего кода из shortlist.
+description: Quarantine of an external component before it reaches the project in any form — fetch without execution, sha256 provenance, a licence classifier, a ban on lifecycle scripts, a scan for hidden network/eval, a dependency review, an esbuild check, and a PASS/ADAPT/REJECT verdict. A thin wrapper over the `component-intake` CLI. Use when "check this component", "can we take this component", intake, quarantine, before installing or adapting any external code from a shortlist.
 ---
 
-# component-intake — карантин перед адаптацией
+# component-intake — quarantine before adaptation
 
-CLI `component-intake` (движок, контракт `singularity/intake/CONTRACT.md`, component-intake/1). **v1 = inspect-first**: код кандидата НИКОГДА не исполняется, lifecycle-скрипты всегда denied, npm install отсутствует как класс. Потолок вердикта v1 — ADAPT (runtime-фазы typed unavailable; unavailable ≠ PASS).
+The `component-intake` CLI (the engine, contract `singularity/intake/CONTRACT.md`, component-intake/1). **v1 is inspect-first**: a candidate's code is NEVER executed, lifecycle scripts are always denied, and npm install does not exist as a class. The verdict ceiling in v1 is ADAPT (the runtime phases are typed unavailable; unavailable ≠ PASS).
 
-> **Правило нулевого кода:** fetch/hash/скан/вердикт — субкоманда `run`. 0 новых скриптов.
+> **Zero-code rule:** fetch, hash, scan and verdict are the `run` subcommand. 0 new scripts.
 
-## Порядок
+## The order
 
 ```bash
-# всегда через provenance-цепочку E02 (лицензия из реестра провайдера):
+# always through the E02 provenance chain (the licence comes from the provider registry):
 INTAKE_PROTECTED_ROOTS=<project> component-intake run \
-  --candidates <candidates.json из pattern-scout> --id <candidate_id> \
-  --workspace <disposable-dir ВНЕ проекта> --json
-# exit 0 = PASS (недостижим в v1), 1 = ADAPT|REJECT (читать verdict.result), 2 = инструмент
+  --candidates <candidates.json from pattern-scout> --id <candidate_id> \
+  --workspace <disposable dir OUTSIDE the project> --json
+# exit 0 = PASS (unreachable in v1), 1 = ADAPT|REJECT (read verdict.result), 2 = tool error
 ```
 
-## Как читать вердикт
+## How to read the verdict
 
-- **REJECT** — не адаптируем: license unknown / lifecycle-скрипты / скрытый network / eval / build fail. Причины в `data.reject_reasons`. REJECT кандидата ≠ дефект конвейера.
-- **ADAPT** — можно в implementation branch ТОЛЬКО через adaptation recipe (E04); `data.requirements` — обязательный вход рецепта (reduced-motion variant, lazy-island для heavy deps, runtime evidence v2).
-- `checks.build.status=unavailable` — поставить `INTAKE_ESBUILD` на esbuild.exe любого vite-проекта; unavailable капит вердикт, не пропускает.
-- `data.checks.snapshot` (sha256 + origin + retrieved_at) — провенанс, он обязан попасть в recipe/golden registry.
+- **REJECT** — do not adapt: license unknown / lifecycle scripts / hidden network / eval / build failure. The reasons are in `data.reject_reasons`. A rejected candidate is not a defect of the pipeline.
+- **ADAPT** — it may enter the implementation branch ONLY through an adaptation recipe (E04); `data.requirements` is a mandatory input to that recipe (a reduced-motion variant, a lazy island for heavy deps, runtime evidence v2).
+- `checks.build.status=unavailable` — point `INTAKE_ESBUILD` at the esbuild.exe of any vite project; unavailable caps the verdict, it does not wave it through.
+- `data.checks.snapshot` (sha256 + origin + retrieved_at) is the provenance, and it must reach the recipe and the golden registry.
 
-## Гейты
+## Gates
 
-- [ ] Кандидат без записи в candidates.json (нет provenance-цепочки) = license unknown = REJECT — не «подсказывать» лицензию руками без проверки источника.
-- [ ] Классификатор читает файл `LICENSE`, а не поле GitHub: `Other`/`NOASSERTION` = «автоопределение не узнало», не «лицензии нет». Если кандидат уже был кем-то рекомендован без чтения текста — рекомендация не является провенансом.
-- [ ] `INTAKE_PROTECTED_ROOTS` выставлен на целевой проект ВСЕГДА.
-- [ ] REJECT не оспаривается скилом; спорные случаи — вопрос владельцу с evidence.
-- [ ] Вердикт и requirements — в learnings (`mb learn`); intake-report.json — evidence для E04.
+- [ ] A candidate with no entry in candidates.json (no provenance chain) counts as license unknown and therefore REJECT — never "helpfully" supply a licence by hand without checking the source.
+- [ ] The classifier reads the `LICENSE` file, not GitHub's field: `Other`/`NOASSERTION` means "auto-detection did not recognise it", not "there is no licence". If somebody already recommended the candidate without reading the text, that recommendation is not provenance.
+- [ ] `INTAKE_PROTECTED_ROOTS` is ALWAYS set to the target project.
+- [ ] A REJECT is not disputed by the skill; contested cases go to the owner with evidence.
+- [ ] The verdict and requirements go into the learnings (`mb learn`); intake-report.json is the evidence for E04.
