@@ -146,11 +146,15 @@ def approve(cfg: Config, rel: str, note_type: str, title: str | None = None) -> 
 
 # --- helpers ----------------------------------------------------------------
 
+#: English keywords, and the engine says so rather than pretending otherwise:
+#: a note written in another language falls through to the default, which is
+#: the same outcome as an unrecognised English one. The cost of a miss here is
+#: one extra keystroke at `mb inbox approve`, never a wrong file on disk.
 _TYPE_HINTS = (
-    ("decision", ("решили", "decision", "trade-off", "выбрали", "owner decision")),
-    ("incident", ("сломал", "incident", "упал", "regression", "traceback", "ошибка")),
-    ("howto", ("шаг", "how to", "howto", "инструкция", "запусти", "run ")),
-    ("rule", ("всегда", "никогда", "must ", "never ", "правило")),
+    ("decision", ("decided", "decision", "trade-off", "we chose", "owner decision")),
+    ("incident", ("broke", "incident", "crashed", "regression", "traceback", "error")),
+    ("howto", ("step ", "how to", "howto", "instructions", "run ")),
+    ("rule", ("always", "never", "must ", "rule")),
 )
 
 

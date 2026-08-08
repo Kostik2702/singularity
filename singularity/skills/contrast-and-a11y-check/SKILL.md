@@ -1,48 +1,48 @@
 ---
 name: contrast-and-a11y-check
-description: Точная проверка доступности сайта — WCAG-контраст точным расчётом (imgqa contrast), axe-прогон на живом URL (scripts/a11y-audit.mjs), протокол keyboard-навигации с задокументированными WebKit-обходами. Use when "проверь контраст", "хватает ли контраста", "a11y", accessibility check, WCAG, axe, keyboard navigation, перед релизом/визуальным baseline сайта.
+description: Precise accessibility checking of a site — WCAG contrast by exact calculation (imgqa contrast), an axe run against a live URL (scripts/a11y-audit.mjs), and a keyboard-navigation protocol with documented WebKit workarounds. Use when "check the contrast", "is there enough contrast", "a11y", accessibility check, WCAG, axe, keyboard navigation, before a release or a site's visual baseline.
 ---
 
-# contrast-and-a11y-check — точная доступность, не «на глаз»
+# contrast-and-a11y-check — precise accessibility, not "by eye"
 
-Два детерминированных инструмента + один ручной протокол. Суждение «чинить или это решение владельца» — за человеком/скилом, не за инструментами.
+Two deterministic tools plus one manual protocol. The judgement "fix it, or is this an owner decision" belongs to the human or the skill, never to the tools.
 
-> **Контраст НИКОГДА не оценивается на глаз.** Прецедент NIKA: «на глаз» дал ложный fail 4.2 при реальных 4.93:1 (GT-C1 imgqa: `C9586B` на `070506` → 4.93). Только `imgqa contrast`.
+> **Contrast is NEVER assessed by eye.** NIKA precedent: "by eye" gave a false fail of 4.2 when the real value was 4.93:1 (GT-C1 imgqa: `C9586B` on `070506` → 4.93). Only `imgqa contrast`.
 
-## 1. Контраст (evaluative, exit 0/1/2)
+## 1. Contrast (evaluative, exit 0/1/2)
 
 ```bash
-imgqa contrast "#RRGGBB" "#RRGGBB" --json          # --min 4.5 по умолчанию
-# verdict.result PASS/FAIL, data.ratio_raw — гейт по raw (не по округлению)
+imgqa contrast "#RRGGBB" "#RRGGBB" --json          # --min 4.5 by default
+# verdict.result PASS/FAIL, data.ratio_raw — the gate is on the raw value, not on the rounding
 ```
-- AA normal ≥4.5, AA large ≥3.0, AAA ≥7.0 — читать typed-поля `aa_normal/aa_large/aaa_normal`.
-- Цвета брать из computed styles/токенов проекта, не из макета «примерно».
+- AA normal ≥4.5, AA large ≥3.0, AAA ≥7.0 — read the typed fields `aa_normal/aa_large/aaa_normal`.
+- Take the colours from the project's computed styles or tokens, never "roughly" from the mockup.
 
-## 2. Axe-прогон живого URL (evaluative)
+## 2. An axe run against a live URL (evaluative)
 
 ```bash
-# Сервер: ТОЛЬКО npx http-server (python http.server не отдаёт Range — правило vault)
+# Server: ONLY npx http-server (python http.server does not serve Range — a vault rule)
 node "E:\Singularity\singularity\skills\contrast-and-a11y-check\scripts\a11y-audit.mjs" \
-  --project "<корень проекта>" --url http://localhost:8743 \
-  --out "<evidence-dir ВНЕ проекта>" [--page /index.html] [--fail-impact serious]
+  --project "<project root>" --url http://localhost:8743 \
+  --out "<evidence dir OUTSIDE the project>" [--page /index.html] [--fail-impact serious]
 ```
-- Playwright и axe-core берутся из node_modules ПРОЕКТА (no network/CDN); нет axe-core → typed exit 2 с ремедиацией `npm i -D axe-core`.
-- exit 0 = нет нарушений ≥ fail-impact; 1 = есть (список в verdict.reason + `a11y-report.json`); 2 = инструмент не отработал (≠ «всё хорошо»).
-- `?visual-test=1` добавляется автоматически (детерминизм: canvas t=0, анимации off); `--visual-test 0` — выключить.
-- `data.incomplete` — axe не уверен: проверить руками, не игнорировать молча.
+- Playwright and axe-core are taken from the PROJECT's node_modules (no network, no CDN); no axe-core means a typed exit 2 with the remediation `npm i -D axe-core`.
+- exit 0 = no violations at or above fail-impact; 1 = there are some (the list is in verdict.reason plus `a11y-report.json`); 2 = the tool did not run (≠ "everything is fine").
+- `?visual-test=1` is added automatically (determinism: canvas t=0, animation off); `--visual-test 0` turns it off.
+- `data.incomplete` means axe is unsure: check those by hand, do not ignore them silently.
 
-## 3. Keyboard-nav протокол (ручной, Playwright-only)
+## 3. Keyboard navigation protocol (manual, Playwright-only)
 
-Интерактивный Chrome — не источник истины (правило vault «аномалия в интерактивном Chrome — лид»). Проверять Playwright-скриптом в контексте проекта: Tab-обход всех интерактивных элементов, видимый focus ring, Escape закрывает модалки, Enter/Space активируют.
+An interactive Chrome is not a source of truth (the vault rule "an anomaly in interactive Chrome is a lead"). Check with a Playwright script in the project's context: Tab through every interactive element, a visible focus ring, Escape closing modals, Enter/Space activating.
 
-**WebKit-ловушки (vault [[WEBKIT-TRAPS]], НЕ переисследовать):**
-- `button` в WebKit не получает focus по клику — проверять Tab-порядком, не кликом;
-- синтетические Tab/Space в headless WebKit ненадёжны — гонять keyboard-тесты в Chromium, WebKit только смоук;
-- `page.route` не перехватывает media-запросы (.mp4) в WebKit — «media 404» тест там молча не работает.
+**WebKit traps (vault [[WEBKIT-TRAPS]], do NOT re-research them):**
+- a `button` in WebKit does not take focus on click — verify by Tab order, not by clicking;
+- synthetic Tab/Space in headless WebKit are unreliable — run keyboard tests in Chromium and keep WebKit as smoke only;
+- `page.route` does not intercept media requests (.mp4) in WebKit — a "media 404" test silently does not work there.
 
-## Гейты
+## Gates
 
-- [ ] Все цветовые пары текста — через `imgqa contrast`, числа в отчёт.
-- [ ] axe exit 2 ≠ PASS; различать «чисто» и «не отработало».
-- [ ] Нарушение может быть B-категорией (намеренное решение владельца) — сверить с vault до «чинить»; финальный вердикт — human gate.
-- [ ] Результаты — в learnings (`mb learn`), a11y-report.json как evidence.
+- [ ] Every text colour pair goes through `imgqa contrast`, with the numbers in the report.
+- [ ] axe exit 2 ≠ PASS; tell "clean" apart from "did not run".
+- [ ] A violation may be a category B (a deliberate owner decision) — check the vault before "fixing"; the final verdict is a human gate.
+- [ ] Results go into the learnings (`mb learn`), with a11y-report.json as evidence.

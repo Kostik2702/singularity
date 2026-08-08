@@ -36,8 +36,8 @@ class FakeEncoder:
     not left to a hash function."""
 
     model_name = "fake"
-    VOCAB = ["индексатор", "корпус", "поиск", "эмбеддинг", "косинус", "vault",
-             "демон", "правило", "всегда", "никогда", "0.45", "0.60", "порог"]
+    VOCAB = ["indexer", "corpus", "search", "embedding", "cosine", "vault",
+             "daemon", "rule", "always", "never", "0.45", "0.60", "threshold"]
 
     def encode(self, texts, progress=False):
         out = np.zeros((len(texts), len(self.VOCAB) + 1), dtype=np.float32)
@@ -48,12 +48,12 @@ class FakeEncoder:
         return out
 
 
-SHARED = "индексатор корпус поиск эмбеддинг косинус vault "
+SHARED = "indexer corpus search embedding cosine vault "
 SOURCE_TEXT = (
-    "# Внешняя статья про поиск\n\n"
-    "## Устройство корпуса\n" + SHARED * 5 + "\n\n"
-    "## Порог отбора\n" + SHARED * 2 + "порог 0.60 всегда применяется. "
-    "Ссылка на [[Совершенно Новая Тема]].\n"
+    "# External article about search\n\n"
+    "## How the corpus works\n" + SHARED * 5 + "\n\n"
+    "## Selection threshold\n" + SHARED * 2 + "threshold 0.60 always applies. "
+    "A link to [[A Completely New Topic]].\n"
 )
 
 
@@ -66,18 +66,18 @@ def vault(tmp_path, monkeypatch):
         "reference/search.md": SHARED * 4,
         "reference/indexing.md": SHARED * 4,
         "howto/rebuild.md": SHARED * 4,
-        # Planted contradiction against the source's "Порог отбора" section.
+        # Planted contradiction against the source's "Selection threshold" section.
         # The shared-token mass is tuned so the pair lands INSIDE the (0.72,
         # 0.90) band: more overlap and curator.lint would own it as a
         # near-duplicate, less and it reads as a different topic.
-        "rules/threshold.md": ("порог 0.45 никогда не меняется. "
-                               "демон демон правило правило. " + SHARED * 2),
+        "rules/threshold.md": ("threshold 0.45 never changes. "
+                               "daemon daemon rule rule. " + SHARED * 2),
     }
     for rel, body in bodies.items():
         p = root / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(f"---\ntype: reference\ntitle: \"{p.stem}\"\ncreated: 2026-01-01\n"
-                     f"---\n\n# {p.stem}\n\n## Раздел\n{body}",
+                     f"---\n\n# {p.stem}\n\n## Section\n{body}",
                      encoding="utf-8")
     return root
 
@@ -109,7 +109,7 @@ def test_full_cycle_closes(vault, tmp_path, capsys, monkeypatch):
     doc.write_text(SOURCE_TEXT, encoding="utf-8")
 
     # 1. add
-    code, out = _run(["ingest", "add", str(doc), "--title", "Внешняя статья", "--json"],
+    code, out = _run(["ingest", "add", str(doc), "--title", "External article", "--json"],
                      capsys)
     assert code == 0, out.err
     added = json.loads(out.out)
@@ -127,13 +127,13 @@ def test_full_cycle_closes(vault, tmp_path, capsys, monkeypatch):
     for entry in plan["touch"]:
         assert entry["why"]["source_section"] and entry["why"]["note_section"]
     assert plan["summary_target"]["exists"] is False
-    assert any(p["name"] == "Совершенно Новая Тема" for p in plan["new_pages"])
+    assert any(p["name"] == "A Completely New Topic" for p in plan["new_pages"])
 
     # 4. summary note with provenance
-    code, out = _run(["note", "new", "reference", "Внешняя статья", "--from-source", sid],
+    code, out = _run(["note", "new", "reference", "External article", "--from-source", sid],
                      capsys)
     assert code == 0, out.err
-    summary = vault / "reference" / "Внешняя статья.md"
+    summary = vault / "reference" / "External article.md"
     assert f'sources: ["{sid}"]' in summary.read_text(encoding="utf-8")
 
     # 5. edit the pages the plan justified (add-only)
@@ -141,12 +141,12 @@ def test_full_cycle_closes(vault, tmp_path, capsys, monkeypatch):
     for rel in touched:
         path = vault / rel
         path.write_text(path.read_text(encoding="utf-8")
-                        + f"\n\n## Из источника {sid}\n> цитата из внешней статьи\n",
+                        + f"\n\n## From source {sid}\n> a quotation from the external article\n",
                         encoding="utf-8")
 
     # 6. mark
     code, out = _run(["ingest", "mark", sid, "--notes",
-                      ",".join(touched + ["reference/Внешняя статья.md"]),
+                      ",".join(touched + ["reference/External article.md"]),
                       "--status", "processed", "--actor", "skill", "--json"], capsys)
     assert code == 0, out.err
     assert json.loads(out.out)["status"] == "processed"
@@ -210,7 +210,7 @@ def test_search_escalation_finds_only_in_sources(vault):
 def populated(vault, tmp_path, monkeypatch):
     cfg = _cfg(vault)
     sources.add(cfg, SOURCE_TEXT, origin_ref="a")
-    sources.add(cfg, "# Второй\n\n## Раздел\n" + SHARED * 4, origin_ref="b")
+    sources.add(cfg, "# Second\n\n## Section\n" + SHARED * 4, origin_ref="b")
     indexer.rebuild(cfg, progress=False, corpus="sources")
     return cfg
 

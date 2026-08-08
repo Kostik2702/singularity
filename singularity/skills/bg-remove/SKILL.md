@@ -1,51 +1,51 @@
 ---
 name: bg-remove
-description: Удаление фона с изображения с автоматическим QA краёв — rembg/BiRefNet в изолированном ML-venv через imgqa cutout, затем probe/edges/backgrounds/detect-fringe и при необходимости локальный defringe. Use when "убери фон", "сделай PNG с прозрачностью", "вырежи объект/человека", background removal, cutout, "нужен прозрачный фон", подготовка hero/product ассета из фото.
+description: Background removal from an image with automatic edge QA — rembg/BiRefNet in an isolated ML venv through imgqa cutout, then probe/edges/backgrounds/detect-fringe and, if needed, a local defringe. Use when "remove the background", "make a PNG with transparency", "cut out the object/person", background removal, cutout, "I need a transparent background", preparing a hero/product asset from a photo.
 ---
 
-# bg-remove — вырезка фона с QA-пайплайном
+# bg-remove — background cutout with a QA pipeline
 
-Вся работа — командами `imgqa` (контракт schema 2). ML-движок (rembg + BiRefNet, ~930MB весов) живёт в изолированном venv `D:\venvs\imgqa-ml` (OD-1) — движок Singularity его не импортирует, только subprocess-dispatch.
+All the work goes through `imgqa` commands (contract schema 2). The ML engine (rembg + BiRefNet, ~930MB of weights) lives in the isolated venv `D:\venvs\imgqa-ml` (OD-1) — the Singularity engine never imports it, only dispatches to it as a subprocess.
 
-> **Правило нулевого кода:** вырезка/QA/ремонт — только субкоманды `imgqa`. Никаких самописных скриптов с rembg.
+> **Zero-code rule:** cutting out, QA and repair go only through `imgqa` subcommands. No hand-written rembg scripts.
 
-## Что модель умеет и не умеет (по spike 2026-07-14)
+## What the model can and cannot do (from the 2026-07-14 spike)
 
-- **Целевой кейс — фото-субъекты:** люди, объекты. Волосы/пряди — хорошо (проверено на видео-кадре с распущенными волосами и белой одеждой на светлом фоне); ~9с/изображение на CPU.
-- **Line-art/логотипы на однотонном фоне** — работает (свадебное приглашение вырезано чисто).
-- **НЕ целевой кейс:** страницы с текстом/графикой на белом — BiRefNet это salient-object модель, текст «съедается» частично. Для таких входов вырезка не имеет смысла — сказать это пользователю, не гнать пайплайн.
+- **The target case is photographic subjects:** people, objects. Hair and strands come out well (verified on a video frame with loose hair and white clothing against a light background); ~9s per image on CPU.
+- **Line art and logos on a flat background** — works (a wedding invitation was cut out cleanly).
+- **NOT the target case:** pages with text or graphics on white — BiRefNet is a salient-object model, and text gets partially eaten. For such inputs a cutout makes no sense — say so to the user instead of driving the pipeline.
 
-## Пайплайн
+## The pipeline
 
 ```bash
-# 0. (однократно на машине) ML-venv должен существовать: D:\venvs\imgqa-ml
-#    exit 2 с ремедиацией = venv нет; создать по инструкции из ошибки. Веса на D:.
+# 0. (once per machine) the ML venv must exist: D:\venvs\imgqa-ml
+#    exit 2 with a remediation means there is no venv; create it per the instruction in the error. Weights live on D:.
 
-# 1. Вырезка (dispatch, ~15с холодный старт)
+# 1. The cutout (dispatch, ~15s cold start)
 imgqa cutout PHOTO.png --out OUTDIR --json
-#    exit 2 = инструмент не отработал (нет venv/зависимостей/битый вход) — НЕ «фон уже чистый»
+#    exit 2 = the tool did not run (no venv / no dependencies / corrupt input) — NOT "the background is already clean"
 
-# 2. Авто-QA результата (скил image-asset-qa, шаги 1-3):
-imgqa probe OUTDIR/PHOTO.cutout.png --json           # настоящая alpha?
-imgqa backgrounds OUTDIR/PHOTO.cutout.png --out QADIR # 3 фона
-imgqa edges OUTDIR/PHOTO.cutout.png --out QADIR       # 200% кропы краёв
-imgqa detect-fringe OUTDIR/PHOTO.cutout.png --json    # ореолы?
+# 2. Automatic QA of the result (the image-asset-qa skill, steps 1-3):
+imgqa probe OUTDIR/PHOTO.cutout.png --json           # is the alpha real?
+imgqa backgrounds OUTDIR/PHOTO.cutout.png --out QADIR # 3 backgrounds
+imgqa edges OUTDIR/PHOTO.cutout.png --out QADIR       # 200% edge crops
+imgqa detect-fringe OUTDIR/PHOTO.cutout.png --json    # any halos?
 
-# 3. При детекциях: щедрый bbox (>=3x feather) → локальный ремонт
+# 3. On detections: a generous bbox (>=3x feather) -> local repair
 imgqa defringe OUTDIR/PHOTO.cutout.png --bbox X,Y,W,H --out OUTDIR
-#    → повторить detect-fringe на результате (ожидаем 0)
+#    -> repeat detect-fringe on the result (expect 0)
 
-# 4. Экспорт responsive-вариантов (WebP/AVIF) — если нужен, ffmpeg/Pillow-плагин
+# 4. Export of responsive variants (WebP/AVIF) — if needed, ffmpeg or the Pillow plugin
 ```
 
-Гейт `--out`: QADIR не может быть внутри каталога вырезки (политика источника — imgqa сам откажет).
+The `--out` gate: QADIR cannot live inside the cutout directory (source policy — imgqa refuses it itself).
 
-## Human gate (обязателен)
+## Human gate (mandatory)
 
-Финальную приёмку краёв — особенно **matting волос** — делает человек по QA-evidence (3 фона + edges-кропы, смотреть глазами через Read). Скил никогда не объявляет края «готовыми»: детектор ловит класс «плотный ореол», качество тонких прядей автоматом не оценивается. Показать пользователю рендер на контрастном фоне + 1-2 edge-кропа и спросить приёмку.
+Final acceptance of the edges — especially **hair matting** — is done by a human from the QA evidence (3 backgrounds plus edge crops, read with your eyes through Read). The skill never declares the edges "done": the detector catches the "dense halo" class, and the quality of fine strands is not assessed automatically. Show the user a render on a contrasting background plus 1-2 edge crops and ask for acceptance.
 
-## Ловушки (проверены spike'ом)
+## Traps (verified by the spike)
 
-- TLS-прокси машины ломает скачивание весов (pip и pooch): pip лечится `pip.ini` с trusted-host (уже в venv), веса — `curl -L --ssl-no-revoke` в `D:\venvs\imgqa-ml\models`, **имя файла = `<model>.onnx`** (pooch ищет по fname, не по имени релиза; md5 проверяется).
-- exit 2 ≠ pass. Пустой/невалидный вывод ML-venv = tool error (валидируется движком: schema/status/command/outputs/файлы внутри --out).
-- Вердикт QA → `mb learn --task <TASK>`; дефекты на dogfood — в regression-каталог (§9).
+- The machine's TLS proxy breaks weight downloads (both pip and pooch): pip is cured by a `pip.ini` with trusted-host (already in the venv), and the weights by `curl -L --ssl-no-revoke` into `D:\venvs\imgqa-ml\models`, where **the filename must be `<model>.onnx`** (pooch looks up by fname, not by release name; the md5 is verified).
+- exit 2 ≠ pass. Empty or invalid output from the ML venv is a tool error (validated by the engine: schema/status/command/outputs plus the files inside --out).
+- The QA verdict goes to `mb learn --task <TASK>`; defects on dogfood assets go into the regression catalogue (§9).

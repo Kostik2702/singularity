@@ -103,7 +103,7 @@ def _process_pending(cfg: Config, pending: dict[str, float]) -> None:
     """One debounced batch. On failure -- including a held writer lock (e.g.
     `mb nightly` running) -- the files go BACK into `pending` with a fresh
     timestamp so they retry after the next debounce window instead of
-    vanishing silently (T12: "не теряй pending watcher files"). Only the
+    vanishing silently (T12: "do not lose pending watcher files"). Only the
     files actually handled this batch are cleared on success, so an edit
     that lands on another file while this batch is in flight survives."""
     files = sorted(pending)

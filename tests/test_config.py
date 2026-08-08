@@ -275,7 +275,7 @@ def test_a_value_equal_to_the_default_is_still_recorded(tmp_path, monkeypatch):
     default was `false`, `mb config set hybrid_search false` deleted the key, so
     when the default flipped every install flipped with it and none could have
     opted out. The same hole voided the v0.6.3 promise about
-    `vault_guard_enabled` — see `decisions/SEARCH D1 - гибрид по умолчанию.md`.
+    `vault_guard_enabled` — see the vault decision SEARCH D1 (hybrid on by default).
     """
     from singularity import config as cfgmod
     monkeypatch.setenv("MB_HOME", str(tmp_path))

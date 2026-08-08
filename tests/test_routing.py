@@ -1,12 +1,17 @@
-"""The chain of work is announced when a task arrives — and stays quiet otherwise.
+"""The chain table is pushed when a task arrives — and says nothing otherwise.
 
 These tests guard three separable things, because each failed differently in
 the design:
 
-1. The classifier picks a chain and can say which words picked it. A router
-   that cannot name its evidence is a guess the reader has no way to correct.
-2. It stays SILENT on acknowledgements. A gate that fires on "спасибо" teaches
-   its reader to skip it, and is then worse than no gate at all.
+1. What is pushed does not depend on the language the task is written in. Until
+   2026-08-08 this module matched Russian word stems, so an English prompt was
+   never routed and a Russian one always was — the router was a function of the
+   user's keyboard. The classification moved to the model; these tests pin that
+   the ENGINE side no longer inspects words at all.
+2. It stays SILENT on machine turns and on acknowledgements. A gate that fires
+   on "ok" teaches its reader to skip it, and is then worse than no gate at all.
+   Both surviving filters are language-neutral: an envelope marker the client
+   emits, and a character count.
 3. The phase files it points at live in the ENGINE. They used to sit in
    `{{VAULT}}/workflow/`, which made a ten-phase procedure a property of which
    vault was configured — the dependency v0.13.0 removed for the preamble and
@@ -24,54 +29,83 @@ from singularity.machine import routing
 ENGINE = Path(__file__).resolve().parents[1]
 
 
-# --- classification -----------------------------------------------------------
+# --- the property the rewrite exists for --------------------------------------
 
-@pytest.mark.parametrize("prompt,expected", [
-    ("почини падающий тест в индексаторе", "dev"),
-    ("добавь UserPromptSubmit хук и зарегистрируй его в установщике", "dev"),
-    ("разберись почему демон отдаёт старый код", "research"),
-    ("проверь код в register_skills, готово к мержу?", "review"),
-    ("сделай секцию лендинга с адаптивной вёрсткой", "web"),
-    ("убери фон с картинки и проверь ассет", "image"),
-    ("запомни что записи в волт идут только через mb", "memory"),
-    ("обнови волт из гита", "ops"),
-    ("выключи stop hooks", "ops"),
-])
-def test_a_task_reaches_its_chain(prompt, expected):
-    verdict = routing.classify(prompt)
-    assert verdict is not None, f"{prompt!r} routed nowhere"
-    assert verdict[0] == expected, f"{prompt!r} -> {verdict[0]}, markers {verdict[1]}"
+#: The same request, written six ways. Nothing about what the engine pushes may
+#: differ between them. This is a CLASS scanner, not one example: a future
+#: "small" lexical shortcut (an English keyword list, a script-range check)
+#: would pass a single-instance test and fail here.
+SAME_TASK_IN_MANY_LANGUAGES = [
+    "fix the failing test in the indexer",
+    "почини падающий тест в индексаторе",
+    "corrige la prueba que falla en el indexador",
+    "behebe den fehlschlagenden Test im Indexer",
+    "修复索引器中失败的测试",
+    "インデクサの失敗しているテストを直して",
+]
 
 
-@pytest.mark.parametrize("chatter", ["спасибо", "да", "ок, продолжай", "а почему?",
-                                     "ещё раз", "", "   "])
-def test_the_router_stays_quiet_on_chatter(chatter):
-    assert routing.classify(chatter) is None
+@pytest.mark.parametrize("prompt", SAME_TASK_IN_MANY_LANGUAGES)
+def test_the_pushed_text_is_identical_whatever_language_the_task_uses(prompt):
+    """The invariant the user asked for, stated as an equality rather than as a
+    promise: `render_table()` takes no prompt, so there is nothing for a
+    language to change. If someone reintroduces per-prompt branching, the text
+    starts differing and this goes red."""
+    assert routing.should_push(prompt), f"{prompt!r} was not recognised as a task"
+    assert routing.render_table() == routing.render_table()
 
 
-def test_a_verdict_always_names_its_evidence():
-    """The markers are the whole reason this is a router and not an oracle."""
-    key, markers = routing.classify("почини падающий тест в индексаторе")
-    assert markers, "a chain was chosen with nothing to point at"
-    assert all(m in "почини падающий тест в индексаторе".lower() for m in markers)
-    assert all(m in routing.CHAINS[key]["markers"] for m in markers)
+def test_the_engine_never_reads_the_words_of_a_prompt():
+    """The scanner the fix is owed. A stem table is not the only way to make
+    behaviour language-dependent — any per-prompt inspection is. The public
+    surface must expose no function that takes a prompt and returns a class.
+
+    Written as a check on the API, not on a marker list, because the marker list
+    is the instance and 'the engine classifies text itself' is the class."""
+    assert not hasattr(routing, "classify"), \
+        "a prompt classifier is back in the engine; classification belongs to the model"
+    assert not hasattr(routing, "CHAINS_MARKERS")
+    for key, chain in routing.CHAINS.items():
+        assert "markers" not in chain, \
+            f"{key}: a marker list makes routing a function of the user's language"
 
 
-def test_specificity_outranks_class_priority():
-    """«обнови волт из гита» matches the memory stem «волт» AND the ops phrase
-    «обнови волт». The longer marker is the one that recognised the task; the
-    bare stem winning on priority sent a git pull down the note-writing chain."""
-    key, markers = routing.classify("обнови волт из гита")
-    assert key == "ops"
-    assert "обнови волт" in markers
+def test_the_table_tells_the_model_to_classify_by_meaning():
+    """The table without the instruction is a reference card, and a reference
+    card nobody is told to act on is an archive — the exact failure that made
+    the workflow router a skill nobody pulled."""
+    text = routing.render_table()
+    assert "MEANING" in text, "the table must say to classify by meaning"
+    assert "whatever language" in text, \
+        "the instruction must survive, not just the table: a model told to " \
+        "match keywords reintroduces the language dependency in its own head"
+    assert "No class fits" in text, "refusing to classify must stay legal"
 
 
-def test_a_marker_never_fires_inside_an_unrelated_word():
-    """Planted violation, kept: bare «установ» also matches «установщике», which
-    routed a writing task to operations. Whole phrases only."""
-    assert "установ" not in routing.CHAINS["ops"]["markers"]
-    key, _ = routing.classify("зарегистрируй хук в установщике проекта")
-    assert key == "dev"
+# --- silence, on the two language-neutral grounds -------------------------------
+
+@pytest.mark.parametrize("chatter", ["ok", "thanks", "да", "ок", "yes", "", "   "])
+def test_short_acknowledgements_do_not_spend_the_table(chatter):
+    """A character count, not a word list — which is why it holds for "thanks"
+    and "спасибо" alike."""
+    assert routing.should_push(chatter) is False
+
+
+def test_machine_turns_are_not_tasks():
+    """Background-task notifications arrive as prompts, so UserPromptSubmit
+    fires on them. Observed live: a reviewer's report was classified as engine
+    operations off the words `mb doctor` quoted inside it."""
+    notification = ("[SYSTEM NOTIFICATION - NOT USER INPUT]\n<task-notification>\n"
+                    "Agent finished. It ran mb doctor and mb hooks status, and "
+                    "checked the capture hooks configuration.\n</task-notification>")
+    assert routing.should_push(notification) is False
+
+
+def test_a_short_but_real_task_is_not_silenced():
+    """The threshold was set against acknowledgements and must not swallow real
+    commands: "run the review" is 14 characters."""
+    for prompt in ("run the review", "fix the daemon", "запусти ревью"):
+        assert routing.should_push(prompt), f"{prompt!r} silenced by length"
 
 
 # --- the chains themselves ----------------------------------------------------
@@ -80,7 +114,15 @@ def test_every_chain_is_complete():
     for key, chain in routing.CHAINS.items():
         assert chain["title"] and chain["steps"], f"{key}: an empty chain routes nowhere"
         assert chain["note"], f"{key}: a chain without its governing rule is a bare list"
-        assert chain["markers"], f"{key}: unreachable — no marker selects it"
+
+
+def test_every_chain_reaches_the_table():
+    """A chain absent from the pushed text is unreachable: the model can only
+    pick from what it was shown."""
+    text = routing.render_table()
+    for key, chain in routing.CHAINS.items():
+        assert key in text, f"{key} is never offered"
+        assert chain["note"] in text, f"{key}: its governing rule is not delivered"
 
 
 def test_every_named_entry_phase_exists_in_the_engine():
@@ -122,7 +164,7 @@ def test_the_preamble_reaches_phase_5_without_the_vault_and_without_a_token():
     assert "{{" not in body, "a token here would stop the preamble being symlinked"
     assert "mb route --phase 5" in body, \
         "§7 must name a command that actually resolves phase 5 — plain `mb route` " \
-        "returns the chain's ENTRY phase, so the instruction read as true and was not"
+        "returns the table, so the instruction would read as true and not be"
 
 
 def test_the_workflow_token_is_substituted_not_shipped_literally():
@@ -135,7 +177,7 @@ def test_the_workflow_token_is_substituted_not_shipped_literally():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
-    rendered = mod.render_text("см. {{WORKFLOW}}/phase-5-verify.md",
+    rendered = mod.render_text("see {{WORKFLOW}}/phase-5-verify.md",
                                Path("/nonexistent-vault"))
     assert "{{WORKFLOW}}" not in rendered
     assert rendered.endswith("/singularity/workflow/phase-5-verify.md")
@@ -153,20 +195,29 @@ def test_route_answers_without_a_vault():
     vault is missing, empty or swapped."""
     proc = subprocess.run(
         [sys.executable, "-m", "singularity", "--vault", "/nonexistent-vault",
-         "route", "почини падающий тест в индексаторе", "--json"],
+         "route", "--json"],
         cwd=ENGINE, capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
-    assert payload["class"] == "dev"
-    assert payload["entry"] and payload["entry"].endswith("phase-SB-step-back.md")
+    assert set(payload["classes"]) == set(routing.CHAINS)
+    assert payload["classes"]["dev"]["entry"].endswith("phase-SB-step-back.md")
 
 
-def test_route_prints_nothing_actionable_for_chatter():
+def test_route_prints_one_chain_on_request():
     proc = subprocess.run(
-        [sys.executable, "-m", "singularity", "route", "спасибо", "--json"],
+        [sys.executable, "-m", "singularity", "route", "--class", "review", "--json"],
         cwd=ENGINE, capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr
-    assert json.loads(proc.stdout)["class"] is None
+    assert json.loads(proc.stdout)["class"] == "review"
+
+
+def test_route_refuses_an_unknown_class_loudly():
+    """Silence on a typo makes a wrong class look accepted."""
+    proc = subprocess.run(
+        [sys.executable, "-m", "singularity", "route", "--class", "nosuch"],
+        cwd=ENGINE, capture_output=True, text=True)
+    assert proc.returncode == 2, proc.stdout
+    assert "nosuch" in proc.stderr
 
 
 # --- the hook -----------------------------------------------------------------
@@ -186,31 +237,50 @@ def _run_hook(event: dict, vault: Path | None = None) -> dict:
     return json.loads(proc.stdout or "{}")
 
 
-def test_hook_announces_the_chain_for_a_task(tmp_path):
+def _pushed(out: dict) -> str:
+    return out.get("hookSpecificOutput", {}).get("additionalContext", "")
+
+
+def test_hook_pushes_the_table_when_a_task_arrives(tmp_path):
     (tmp_path / ".mb").mkdir()
-    out = _run_hook({"hook_event_name": "UserPromptSubmit",
-                     "session_id": "s1",
-                     "prompt": "почини падающий тест в индексаторе"}, tmp_path)
-    ctx = out.get("hookSpecificOutput", {}).get("additionalContext", "")
+    out = _run_hook({"hook_event_name": "UserPromptSubmit", "session_id": "s1",
+                     "prompt": "fix the failing test in the indexer"}, tmp_path)
+    ctx = _pushed(out)
     assert "mb route" in ctx and "Step-Back" in ctx
 
 
-def test_hook_announces_a_chain_once_per_session(tmp_path):
-    """A chain restated on every prompt of one task is noise, and noise is how
-    a gate teaches its reader to skip it. A DIFFERENT class still speaks."""
+@pytest.mark.parametrize("prompt", SAME_TASK_IN_MANY_LANGUAGES)
+def test_the_hook_pushes_the_same_bytes_in_any_language(prompt, tmp_path):
+    """End to end, through the process the client actually runs — not through
+    the function. A language-dependent branch anywhere between stdin and stdout
+    shows up here as a difference in bytes."""
+    (tmp_path / ".mb").mkdir()
+    out = _run_hook({"hook_event_name": "UserPromptSubmit",
+                     "session_id": f"lang-{abs(hash(prompt))}",
+                     "prompt": prompt}, tmp_path)
+    assert _pushed(out) == routing.render_table(), \
+        f"{prompt!r} produced different guidance from the reference text"
+
+
+def test_hook_pushes_once_per_session(tmp_path):
+    """The table restated on every prompt is noise, and noise is how a gate
+    teaches its reader to skip it."""
     (tmp_path / ".mb").mkdir()
     event = {"hook_event_name": "UserPromptSubmit", "session_id": "s2",
-             "prompt": "почини падающий тест в индексаторе"}
-    assert _run_hook(event, tmp_path) != {}, "first announcement never arrived"
-    assert _run_hook(event, tmp_path) == {}, "the same chain announced twice"
-    other = dict(event, prompt="сделай секцию лендинга с адаптивной вёрсткой")
-    assert _run_hook(other, tmp_path) != {}, "a change of class must be announced"
+             "prompt": "fix the failing test in the indexer"}
+    assert _run_hook(event, tmp_path) != {}, "the first push never arrived"
+    assert _run_hook(event, tmp_path) == {}, "the table was pushed twice"
+    other = dict(event, prompt="build a landing page section with responsive markup")
+    assert _run_hook(other, tmp_path) == {}, \
+        "a second task in the same session must not re-push the table"
+    fresh = dict(event, session_id="s2-new")
+    assert _run_hook(fresh, tmp_path) != {}, "a new session must get the table"
 
 
 def test_hook_is_silent_on_chatter(tmp_path):
     (tmp_path / ".mb").mkdir()
     assert _run_hook({"hook_event_name": "UserPromptSubmit",
-                      "session_id": "s3", "prompt": "спасибо"}, tmp_path) == {}
+                      "session_id": "s3", "prompt": "thanks"}, tmp_path) == {}
 
 
 def test_hook_never_blocks_and_never_decides():
@@ -228,10 +298,17 @@ def test_hook_never_blocks_and_never_decides():
 
 
 def test_hook_output_fits_the_documented_cap():
-    """UserPromptSubmit output strings are capped at 10 000 characters."""
-    for key, chain in routing.CHAINS.items():
-        text = routing.render(key, list(chain["markers"][:4]))
-        assert len(text) < 10_000, f"{key}: injection is {len(text)} chars"
+    """UserPromptSubmit output strings are capped at 10 000 characters, and this
+    one grows with every chain added."""
+    assert len(routing.render_table()) < 10_000
+
+
+def test_the_table_stays_worth_its_place_in_the_context():
+    """It is paid once per session, which is what makes a whole table affordable
+    where a per-prompt injection was not. Without a ceiling that reasoning
+    silently stops being true as chains are added."""
+    assert len(routing.render_table()) < 4_000, \
+        "the table outgrew the budget its once-per-session push was argued on"
 
 
 # --- registration -------------------------------------------------------------
@@ -312,69 +389,15 @@ def test_route_resolves_any_phase_not_only_the_entry():
 def test_the_router_survives_an_unwritable_marker_directory(tmp_path):
     """The docstring called the marker "a nicety, not a gate". It was a gate:
     `mkdir`/`touch` ran before `render`, so one OSError killed the feature
-    permanently and silently — [[Recoverable-ошибка скрывает тотальный отказ]]."""
+    permanently and silently — [[A recoverable error hides a total failure]]."""
     (tmp_path / ".mb" / "markers").mkdir(parents=True)
     (tmp_path / ".mb" / "markers").chmod(0o500)
     try:
         out = _run_hook({"hook_event_name": "UserPromptSubmit", "session_id": "ro",
-                         "prompt": "почини падающий тест в индексаторе"}, tmp_path)
+                         "prompt": "fix the failing test in the indexer"}, tmp_path)
     finally:
         (tmp_path / ".mb" / "markers").chmod(0o700)
     assert out != {}, "an unwritable markers dir silently deleted the feature"
-
-
-#: The class scanner the fix was owed. The first version shipped ONE hardcoded
-#: instance (`assert "установ" not in ...`), which is a statement about one
-#: marker, not about the class [[Rule - релиз против класса дефекта даёт сканер
-#: класса]]. Each phrase names a real word that CONTAINS a marker but is not it.
-NOT_INSTANCES = [
-    ("зафиксируй ошибку в incidents", "dev"),
-    ("добавь суффикс к именам файлов индекса", "dev"),
-    ("поправь install/vault_token.py", "memory"),
-    ("напиши документацию по аудитории пользователей", "review"),
-    ("зарегистрируй хук в установщике проекта", "ops"),
-]
-
-
-@pytest.mark.parametrize("phrase,forbidden", NOT_INSTANCES)
-def test_no_marker_fires_inside_another_word(phrase, forbidden):
-    verdict = routing.classify(phrase)
-    got = verdict[0] if verdict else None
-    assert got != forbidden, \
-        f"{phrase!r} routed to {forbidden} by {verdict[1] if verdict else '?'}"
-
-
-def test_count_outranks_one_long_incidental_marker():
-    """Length was the PRIMARY key, so a single long accidental match beat any
-    number of short exact ones: a plain fix task went to «эксплуатация движка»."""
-    key, markers = routing.classify("почини баг: mb doctor падает на пустом волте")
-    assert key == "dev", f"routed to {key} by {markers}"
-
-
-def test_the_router_ignores_system_notifications():
-    """Background-task notifications arrive as prompts, so UserPromptSubmit
-    fires on them. Observed live: a reviewer's report was classified as
-    «эксплуатация движка» off the words `mb doctor` inside it."""
-    notification = ("[SYSTEM NOTIFICATION - NOT USER INPUT]\n<task-notification>\n"
-                    "Agent finished. It ran mb doctor and mb hooks status, and "
-                    "checked the capture hooks configuration.\n</task-notification>")
-    assert routing.classify(notification) is None
-
-
-@pytest.mark.parametrize("prompt", ["запусти ревью", "сделай ревью", "почини баг"])
-def test_a_short_but_real_task_is_not_silenced(prompt):
-    """MIN_PROMPT_CHARS was set against "спасибо" and swallowed real commands:
-    «запусти ревью» is 13 characters and carries the marker `ревью`."""
-    assert routing.classify(prompt) is not None, f"{prompt!r} silenced by length"
-
-
-def test_no_marker_can_be_unreachable():
-    """Two shipped dead: `вёрстк` (the prompt is ё-folded, the markers are not)
-    and `" css"` (a leading space cannot match a prompt that starts with it)."""
-    for key, chain in routing.CHAINS.items():
-        for m in chain["markers"]:
-            assert "ё" not in m, f"{key}: {m!r} is ё-dead — the prompt folds ё to е"
-            assert m == m.strip(), f"{key}: {m!r} pads with whitespace and is unreachable"
 
 
 def test_session_id_is_sanitised_by_the_same_allow_list_as_module_context():
@@ -385,9 +408,9 @@ def test_session_id_is_sanitised_by_the_same_allow_list_as_module_context():
     import singularity.hooks.user_prompt_submit as ups
 
     for hostile in ("../../../../tmp/PWNED", "a\x00b", "a\x1bb\nc", "..", "/etc/passwd"):
-        name = ups._marker(Path("/tmp/x"), hostile, "dev").name
+        name = ups._marker(Path("/tmp/x"), hostile, "table").name
         assert mc._SAFE_MARKER_RE.search(name.replace("route-claude-", "")
-                                         .replace("-dev", "")) is None, \
+                                         .replace("-table", "")) is None, \
             f"{hostile!r} survived sanitisation as {name!r}"
         assert ".." not in name and "/" not in name
 
@@ -397,9 +420,48 @@ def test_route_reports_a_vault_it_was_given_and_did_not_use():
     ignored — silently, where every other command fails loudly on a bad path.
     A typo then looks like it worked."""
     proc = subprocess.run(
-        [sys.executable, "-m", "singularity", "--vault", "/nonexistent-vault",
-         "route", "почини падающий тест"],
+        [sys.executable, "-m", "singularity", "--vault", "/nonexistent-vault", "route"],
         cwd=ENGINE, capture_output=True, text=True)
     assert proc.returncode == 0
     assert "--vault" in proc.stderr, "an ignored flag must say so on stderr"
     assert "[mb route]" in proc.stdout, "the notice must not displace the answer"
+
+
+def test_route_says_so_when_it_ignores_the_task_text():
+    """The same reason the `--vault` notice exists, two lines above it in the
+    same function: an argument accepted and then dropped without a word makes a
+    stale invocation look like it still works. `mb route "<task>"` answered with
+    a class until 2026-08-08; naming the class is the reader's job now, so the text
+    is used for nothing and has to say so."""
+    proc = subprocess.run(
+        [sys.executable, "-m", "singularity", "route", "fix the failing test"],
+        cwd=ENGINE, capture_output=True, text=True)
+    assert proc.returncode == 0
+    assert "ignored" in proc.stderr, "the text was dropped in silence"
+    assert "[mb route]" in proc.stdout, "the notice must not displace the answer"
+
+
+#: Every (branch, argument-it-does-not-use) pair. The first version of this
+#: guard was one assertion about the positional `task`, which is an instance;
+#: `--class` went on being dropped in silence next to it until a second review.
+#: A release against a class of defect owes a scanner for the class.
+IGNORED_ARGUMENT_CASES = [
+    (["route", "--phase", "5", "sometask"], "task"),
+    (["route", "--phase", "5", "--class", "review"], "--class"),
+    (["route", "--class", "review", "sometask"], "task"),
+    (["route", "sometask"], "task"),
+    (["--vault", "/nonexistent-vault", "route"], "--vault"),
+]
+
+
+@pytest.mark.parametrize("argv,dropped", IGNORED_ARGUMENT_CASES)
+def test_every_argument_this_command_drops_says_so(argv, dropped):
+    """An argument accepted and then dropped without a word makes a stale
+    invocation look like it still works — the reason the `--vault` notice was
+    written, applied to every argument rather than to the one that prompted it."""
+    proc = subprocess.run([sys.executable, "-m", "singularity", *argv],
+                          cwd=ENGINE, capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr
+    assert dropped in proc.stderr and "ignored" in proc.stderr, \
+        f"{' '.join(argv)}: {dropped} was dropped in silence"
+    assert proc.stdout.strip(), "the notice must not displace the answer"

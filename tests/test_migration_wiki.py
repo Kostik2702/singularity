@@ -54,9 +54,9 @@ def test_frontmatter_source_url_is_registered(cfg):
 
 
 def test_prose_sources_are_not_registered(cfg):
-    """`source: "брейншторм + grill, сессия 2026-07-03"` is real provenance but
+    """`source: "brainstorm + grill, session 2026-07-03"` is real provenance but
     not a retrievable document."""
-    _note(cfg.vault, "reference/a.md", fm='source: "брейншторм + grill, сессия"\n')
+    _note(cfg.vault, "reference/a.md", fm='source: "brainstorm + grill, session"\n')
     assert sources.backfill(cfg)["created"] == 0
 
 
@@ -66,7 +66,7 @@ def test_absolute_paths_count_as_external(cfg):
 
 
 def test_urls_in_reference_bodies_are_registered(cfg):
-    _note(cfg.vault, "reference/a.md", body="см. https://example.com/x и (https://b.dev/y).")
+    _note(cfg.vault, "reference/a.md", body="see https://example.com/x and (https://b.dev/y).")
     result = sources.backfill(cfg, apply=True)
     refs = {e["ref"] for e in result["entries"]}
     assert refs == {"https://example.com/x", "https://b.dev/y"}, \
@@ -74,7 +74,7 @@ def test_urls_in_reference_bodies_are_registered(cfg):
 
 
 def test_bodies_outside_reference_are_not_scanned(cfg):
-    _note(cfg.vault, "howto/a.md", body="см. https://example.com/x")
+    _note(cfg.vault, "howto/a.md", body="see https://example.com/x")
     assert sources.backfill(cfg)["created"] == 0
 
 

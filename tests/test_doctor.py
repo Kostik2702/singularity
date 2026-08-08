@@ -806,3 +806,51 @@ def test_d9_pass_via_command_path_match_without_marker(cfg, monkeypatch):
         encoding="utf-8")
     doctor.run(cfg, as_json=True)
     assert _check(cfg, "D9-route-hook")["status"] == "PASS"
+
+
+# --- D10-rules-inventory: the count that was prose ----------------------------
+# The registry's docstring claimed "72 rule notes, minus what DELIVERIES covers,
+# minus the out-of-scope groups, is zero". Nothing computed it, so a rule sitting
+# in none of the three buckets looked exactly like one that was covered.
+
+def test_rules_inventory_skips_when_the_vault_has_no_rules_dir(cfg, monkeypatch):
+    """The engine may not depend on which vault is configured, so a machine
+    without one gets SKIP — and SKIP has to be reached, not crashed into."""
+    _stub_externals(monkeypatch)
+    doctor.run(cfg, as_json=True)
+    d10 = [c for c in _parse_checks(cfg) if c["id"].startswith("D10")]
+    assert d10, "the inventory check never ran"
+    assert d10[0]["status"] == "SKIP"
+
+
+def test_rules_inventory_warns_when_a_note_is_in_no_bucket(cfg, monkeypatch):
+    """The case it exists for: a rule note that declares no delivery point and
+    that the engine never names pushes the count past the recorded ceiling."""
+    from singularity.machine import rules_delivery
+    _stub_externals(monkeypatch)
+    rules = cfg.vault / "rules"
+    rules.mkdir(parents=True, exist_ok=True)
+    for i in range(rules_delivery.UNACCOUNTED_CEILING + 1):
+        (rules / f"Rule - undelivered {i}.md").write_text(
+            "# x\n\nno delivery point, named nowhere\n", encoding="utf-8")
+
+    doctor.run(cfg, as_json=True)
+    d10 = [c for c in _parse_checks(cfg) if c["id"].startswith("D10")]
+    assert d10 and d10[0]["status"] == "WARN", d10
+    assert "undelivered" in d10[0]["detail"], "the warning must name what it found"
+    assert d10[0]["fix"], "a WARN with no fix line is a complaint"
+
+
+def test_rules_inventory_passes_when_every_note_declares_its_point(cfg, monkeypatch):
+    """The control. Without it, a check that warned unconditionally would
+    satisfy the test above while telling nobody anything."""
+    _stub_externals(monkeypatch)
+    rules = cfg.vault / "rules"
+    rules.mkdir(parents=True, exist_ok=True)
+    for i in range(3):
+        (rules / f"Rule - grafted {i}.md").write_text(
+            "# x\n\n## Where it is grafted\n\npreamble §7\n", encoding="utf-8")
+
+    doctor.run(cfg, as_json=True)
+    d10 = [c for c in _parse_checks(cfg) if c["id"].startswith("D10")]
+    assert d10 and d10[0]["status"] == "PASS", d10

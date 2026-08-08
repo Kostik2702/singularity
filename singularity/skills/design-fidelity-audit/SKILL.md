@@ -1,23 +1,23 @@
 ---
 name: design-fidelity-audit
-description: Аудит соответствия живой реализации сайта дизайн-макету — скриншоты по viewport-матрице в детерминированном режиме, DOM-метрики (высоты секций, пропорции), сравнение с макетом и A/B-категоризация расхождений. Use when "сравни с дизайном", "похоже ли на макет", "визуальный аудит", design fidelity, "почему выглядит не как в макете", приёмка визуальной части, before/after redesign сравнение.
+description: Audit how faithfully a live site implementation matches the design mockup — screenshots across a viewport matrix in deterministic mode, DOM metrics (section heights, proportions), comparison against the mockup and A/B categorisation of the divergences. Use when "compare it with the design", "does it look like the mockup", "visual audit", design fidelity, "why does it not look like the mockup", acceptance of the visual part, before/after redesign comparison.
 ---
 
-# design-fidelity-audit — реализация vs макет
+# design-fidelity-audit — implementation vs mockup
 
-Скрипт собирает EVIDENCE (числа + скриншоты), скил выносит СУЖДЕНИЕ (A/B-категоризация, вердикт). Не смешивать: суждение без чисел = «на глаз» (уже ошибалось: контраст 4.2 vs реальные 4.93); числа без A/B-категорий = война с решениями владельца.
+The script gathers EVIDENCE (numbers plus screenshots); the skill delivers the JUDGEMENT (A/B categorisation, verdict). Do not mix them: judgement without numbers is "by eye" (it has been wrong before: contrast 4.2 against the real 4.93); numbers without A/B categories is a war against the owner's decisions.
 
-> **Правило нулевого кода:** измерения/скриншоты/diff — только `scripts/fidelity-audit.mjs` и `imgqa compare`. Новый одноразовый скрипт за сессию аудита = регрессия.
+> **Zero-code rule:** measurements, screenshots and diffs come only from `scripts/fidelity-audit.mjs` and `imgqa compare`. A new one-off script during an audit session is a regression.
 
-## Предусловия
+## Preconditions
 
-- [ ] Аудируемый проект запущен локально (`npx http-server`, НЕ `python -m http.server` — Range/видео).
-- [ ] У проекта есть свой Playwright (harness) — скрипт резолвит его из `node_modules` проекта.
-- [ ] `IMGQA_PROTECTED_ROOTS=<корень проекта>` выставлен на время сессии — ни один вывод не попадёт в аудируемое дерево.
-- [ ] У страницы есть режим `?visual-test=1` (canvas t=0, анимации off, lazy→eager). Скрипт добавляет флаг сам; если проект режим не поддерживает — сначала [[visual-regression-bootstrap]], иначе скриншоты недетерминированы и сравнение бессмысленно.
-- [ ] **Источник истины — только Playwright.** Интерактивная Chrome-вкладка (claude-in-chrome) в этом скиле запрещена как основание вердикта: замерено 3 аномалии за сессию, 2 из них в чистом контексте не воспроизвелись (rAF-троттлинг вкладки, инжект расширений). Увидел странность во вкладке — это лид: воспроизведи минимальным Playwright-прогоном, вердикт выносится по нему. Посторонние ошибки в console/network сначала проверяются на принадлежность расширению, а не странице.
+- [ ] The audited project runs locally (`npx http-server`, NOT `python -m http.server` — Range/video).
+- [ ] The project has its own Playwright (harness) — the script resolves it from the project's `node_modules`.
+- [ ] `IMGQA_PROTECTED_ROOTS=<project root>` is set for the session — no output can land in the audited tree.
+- [ ] The page has a `?visual-test=1` mode (canvas t=0, animation off, lazy→eager). The script adds the flag itself; if the project does not support the mode, run [[visual-regression-bootstrap]] first, otherwise the screenshots are non-deterministic and the comparison is meaningless.
+- [ ] **Playwright is the only source of truth.** An interactive Chrome tab (claude-in-chrome) is forbidden in this skill as grounds for a verdict: 3 anomalies were measured in one session, 2 of which did not reproduce in a clean context (tab rAF throttling, extension injection). Saw something odd in the tab — that is a lead: reproduce it with a minimal Playwright run, and let the verdict rest on that. Stray console/network errors are first checked for belonging to an extension rather than to the page.
 
-## Пайплайн
+## Pipeline
 
 ```bash
 node "%USERPROFILE%\.claude\skills\design-fidelity-audit\scripts\fidelity-audit.mjs" ^
@@ -25,25 +25,25 @@ node "%USERPROFILE%\.claude\skills\design-fidelity-audit\scripts\fidelity-audit.
   --design "D:\path\to\mockup.png" --out "%TEMP%\fidelity-<task>"
 ```
 
-1. Скрипт → `fidelity-metrics.json` + `fidelity.<viewport>.png` (1440x900 / 768x1024 / 390x844 по умолчанию). Пинить `schema_version == "fidelity-audit/1"`; status=error / exit 2 = инструмент не отработал, НЕ «всё совпадает».
-2. Прочитать метрики: `pageHeight`, `proportion` (height/width) против `design.proportion`, высоты секций, `horizontalOverflow`, `consoleErrors`, `visualTestMode` (обязан быть true — иначе стоп, режим не сработал).
-3. Прочитать скриншоты и макет глазами (multimodal Read), секция за секцией.
-4. Пиксельные сравнения одинаковых по размеру артефактов (before/after, два прогона) — `imgqa compare a.png b.png --json` (метрики mae/diff_ratio), не самописный diff.
-5. Отчёт по шаблону [`references/report-template.md`](references/report-template.md) с обязательной A/B-категоризацией.
+1. The script → `fidelity-metrics.json` + `fidelity.<viewport>.png` (1440x900 / 768x1024 / 390x844 by default). Pin `schema_version == "fidelity-audit/1"`; status=error / exit 2 means the tool did not run, NOT "everything matches".
+2. Read the metrics: `pageHeight`, `proportion` (height/width) against `design.proportion`, section heights, `horizontalOverflow`, `consoleErrors`, `visualTestMode` (must be true — otherwise stop, the mode did not engage).
+3. Read the screenshots and the mockup with your eyes (multimodal Read), section by section.
+4. Pixel comparisons of equally sized artefacts (before/after, two runs) go through `imgqa compare a.png b.png --json` (mae/diff_ratio metrics), never a hand-written diff.
+5. Report from the template in [`references/report-template.md`](references/report-template.md), with the mandatory A/B categorisation.
 
-## A/B-категоризация (ядро скила)
+## A/B categorisation (the core of the skill)
 
-Каждое расхождение реализация↔макет получает ровно одну категорию:
+Every implementation↔mockup divergence gets exactly one category:
 
-- **A — не построено / построено иначе, чем задумано.** Идёт в fix-list с конкретикой (селектор, число, ожидание).
-- **B — намеренно иное**: truth-policy (нет фейковых цен/отзывов/контактов), решения владельца, зафиксированные ограничения. **В fix-list НЕ попадает** — перечисляется отдельным блоком со ссылкой на решение (vault: decisions/backlog). Прецедент: конфликт «внешний вид СОВСЕМ другой» в NIKA разрешился именно этим разделением.
+- **A — not built, or built differently from the intent.** Goes into the fix list with specifics (selector, number, expectation).
+- **B — deliberately different**: truth policy (no fake prices, reviews or contacts), owner decisions, recorded constraints. It does NOT enter the fix list — it is listed in a separate block with a link to the decision (vault: decisions/backlog). Precedent: the "it looks COMPLETELY different" conflict in NIKA was resolved by exactly this split.
 
-Перед категоризацией — `mb search` по проекту на предмет зафиксированных решений/ограничений; не знаешь, почему секция отличается — это вопрос владельцу, а не автоматически категория A.
+Before categorising — `mb search` the project for recorded decisions and constraints; if you do not know why a section differs, that is a question for the owner, not automatically a category A.
 
-## Калибровка суждения о пропорциях
+## Calibrating judgement about proportions
 
-Макет — art-direction, не пиксельная спека (данные/цифры в нём UNVERIFIED). Сигналы реальной проблемы: `proportion` страницы в разы больше макета (NIKA до пересборки: desktop 5.1 vs макет 1.78 — «слишком длинно и пусто»), секции-гиганты (hero 1013px при первом экране 900px), горизонтальный overflow, пустые полосы на скриншотах. НЕ сигналы: точное несовпадение высот (адаптив ≠ артборд), другой контент по truth-policy (категория B).
+The mockup is art direction, not a pixel spec (data and figures in it are UNVERIFIED). Signals of a real problem: the page `proportion` is several times the mockup's (NIKA before the rebuild: desktop 5.1 against the mockup's 1.78 — "too long and too empty"), giant sections (a 1013px hero when the first screen is 900px), horizontal overflow, empty bands on the screenshots. NOT signals: heights not matching exactly (responsive ≠ artboard), different content under the truth policy (category B).
 
-## Фиксация
+## Recording
 
-Вердикт + топ-расхождения + путь к отчёту → `mb learn --task <TASK>`. Дефекты, найденные на dogfood-проектах, → regression-кейсы (правило §9 контракта imgqa).
+The verdict plus the top divergences plus the path to the report → `mb learn --task <TASK>`. Defects found on dogfood projects become regression cases (rule §9 of the imgqa contract).

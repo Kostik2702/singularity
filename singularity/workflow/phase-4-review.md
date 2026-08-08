@@ -6,14 +6,14 @@ created: 2026-07-03
 status: active
 ---
 
-# Phase 4 — Review (самостоятельное, 3 прохода)
+# Phase 4 — Review (self-review, 3 passes)
 
-Родитель: `_router.md`. Порт QA-протокола Genevra (3 полных прохода по диффу).
+Parent: `_router.md`. The QA protocol: 3 full passes over the diff.
 
-- [ ] Проход 1 — **корректность**: логика, error paths, null/пустые входы, соответствие плану.
-- [ ] Проход 2 — **паттерны**: идиомы репо, дубли (можно ли переиспользовать существующее?), naming, лишняя сложность.
-- [ ] Проход 3 — **edge cases + gaps**: конкурентность, кодировки/пути (Win/macOS/Linux!), большие входы, «что если файл/сеть/процесс недоступен». Найди минимум 1 gap — если «всё идеально», ты плохо искал.
-- [ ] Для нетривиального — `/code-review` или reviewer-агент; находки не принимаются без верификации (disproval-first).
-- [ ] Авто-append: находки ревью + что исправлено.
+- [ ] Pass 1 — **correctness**: logic, error paths, null and empty inputs, conformance to the plan.
+- [ ] Pass 2 — **patterns**: the repository's idioms, duplication (could something existing be reused?), naming, superfluous complexity.
+- [ ] Pass 3 — **edge cases and gaps**: concurrency, encodings and paths (Win/macOS/Linux!), large inputs, "what if the file / network / process is unavailable". Find at least 1 gap — if "everything is perfect", you did not look hard enough.
+- [ ] For anything non-trivial, `/code-review` or the reviewer agent; findings are not accepted without verification (disproval-first).
+- [ ] Auto-append: the review findings plus what was fixed.
 
-**Выход:** находки закрыты → `phase-5-verify.md`.
+**Exit:** findings closed → `phase-5-verify.md`.

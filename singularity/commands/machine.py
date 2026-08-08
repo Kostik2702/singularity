@@ -318,7 +318,7 @@ def cmd_usage(cfg, args) -> int:
 
     Read-only by construction: `tokens` never writes, so this command cannot
     add anything to `.mb/` — the one property that keeps it outside the
-    session-search opt-in ([[TRANSCRIPTS D1 - приватность транскриптов]]).
+    session-search opt-in (the vault decision TRANSCRIPTS D1, transcript privacy).
     """
     from .. import render
     from ..telemetry import tokens
@@ -485,16 +485,33 @@ def cmd_route(args) -> int:
     `resolve_vault` returns None."""
     from ..machine import routing
 
-    # Answered before the config load, so `--vault` cannot apply. Silence there
-    # makes a typo'd path look accepted, where every other command exits 2.
-    if getattr(args, "vault", None):
-        print(f"[mb route] --vault {args.vault} проигнорирован: цепь живёт в "
-              f"движке и от волта не зависит", file=sys.stderr)
+    # An argument accepted and then dropped without a word makes a stale
+    # invocation look like it still works. This command drops three of them for
+    # three different reasons, so the reporting is done ONCE over whatever the
+    # chosen branch did not consume — a notice written per argument covers the
+    # instance and leaves the class, which is how `--class` stayed silent after
+    # `task` was fixed ([[Rule - a release against a class of defect owes a
+    # scanner for the class]]).
+    _WHY_IGNORED = {
+        "vault": "the chain lives in the engine and does not depend on the vault",
+        "task": "the class is named by the reader, not matched from the words",
+        "cls": "--phase answers with a path, which is not a chain",
+        "phase": "a class was asked for, which is not a single phase",
+    }
+
+    def _note_ignored(*names: str) -> None:
+        for name in names:
+            value = getattr(args, name, None)
+            if value:
+                flag = name if name == "task" else f"--{'class' if name == 'cls' else name}"
+                print(f"[mb route] {flag} {value} ignored: {_WHY_IGNORED[name]}",
+                      file=sys.stderr)
 
     if getattr(args, "phase", None):
+        _note_ignored("vault", "task", "cls")
         path = routing.resolve_phase(args.phase)
         if path is None:
-            print(f"нет такой фазы: {args.phase}. Есть: "
+            print(f"no such phase: {args.phase}. Available: "
                   + ", ".join(sorted(p.stem[len("phase-"):]
                                      for p in routing.WORKFLOW.glob("phase-*.md"))),
                   file=sys.stderr)
@@ -503,29 +520,35 @@ def cmd_route(args) -> int:
               if args.json else path)
         return 0
 
-    if not args.task:
-        print("нужен текст задачи либо --phase <id>", file=sys.stderr)
-        return 2
-
-    verdict = routing.classify(args.task)
-    if verdict is None:
+    key = getattr(args, "cls", None)
+    if key:
+        _note_ignored("vault", "task")
+        if key not in routing.CHAINS:
+            print(f"no such class: {key}. Available: "
+                  + ", ".join(routing.CHAINS), file=sys.stderr)
+            return 2
+        chain = routing.CHAINS[key]
         if args.json:
-            print(json.dumps({"class": None, "reason": "no strong marker "
-                              f"or shorter than {routing.MIN_PROMPT_CHARS} chars"},
-                             ensure_ascii=False))
+            entry = routing.phase_file(chain["entry"]) if chain["entry"] else None
+            print(json.dumps({"class": key, "title": chain["title"],
+                              "steps": chain["steps"],
+                              "entry": str(entry) if entry else None,
+                              "note": chain["note"]}, ensure_ascii=False))
         else:
-            print("класс не определён — роутер молчит "
-                  f"(нет сильного маркера либо короче {routing.MIN_PROMPT_CHARS} символов)")
+            print(routing.render(key))
         return 0
 
-    key, markers = verdict
-    chain = routing.CHAINS[key]
+    # No class named: print the whole table. Naming the class from the task text
+    # is the caller's judgement, not a lexical match — that is what stopped this
+    # command from working only for prompts in one language.
+    _note_ignored("vault", "task")
     if args.json:
-        entry = routing.phase_file(chain["entry"]) if chain["entry"] else None
-        print(json.dumps({"class": key, "title": chain["title"],
-                          "markers": markers, "steps": chain["steps"],
-                          "entry": str(entry) if entry else None,
-                          "note": chain["note"]}, ensure_ascii=False))
+        print(json.dumps({"classes": {
+            k: {"title": c["title"], "steps": c["steps"],
+                "entry": str(routing.phase_file(c["entry"])) if c["entry"] else None,
+                "note": c["note"]} for k, c in routing.CHAINS.items()}},
+            ensure_ascii=False))
     else:
-        print(routing.render(key, markers))
+        print(routing.render_table())
+    return 0
     return 0

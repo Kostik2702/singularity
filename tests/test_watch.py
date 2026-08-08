@@ -1,7 +1,7 @@
 """T12: the watcher must not silently drop pending files when the index
 writer lock is held (e.g. `mb nightly` running) or a batch update fails --
 see [[SINGULARITY_INCOMING_FORK_IMPLEMENTATION]] T12, AI prompt clause
-"при lock не теряй pending watcher files"."""
+"do not lose pending watcher files when the lock is held"."""
 import pytest
 
 from singularity.machine import watch

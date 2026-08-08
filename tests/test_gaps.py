@@ -113,13 +113,28 @@ def test_resolvable_links_are_never_missing_pages(vault):
 
 # --- open questions ---------------------------------------------------------
 
-@pytest.mark.parametrize("heading", ["Open questions", "Открытые вопросы",
-                                     "TODO", "OPEN: что дальше"])
+@pytest.mark.parametrize("heading", ["Open questions", "TODO", "OPEN: what next"])
 def test_open_question_sections_are_found(vault, heading):
     cfg = _cfg(vault)
-    _note(vault, "reference/a.md", body=f"## {heading}\n\nчто делать?", mtime=NOW)
+    _note(vault, "reference/a.md", body=f"## {heading}\n\nwhat do we do?", mtime=NOW)
     items = _signals(gaps.report(cfg, now=NOW), "open_questions")
     assert any(heading in i["key"] for i in items)
+
+
+#: The signal must not be a property of the language the note is written in.
+#: A heading that IS a question is a question in any of them, which is why the
+#: detector tests the shape before it tests the English word list.
+@pytest.mark.parametrize("heading", [
+    "What do we do about the daemon?",
+    "Что делать с демоном?",
+    "デーモンをどうする?",
+])
+def test_a_heading_that_is_a_question_is_found_in_any_language(vault, heading):
+    cfg = _cfg(vault)
+    _note(vault, "reference/a.md", body=f"## {heading}\n\nbody", mtime=NOW)
+    items = _signals(gaps.report(cfg, now=NOW), "open_questions")
+    assert any(heading in i["key"] for i in items), \
+        f"{heading!r} is a question and was not detected as one"
 
 
 def test_frontmatter_status_open_is_found(vault):
@@ -131,7 +146,7 @@ def test_frontmatter_status_open_is_found(vault):
 
 def test_ordinary_sections_are_not_open_questions(vault):
     cfg = _cfg(vault)
-    _note(vault, "reference/a.md", body="## Контекст\n\nтекст", mtime=NOW)
+    _note(vault, "reference/a.md", body="## Context\n\ntext", mtime=NOW)
     assert _signals(gaps.report(cfg, now=NOW), "open_questions") == []
 
 
@@ -142,7 +157,7 @@ def test_old_unmarked_learning_sections_are_gaps(vault):
     p = vault / "learnings" / "active" / "T.md"
     p.parent.mkdir(parents=True)
     p.write_text("---\ntype: learning\ntitle: T\ncreated: 2026-01-01\n---\n\n# T\n\n"
-                 "## 2020-01-01 10:00 — старое\nинсайт\n", encoding="utf-8")
+                 "## 2020-01-01 10:00 — old\ninsight\n", encoding="utf-8")
     items = _signals(gaps.report(cfg, now=NOW), "undigested_learnings")
     assert len(items) == 1 and items[0]["detail"]["file"] == "learnings/active/T.md"
 
@@ -154,7 +169,7 @@ def test_recent_learning_sections_are_not_gaps(vault):
     p = vault / "learnings" / "active" / "T.md"
     p.parent.mkdir(parents=True)
     p.write_text(f"---\ntype: learning\ntitle: T\ncreated: 2026-01-01\n---\n\n# T\n\n"
-                 f"## {recent} 10:00 — свежее\nинсайт\n", encoding="utf-8")
+                 f"## {recent} 10:00 — fresh\ninsight\n", encoding="utf-8")
     assert _signals(gaps.report(cfg, now=NOW), "undigested_learnings") == []
 
 
@@ -164,8 +179,8 @@ def test_digest_marked_sections_are_not_gaps(vault):
     p = vault / "learnings" / "active" / "T.md"
     p.parent.mkdir(parents=True)
     p.write_text("---\ntype: learning\ntitle: T\ncreated: 2026-01-01\n---\n\n# T\n\n"
-                 "## 2020-01-01 10:00 — старое\nинсайт\n", encoding="utf-8")
-    digest.mark(cfg, [("learnings/active/T.md", "2020-01-01 10:00 — старое")])
+                 "## 2020-01-01 10:00 — old\ninsight\n", encoding="utf-8")
+    digest.mark(cfg, [("learnings/active/T.md", "2020-01-01 10:00 — old")])
     assert _signals(gaps.report(cfg, now=NOW), "undigested_learnings") == []
 
 
@@ -289,7 +304,7 @@ def test_top_limits_the_final_list(vault):
 def test_heuristic_is_off_by_default(vault):
     cfg = _cfg(vault)
     for i in range(3):
-        _note(vault, f"reference/n{i}.md", body="## Совершенно Новый Термин\n\ntext",
+        _note(vault, f"reference/n{i}.md", body="## A Completely New Term\n\ntext",
               mtime=NOW)
     default = gaps.report(cfg, now=NOW)
     assert default["heuristic"] is False
@@ -321,3 +336,21 @@ def test_bare_curator_still_works_with_gaps_registered(vault, capsys, monkeypatc
     assert main(["curator", "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert "gaps" not in payload, "gaps must stay a separate subcommand"
+
+
+def test_a_heuristic_term_needs_every_word_capitalised(vault):
+    """Regression from the 2026-08-08 translation.
+
+    Making the term pattern script-agnostic moved the case test out of the
+    regex, and with it went the second `[A-Z…]` that the two-word branch had
+    carried. `Ingest loop` — a sentence fragment — started being proposed as a
+    missing page, while the signal is supposed to name entities."""
+    cfg = _cfg(vault)
+    for i in range(3):
+        _note(vault, f"reference/n{i}.md",
+              body="## Ingest loop\n\n## Vault Guard\n\ntext", mtime=NOW)
+    proposed = {i["key"] for i in
+                _signals(gaps.report(cfg, now=NOW, heuristic=True), "missing_pages")}
+    assert "Vault Guard" in proposed, "a real two-word entity stopped being seen"
+    assert "Ingest loop" not in proposed, \
+        "a capitalised first word is not an entity; every word must be capitalised"

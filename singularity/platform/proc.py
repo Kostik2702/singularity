@@ -1,8 +1,8 @@
 """Background process management (daemon spawn/kill), per-OS.
 
 Windows: DETACHED_PROCESS (+pythonw when available).
-POSIX:   start_new_session=True (setsid) — the double-fork of the Genevra
-         daemon is unnecessary when the parent exits immediately.
+POSIX:   start_new_session=True (setsid) — the predecessor daemon's double
+         fork is unnecessary when the parent exits immediately.
 """
 from __future__ import annotations
 

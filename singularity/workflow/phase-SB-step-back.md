@@ -6,14 +6,14 @@ created: 2026-07-03
 status: active
 ---
 
-# Phase SB — Step-Back (перед всем)
+# Phase SB — Step-Back (before everything)
 
-Родитель: `_router.md`. ~2 минуты, спасает часы.
+Parent: `_router.md`. ~2 minutes, saves hours.
 
-- [ ] Категоризируй задачу: bug / feature / perf / refactor / research / infra.
-- [ ] `mb search "<суть задачи>"` — prior art: делали ли похожее, есть ли правило/howto/инцидент. Найденное — в learnings.
-- [ ] T-shirt размер: S (<1ч) / M (<1д) / L (дни) / XL (декомпозировать через plc).
-- [ ] **Inverse Trust Rule:** проверь ПРОСТЕЙШУЮ причину первой (свежая правка, конфиг, опечатка, кэш) — до глубокого расследования.
-- [ ] Создай/открой learnings-док: `mb learn "<задача>: старт. Категория X, размер Y, prior art: ..." --task <ID>`.
+- [ ] Categorise the task: bug / feature / perf / refactor / research / infra.
+- [ ] `mb search "<the gist of the task>"` — prior art: have we done something similar, is there a rule/howto/incident. What you find goes into the learnings.
+- [ ] T-shirt size: S (<1h) / M (<1d) / L (days) / XL (decompose through plc).
+- [ ] **Inverse Trust Rule:** check the SIMPLEST cause first (a recent edit, config, a typo, a cache) — before any deep investigation.
+- [ ] Create or open the learnings document: `mb learn "<task>: start. Category X, size Y, prior art: ..." --task <ID>`.
 
-**Выход:** категория + размер + prior-art заметки → `phase-0-approach.md`.
+**Exit:** category + size + prior-art notes → `phase-0-approach.md`.

@@ -89,7 +89,7 @@
       "rules/Rule - Playwright networkidle не наступает на страницах с большим video.md"
      ],
      "got": [
-      "01_Genevra_Analysis/agents/agent_local-setuper.md",
+      "01_Predecessor_Analysis/agents/agent_local-setuper.md",
       "howto/Avast Free - exclusions in registry and removing it from the network stack.md",
       "learnings/active/INTELLIGO-HT-PLAN.md"
      ]
@@ -203,8 +203,8 @@
      ],
      "got": [
       "03_Tasks/TASK-03_Search_Daemon.md",
-      "01_Genevra_Analysis/infrastructure/Setup_And_Sync.md",
-      "01_Genevra_Analysis/infrastructure/Core_Configuration.md"
+      "01_Predecessor_Analysis/infrastructure/Setup_And_Sync.md",
+      "01_Predecessor_Analysis/infrastructure/Core_Configuration.md"
      ]
     },
     {
@@ -401,7 +401,7 @@
      "got": [
       "rules/Rule - записи в vault идут командами mb.md",
       "02_New_System_Design/01_System_Architecture.md",
-      "01_Genevra_Analysis/infrastructure/CLI_Scripts_Integrations.md"
+      "01_Predecessor_Analysis/infrastructure/CLI_Scripts_Integrations.md"
      ]
     },
     {
@@ -455,9 +455,9 @@
       "rules/Rule - верификация идёт через команду пользователя.md"
      ],
      "got": [
-      "01_Genevra_Analysis/skills/skill_test-task.md",
+      "01_Predecessor_Analysis/skills/skill_test-task.md",
       "rules/Rule - верификация идёт через команду пользователя.md",
-      "01_Genevra_Analysis/skills/skill_council.md"
+      "01_Predecessor_Analysis/skills/skill_council.md"
      ]
     },
     {
@@ -667,7 +667,7 @@
      "got": [
       "rules/Rule - a losing lock contender must never clean up the winner's lock.md",
       "rules/Rule - возможность живёт в движке, скил только маршрутизирует.md",
-      "01_Genevra_Analysis/skills/skill_grill.md"
+      "01_Predecessor_Analysis/skills/skill_grill.md"
      ]
     },
     {
@@ -833,7 +833,7 @@
      "got": [
       "rules/Rule - якорь реальности - улики вместо уверенности.md",
       "reference/Визуальная семантика и доказательные вставки.md",
-      "01_Genevra_Analysis/agents/agent_reviewer.md"
+      "01_Predecessor_Analysis/agents/agent_reviewer.md"
      ]
     },
     {
@@ -1054,7 +1054,7 @@
      ],
      "got": [
       "reference/HEADLESS-CHROME-TRAPS.md",
-      "01_Genevra_Analysis/agents/agent_local-setuper.md",
+      "01_Predecessor_Analysis/agents/agent_local-setuper.md",
       "rules/Rule - Playwright networkidle не наступает на страницах с большим video.md"
      ]
     },
@@ -1166,9 +1166,9 @@
       "02_New_System_Design/03_Semantic_Vector_Search.md"
      ],
      "got": [
-      "01_Genevra_Analysis/infrastructure/Setup_And_Sync.md",
+      "01_Predecessor_Analysis/infrastructure/Setup_And_Sync.md",
       "03_Tasks/TASK-03_Search_Daemon.md",
-      "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md"
+      "01_Predecessor_Analysis/memory_system/Semantic_Search_Deep_Dive.md"
      ]
     },
     {
@@ -1181,7 +1181,7 @@
      ],
      "got": [
       "03_Tasks/_Task_Index.md",
-      "01_Genevra_Analysis/skills/skill_confidence-calibration.md",
+      "01_Predecessor_Analysis/skills/skill_confidence-calibration.md",
       "00_INDEX.md"
      ]
     },
@@ -1196,7 +1196,7 @@
      "got": [
       "02_New_System_Design/03_Semantic_Vector_Search.md",
       "decisions/WIKI-LOOP D7 - потолок fan-out 15 страниц.md",
-      "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md"
+      "01_Predecessor_Analysis/memory_system/Semantic_Search_Deep_Dive.md"
      ]
     },
     {
@@ -1418,7 +1418,7 @@
       "rules/Rule - верификация идёт через команду пользователя.md"
      ],
      "got": [
-      "01_Genevra_Analysis/skills/skill_test-task.md",
+      "01_Predecessor_Analysis/skills/skill_test-task.md",
       "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md",
       "rules/Rule - верификация идёт через команду пользователя.md"
      ]
@@ -1672,7 +1672,7 @@
      "got": [
       "howto/Обратный инжиниринг CapCut draft - что можно добавить программно.md",
       "rules/Rule - правило звучит в точке принятия решения.md",
-      "01_Genevra_Analysis/infrastructure/Hooks_And_Automation.md"
+      "01_Predecessor_Analysis/infrastructure/Hooks_And_Automation.md"
      ]
     },
     {
@@ -1824,8 +1824,8 @@
       "02_New_System_Design/03_Semantic_Vector_Search.md"
      ],
      "got": [
-      "01_Genevra_Analysis/infrastructure/Setup_And_Sync.md",
-      "01_Genevra_Analysis/infrastructure/Core_Configuration.md",
+      "01_Predecessor_Analysis/infrastructure/Setup_And_Sync.md",
+      "01_Predecessor_Analysis/infrastructure/Core_Configuration.md",
       "reference/CapCutAPI - стек реализации против альтернатив.md"
      ]
     },
@@ -1894,7 +1894,7 @@
       "rules/Rule - якорь реальности - улики вместо уверенности.md"
      ],
      "got": [
-      "01_Genevra_Analysis/skills/skill_confidence-calibration.md",
+      "01_Predecessor_Analysis/skills/skill_confidence-calibration.md",
       "rules/AGENT_SHARED_PREAMBLE.md",
       "reference/Story corpus - Romance heartbreak sample 01 - e5af97e6.md"
      ]

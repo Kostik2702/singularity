@@ -1,8 +1,8 @@
 """C02: symbol-boundary chunking for the code corpus.
 
 Python carries the heaviest coverage on purpose (decision D6 / risk R7): it is
-69% of this codebase AND the only language with no Genevra ancestor to port
-from, so every Python case here is new code being pinned down rather than a
+69% of this codebase AND the only language with no ancestor implementation to
+port from, so every Python case here is new code being pinned down rather than a
 port being re-verified.
 """
 import sys

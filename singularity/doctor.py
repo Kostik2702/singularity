@@ -1,4 +1,4 @@
-"""mb doctor — installation verification (port of genevra-setup-doctor).
+"""mb doctor — installation verification.
 
 Statuses: PASS / WARN / FAIL / FIXED / SKIP / AUTH. Guarded checks (one
 failure never aborts the run), exit 0 unless there is a hard FAIL.
@@ -988,6 +988,47 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
                     fix='git config --global user.name "Your Name" && '
                         'git config --global user.email "you@example.com"')
 
+    def d10():
+        # The inventory the registry's docstring described in prose: "72 rule
+        # notes, minus what DELIVERIES covers, minus the out-of-scope groups, is
+        # zero". Nothing ever computed it, which is how a rule sat in none of the
+        # three buckets for four days without anything saying so.
+        #
+        # It lives HERE and not in the test suite on purpose. Reconciling needs
+        # the vault, and the engine may not make its behaviour depend on which
+        # vault is configured; the doctor is the surface that is allowed to look
+        # at one and degrade to SKIP when there is none. The classifying logic is
+        # a pure function over a directory, unit-tested against a fixture, so the
+        # check cannot quietly stop checking when this machine has no vault.
+        from .machine import rules_delivery
+
+        # `memory_folder`, never a hand-joined path: the layout of a vault is
+        # known in config and nowhere else. `test_architecture` scans for the
+        # joined form, so this comment must not spell it either.
+        rules_dir = cfg.memory_folder("rules") if cfg.vault else None
+        if rules_dir is None or not rules_dir.is_dir():
+            rep.add("D10-rules-inventory", "SKIP", "vault has no rules/ directory")
+            return
+        orphans = rules_delivery.unaccounted_rules(rules_dir)
+        ceiling = rules_delivery.UNACCOUNTED_CEILING
+        total = len(list(rules_dir.glob("*.md")))
+        if len(orphans) > ceiling:
+            fresh = orphans[:3]
+            rep.add("D10-rules-inventory", "WARN",
+                    f"{len(orphans)} of {total} rule notes are delivered nowhere and "
+                    f"recorded as out of scope nowhere (was {ceiling}): "
+                    f"{', '.join(fresh)}"
+                    + (" …" if len(orphans) > 3 else ""),
+                    fix="graft the rule and add a '## Where it is grafted' section "
+                        "to the note, or record it in NOT_OURS_TO_DELIVER with a reason")
+        elif len(orphans) < ceiling:
+            rep.add("D10-rules-inventory", "PASS",
+                    f"{len(orphans)} of {total} unaccounted — below the recorded "
+                    f"{ceiling}; lower UNACCOUNTED_CEILING to keep the ratchet tight")
+        else:
+            rep.add("D10-rules-inventory", "PASS",
+                    f"{len(orphans)} of {total} unaccounted, unchanged")
+
     def d2():
         # every engine-owned agent (singularity/agents/*.md) must be registered
         # in ~/.claude/agents so councils can spawn them by portable name.
@@ -1231,6 +1272,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
     _guard(rep, "D5", d5)
     _guard(rep, "D6", d6)
     _guard(rep, "D9", d9)
+    _guard(rep, "D10", d10)
 
     # ---- Block E: Gemini CLI integration (GCLI-05) --------------------
     _guard(rep, "E-gemini", lambda: gemini_block(rep, fix))

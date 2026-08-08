@@ -15,8 +15,8 @@ Two properties this file depends on:
 
 - **Controls, in the same run.** Cases expecting GREEN are not padding. Without
   them a bug that made every mutation look RED would leave the whole file
-  passing while measuring nothing — "не найдено" is not evidence on its own
-  ([[Rule - утверждение об отсутствии требует контроля]]).
+  passing while measuring nothing — "not found" is not evidence on its own
+  ([[Rule - a claim of absence requires a control]]).
 - **Serial execution.** A case mutates a real repo file for the length of one
   subprocess run. Under `pytest -n` another worker could observe the mutated
   tree, so this file must not be run in parallel with the suite it mutates.

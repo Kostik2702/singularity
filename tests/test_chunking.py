@@ -7,32 +7,40 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from singularity.search.chunking import (extract_chunks, infer_project,
                                         parse_frontmatter, should_skip)
 
+#: One section of this note is deliberately NOT in English. The chunker splits
+#: on markdown structure and merges tags, aliases and wikilinks — none of which
+#: may depend on the script the note is written in. An all-English fixture would
+#: pass just as happily with a Latin-only regex, so it would stop testing the
+#: property that matters ([[Rule - a claim of absence requires a control]]).
 SAMPLE = """---
 type: decision
-title: "Тестовое решение"
+title: "Test decision"
 tags: [alpha, beta]
 aliases: [test-alias]
 ---
 
-# Тестовое решение
+# Test decision
 
-Преамбула до первой секции, достаточно длинная чтобы пройти минимальный порог в пятьдесят символов.
+A preamble before the first section, long enough to clear the fifty-character floor.
 
-## Контекст задачи
+## Task context
 
-Это секция с [[Другая заметка|алиасом]] и ссылкой [текст](http://x) и **жирным** текстом, а также #тегом внутри. Длина этой секции точно превышает пятьдесят символов.
+This section has [[Another note|an alias]] and a link [text](http://x) and **bold**
+text, plus an inline #tag. The length of this section is comfortably over fifty
+characters.
 
 ```python
 code = "must be removed from content"
 ```
 
-## Короткая
+## Short
 
-Мало.
+Little.
 
-## Русская секция про поиск
+## Секция не на латинице
 
-Семантический поиск должен находить русскоязычные заметки по смыслу запроса, а не по точному совпадению слов.
+Поиск обязан находить эту секцию по смыслу запроса, а её заголовок и теги —
+переживать чанкинг без потерь, как и любая другая письменность.
 """
 
 
@@ -40,7 +48,7 @@ def test_frontmatter():
     fm, body = parse_frontmatter(SAMPLE)
     assert fm["type"] == "decision"
     assert "alpha" in fm["tags"]
-    assert body.lstrip().startswith("# Тестовое решение")
+    assert body.lstrip().startswith("# Test decision")
 
 
 def test_chunks(tmp_path):
@@ -48,24 +56,25 @@ def test_chunks(tmp_path):
     p.write_text(SAMPLE, encoding="utf-8")
     chunks = extract_chunks(p, "decisions/note.md")
     sections = [c["section"] for c in chunks]
-    assert "Контекст задачи" in sections
-    assert "Русская секция про поиск" in sections
-    assert "Короткая" not in sections  # < 50 chars dropped
+    assert "Task context" in sections
+    assert "Секция не на латинице" in sections, \
+        "a non-Latin heading must survive chunking like any other"
+    assert "Short" not in sections  # < 50 chars dropped
 
-    ctx = next(c for c in chunks if c["section"] == "Контекст задачи")
+    ctx = next(c for c in chunks if c["section"] == "Task context")
     assert "must be removed" not in ctx["content"]       # code stripped
-    assert "алиасом" in ctx["content"]                    # wikilink -> alias text
-    assert "жирным" in ctx["content"]
-    assert "Другая заметка" in ctx["wikilinks"]           # link target captured
-    assert "тегом" in ctx["tags"]                          # inline tag merged
+    assert "an alias" in ctx["content"]                   # wikilink -> alias text
+    assert "bold" in ctx["content"]
+    assert "Another note" in ctx["wikilinks"]             # link target captured
+    assert "tag" in ctx["tags"]                            # inline tag merged
     assert "alpha" in ctx["tags"]                          # frontmatter tag merged
     assert ctx["type"] == "decision"
-    assert ctx["text"].startswith("Тестовое решение / test-alias - Контекст задачи:")
+    assert ctx["text"].startswith("Test decision / test-alias - Task context:")
 
 
 def test_infer_type_from_path(tmp_path):
     p = tmp_path / "x.md"
-    p.write_text("# T\n\n## S\n" + "х" * 60, encoding="utf-8")
+    p.write_text("# T\n\n## S\n" + "x" * 60, encoding="utf-8")
     chunks = extract_chunks(p, "howto/x.md")
     assert chunks[0]["type"] == "howto"
 
@@ -82,26 +91,26 @@ def test_should_skip():
 
 def _long_note(unique_tail):
     # a section whose content runs well past the old 500-char truncation point
-    filler = ("Первое предложение секции с достаточным объёмом текста. " * 40)
-    return (f"# Заголовок\n\n## Длинная секция\n\n{filler}\n\n{unique_tail}\n")
+    filler = ("The first sentence of the section, with enough text in it. " * 40)
+    return (f"# Heading\n\n## Long section\n\n{filler}\n\n{unique_tail}\n")
 
 
 def test_long_section_windowed_not_truncated(tmp_path):
     p = tmp_path / "long.md"
-    p.write_text(_long_note("УникальныйХвостовойМаркер42 в самом конце секции."),
+    p.write_text(_long_note("UniqueTailMarker42 at the very end of the section."),
                  encoding="utf-8")
     chunks = extract_chunks(p, "reference/long.md")
     joined = " ".join(c["content"] for c in chunks)
-    assert "УникальныйХвостовойМаркер42" in joined      # tail survived (was dropped)
+    assert "UniqueTailMarker42" in joined              # tail survived (was dropped)
     assert not any(c["content"].endswith("...") for c in chunks)  # no truncation marker
-    assert sum(1 for c in chunks if c["section"] == "Длинная секция") > 1  # multiple windows
+    assert sum(1 for c in chunks if c["section"] == "Long section") > 1  # multiple windows
 
 
 def test_windows_overlap_preserves_context(tmp_path):
     p = tmp_path / "long.md"
-    p.write_text(_long_note("Хвост."), encoding="utf-8")
+    p.write_text(_long_note("Tail."), encoding="utf-8")
     win = [c["content"] for c in extract_chunks(p, "reference/long.md")
-           if c["section"] == "Длинная секция"]
+           if c["section"] == "Long section"]
     assert len(win) >= 2
     # end of window i shares text with start of window i+1
     tail = win[0][-80:]
@@ -110,9 +119,9 @@ def test_windows_overlap_preserves_context(tmp_path):
 
 def test_window_metadata_present_and_ordered(tmp_path):
     p = tmp_path / "long.md"
-    p.write_text(_long_note("Хвост."), encoding="utf-8")
+    p.write_text(_long_note("Tail."), encoding="utf-8")
     win = [c for c in extract_chunks(p, "reference/long.md")
-           if c["section"] == "Длинная секция"]
+           if c["section"] == "Long section"]
     assert [c["chunk_index"] for c in win] == list(range(len(win)))
     ids = [c["chunk_id"] for c in win]
     assert len(set(ids)) == len(ids)                    # stable + unique
@@ -124,7 +133,7 @@ def test_short_section_single_window(tmp_path):
     p = tmp_path / "note.md"
     p.write_text(SAMPLE, encoding="utf-8")
     ctx = [c for c in extract_chunks(p, "decisions/note.md")
-           if c["section"] == "Контекст задачи"]
+           if c["section"] == "Task context"]
     assert len(ctx) == 1                                 # no regression for short sections
     assert ctx[0]["chunk_index"] == 0
 
@@ -229,8 +238,8 @@ def test_line_offsets_map_into_file(tmp_path):
     p.write_text(SAMPLE, encoding="utf-8")
     total_lines = SAMPLE.count("\n") + 1
     rus = next(c for c in extract_chunks(p, "decisions/note.md")
-               if c["section"] == "Русская секция про поиск")
-    # the "## Русская секция про поиск" header is near the end of the file
+               if c["section"] == "Секция не на латинице")
+    # the "## Секция не на латинице" header is near the end of the file
     assert rus["line_start"] <= total_lines
-    src_line = SAMPLE.splitlines().index("## Русская секция про поиск") + 1
+    src_line = SAMPLE.splitlines().index("## Секция не на латинице") + 1
     assert rus["line_start"] <= src_line <= rus["line_end"]

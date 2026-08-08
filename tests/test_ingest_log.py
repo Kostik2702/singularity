@@ -32,7 +32,7 @@ class FakeEncoder:
         return out
 
 
-SHARED = "векторный поиск индексатор корпус эмбеддинги косинус "
+SHARED = "vector search indexer corpus embeddings cosine "
 
 
 @pytest.fixture
@@ -43,7 +43,7 @@ def cfg(tmp_path, monkeypatch):
         p = vault / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(f"---\ntype: reference\ncreated: 2026-01-01\ntitle: {rel}\n---\n\n"
-                     f"# {rel}\n\n## Раздел\n" + SHARED * 4, encoding="utf-8")
+                     f"# {rel}\n\n## Section\n" + SHARED * 4, encoding="utf-8")
     c = Config(vault=vault, data={"model": "fake", "ingest_fanout_threshold": -1.0})
     c.mb_dir.mkdir(parents=True, exist_ok=True)
     return c
@@ -51,7 +51,7 @@ def cfg(tmp_path, monkeypatch):
 
 def _ingest(cfg, text=None, **kw):
     kw.setdefault("origin_ref", "D:/docs/a.md")
-    return sources.add(cfg, text or ("# Источник\n\n## Про поиск\n" + SHARED * 5), **kw)
+    return sources.add(cfg, text or ("# Source\n\n## About search\n" + SHARED * 5), **kw)
 
 
 def _build(cfg):
@@ -80,7 +80,7 @@ def test_reingesting_a_changed_document_brings_the_pages_back(cfg):
     _build(cfg)
     sources.attach_notes(cfg, first["source_id"], ["reference/search.md"], log=True)
 
-    second = _ingest(cfg, text="# Источник\n\n## Про поиск\n" + SHARED * 5 + " добавлено")
+    second = _ingest(cfg, text="# Source\n\n## About search\n" + SHARED * 5 + " appended")
     assert second["source_id"] != first["source_id"]
     assert second["supersedes"] == first["source_id"]
     indexer.rebuild(cfg, progress=False, corpus="sources")
@@ -123,7 +123,7 @@ def test_log_row_format_is_stable(cfg):
     assert raw.count("\n") == 0, "one JSON object per line"
     row = json.loads(raw)
     assert row == {"ts": "2026-07-28T18:45:00", "op": "ingest", "source_id": sid,
-                   "title": "Источник", "notes": ["reference/a.md", "reference/b.md"],
+                   "title": "Source", "notes": ["reference/a.md", "reference/b.md"],
                    "status": "processed", "actor": "skill"}
 
 

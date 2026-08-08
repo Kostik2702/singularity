@@ -63,6 +63,19 @@ def test_the_inventory_adds_up():
     for group, why in rules_delivery.NOT_OURS_TO_DELIVER:
         assert why.strip(), f"{group}: an out-of-scope group needs a stated reason"
 
+    # The half that was missing. `>= 20` and "the list is non-empty" are floors:
+    # they hold while a rule sits in no bucket at all, which is what happened.
+    # The arithmetic cannot be done here — it needs the vault, and the engine may
+    # not depend on one — so what this asserts is that the MECHANISM which can do
+    # it exists and is wired, and `tests/test_doctor.py` covers its wiring.
+    assert callable(rules_delivery.unaccounted_rules), \
+        "nothing can reconcile the inventory against the vault"
+    assert rules_delivery.DELIVERY_SECTION_MARKERS, \
+        "a note declares its delivery point by a section; the heading must be named"
+    for r, _, _, _ in rules_delivery.DELIVERIES:
+        assert not any(r == g for g, _ in rules_delivery.NOT_OURS_TO_DELIVER), \
+            f"{r} is both delivered and declared out of scope"
+
 
 def test_the_registry_covers_every_surface_kind():
     """A registry that only ever grew skill entries would silently stop guarding
@@ -136,7 +149,7 @@ def test_agents_dir_token_resolves_without_a_vault():
 
 def test_memory_fragment_states_the_substitution_that_kept_happening():
     f = MEMORY_WRITES_FRAGMENT
-    assert "THE VAULT" in f, "«память» = vault, not the harness-local store"
+    assert "THE VAULT" in f, "the user's word for memory = vault, not the harness-local store"
     assert "mb note new" in f and "mb learn" in f, "writes go through the CLI"
     assert "mb search" in f, "search before hand-walking the vault"
     assert "never make the machine's behaviour" in f, \
@@ -205,3 +218,97 @@ def test_session_start_imports_the_fragments_from_one_source():
     ss = (ENGINE / "singularity" / "hooks" / "session_start.py").read_text(encoding="utf-8")
     assert "MEMORY_WRITES_FRAGMENT" in ss and "RULE_POINT_FRAGMENT" in ss
     assert "hooks_state import" in ss
+
+
+def test_capture_fragment_names_the_three_commands_and_its_own_boundary():
+    """The fragment had a length budget and a verbatim-copy check, and nothing
+    about what it SAYS. It was reworded on 2026-08-08 (the trigger phrases came
+    out) with no test able to notice if a clause had gone with them — the same
+    hole `MEMORY_WRITES` and `RULE_POINT` were already covered against."""
+    f = CAPTURE_HOOKS_FRAGMENT
+    for command in ("mb hooks status", "mb hooks enable", "mb hooks disable"):
+        assert command in f, f"{command} is the deterministic path and must be named"
+    assert "never SessionStart" in f and "guard hook" in f, \
+        "the fragment's whole job is bounding WHICH hooks are meant"
+    assert "confirm scope" in f, \
+        "a vague 'turn off the hooks' must not default to the capture hooks"
+    assert "settings.json" in f, "hand-editing the file has to stay forbidden"
+
+
+def test_the_stop_reminder_still_asks_for_what_it_is_for():
+    """`stop_capture.REASON` is injected at the end of every session and had
+    ZERO test references — it was rewritten with nothing covering a word of it."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "stop_capture_probe", ENGINE / "singularity" / "hooks" / "stop_capture.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    r = mod.REASON
+    assert "mb learn" in r and "--task" in r, "the sanctioned write path must be named"
+    assert "file:line" in r, "code goes in as a reference, not as a paste"
+    assert "more than one attempt" in r, "the criterion is what keeps this from being noise"
+    assert "write nothing" in r, \
+        "'nothing to record' must stay a legal outcome, or the reminder manufactures entries"
+
+
+# --- the inventory, made countable -------------------------------------------
+#
+# `test_the_inventory_adds_up` used to assert `len(accounted) >= 20` and that the
+# out-of-scope list was non-empty. Neither reads the vault, so neither could
+# notice a rule note sitting in none of the three buckets — which is exactly how
+# `Rule - a release against a class of defect gives a scanner for the class`
+# stayed undelivered while the registry's docstring described an inventory that
+# "adds up". These exercise the classifier against a FIXTURE directory, so they
+# run on a machine with no vault and cannot skip themselves.
+
+def _rules_fixture(tmp_path):
+    d = tmp_path / "rules"
+    d.mkdir()
+    (d / "Rule - grafted.md").write_text(
+        "# x\n\n## Where it is grafted\n\npreamble §7\n", encoding="utf-8")
+    (d / "Rule - grafted in the other language.md").write_text(
+        "# x\n\n## Где вживлено\n\n"
+        "preamble\n", encoding="utf-8")
+    (d / "Rule - named by the engine.md").write_text("# x\n\nno section\n", encoding="utf-8")
+    (d / "Rule - nobody accounted for this.md").write_text("# x\n\nnothing\n", encoding="utf-8")
+    return d
+
+
+def test_a_note_that_declares_its_delivery_point_is_accounted(tmp_path):
+    d = _rules_fixture(tmp_path)
+    orphans = rules_delivery.unaccounted_rules(d, engine_text="")
+    assert "Rule - grafted" not in orphans
+    assert "Rule - grafted in the other language" not in orphans, \
+        "the section heading exists in both languages in the vault"
+
+
+def test_a_note_the_engine_names_is_accounted(tmp_path):
+    """The Core Disciplines carry no section: they reach every agent as
+    `[[wikilinks]]` from the preamble, which is a delivery point too."""
+    d = _rules_fixture(tmp_path)
+    engine = "see [[Rule - named by the engine]] for the detail"
+    assert "Rule - named by the engine" not in rules_delivery.unaccounted_rules(d, engine)
+
+
+def test_a_note_with_neither_is_reported(tmp_path):
+    """The case the whole check exists for, and the control for the two above:
+    without it, a classifier that accounted for everything would satisfy them."""
+    d = _rules_fixture(tmp_path)
+    orphans = rules_delivery.unaccounted_rules(d, engine_text="")
+    assert "Rule - nobody accounted for this" in orphans
+    assert "Rule - named by the engine" in orphans, \
+        "with an empty engine text this one has no delivery point either"
+
+
+def test_the_classifier_survives_a_missing_directory(tmp_path):
+    """A machine with no vault must get an empty answer, not an exception: the
+    doctor turns this into SKIP, and a crash there would read as a FAIL."""
+    assert rules_delivery.unaccounted_rules(tmp_path / "nope", engine_text="") == []
+
+
+def test_the_inventory_ratchet_is_recorded_and_reachable():
+    """The ceiling is a number someone measured, not a placeholder: it has to be
+    smaller than the vault's rule count for the ratchet to mean anything."""
+    assert isinstance(rules_delivery.UNACCOUNTED_CEILING, int)
+    assert rules_delivery.UNACCOUNTED_CEILING >= 0

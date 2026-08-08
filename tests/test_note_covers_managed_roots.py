@@ -71,9 +71,9 @@ def test_skill_gate_sends_new_files_through_the_cli():
     body = SKILL.read_text(encoding="utf-8")
     assert "mb note new" in body
     assert "GATE" in body, "the pre-write gate heading is gone"
-    # The old wording ("крупные записи — редактируй .md напрямую") is what
+    # The old wording ("for large entries, edit the .md directly") is what
     # authorized the bypass this gate exists to stop.
-    assert "редактируй `.md` напрямую" not in body
+    assert "edit the `.md` directly" not in body
 
 
 def test_skill_does_not_hardcode_a_vault_path():

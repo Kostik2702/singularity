@@ -1,26 +1,26 @@
 ---
 name: workflow-helper
-description: Navigate the solo development workflow (Singularity port of Genevra 12-phase flow). Use when the user says fw, wh, next, "следующая фаза", "what phase", "follow workflow", "начни задачу по воркфлоу", or when starting any non-trivial development task. Router + lazy-load - loads ONLY the current phase file, from the ENGINE.
+description: Navigate the solo development workflow (Singularity's 12-phase flow). Use when the user says fw, wh, next, "next phase", "what phase", "follow workflow", "start the task through the workflow", or when starting any non-trivial development task. Router + lazy-load - loads ONLY the current phase file, from the ENGINE.
 ---
 
-# workflow-helper — навигация по соло-воркфлоу
+# workflow-helper — navigating the solo workflow
 
-Воркфлоу живёт в ДВИЖКЕ: `{{WORKFLOW}}/` (router + файлы фаз). Дисциплина lazy-load (правило C9): грузи ТОЛЬКО текущую фазу, не всё сразу.
+The workflow lives in the ENGINE: `{{WORKFLOW}}/` (the router plus the phase files). Lazy-load discipline (rule C9): load ONLY the current phase, never everything at once.
 
-## Протокол
+## Protocol
 
-- [ ] 0. Класс задачи и цепь: `mb route "<задача>"` — печатает класс, цепь фаз и абсолютный путь к первой. Хук `UserPromptSubmit` объявляет то же самое сам, один раз на класс за сессию; эта команда нужна для перепроверки и когда класс спорный.
-- [ ] 1. Прочитай router: `{{WORKFLOW}}/_router.md` (карта фаз + сквозные правила). Если уже читал в этой сессии — не перечитывай (cache).
-- [ ] 2. Определи текущую фазу:
-    - новая задача → фаза SB (Step-Back), всегда;
-    - иначе — по активному learnings-доку (`learnings/active/<TASK>.md`): последняя запись фазы = текущая позиция; спроси пользователя только если по доку не ясно.
-- [ ] 3. Прочитай ТОЛЬКО файл текущей фазы (`workflow/phase-*.md`) и исполняй его чекбоксы как гейты.
-- [ ] 4. По завершении фазы: авто-append короткой записи в learnings (без вопроса) → объяви следующую фазу одной строкой → загрузи её файл.
-- [ ] 5. `next`/`wh` от пользователя = «фаза закрыта, веди дальше»: проверь незакрытые чекбоксы текущей (фейлы/скипы — озвучь), потом переходи.
-- [ ] 6. Пропуск фаз легален по правилам router'а (S-размер → сразу Phase 3), но фиксируется `[➖]` с причиной.
+- [ ] 0. Task class and chain: the `UserPromptSubmit` hook pushes the table of chains once per session, and YOU name the class from the meaning of the request — in whatever language it is written — saying in one line which words chose it. `mb route` reprints the table; `mb route --class <key>` prints one chain in full; `mb route --phase <id>` gives the path to a phase file.
+- [ ] 1. Read the router: `{{WORKFLOW}}/_router.md` (the phase map plus the cross-cutting rules). If you already read it this session, do not re-read it (cache).
+- [ ] 2. Determine the current phase:
+    - a new task → phase SB (Step-Back), always;
+    - otherwise from the active learnings document (`learnings/active/<TASK>.md`): the last phase entry is the current position; ask the user only if the document leaves it unclear.
+- [ ] 3. Read ONLY the current phase's file (`workflow/phase-*.md`) and execute its checkboxes as gates.
+- [ ] 4. When a phase completes: auto-append a short entry to the learnings (without asking) → announce the next phase in one line → load its file.
+- [ ] 5. `next`/`wh` from the user means "the phase is closed, lead on": check the current phase's unclosed checkboxes (call out failures and skips), then move on.
+- [ ] 6. Skipping phases is legal under the router's rules (S size → straight to Phase 3), but it is recorded as `[➖]` with a reason.
 
-## Карта (для ориентировки, детали — в файлах фаз)
+## The map (for orientation; the detail is in the phase files)
 
-SB Step-Back → 0 Подход → 1 Investigation → 1.5 Grill → 2 Planning → 3 Implementation → 4 Review (3 прохода) → 5 Verify (реально прогнать) → 6 Commit → 7 Docs+Self-learn (финал: learnings, changelog, правило из ошибок).
+SB Step-Back → 0 Approach → 1 Investigation → 1.5 Grill → 2 Planning → 3 Implementation → 4 Review (3 passes) → 5 Verify (actually run it) → 6 Commit → 7 Docs + Self-learn (the finale: learnings, changelog, a rule out of the mistakes).
 
-Связанные скилы: `grill` (фаза 1.5), `confidence-calibration` (фаза 1), `mb-search`/`mb-memory` (сквозные), `memory-curator` (фаза 7, периодически).
+Related skills: `grill` (phase 1.5), `confidence-calibration` (phase 1), `mb-search`/`mb-memory` (cross-cutting), `memory-curator` (phase 7, periodically).

@@ -1,7 +1,7 @@
 """Secret storage: keyring (DPAPI / Keychain / SecretService) with an opt-in,
 atomic 0600-file fallback.
 
-Secrets never go to argv, vault or logs (Genevra secret hygiene). The plaintext
+Secrets never go to argv, vault or logs (secret hygiene). The plaintext
 file fallback is refused unless the caller explicitly opts in — an unavailable
 keyring must not silently downgrade to storing secrets in clear text.
 """

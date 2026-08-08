@@ -1,6 +1,6 @@
 ---
 name: observation-council
-description: Hypothesis-driven root cause investigation (SRE-style multi-agent council) for bugs, incidents, strange behavior. Triggers: oc, observation council, "why is X happening", "why does X do Y", strange behavior, not working, incident, regression, silent failure, разберись почему, странное поведение, почему сломалось / не работает, инцидент.
+description: Hypothesis-driven root cause investigation (SRE-style multi-agent council) for bugs, incidents, strange behavior. Triggers: oc, observation council, "why is X happening", "why does X do Y", strange behavior, not working, incident, regression, silent failure, figure out why it broke.
 ---
 
 # Observation Council — Hypothesis-Driven RCA
@@ -139,7 +139,7 @@ Chat report (one screen max):
 - [needs-data gaps, inconclusive predictions, every `[default]` taken]
 ```
 
-- [ ] Then OFFER — never auto-write: "Записать incident-заметку в vault?" On yes → `mb note new incident "<title>"` (vault `templates/incident.md`), fill: Симптом / Хронология / Гипотезы и опровержения (every H + how it died) / Root cause / Фикс и предотвращение. Repeatable assistant mistake exposed → also offer a `rule` note (`mb-memory` skill).
+- [ ] Then OFFER — never auto-write: "Record an incident note in the vault?" On yes → `mb note new incident "<title>"` (vault `templates/incident.md`), fill the template's sections: symptom / timeline / hypotheses and refutations (every H + how it died) / root cause / fix and prevention. Repeatable assistant mistake exposed → also offer a `rule` note (`mb-memory` skill).
 
 ## Disproval table
 

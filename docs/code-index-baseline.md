@@ -1,76 +1,82 @@
-# CODE-INDEX — baseline ДО существования корпуса кода
+# CODE-INDEX — baseline from BEFORE the code corpus existed
 
-> **Этот срез снят ДО того, как корпус кода начал существовать.** На момент
-> замера `.mb/code_index/` отсутствовал физически, `code_repos_dir` не был
-> задан, а `mb search --code-only` отвечал заглушкой «not implemented yet».
-> Всё, что здесь записано — это поведение `mb search` по чистой памяти.
+> **This slice was taken BEFORE the code corpus came into existence.** At the
+> time of the measurement `.mb/code_index/` physically did not exist,
+> `code_repos_dir` was unset, and `mb search --code-only` answered with a "not
+> implemented yet" stub. Everything recorded here is the behaviour of
+> `mb search` over memory alone.
 
-Снято **2026-07-29** на боевом vault (275 заметок), ветка `release/v0.5.0` от
-`d79f047` (WIKI-LOOP смёржен), Windows 11 Pro 26200, Python 3.10 из рабочего
-окружения проекта.
+Taken **2026-07-29** on the production vault (275 notes), branch
+`release/v0.5.0` off `d79f047` (WIKI-LOOP merged), Windows 11 Pro 26200, Python
+3.10 from the project's working environment.
 
-Назначение — задача **C00** эпика [[SINGULARITY_CODE_INDEX_IMPLEMENTATION]]:
-дать доказательную базу, по которой решение **D2** (`--with-code` как opt-in)
-можно пересмотреть цифрами, а не ощущением. Результат сравнения — в
-[code-index.md](code-index.md) §6.
+Its purpose is task **C00** of the [[SINGULARITY_CODE_INDEX_IMPLEMENTATION]]
+epic: to give an evidential basis on which decision **D2** (`--with-code` as
+opt-in) can be revisited by figures rather than by feel. The result of the
+comparison is in [code-index.md](code-index.md) §6.
 
 ---
 
-## 1. Воспроизведение
+## 1. Reproduction
 
 ```powershell
 python tools/code_index_baseline.py capture --out docs/code-index-baseline.json
-python tools/code_index_baseline.py render                  # таблицы ниже
+python tools/code_index_baseline.py render                  # the tables below
 python tools/code_index_baseline.py capture --both --out pair.json
-python tools/code_index_baseline.py compare pair.json       # диф вытеснения
+python tools/code_index_baseline.py compare pair.json       # the displacement diff
 ```
 
-Машиночитаемый срез лежит рядом: **`docs/code-index-baseline.json`** (10
-запросов × топ-5, со `score`, `chunk_id`, корпусом и таймингами).
+The machine-readable slice sits alongside: **`docs/code-index-baseline.json`**
+(10 queries × top-5, with `score`, `chunk_id`, corpus and timings).
 
-### ⚠️ Как это сравнивать правильно
+### ⚠️ How to compare this correctly
 
-Vault живой. Любая новая заметка законно меняет абсолютные `score`, поэтому
-**побайтовое сравнение с этим файлом через месяц ничего не докажет**.
-Доказательная пара для D2 — это `capture --both`: один и тот же vault, одна и
-та же модель, одна переменная (`--with-code`), обе выдачи сняты подряд в одной
-сессии. Файл в `docs/` — исторический протокол «как было до корпуса кода»,
-а не эталон для diff.
+The vault is alive. Any new note legitimately changes the absolute `score`, so
+**a byte-for-byte comparison against this file a month from now proves nothing**.
+The evidential pair for D2 is `capture --both`: the same vault, the same model,
+one variable (`--with-code`), both result sets taken back to back in one session.
+The file in `docs/` is a historical record of "how things were before the code
+corpus", not a reference for a diff.
 
-Исключение — гейт C04 «дефолтная выдача не изменилась»: он проверялся
-непосредственно после реализации, пока vault не менялся, и дал **0/10
-расхождений** (см. [code-index.md](code-index.md) §6).
+The exception is gate C04, "the default results did not change": it was checked
+immediately after the implementation, while the vault was unchanged, and gave
+**0/10 divergences** (see [code-index.md](code-index.md) §6).
 
-## 2. Состояние системы на момент замера
+## 2. State of the system at the time of the measurement
 
-| Метрика | Значение |
+| Metric | Value |
 |---|---|
-| Заметок в vault | 275 (0 неиндексированных) |
-| Чанков памяти | 3216 (11.69 на заметку, 0 дубликатов) |
-| Проиндексировано текста | 2 026 466 символов |
-| `chunk_schema` памяти | 3 |
-| По типам | reference 2038, learning 625, decision 233, changelog 130, rule 105, incident 53, howto 32 |
-| Корпус sources | 3 документа (processed), 33 чанка |
-| **Корпус кода** | **не существует** |
-| Модель | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
-| Тестов | **1492 passed, 5 skipped** за 106.59 s (собрано 1497) |
-| Версия | `mb` 0.5.0 |
+| Notes in the vault | 275 (0 unindexed) |
+| Memory chunks | 3216 (11.69 per note, 0 duplicates) |
+| Text indexed | 2 026 466 characters |
+| memory `chunk_schema` | 3 |
+| By type | reference 2038, learning 625, decision 233, changelog 130, rule 105, incident 53, howto 32 |
+| Sources corpus | 3 documents (processed), 33 chunks |
+| **Code corpus** | **does not exist** |
+| Model | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` |
+| Tests | **1492 passed, 5 skipped** in 106.59 s (1497 collected) |
+| Version | `mb` 0.5.0 |
 
-5 пропущенных — opt-in маркеры `ml_smoke` / `gemini_e2e` / `grok_e2e` /
+The 5 skipped are the opt-in markers `ml_smoke` / `gemini_e2e` / `grok_e2e` /
 `imgqa_gt` (`pyproject.toml`).
 
-## 3. Контрольные запросы
+## 3. The control queries
 
-Десять **реальных** вопросов к памяти, а не синтетика: каждый — форма того,
-что действительно спрашивают во время работы над Singularity. Колонка
-«ожидаемый тип» документирует заявку на покрытие (decision / howto / incident
-/ reference / rule / learning); дрейф самого типа — тоже сигнал.
+Ten **real** questions to the memory, not synthetic ones: each is the shape of
+what actually gets asked while working on Singularity. The "expected type"
+column documents the coverage claim (decision / howto / incident / reference /
+rule / learning); a drift in the type is itself a signal.
 
-Часть запросов возвращает меньше пяти строк — это не ошибка, а отсечка
-`min_score = 0.30`: движок предпочитает вернуть три релевантных попадания,
-а не пять с двумя случайными.
+> The query strings and the result rows below are kept **verbatim**, in the
+> language they were issued and returned in. They are recorded output naming
+> real notes in the vault: rewriting them would turn a measurement into a
+> fiction, and the next re-record would flip them back anyway.
 
-### Q01 — «почему индекс пересобирается полностью» · ожидаемый тип: `decision`
+Some queries return fewer than five rows — that is not an error but the
+`min_score = 0.30` cutoff: the engine prefers to return three relevant hits
+rather than five with two accidental ones.
+
+### Q01 — «почему индекс пересобирается полностью» · expected type: `decision`
 
 | # | score | file | section | corpus |
 |---|---|---|---|---|
@@ -86,8 +92,8 @@ Vault живой. Любая новая заметка законно меняе
 |---|---|---|---|---|
 | 1 | 0.6381 | `02_New_System_Design/03_Semantic_Vector_Search.md` | — | memory |
 | 2 | 0.6108 | `03_Tasks/TASK-06_Search_Client_And_TokenEconomy.md` | Ссылки | memory |
-| 3 | 0.5929 | `01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md` | 3. search-all.py | memory |
-| 4 | 0.5728 | `01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md` | 2. Модель эмбеддингов | memory |
+| 3 | 0.5929 | `01_Predecessor_Analysis/memory_system/Semantic_Search_Deep_Dive.md` | 3. search-all.py | memory |
+| 4 | 0.5728 | `01_Predecessor_Analysis/memory_system/Semantic_Search_Deep_Dive.md` | 2. Модель эмбеддингов | memory |
 
 ### Q03 — «Glob на Windows молча возвращает пустой результат» · `incident`
 
@@ -159,20 +165,20 @@ Vault живой. Любая новая заметка законно меняе
 | # | score | file | section | corpus |
 |---|---|---|---|---|
 | 1 | 0.4685 | `learnings/active/SINGULARITY-AUDIT.md` | 2026-07-11 15:08 | memory |
-| 2 | 0.4621 | `01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md` | 1. Архитектура | memory |
+| 2 | 0.4621 | `01_Predecessor_Analysis/memory_system/Semantic_Search_Deep_Dive.md` | 1. Архитектура | memory |
 | 3 | 0.4403 | `learnings/active/STORYFORGE-RUNTIME.md` | 2026-07-20 10:10 | memory |
 | 4 | 0.4311 | `learnings/active/STORYFORGE-QUALITY.md` | 2026-07-20 10:37 | memory |
 | 5 | 0.4194 | `rules/Rule - repair-проход обязан снова пройти gate.md` | Почему | memory |
 
-**Тайминги:** тёплый движок 13.5–18.1 мс на запрос (среднее 15.3 мс),
-wall-clock через CLI 181–205 мс (модель уже загружена в демоне; разница —
-старт процесса Python).
+**Timings:** the warm engine takes 13.5–18.1 ms per query (mean 15.3 ms), and
+wall-clock through the CLI is 181–205 ms (the model is already loaded in the
+daemon; the difference is Python process start-up).
 
-## 4. Чего этот baseline НЕ покрывает
+## 4. What this baseline does NOT cover
 
-* качество выдачи ПО КОДУ — эти десять запросов адресованы памяти; они
-  измеряют вытеснение, а не полезность корпуса кода. Отдельная проба
-  код-ориентированными запросами — в [code-index.md](code-index.md) §5;
-* тайминги полного `mb index rebuild` по памяти (не пересобиралась —
-  в этом и был смысл гейта C01);
-* `mb doctor` / `mb selftest` — фиксируются в release gate C07.
+* the quality of results FOR CODE — these ten queries address memory; they
+  measure displacement, not the usefulness of the code corpus. A separate probe
+  with code-oriented queries is in [code-index.md](code-index.md) §5;
+* the timings of a full `mb index rebuild` over memory (it was not rebuilt —
+  that was the whole point of gate C01);
+* `mb doctor` / `mb selftest` — those are recorded in release gate C07.

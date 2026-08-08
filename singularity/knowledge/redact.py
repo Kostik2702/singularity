@@ -36,8 +36,14 @@ _PLACEHOLDER_RE = re.compile(
 
 # A line that is visibly teaching rather than leaking. `mb learn "set
 # api_key=<your key> in config"` is documentation, not a credential.
+#: `for example` and `template` are the English of the two markers this list
+#: always had. `sample` is deliberately NOT here: it was added during the
+#: 2026-08-08 translation and widened the suppression beyond what was being
+#: translated — a real credential on a line mentioning "sample" stopped being
+#: reported. A security check may only be loosened by a decision, never as a
+#: side effect of rewording one.
 _TEACHING_RE = re.compile(r"(?i)\b(example|placeholder|dummy|fake|e\.g\.|for instance|"
-                          r"как\s+пример|например|шаблон)\b")
+                          r"for example|template)\b")
 
 
 class Finding(NamedTuple):

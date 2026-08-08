@@ -34,95 +34,97 @@ PREAMBLE = AGENTS / "AGENT_SHARED_PREAMBLE.md"
 #: cannot match anything else in the file.
 DELIVERIES: list[tuple[str, str, Path, str]] = [
     # --- main thread: the SessionStart hook is its only mandatory surface -----
-    ("память означает vault", "SessionStart",
+    ("memory means the vault", "SessionStart",
      ENGINE / "singularity" / "machine" / "hooks_state.py",
      "MEMORY_WRITES_FRAGMENT"),
-    ("записи в vault идут командами mb", "SessionStart",
+    ("writes to the vault go through mb commands", "SessionStart",
      ENGINE / "singularity" / "machine" / "hooks_state.py",
      "mb note new <type>"),
-    ("рабочие AI-артефакты хранятся в vault", "SessionStart",
+    ("working AI artefacts are stored in the vault", "SessionStart",
      ENGINE / "singularity" / "machine" / "hooks_state.py",
      "second source of truth"),
-    ("правило звучит в точке принятия решения", "SessionStart",
+    ("a rule is spoken at the point of decision", "SessionStart",
      ENGINE / "singularity" / "machine" / "hooks_state.py",
      "RULE_POINT_FRAGMENT"),
-    ("найденное несоответствие сверить с записанным решением", "SessionStart",
+    ("check a found inconsistency against the recorded decision", "SessionStart",
      ENGINE / "singularity" / "machine" / "hooks_state.py",
      "look for a RECORDED decision"),
 
     # --- every subagent: preamble sections 1-2 are the mandatory minimum -----
-    ("утверждение об отсутствии требует контроля", "preamble §2", PREAMBLE,
-     "само по себе не evidence"),
-    ("найденное несоответствие сверить с записанным решением", "preamble §2", PREAMBLE,
-     "ищи записанное решение"),
-    ("якорь реальности - улики вместо уверенности", "preamble §2", PREAMBLE,
-     "Якорь реальности"),
-    ("инвариант доказывается попыткой его сломать", "preamble §2", PREAMBLE,
-     "посади нарушение"),
-    ("пайп поверх тестовой команды не должен глотать exit-код", "preamble §2", PREAMBLE,
+    ("a claim of absence requires a control", "preamble §2", PREAMBLE,
+     "is not evidence by itself"),
+    ("check a found inconsistency against the recorded decision", "preamble §2", PREAMBLE,
+     "look for a recorded decision"),
+    ("reality anchor - evidence over confidence", "preamble §2", PREAMBLE,
+     "Reality anchor"),
+    ("an invariant is proven by trying to break it", "preamble §2", PREAMBLE,
+     "plant the violation"),
+    ("a pipe over the test command must not swallow the exit code", "preamble §2", PREAMBLE,
      "PIPESTATUS"),
-    ("доказательный замер перепроверять при смене популяции", "preamble §3", PREAMBLE,
-     "вместе с популяцией"),
-    ("если агент перерендеривает свой вход, чинить надо вход", "preamble §6", PREAMBLE,
-     "дефект ВХОДА"),
-    ("у покрытой тестами функции должен быть потребитель", "preamble §7", PREAMBLE,
-     "композиционного корня"),
-    ("recoverable-ошибка скрывает тотальный отказ", "preamble §7", PREAMBLE,
+    ("re-check an evidential measurement when the population changes", "preamble §3", PREAMBLE,
+     "together with the population"),
+    ("when an agent re-renders its own input, the input is what to fix", "preamble §6", PREAMBLE,
+     "defect of the INPUT"),
+    ("a function covered by tests needs a consumer", "preamble §7", PREAMBLE,
+     "composition root"),
+    ("a recoverable error hides a total failure", "preamble §7", PREAMBLE,
      "recoverable / previous state stands"),
-    ("сканер исходника не пишет то, что ищет", "preamble §7", PREAMBLE,
-     "игла не должна встречаться"),
+    ("a source scanner must not write what it searches for", "preamble §7", PREAMBLE,
+     "no needle may occur literally"),
+    ("a release against a class of defect gives a scanner for the class",
+     "preamble §7", PREAMBLE, "One instance of a defect is not the defect"),
 
-    ("каждая изменённая строка прослеживается до запроса", "preamble §7", PREAMBLE,
-     "прослеживается до запроса"),
-    ("минимум кода, ничего спекулятивного", "preamble §7", PREAMBLE,
-     "переусложнено"),
-    ("развилку назвать до работы, а не после", "SessionStart",
+    ("every changed line traces back to the request", "preamble §7", PREAMBLE,
+     "traces back to the request"),
+    ("minimum code, nothing speculative", "preamble §7", PREAMBLE,
+     "over-engineered"),
+    ("name the fork before the work, not after", "SessionStart",
      ENGINE / "singularity" / "machine" / "hooks_state.py",
      "The boundary is WHEN, not who"),
 
     # --- skills: the rule stands where that class of work is done ------------
-    ("Playwright networkidle не наступает на страницах с video", "skill",
+    ("Playwright networkidle never arrives on pages with video", "skill",
      SKILLS / "visual-regression-bootstrap" / "SKILL.md", "networkidle"),
-    ("byte-identity скриншотов требует --disable-gpu", "skill",
+    ("byte-identical screenshots require --disable-gpu", "skill",
      SKILLS / "visual-regression-bootstrap" / "SKILL.md", "--disable-gpu"),
-    ("python http.server не отдаёт Range", "skill",
-     SKILLS / "visual-regression-bootstrap" / "SKILL.md", "не отдаёт Range"),
-    ("canvas-анимации только на wall-time", "skill",
+    ("python http.server does not serve Range", "skill",
+     SKILLS / "visual-regression-bootstrap" / "SKILL.md", "does not serve Range"),
+    ("canvas animation runs on wall-time only", "skill",
      SKILLS / "motion-3d-implementer" / "SKILL.md", "delta = time - lastTime"),
-    ("img src svg не наследует currentColor", "skill",
+    ("img src svg does not inherit currentColor", "skill",
      SKILLS / "motion-3d-implementer" / "SKILL.md", "currentColor"),
-    ("аномалия в интерактивном Chrome — лид", "skill",
-     SKILLS / "design-fidelity-audit" / "SKILL.md", "Источник истины — только Playwright"),
-    ("аномалия в интерактивном Chrome — лид", "agent",
+    ("an anomaly in interactive Chrome is a lead", "skill",
+     SKILLS / "design-fidelity-audit" / "SKILL.md", "Playwright is the only source of truth"),
+    ("an anomaly in interactive Chrome is a lead", "agent",
      AGENTS / "web-viewer.md", "Playwright-only rule"),
-    ("environment-утверждения проверять живым probe", "skill",
+    ("environment claims are checked with a live probe", "skill",
      SKILLS / "planning-council" / "SKILL.md", "live probe"),
-    ("оценки агентной разработки - два класса затрат", "skill",
+    ("agentic-development estimates have two cost classes", "skill",
      SKILLS / "planning-council" / "SKILL.md", "COST CLASS"),
     ("session end ... continuation prompt", "skill",
-     SKILLS / "compaction-plan" / "SKILL.md", "continuation-промпт"),
-    ("перед архивацией вынести знание в индексируемые заметки", "skill",
-     SKILLS / "memory-curator" / "SKILL.md", "Архивация — точка потери знания"),
-    ("правило звучит в точке принятия решения", "skill",
-     SKILLS / "mb-memory" / "SKILL.md", "в движке, не в vault"),
-    ("лицензию библиотеки читать до рекомендации", "skill",
+     SKILLS / "compaction-plan" / "SKILL.md", "continuation prompt"),
+    ("lift knowledge into indexable notes before archiving", "skill",
+     SKILLS / "memory-curator" / "SKILL.md", "Archiving is where knowledge is lost"),
+    ("a rule is spoken at the point of decision", "skill",
+     SKILLS / "mb-memory" / "SKILL.md", "in the engine, not in the vault"),
+    ("read the library licence before recommending it", "skill",
      SKILLS / "pattern-source-scout" / "SKILL.md", "NOASSERTION"),
-    ("лицензию библиотеки читать до рекомендации", "skill",
+    ("read the library licence before recommending it", "skill",
      SKILLS / "component-intake" / "SKILL.md", "NOASSERTION"),
-    ("лицензию библиотеки читать до рекомендации", "skill",
+    ("read the library licence before recommending it", "skill",
      SKILLS / "website-factory" / "SKILL.md", "NOASSERTION"),
-    ("манифест ассетов генерируется обходом дерева", "skill",
+    ("the asset manifest is generated by walking the tree", "skill",
      SKILLS / "website-factory" / "SKILL.md", "coverage self-check"),
-    ("возможность живёт в движке, скил только маршрутизирует", "skill",
-     SKILLS / "website-factory" / "SKILL.md", "Возможность живёт в движке"),
+    ("a capability lives in the engine, a skill only routes to it", "skill",
+     SKILLS / "website-factory" / "SKILL.md", "A capability lives in the engine"),
 ]
 
 # Rules whose delivery point no longer exists. Kept visible on purpose: an entry
 # silently dropped from DELIVERIES looks exactly like a rule that was never
 # delivered, and the difference matters when the tool comes back.
 #
-# «Короткая огибающая в ffmpeg кладётся aeval, а не volume eval=frame» stood in
-# `reel-editor/SKILL.md` and in the docstring of `reel/render.py::shutter_wav`.
+# «A short envelope in ffmpeg is laid down with aeval, not volume eval=frame»
+# stood in `reel-editor/SKILL.md` and in `reel/render.py::shutter_wav`'s docstring.
 # v0.12.0 deleted the reel tool with the skill that pointed at it, so both
 # surfaces are gone at once. The rule remains true about ffmpeg and remains in
 # the vault as knowledge; it has no execution point in this engine until
@@ -130,9 +132,9 @@ DELIVERIES: list[tuple[str, str, Path, str]] = [
 # neighbouring skill would be rule-theatre — nobody writing an envelope would
 # read it there.
 WITHOUT_A_POINT: list[tuple[str, str]] = [
-    ("короткая огибающая в ffmpeg кладётся aeval",
-     "reel-editor + reel/render.py удалены в v0.12.0; замены, синтезирующей звук, "
-     "в движке нет"),
+    ("a short envelope in ffmpeg is laid down with aeval",
+     "reel-editor + reel/render.py were deleted in v0.12.0; the engine has no "
+     "replacement that synthesises audio"),
 ]
 
 # Rules that are NOT this engine's to deliver. Recorded so the inventory adds
@@ -143,22 +145,81 @@ WITHOUT_A_POINT: list[tuple[str, str]] = [
 # delivered by another repository, dormant on this platform, or already carried
 # by the code they are about.
 NOT_OURS_TO_DELIVER: list[tuple[str, str]] = [
-    ("правила проектов Bringg (2) и singularity-ui (6)",
-     "их точка — в тех репозиториях (код-стандарты, деплой-гейты, адаптеры, "
-     "approval/egress-модель); движок Singularity их не исполняет"),
-    ("правила видео-движка (4): склейки по позициям, перелёт кривой, порог из "
-     "float, «намеренно не экспортируется»",
-     "точка — в том репозитории, которому принадлежит этот код; после удаления reel "
-     "в v0.12.0 в этом движке видеокода нет"),
-    ("Windows-специфика (6): PowerShell round-trip, CRLF, кавычки в git -m, "
-     "argv через ANSI, check.ps1, оба имени shell-инструмента",
-     "dormant на macOS-машине; правилу нужен платформенный триггер, а не место "
-     "в подсказке, которая платится каждой сессией"),
-    ("инварианты кода движка (11): хуки не зовут load_config, читатели индекса "
-     "через index_files, mkdir-лок, POSIX shim, utf-8-sig, ownership-детект и др.",
-     "уже доставлены там, где пишется этот код: докстринг рядом с реализацией "
-     "плюс тест, который падает при нарушении"),
+    ("rules of the singularity-ui project (6)",
+     "their point is in that repository (code standards, adapters, the "
+     "approval/egress model); the Singularity engine does not execute them"),
+    ("video-engine rules (4): cuts on positions, curve overshoot, a threshold "
+     "out of a float, «deliberately not exported»",
+     "the point is in the repository that owns that code; after reel was deleted "
+     "in v0.12.0 this engine holds no video code"),
+    ("Windows specifics (6): PowerShell round-trip, CRLF, quoting in git -m, "
+     "argv through ANSI, check.ps1, both names of the shell tool",
+     "dormant on a macOS machine; the rule needs a platform trigger, not a slot "
+     "in a prompt that is paid for every session"),
+    ("engine code invariants (11): hooks never call load_config, index readers "
+     "go through index_files, the mkdir lock, the POSIX shim, utf-8-sig, "
+     "ownership detection and others",
+     "already delivered where that code is written: a docstring next to the "
+     "implementation plus a test that fails on violation"),
 ]
+
+
+#: A rule note declares its own delivery point in a section of this name. The
+#: convention is not new — `docs/rules-delivery.md` step 6 prescribes it and 27
+#: of the vault's notes already carry it. What was missing is anything that
+#: NOTICES when a note carries neither this nor a mention in the engine.
+DELIVERY_SECTION_MARKERS = ("## Где вживлено", "## Where it is grafted")
+
+#: Unaccounted notes on 2026-08-08, measured. The number may fall; it may not
+#: rise. It is a RATCHET rather than a target because the 43 are mostly the
+#: groups `NOT_OURS_TO_DELIVER` describes in prose — other repositories, dormant
+#: Windows specifics, code invariants delivered by a docstring plus a test — and
+#: turning that prose into 43 names is work this ceiling makes visible instead of
+#: pretending is done. What it buys immediately is the case it was written for:
+#: a NEW rule note that nothing delivers moves the count up and is named.
+UNACCOUNTED_CEILING = 43
+
+
+def _engine_text() -> str:
+    """Every word the engine ships, for the "is this note named anywhere" test."""
+    parts = []
+    for path in sorted((ENGINE / "singularity").rglob("*")):
+        if path.is_file() and path.suffix in {".py", ".md"}:
+            try:
+                parts.append(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError):
+                continue
+    return "\n".join(parts)
+
+
+def unaccounted_rules(rules_dir: Path, engine_text: str | None = None) -> list[str]:
+    """Rule notes that neither declare a delivery point nor are named in the engine.
+
+    Two objective signals, no hand-maintained list to drift: the note says where
+    it is grafted, or the engine mentions it by name (the Core Disciplines reach
+    every agent as `[[wikilinks]]` from the preamble). A note with neither is not
+    necessarily a defect — it may belong to another repository — but nobody has
+    said so, and "untouched" and "covered somewhere else" must not look alike.
+
+    Takes the directory rather than a `Config`: the engine may not depend on
+    which vault is configured, so the caller supplies the path and this stays a
+    pure function a fixture can exercise without one.
+    """
+    if not rules_dir.is_dir():
+        return []
+    text = _engine_text() if engine_text is None else engine_text
+    orphans = []
+    for note in sorted(rules_dir.glob("*.md")):
+        try:
+            body = note.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if any(marker in body for marker in DELIVERY_SECTION_MARKERS):
+            continue
+        if note.stem in text:
+            continue
+        orphans.append(note.stem)
+    return orphans
 
 
 def check() -> list[str]:

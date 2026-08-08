@@ -1,12 +1,11 @@
 """OS scheduler abstraction: register/verify/unregister periodic jobs.
 
 Windows: Task Scheduler (schtasks), StartWhenAvailable via XML re-register.
-macOS:   launchd LaunchAgent (ported plist logic from Genevra
-         search-daemon-ctl.sh — cron on macOS is a TCC/PATH trap).
+macOS:   launchd LaunchAgent (cron on macOS is a TCC/PATH trap).
 linux:   systemd user timer with Persistent=true; cron fallback.
 
-All jobs run the current venv python with an absolute path (Genevra lesson:
-schedulers run with a minimal PATH) and pin a working directory (issue #16:
+All jobs run the current venv python with an absolute path (a lesson paid for
+once: schedulers run with a minimal PATH) and pin a working directory (issue #16:
 `-m singularity` puts the CWD on sys.path, and a systemd user unit's default
 CWD is $HOME — which the README tells people to clone into as ~/singularity,
 so every scheduled run would die on a namespace-shadowed import).
@@ -186,7 +185,7 @@ def _win_unregister(job: Job) -> None:
 
 
 # --------------------------------------------------------------------------
-# macOS — launchd LaunchAgent  (port of Genevra setup-schedule)
+# macOS — launchd LaunchAgent
 # --------------------------------------------------------------------------
 
 def _launch_agent_path(job: Job) -> Path:
@@ -271,7 +270,7 @@ def _linux_register(job: Job) -> str:
             _run(["systemctl", "--user", "daemon-reload"])
             res = _run(["systemctl", "--user", "enable", "--now", f"{unit}.service"])
             return "OK" if res.returncode == 0 else f"FAIL: {res.stderr.strip()}"
-    # cron fallback (idempotent append, ported from Genevra)
+    # cron fallback (idempotent append)
     if job.daily_at:
         hh, mm = job.daily_at.split(":")
         line = f"{int(mm)} {int(hh)} * * * {_cron_command(exe, job.args)}  # {job.task_id}"

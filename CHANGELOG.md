@@ -505,7 +505,7 @@ The fix removed the second name and split a concept that had been conflated:
 host names must be — plus the invariant that keeps the window honest as the
 engine grows: every parser command is either on the window or inside a group or
 a host, and every name the facade lists exists in the parser. Rule recorded in
-the vault: *Второе имя для существующей вещи оплачивается всеми её потребителями*.
+the vault: *a second name for an existing thing is paid for by all of its consumers*.
 
 ### The measurement loop closes
 
@@ -514,7 +514,7 @@ A coverage check ("which command has a skill that leads to it?") found that
 the 33 skills — including `memory-curator`, whose whole subject is "how is the
 memory doing". T14 shipped those measurements to "decide on further complexity
 from data rather than impressions"; the data had been accumulating unread.
-`memory-curator` gains a *Здоровье по данным* section: thresholds tied to the one
+`memory-curator` gains a *Health from the data* section: thresholds tied to the one
 declared goal (G1, ≥80% of session knowledge lands in the vault) because the
 engine deliberately has none, the denominator checked first (percentages over 3
 sessions mean nothing), and every signal mapped to one action. SessionStart now
@@ -741,7 +741,7 @@ genuinely blocked, **stop and say so** rather than routing around it. Reading
 vault files and copying *into* the vault stay explicitly fine — the rule is
 about editable duplicates, not about the outside world.
 
-`mb-memory/SKILL.md` gains the matching destination gate above the "чем писать"
+`mb-memory/SKILL.md` gains the matching destination gate above the "what to write with"
 gate added in v0.6.4: together they answer *where* and *with what* before the
 first write.
 
@@ -850,8 +850,8 @@ change: three tests fail.
 
 ### The skill said the opposite of the guard
 
-`mb-memory/SKILL.md` is what the assistant actually reads, and it said *"крупные
-записи — редактируй `.md` напрямую (Edit/Write)"*. So the bypass was not a
+`mb-memory/SKILL.md` is what the assistant actually reads, and it said *"for large
+entries, edit the `.md` directly (Edit/Write)"*. So the bypass was not a
 lapse — it was the documented instruction, and the guard was arguing with the
 skill. The skill now carries the gate itself: a NEW file in a managed root goes
 through `mb note new` regardless of size (create with the command, fill in with
@@ -1353,7 +1353,7 @@ of duplicating it** — and in doing so surfaced two seams the spec never had.
   disk already carries the old global number, which is exactly what memory and
   sources now declare.
 - **`search/code_chunking.py`** (C02): regex symbol boundaries, Python-first
-  (69% of the codebase, and the one language Genevra had no chunker for) —
+  (69% of the codebase, and the one language the predecessor had no chunker for) —
   methods as their own chunks, decorators pulled in, docstrings read forward
   from the signature. TS/JS/JSX ported. Ruby deliberately *not* implemented
   (D6: zero `.rb` files exist; it falls back rather than pretending).

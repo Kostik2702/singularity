@@ -1,6 +1,6 @@
 ---
 name: error-reports
-description: Review PENDING error-report notes in the vault, formulate preventive rules, embed each rule at its execution point, mark reports LEARNED. Triggers: error reports, process reports, "разбери ошибки", PENDING reports.
+description: Review PENDING error-report notes in the vault, formulate preventive rules, embed each rule at its execution point, mark reports LEARNED. Triggers: error reports, process reports, work through the mistakes, PENDING reports.
 ---
 
 # error-reports — errors into rules (self-learning pipeline: OUTPUT)
@@ -20,7 +20,7 @@ One line each: Date, Error Type, Context, Lesson. Wait for the user to pick a nu
 Analyze the root cause, then propose rule option(s), each with the **EXECUTION POINT** where it belongs — the artifact that will be loaded exactly at the moment the error could repeat, NEVER a general lessons list:
 
 - a specific skill in `C:\Users\Admin\.claude\skills\<name>\SKILL.md` — error maps to a workflow that skill drives (e.g. overconfidence → `confidence-calibration`, missed vault memory → `mb-search`)
-- a rule note in vault `rules/` — cross-cutting technical rule; **format sample: `rules/Rule - stdin хуков читать utf-8-sig.md`** (frontmatter `type: rule`; sections: Правило as checkboxes / Почему — which failure it catches, GATE result / Происхождение — task, date, LEARNED line)
+- a rule note in vault `rules/` — cross-cutting technical rule; **filename shape: `rules/Rule - <what the rule says>.md`** (frontmatter `type: rule`; the template's sections: the rule itself as checkboxes / why — which failure it catches, GATE result / origin — task, date, LEARNED line)
 - a `CLAUDE.md` section — permanent behavioral rule active in every session
 - an agent file in `.claude\agents\` — error is specific to one subagent's behaviour
 

@@ -1,110 +1,110 @@
 ---
 name: mb-ingest
-description: Проглотить внешний документ в память и разнести его по связанным wiki-страницам (Singularity ingest-цикл). Use when the user says "проглоти этот документ", "добавь источник", "разбери статью в память", ingest, "add source", "прочитай и запиши в vault", или когда появился внешний материал (статья, техдок, спека, переписка), знание из которого должно осесть в vault с провенансом.
+description: Swallow an external document into memory and spread it across the linked wiki pages (the Singularity ingest cycle). Use when the user says "swallow this document", "add a source", "work this article into memory", ingest, "add source", "read it and write it into the vault", or whenever external material has appeared (an article, a technical document, a spec, a thread) whose knowledge should settle in the vault with provenance.
 ---
 
-# mb-ingest — от документа до обновлённой wiki
+# mb-ingest — from a document to an updated wiki
 
-Движок даёт цифры (хранение, провенанс, кандидаты, журнал). Пересказ, правки страниц и вердикты — твоя работа (решение D5). Ровно как `digest`/`curator`: report-only + применяет человек/агент.
+The engine supplies the numbers (storage, provenance, candidates, the log). The retelling, the page edits and the verdicts are your work (decision D5). Exactly like `digest`/`curator`: report-only, applied by a human or an agent.
 
-Raw живёт в `.mb/sources/` — **вне** Obsidian-дерева (решение D1), поэтому источник не виден в графе и на него нельзя сослаться `[[wikilink]]`; провенанс — это `sources: [<id>]` во frontmatter.
+Raw material lives in `.mb/sources/` — **outside** the Obsidian tree (decision D1), so a source is invisible in the graph and cannot be referenced with a `[[wikilink]]`; provenance is `sources: [<id>]` in the frontmatter.
 
-## Жёсткие гейты (нарушение = откат шага)
+## Hard gates (a violation rolls the step back)
 
-- [ ] **Правка только при непустом `why`.** У каждого элемента `touch` движок обязан дать `why: {source_section, note_section}`. Нет `why` — страницу не трогаем.
-- [ ] **«Нечего дописать» — легитимный исход.** Он должен быть ЗАПИСАН (`mb ingest mark` без `--notes`), а не замолчан.
-- [ ] **Add-only.** Дописываем абзац/пункт с цитатой из источника. Ничего не переписываем начисто, ничего не удаляем.
-- [ ] **Потолок `ingest_fanout_top_k` (15).** Это потолок ПРЕДЛОЖЕНИЙ, а не план обязательных правок.
-- [ ] **Сеть не в ядре (D4).** `mb ingest add` не качает URL. Скачиваешь ты.
-- [ ] **Raw иммутабелен (D6).** Никогда не редактируй файл под `.mb/sources/`. Новая версия = новый `mb ingest add`.
+- [ ] **Edit only on a non-empty `why`.** For every `touch` element the engine must supply `why: {source_section, note_section}`. No `why` — the page is not touched.
+- [ ] **"Nothing to add" is a legitimate outcome.** It must be RECORDED (`mb ingest mark` without `--notes`), not passed over in silence.
+- [ ] **Add-only.** Append a paragraph or bullet with a quotation from the source. Nothing is rewritten from scratch, nothing is deleted.
+- [ ] **The `ingest_fanout_top_k` ceiling (15).** That is a ceiling on SUGGESTIONS, not a plan of mandatory edits.
+- [ ] **The network is not in the core (D4).** `mb ingest add` does not download URLs. You download them.
+- [ ] **Raw is immutable (D6).** Never edit a file under `.mb/sources/`. A new version means a new `mb ingest add`.
 
-## Шаги
+## Steps
 
-### 1. Подготовить контент
+### 1. Prepare the content
 
-Локальный файл — путь как есть:
+A local file — the path as it is:
 ```bash
-mb ingest add "D:\docs\article.md" --title "Название" --json
+mb ingest add "D:\docs\article.md" --title "Title" --json
 ```
 
-URL — CLI откажет с exit 2 (это не баг, это решение D4). Качаешь сам и передаёшь через stdin:
+A URL — the CLI refuses with exit 2 (not a bug, this is decision D4). You download it yourself and pass it through stdin:
 ```bash
-# 1) достань текст (WebFetch / curl / браузер -> файл)
-# 2) отдай его движку, сохранив происхождение:
-Get-Content article.txt -Raw | mb ingest add --stdin --origin "https://example.com/article" --title "Название" --json
+# 1) get the text (WebFetch / curl / browser -> file)
+# 2) hand it to the engine, preserving the origin:
+Get-Content article.txt -Raw | mb ingest add --stdin --origin "https://example.com/article" --title "Title" --json
 ```
 
-- [ ] `--project` только если материал реально проектный; personal-источник в fan-out не пойдёт вообще.
-- [ ] Ответ содержит `source_id`, `duplicate`, `stored_path`, `indexed`. `duplicate: true` — документ уже есть, это не ошибка.
+- [ ] `--project` only if the material really is project material; a personal source will not enter fan-out at all.
+- [ ] The response carries `source_id`, `duplicate`, `stored_path`, `indexed`. `duplicate: true` means the document is already there — that is not an error.
 
-### 2. Догнать индекс
+### 2. Catch the index up
 
-Watcher **не** видит `.mb/` (следствие D1). Если в ответе `indexed: "pending"`:
+The watcher does **not** see `.mb/` (a consequence of D1). If the response says `indexed: "pending"`:
 ```bash
 mb ingest index
 ```
 
-### 3. Получить план
+### 3. Get the plan
 
 ```bash
 mb ingest plan <source_id> --json
 ```
 
-Читай поля:
-- `summary_target` — куда положить summary-заметку (+ готовая команда);
-- `touch[]` — до 15 существующих страниц со `score` и обязательным `why`;
-- `new_pages[]` — сущности источника без своей страницы;
-- `conflicts[]` — кандидаты в противоречия с тем, что vault уже утверждает (**кандидаты, не вердикты**);
-- `suppressed` — сколько страниц уже помечено обработанными для этой версии источника.
+Read the fields:
+- `summary_target` — where the summary note goes (plus a ready command);
+- `touch[]` — up to 15 existing pages with a `score` and a mandatory `why`;
+- `new_pages[]` — entities of the source with no page of their own;
+- `conflicts[]` — candidate contradictions against what the vault already claims (**candidates, not verdicts**);
+- `suppressed` — how many pages are already marked processed for this version of the source.
 
-Отказы, которые надо прочитать буквально: `error` про `mb ingest index` — источник ещё не в корпусе; `error` про model mismatch — корпуса собраны разными моделями, план не строится намеренно.
+Refusals to read literally: an `error` about `mb ingest index` means the source is not in the corpus yet; an `error` about a model mismatch means the corpora were built by different models and the plan is deliberately not constructed.
 
-### 4. Прочитать источник и обсудить takeaways с пользователем
+### 4. Read the source and discuss the takeaways with the user
 
-- [ ] `mb ingest show <source_id> --excerpt 4000` для быстрого просмотра, полный текст — из `stored_path`.
-- [ ] **Этот шаг не пропускать.** Сначала 3–7 тезисов пользователю своими словами, потом список страниц из `touch`, которые ты предлагаешь тронуть, с одной строкой «что именно добавлю».
-- [ ] Дождись подтверждения/корректировки списка.
+- [ ] `mb ingest show <source_id> --excerpt 4000` for a quick look; the full text comes from `stored_path`.
+- [ ] **Do not skip this step.** First 3–7 points to the user in your own words, then the list of pages from `touch` you propose to touch, each with one line of "what exactly I will add".
+- [ ] Wait for confirmation or a correction of the list.
 
-### 5. Summary-заметка
+### 5. The summary note
 
 ```bash
-mb note new reference "<Название>" --from-source <source_id>
+mb note new reference "<Title>" --from-source <source_id>
 ```
-Команда сама проставит `sources: [<id>]` во frontmatter и обратную ссылку в реестр. Дальше наполни заметку: контекст, суть, что из этого следует для нас, ссылки на затронутые страницы.
+The command sets `sources: [<id>]` in the frontmatter itself and the back-reference in the registry. Then fill the note in: context, substance, what follows from it for us, links to the pages touched.
 
-### 6. Правки существующих страниц
+### 6. Edits to existing pages
 
-Для каждого элемента `touch`, который одобрил пользователь:
-- [ ] открой страницу и найди секцию из `why.note_section`;
-- [ ] добавь абзац с **цитатой** из `why.source_section` и пометкой источника;
-- [ ] если дописывать нечего — пропусти и скажи об этом; это нормальный результат, а не провал.
+For every `touch` element the user approved:
+- [ ] open the page and find the section from `why.note_section`;
+- [ ] add a paragraph with a **quotation** from `why.source_section` and a note of the source;
+- [ ] if there is nothing to add — skip it and say so; that is a normal result, not a failure.
 
-### 7. Записать результат
+### 7. Record the outcome
 
 ```bash
 mb ingest mark <source_id> --notes "reference/a.md,reference/b.md" --status processed --actor skill
-mb ingest mark <source_id> --actor skill              # исход «нечего дописать»
+mb ingest mark <source_id> --actor skill              # the "nothing to add" outcome
 ```
-Помеченные страницы перестают всплывать в плане (для этой версии источника). Ре-ингест изменённого документа вернёт их — он получит новый `source_id`.
+Marked pages stop surfacing in the plan (for this version of the source). Re-ingesting a changed document brings them back — it gets a new `source_id`.
 
-### 8. Человеческий след
+### 8. The human trail
 
-- [ ] Строка в `changelog/YYYY-MM.md`: что проглочено, какие страницы тронуты, что осталось открытым.
+- [ ] A line in `changelog/YYYY-MM.md`: what was swallowed, which pages were touched, what stayed open.
 
-### 9. Отчёт пользователю
+### 9. Report to the user
 
-- [ ] `source_id`, число тронутых страниц, что осталось открытым, `conflicts` (если были) с явной пометкой «кандидаты, требуют вердикта».
-- [ ] Проверка замыкания цикла: `mb curator gaps --json` — этот источник не должен остаться в `unprocessed_sources`.
+- [ ] `source_id`, the number of pages touched, what stayed open, `conflicts` (if any) explicitly marked "candidates, awaiting a verdict".
+- [ ] Check that the loop closed: `mb curator gaps --json` — this source must not remain in `unprocessed_sources`.
 
-## Взаимодействие с авто-захватом
+## Interaction with auto-capture
 
-Правки страниц по этому циклу — не сессионные инсайты. Не запускай `mb learn` по ходу ingest: дубли в `learnings/active` — известный риск (R5). Знание фиксируется в самих страницах и в `changelog`.
+Page edits from this cycle are not session insights. Do not run `mb learn` during an ingest: duplicates in `learnings/active` are a known risk (R5). The knowledge is recorded in the pages themselves and in the `changelog`.
 
-## Диагностика
+## Diagnostics
 
 ```bash
-mb ingest list --status new          # что ещё не переварено
-mb ingest log --limit 20             # история цикла (машинная)
-mb ingest export "D:\backup\sources" # аварийный выгруз raw наружу из .mb/
-mb search "<фраза>" --with-sources   # эскалация: в wiki ответа нет, посмотри в сырье
+mb ingest list --status new          # what is not digested yet
+mb ingest log --limit 20             # the cycle's history (machine-readable)
+mb ingest export "D:\backup\sources" # emergency dump of raw material out of .mb/
+mb search "<phrase>" --with-sources  # escalation: the wiki has no answer, look in the raw material
 ```

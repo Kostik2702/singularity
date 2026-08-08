@@ -1,39 +1,39 @@
 ---
 type: reference
-title: "Workflow Router — соло-разработка"
+title: "Workflow Router — solo development"
 tags: [workflow, router, singularity]
 created: 2026-07-03
 status: active
-source: "порт Genevra COMPLETE_IMPLEMENTATION_WORKFLOW (12 фаз → 8 под соло)"
+source: "COMPLETE_IMPLEMENTATION_WORKFLOW (12 phases -> 8 for solo work)"
 ---
 
-# Workflow Router — соло-разработка
+# Workflow Router — solo development
 
-**Правило C9 (lazy-load):** этот файл только маршрутизирует. Загружай файл фазы ТОЛЬКО при входе в неё — не читай все фазы разом. Помощник: skill `workflow-helper` (fw / wh / next).
+**Rule C9 (lazy-load):** this file only routes. Load a phase file ONLY when entering that phase — never read all the phases at once. The helper: the `workflow-helper` skill (fw / wh / next).
 
-## Карта фаз
+## Phase map
 
-| # | Фаза | Файл | Триггер входа |
+| # | Phase | File | Entry trigger |
 |---|---|---|---|
-| SB | Step-Back | `phase-SB-step-back.md` | любая новая задача — ВСЕГДА первым |
-| 0 | Выбор подхода | `phase-0-approach.md` | после Step-Back |
-| 1 | Investigation | `phase-1-investigation.md` | подход = research/bug |
-| 1.5 | Grill | `phase-1-5-grill.md` | перед планом/дизайном (skill `grill`) |
-| 2 | Planning | `phase-2-planning.md` | investigation закрыта |
-| 3 | Implementation | `phase-3-implementation.md` | план одобрен |
-| 4 | Review | `phase-4-review.md` | код написан |
-| 5 | Verify | `phase-5-verify.md` | ревью пройдено |
-| 6 | Commit | `phase-6-commit.md` | verify зелёный |
-| 7 | Docs + Self-learn | `phase-7-docs-selflearn.md` | закоммичено / задача закрыта |
+| SB | Step-Back | `phase-SB-step-back.md` | any new task — ALWAYS first |
+| 0 | Choosing the approach | `phase-0-approach.md` | after Step-Back |
+| 1 | Investigation | `phase-1-investigation.md` | approach = research/bug |
+| 1.5 | Grill | `phase-1-5-grill.md` | before a plan or design (the `grill` skill) |
+| 2 | Planning | `phase-2-planning.md` | investigation is closed |
+| 3 | Implementation | `phase-3-implementation.md` | the plan is approved |
+| 4 | Review | `phase-4-review.md` | the code is written |
+| 5 | Verify | `phase-5-verify.md` | review is passed |
+| 6 | Commit | `phase-6-commit.md` | verify is green |
+| 7 | Docs + Self-learn | `phase-7-docs-selflearn.md` | committed / the task is closed |
 
-## Сквозные правила (действуют во всех фазах)
+## Cross-cutting rules (they hold in every phase)
 
-- [ ] Активный learnings-док (`learnings/active/<TASK>.md`) существует с фазы SB; каждая фаза ЗАКАНЧИВАЕТСЯ авто-append короткой записи в него (без вопроса пользователю).
+- [ ] The active learnings document (`learnings/active/<TASK>.md`) exists from phase SB onward; every phase ENDS with an auto-appended short entry in it (without asking the user).
 - [ ] [[Core Discipline - SEM-FIRST]] · [[Core Discipline - Never Decide Alone]] · [[Core Discipline - Checkbox Gates]] · [[Core Discipline - Token Economy]].
-- [ ] Фаза не «пройдена», пока её чекбоксы не `[x]`+evidence / `[➖]`+причина.
-- [ ] **Топливный отчёт:** закрывая фазу, печатай одну строку — `⛽ <фаза>: N токенов`. Источник — `mb usage --session <id> --brief --from <индекс первого хода фазы>`: команда сама печатает одну строку и ничего больше. `--session` ОБЯЗАТЕЛЕН: по умолчанию берётся самая свежая сессия на машине, и параллельно запущенная чужая работа подменит цифры (проверка: id в начале строки должен совпасть с текущей сессией). Индекс берётся из `--brief` предыдущей фазы, так что арифметики и промежуточных файлов не нужно. `--json` в контекст не выводить никогда: он весит ~8k токенов, то есть измерение расхода становится главной статьёй расхода.
-- [ ] Пропуск фазы — легален (мелкая правка не требует plc), но помечается `[➖]` с причиной в learnings.
+- [ ] A phase is not "passed" until its checkboxes are `[x]`+evidence or `[➖]`+reason.
+- [ ] **Fuel report:** when closing a phase, print one line — `⛽ <phase>: N tokens`. The source is `mb usage --session <id> --brief --from <index of the phase's first turn>`: the command prints one line itself and nothing else. `--session` is MANDATORY: by default it takes the freshest session on the machine, and somebody else's work running in parallel will substitute the figures (check: the id at the start of the line must match the current session). The index comes from the previous phase's `--brief`, so no arithmetic and no intermediate files are needed. Never print `--json` into the context: it weighs ~8k tokens, which makes measuring the spend the largest item of spend.
+- [ ] Skipping a phase is legal (a small edit does not need plc), but it is marked `[➖]` with a reason in the learnings.
 
-## Отличия от Genevra (12 фаз, команда)
+## Differences from the 12-phase team flow
 
-Убрано: PR-description для команды, related-repos, persistent-QA, demo-prep, memory-PR, командное ревью. Добавлено: явный verify-гейт (реально прогнать), self-learn в финале. Решение: [[00_Vision_And_Principles]] (owner: user).
+Removed: the PR description for a team, related repos, persistent QA, demo prep, the memory PR, team review. Added: an explicit verify gate (actually run it) and self-learn at the end. Decision: [[00_Vision_And_Principles]] (owner: user).

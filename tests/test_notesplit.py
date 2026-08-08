@@ -33,21 +33,21 @@ status: active
 
 # Singularity Brain
 
-Что ассистент должен знать в каждой сессии этого проекта.
+What the assistant must know in every session of this project.
 
-## Архитектура
+## Architecture
 
-Ядро на Python, тонкий платформенный слой.
-Демон держит модель тёплой и слушает только 127.0.0.1.
+A Python core with a thin platform layer.
+The daemon keeps the model warm and listens on 127.0.0.1 only.
 
-## Гейты
+## Gates
 
-Каждый чекбокс — исполняемый гейт.
-Инвариант доказывается посадкой нарушения.
+Every checkbox is an executable gate.
+An invariant is proven by planting a violation.
 
-## Ловушки
+## Traps
 
-Пайп поверх тестовой команды глотает exit-код.
+A pipe over the test command swallows the exit code.
 """
 
 
@@ -75,7 +75,7 @@ def brain(cfg):
 def test_plan_makes_one_child_per_section():
     p = notesplit.plan(NOTE, "reference/Singularity Brain.md", "2026-08-05", 6)
     assert p.ok
-    assert [c.heading for c in p.children] == ["Архитектура", "Гейты", "Ловушки"]
+    assert [c.heading for c in p.children] == ["Architecture", "Gates", "Traps"]
     assert all(c.rel_path.startswith("reference/") for c in p.children)
 
 
@@ -85,8 +85,8 @@ def test_plan_preserves_every_line():
     p = notesplit.plan(NOTE, "reference/Singularity Brain.md", "2026-08-05", 6)
     assert notesplit.content_is_preserved(NOTE, p)
     joined = p.parent_text + "".join(c.text for c in p.children)
-    assert "Пайп поверх тестовой команды глотает exit-код." in joined
-    assert "Демон держит модель тёплой и слушает только 127.0.0.1." in joined
+    assert "A pipe over the test command swallows the exit code." in joined
+    assert "The daemon keeps the model warm and listens on 127.0.0.1 only." in joined
 
 
 def test_plan_links_both_directions():
@@ -112,7 +112,7 @@ def test_children_inherit_type_and_project_but_not_status():
 
 
 def test_duplicate_headings_do_not_collide():
-    note = "---\ntype: reference\ntitle: \"X\"\n---\n\n# X\n\n## Дубль\n\na\n\n## Дубль\n\nb\n"
+    note = "---\ntype: reference\ntitle: \"X\"\n---\n\n# X\n\n## Duplicate\n\na\n\n## Duplicate\n\nb\n"
     p = notesplit.plan(note, "reference/X.md", "2026-08-05", 5)
     stems = [c.stem for c in p.children]
     assert len(set(stems)) == len(stems), f"two files would share a name: {stems}"
@@ -130,16 +130,16 @@ def test_a_note_without_sections_is_refused_with_a_reason():
 def test_split_writes_index_and_children(wired, cfg, brain, capsys):
     rc = cli.main(["note", "split", "reference/Singularity Brain.md"])
     assert rc == 0
-    for name in ("Singularity Brain - Архитектура", "Singularity Brain - Гейты",
-                 "Singularity Brain - Ловушки"):
+    for name in ("Singularity Brain - Architecture", "Singularity Brain - Gates",
+                 "Singularity Brain - Traps"):
         assert (cfg.vault / "reference" / f"{name}.md").is_file(), f"{name} not written"
     index = brain.read_text(encoding="utf-8")
-    assert "## Разделы" in index
+    assert "## Sections" in index
     # The FIRST line of a section survives as its index summary by design — that
     # is what tells the reader whether to open the link. Everything after it is
     # what must have moved out.
-    assert "Ядро на Python" in index, "the index entry should summarise its child"
-    assert "Демон держит модель тёплой" not in index, "detail stayed in the index"
+    assert "A Python core" in index, "the index entry should summarise its child"
+    assert "keeps the model warm" not in index, "detail stayed in the index"
 
 
 def test_dry_run_writes_nothing(wired, cfg, brain, capsys):
@@ -147,14 +147,14 @@ def test_dry_run_writes_nothing(wired, cfg, brain, capsys):
     rc = cli.main(["note", "split", "reference/Singularity Brain.md", "--dry-run"])
     assert rc == 0
     assert brain.read_text(encoding="utf-8") == before
-    assert not (cfg.vault / "reference" / "Singularity Brain - Гейты.md").exists()
+    assert not (cfg.vault / "reference" / "Singularity Brain - Gates.md").exists()
     assert "dry run" in capsys.readouterr().out
 
 
 def test_occupied_destination_aborts_before_any_write(wired, cfg, brain, capsys):
     """All-or-nothing: one taken name must not leave two children on disk and
     a rewritten parent pointing at a third that was never created."""
-    clash = cfg.vault / "reference" / "Singularity Brain - Гейты.md"
+    clash = cfg.vault / "reference" / "Singularity Brain - Gates.md"
     clash.write_text("mine\n", encoding="utf-8")
     before = brain.read_text(encoding="utf-8")
 
@@ -163,7 +163,7 @@ def test_occupied_destination_aborts_before_any_write(wired, cfg, brain, capsys)
     assert "already exist" in capsys.readouterr().err
     assert clash.read_text(encoding="utf-8") == "mine\n", "clobbered a foreign note"
     assert brain.read_text(encoding="utf-8") == before, "parent rewritten anyway"
-    assert not (cfg.vault / "reference" / "Singularity Brain - Архитектура.md").exists(), \
+    assert not (cfg.vault / "reference" / "Singularity Brain - Architecture.md").exists(), \
         "a child was written before the abort"
 
 

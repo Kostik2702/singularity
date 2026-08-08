@@ -2,7 +2,7 @@
 
 Commands: {"cmd":"ping"} | {"cmd":"reload"} | {"cmd":"search", ...} |
 {"cmd":"index", "action":"update|rebuild", "files":[...]}
-(the Genevra reload bug `command` vs `cmd` is fixed here: only `cmd`).
+(the predecessor's reload bug `command` vs `cmd` is fixed here: only `cmd`).
 
 Loopback-only bind; actual port is written to .mb/daemon.port so the client
 never guesses (config daemon_port=0 -> OS picks a free one).

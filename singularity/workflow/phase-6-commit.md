@@ -8,11 +8,11 @@ status: active
 
 # Phase 6 — Commit
 
-Родитель: `_router.md`.
+Parent: `_router.md`.
 
-- [ ] `git status` — в стейдже ровно то, что относится к задаче (ни мусора, ни забытого).
-- [ ] Ветка верная (не чужая/не случайный master в чужом репо); коммитит пользователь или ассистент по явной просьбе.
-- [ ] Сообщение: что + зачем (не «fix», а суть); ссылка на задачу, если есть.
-- [ ] Хуки коммита не обходить (--no-verify запрещён без явного указания пользователя).
+- [ ] `git status` — the stage holds exactly what belongs to the task (no rubbish, nothing forgotten).
+- [ ] The branch is the right one (not somebody else's, not an accidental master in somebody else's repo); the commit is made by the user, or by the assistant on an explicit request.
+- [ ] The message says what and why (not "fix" but the substance); a link to the task if there is one.
+- [ ] Commit hooks are not bypassed (--no-verify is forbidden without an explicit instruction from the user).
 
-**Выход:** закоммичено → `phase-7-docs-selflearn.md`.
+**Exit:** committed → `phase-7-docs-selflearn.md`.

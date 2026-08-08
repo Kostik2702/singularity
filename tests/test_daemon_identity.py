@@ -29,9 +29,9 @@ def test_pid_create_time_self():
 
 def test_write_json_atomic_roundtrip(tmp_path):
     p = tmp_path / "s.json"
-    proc.write_json_atomic(p, {"a": 1, "b": "два"})
+    proc.write_json_atomic(p, {"a": 1, "b": "two"})
     import json
-    assert json.loads(p.read_text(encoding="utf-8")) == {"a": 1, "b": "два"}
+    assert json.loads(p.read_text(encoding="utf-8")) == {"a": 1, "b": "two"}
     assert not list(tmp_path.glob("*.tmp"))
 
 

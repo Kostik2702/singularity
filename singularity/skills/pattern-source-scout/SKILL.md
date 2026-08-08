@@ -1,42 +1,42 @@
 ---
 name: pattern-source-scout
-description: Бриф → воспроизводимый shortlist инсталлируемых motion/3D/component-паттернов из внешних экосистем (21st, React Bits, three.js examples, Motion Primitives, GSAP) с лицензиями, score 100 и HTML review board для приёмки владельцем. Тонкая обёртка над CLI `pattern-scout`. Use when "найди компоненты", "какие есть готовые паттерны", pattern shortlist, "installable примеры под бриф", подбор motion/3D кандидатов до adaptaion/intake.
+description: Brief → a reproducible shortlist of installable motion/3D/component patterns from external ecosystems (21st, React Bits, three.js examples, Motion Primitives, GSAP) with licences, a score out of 100 and an HTML review board for the owner's acceptance. A thin wrapper over the `pattern-scout` CLI. Use when "find components", "what ready-made patterns exist", pattern shortlist, "installable examples for the brief", selecting motion/3D candidates before adaptation/intake.
 ---
 
-# pattern-source-scout — бриф → shortlist кандидатов
+# pattern-source-scout — brief → a shortlist of candidates
 
-Вся детерминированная работа — CLI `pattern-scout` (движок, контракт `singularity/providers/CONTRACT.md`, provider-catalog/1). Скил: строит запросы, интерпретирует score/hard-fails, ведёт review board к owner gate. **Найденный код НИКОГДА не исполняется на этом этапе** — установка только через quarantine intake (E03).
+All the deterministic work lives in the `pattern-scout` CLI (the engine, contract `singularity/providers/CONTRACT.md`, provider-catalog/1). The skill builds the queries, interprets scores and hard fails, and carries the review board to the owner gate. **Code that is found is NEVER executed at this stage** — installation happens only through quarantine intake (E03).
 
-> **Правило нулевого кода:** поиск/нормализация/кэш/score/board — субкоманды `pattern-scout`. Новый источник = строка registry.json. 0 новых скриптов.
+> **Zero-code rule:** search, normalisation, cache, score and board are `pattern-scout` subcommands. A new source is a line in registry.json. 0 new scripts.
 
-## Порядок
+## The order
 
 ```bash
-pattern-scout probe --json     # здоровье провайдеров (evaluative: >=1 live)
+pattern-scout probe --json     # provider health (evaluative: >=1 live)
 
 pattern-scout search \
   --query "code rain" --query "terminal background" --query "scroll narrative" \
   --capability particles --capability scroll-linked \
-  --out "<evidence-dir ВНЕ проекта>" --board --profile static-lite
-# PSCOUT_PROTECTED_ROOTS=<project> запрещает запись в проект.
-# -> candidates.json (typed) + review-board.html (scored, для владельца)
+  --out "<evidence dir OUTSIDE the project>" --board --profile static-lite
+# PSCOUT_PROTECTED_ROOTS=<project> forbids writing into the project.
+# -> candidates.json (typed) + review-board.html (scored, for the owner)
 ```
 
-## Query expansion (LLM-часть)
+## Query expansion (the LLM part)
 
-Из брифа/мудборда — 3-6 коротких EN-запросов: приём («code rain»), поверхность («terminal background»), паттерн («scroll narrative»). RU дублировать не надо (экосистемы EN). Capability-фильтр из таксономии §3 контракта — опечатка в capability даёт громкий exit 2, не пустой результат.
+From the brief or moodboard, produce 3-6 short queries: a device ("code rain"), a surface ("terminal background"), a pattern ("scroll narrative"). The ecosystems are English-language, so write the queries in English regardless of the language of the brief. The capability filter comes from the taxonomy in contract §3 — a typo in a capability gives a loud exit 2, not an empty result.
 
-## Как читать выдачу
+## How to read the output
 
-- `importable=false` + `import_block_reason` — жёсткий гейт §2: `license unknown` (весь 21st!), paid (report-only), reference-only, remote-code. Это НЕ дефект кандидата — это статус «нельзя тащить без отдельной проверки».
-- `stale=true` — кандидат из кэша при недоступном провайдере; перед shortlist перепроверить живьём.
-- Score 100 — только для сортировки shortlist (компоненты и evidence в details карточки): brief-fit 25 / license 20 / stack 15 / perf 15 / deps 10 / a11y 10 / freshness 5. Неизвестное получает нейтральный default, никогда max — кандидат не выигрывает на отсутствии данных.
-- `providers` statuses: `unavailable:*+cache` — провайдер лежит, выдача из кэша; run валиден.
+- `importable=false` plus `import_block_reason` is the hard gate of §2: `license unknown` (all of 21st!), paid (report-only), reference-only, remote-code. This is NOT a defect of the candidate — it is the status "cannot be pulled in without a separate check".
+- `stale=true` means a candidate came from the cache while the provider was unreachable; re-check it live before shortlisting.
+- The score out of 100 is only for sorting the shortlist (the components and their evidence are in the card's details): brief-fit 25 / license 20 / stack 15 / perf 15 / deps 10 / a11y 10 / freshness 5. Anything unknown gets a neutral default, never the maximum — a candidate must not win on missing data.
+- `providers` statuses: `unavailable:*+cache` means the provider is down and the output came from the cache; the run is still valid.
 
-## Гейты
+## Gates
 
-- [ ] Никакой установки/исполнения кандидатов — только метаданные и board. Установка = E03 quarantine.
-- [ ] `license=unknown` не помечается importable ни при каких условиях (контракт enforce'ит, скил не обходит).
-- [ ] **Лицензия читается ДО того, как кандидат назван в рекомендации, а не перед вендорингом.** К моменту проверки решение уже принято, и отзывать рекомендацию дороже, чем не давать её. Поле лицензии на GitHub — результат автоопределения: `Other`/`NOASSERTION` значит «GitHub её не узнал», а не «лицензии нет», и требует открыть сам `LICENSE` и прочитать текст на коммерческое использование, раскрытие, требование спонсорства, вирусность (GPL/AGPL).
-- [ ] Shortlist/art-direction подтверждает владелец по review-board.html (human gate §12) — board сам по себе не approval.
-- [ ] Прогон (запросы, статусы, счётчики, путь board) — в learnings через `mb learn`.
+- [ ] No installing or executing candidates — metadata and the board only. Installation is E03 quarantine.
+- [ ] `license=unknown` is never marked importable under any circumstances (the contract enforces it, and the skill does not route around it).
+- [ ] **The licence is read BEFORE the candidate is named in a recommendation, not before vendoring.** By the time of the check the decision is already made, and withdrawing a recommendation costs more than not giving it. The licence field on GitHub is the result of auto-detection: `Other`/`NOASSERTION` means "GitHub did not recognise it", not "there is no licence", and requires opening `LICENSE` itself and reading the text for commercial use, disclosure, a sponsorship requirement, and virality (GPL/AGPL).
+- [ ] The shortlist and art direction are confirmed by the owner from review-board.html (human gate §12) — the board is not approval by itself.
+- [ ] The run (queries, statuses, counters, the board's path) goes into the learnings via `mb learn`.

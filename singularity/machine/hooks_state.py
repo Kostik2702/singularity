@@ -29,17 +29,17 @@ GROK_HOOK_FILE = "singularity.json"
 # the Gemini ~/.gemini/GEMINI.md managed block — one source so the three
 # clients cannot drift apart on what "stop hooks" means or how to act on it.
 CAPTURE_HOOKS_FRAGMENT = """## Capture/stop hooks control
-User intent (RU or EN) like "включи/выключи/покажи stop hooks", "enable/disable/status
-capture hooks", "включи/выключи auto-capture" means ONLY the capture/stop reminder hook —
-never SessionStart/recall and never any guard hook. Run the deterministic CLI, never
-hand-edit settings.json:
+A request to enable, disable or show the status of the stop / capture / auto-capture
+hooks — in whatever language it is phrased — means ONLY the capture/stop reminder
+hook, never SessionStart/recall and never any guard hook. Run the deterministic CLI,
+never hand-edit settings.json:
 ```
 mb hooks status [--json]
 mb hooks enable
 mb hooks disable
 ```
 After enable/disable, always run `mb hooks status` and report the effective state back.
-A vague "выключи все хуки" / "disable all hooks" does NOT mean capture hooks by default —
+A vague "turn off all the hooks" does NOT mean the capture hooks by default —
 confirm scope with the user before running a command."""
 
 # One fragment, not two. `MEMORY_WRITES_FRAGMENT` and `VAULT_WRITE_POLICY_FRAGMENT`
@@ -47,7 +47,7 @@ confirm scope with the user before running a command."""
 # and disagreed on the one case that matters: the first said a new note is
 # `mb note new`, the second opened with "write **directly** to the vault path".
 # `mb-memory/SKILL.md` and the guard side with the first. Two texts at one decision
-# point is exactly what [[Rule - правило звучит в точке принятия решения]] forbids,
+# point is exactly what [[Rule - a rule is spoken at the point of decision]] forbids,
 # and the counter-text wins by default — so the fix is one text.
 #
 # Incident behind the staging half (2026-07-13, [[Error - Vault staging duplicates]]):
@@ -56,8 +56,8 @@ confirm scope with the user before running a command."""
 # lost, but for a while the machine had two working sets and only a hash audit could
 # say which was authoritative.
 MEMORY_WRITES_FRAGMENT = """## The vault: what it is, and how anything gets into it
-- "память" / "memory" / "запомни" / `um` in the user's words = THE VAULT, not the
-  harness-local store. "Закоммить память" = commit and push it.
+- "memory" / "remember this" / `um` from the user, in any language = THE VAULT, not
+  the harness-local store. "Commit the memory" = commit and push it.
 - The vault holds KNOWLEDGE. Rules, checklists and skill instructions are mechanism
   and ship with the engine — never make the machine's behaviour depend on which
   vault is configured.
@@ -65,11 +65,10 @@ MEMORY_WRITES_FRAGMENT = """## The vault: what it is, and how anything gets into
   `mb note new <type> "<title>"`, always: it brings the template, `source:` and
   routing, and the guard flags a hand-made one. Insight — `mb learn`. Config —
   `mb config set`. Editing an EXISTING note with Edit/Write is the normal path.
-- Never build an editable mirror, staging copy or scratch draft of a vault document
-  elsewhere and copy it back — a second working copy is a second source of truth
-  until someone diffs them. External folders are INPUT, or an export that was asked
-  for. Blocked from writing? STOP and say so, then ask for a vault-native path —
-  do not route around it.
+- Never build an editable mirror, staging copy or draft of a vault document elsewhere
+  and copy it back — a second working copy is a second source of truth until someone
+  diffs them. External folders are INPUT, or an export that was asked for. Blocked
+  from writing? STOP and say so, then ask for a vault-native path.
 - Searching is a command too: `mb search` over grep, `mb curator gaps` over walking
   links. Reading vault files, and copying INTO the vault, are always fine."""
 

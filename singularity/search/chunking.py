@@ -1,6 +1,6 @@
 """Markdown chunking for the vault index.
 
-Ported from Genevra search-all.py::extract_memory_chunks (see vault:
+Ported from the predecessor's extract_memory_chunks (see vault:
 Semantic_Search_Deep_Dive §3.2) with Obsidian extensions:
   * [[wikilinks]] / inline #tags / frontmatter aliases -> chunk metadata
   * aliases participate in the embedded text as title synonyms
@@ -35,10 +35,13 @@ _MD_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 _BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
 _CALLOUT_RE = re.compile(r"^>\s*\[![\w-]+\][+-]?\s*", re.MULTILINE)
 _QUOTE_RE = re.compile(r"^>\s?", re.MULTILINE)
-_INLINE_TAG_RE = re.compile(r"(?:^|\s)#([\w/\-а-яА-ЯёЁ]+)")
+#: `\w` is Unicode-aware on str, so this matches a tag in any script; the
+#: previous form spelled out Cyrillic beside it, which added nothing and read
+#: as though other alphabets were excluded.
+_INLINE_TAG_RE = re.compile(r"(?:^|\s)#([\w/\-]+)")
 _WS_RE = re.compile(r"\s+")
 
-# folder -> note type (Genevra _infer_type, adapted to the vault layout)
+# folder -> note type (_infer_type, adapted to the vault layout)
 _TYPE_BY_FOLDER = {
     "learnings": "learning",
     "decisions": "decision",
@@ -52,7 +55,7 @@ _TYPE_BY_FOLDER = {
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
-    """Return (frontmatter dict, body). Tolerates missing PyYAML (Genevra fallback)."""
+    """Return (frontmatter dict, body). Tolerates missing PyYAML (fallback parser)."""
     if not text.startswith("---"):
         return {}, text
     end = text.find("\n---", 3)
@@ -215,7 +218,7 @@ def extract_chunks(path: Path, rel_path: str,
             header, _, rest = section_block.partition("\n")
             section = header[3:].strip()
         else:
-            section = title  # preamble before first ## (Genevra: section 0)
+            section = title  # preamble before first ## (section 0)
             rest = section_block
         content, wikilinks, inline_tags = _clean_section(rest)
         if len(content) < MIN_CHUNK_CHARS:

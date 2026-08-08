@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: "Comprehensive code review after a feature or fix is implemented: three-pass review (correctness, patterns, edge cases) with security/performance/quality checks and severity-graded findings. Spawn when changes are ready for review or before merge. Triggers: review, code review, check the diff, ready to merge?, ревью, проверь код, проверь изменения, готово к мержу?"
+description: "Comprehensive code review after a feature or fix is implemented: three-pass review (correctness, patterns, edge cases) with security/performance/quality checks and severity-graded findings. Spawn when changes are ready for review or before merge. Triggers: review, code review, check the diff, check the changes, ready to merge?"
 ---
 
 ## ⚠️ MANDATORY: Read `{{AGENTS}}/AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️

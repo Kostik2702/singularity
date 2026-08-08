@@ -1,0 +1,1332 @@
+{
+ "taken_at": "2026-08-08T17:28:05",
+ "top_k": 5,
+ "note": "re-record after the 2026-08-08 translation re-worded the ten control questions; daemon restarted first so it serves the current modules",
+ "stats": {
+  "present": true,
+  "notes": 543,
+  "chunks": 5585,
+  "by_type": {
+   "changelog": 382,
+   "decision": 421,
+   "epic": 27,
+   "howto": 257,
+   "incident": 108,
+   "learning": 919,
+   "project": 26,
+   "reference": 2872,
+   "rule": 392,
+   "task": 181
+  },
+  "chars_indexed": 3350275,
+  "avg_chunks_per_note": 10.29,
+  "duplicate_chunks": 3,
+  "chunk_schema": 3,
+  "vault_notes": 543,
+  "unindexed": 0,
+  "sources": {
+   "documents": 48,
+   "stored": 48,
+   "by_status": {
+    "new": 3,
+    "processed": 45
+   },
+   "derived_notes": 139,
+   "chunks": 1931,
+   "indexed_at": "2026-08-05T03:28:44"
+  },
+  "code": {
+   "configured": true,
+   "present": true,
+   "root": "/Users/konstantingritsuk/projects",
+   "files": 272,
+   "chunks": 3528,
+   "chunk_schema": 1,
+   "indexed_at": "2026-08-08T03:08:52",
+   "repos": {
+    "singularity": 3528
+   },
+   "by_kind": {
+    "class": 76,
+    "const": 2,
+    "enum": 1,
+    "function": 3152,
+    "interface": 1,
+    "lines": 18,
+    "method": 278
+   },
+   "excluded": []
+  }
+ },
+ "variants": {
+  "baseline": [
+   {
+    "id": "Q01",
+    "kind": "decision",
+    "query": "why is the index rebuilt in full",
+    "top": [
+     {
+      "file": "learnings/active/SINGULARITY-AUDIT.md",
+      "chunk_id": "learnings/active/SINGULARITY-AUDIT.md#7.1",
+      "score": 0.5446,
+      "source": "memory",
+      "type": "learning",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "2026-07-11 14:09"
+     },
+     {
+      "file": "reference/Claude-Code-Prompt-Library.md",
+      "chunk_id": "reference/Claude-Code-Prompt-Library.md#7.0",
+      "score": 0.0895,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Operate"
+     },
+     {
+      "file": "howto/Migrate Singularity vault_ engine and projects to another drive.md",
+      "chunk_id": "howto/Migrate Singularity vault_ engine and projects to another drive.md#4.1",
+      "score": 0.5045,
+      "source": "memory",
+      "type": "howto",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Порядок выполнения"
+     },
+     {
+      "file": "reference/Claude-Code-Prompt-Library.md",
+      "chunk_id": "reference/Claude-Code-Prompt-Library.md#5.5",
+      "score": 0.1814,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Build"
+     },
+     {
+      "file": "decisions/WIKI-LOOP D2 - отдельный индекс sources_index.md",
+      "chunk_id": "decisions/WIKI-LOOP D2 - отдельный индекс sources_index.md#2.2",
+      "score": 0.5001,
+      "source": "memory",
+      "type": "decision",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Решение"
+     }
+    ],
+    "engine_ms": 11.2,
+    "wall_ms": 52.2,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q02",
+    "kind": "howto",
+    "query": "how to add a new corpus to semantic search",
+    "top": [
+     {
+      "file": "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md",
+      "chunk_id": "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md#3.3",
+      "score": 0.6153,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "3. search-all.py (581 строк) — memory-индексация + единая точка поиска"
+     },
+     {
+      "file": "reference/Claude-Code-Prompt-Library.md",
+      "chunk_id": "reference/Claude-Code-Prompt-Library.md#3.1",
+      "score": 0.2317,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Discover"
+     },
+     {
+      "file": "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md",
+      "chunk_id": "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md#3.1",
+      "score": 0.5955,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "3. search-all.py (581 строк) — memory-индексация + единая точка поиска"
+     },
+     {
+      "file": "reference/Claude-Code-Prompt-Library.md",
+      "chunk_id": "reference/Claude-Code-Prompt-Library.md#5.0",
+      "score": 0.239,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Build"
+     },
+     {
+      "file": "03_Tasks/TASK-06_Search_Client_And_TokenEconomy.md",
+      "chunk_id": "03_Tasks/TASK-06_Search_Client_And_TokenEconomy.md#6.0",
+      "score": 0.5843,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Ссылки"
+     }
+    ],
+    "engine_ms": 11.7,
+    "wall_ms": 52.2,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q03",
+    "kind": "incident",
+    "query": "Glob on Windows silently returns an empty result",
+    "top": [
+     {
+      "file": "incidents/Error - Glob subdir pattern silent empty on Windows.md",
+      "chunk_id": "incidents/Error - Glob subdir pattern silent empty on Windows.md#0.0",
+      "score": 0.6943,
+      "source": "memory",
+      "type": "incident",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": null
+     },
+     {
+      "file": "incidents/Error - Glob subdir pattern silent empty on Windows.md",
+      "chunk_id": "incidents/Error - Glob subdir pattern silent empty on Windows.md#6.0",
+      "score": 0.6768,
+      "source": "memory",
+      "type": "incident",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Lesson"
+     }
+    ],
+    "engine_ms": 11.3,
+    "wall_ms": 52.6,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q04",
+    "kind": "reference",
+    "query": "atomic commit of index generations and torn-write protection",
+    "top": [
+     {
+      "file": "03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md",
+      "chunk_id": "03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md#2.0",
+      "score": 0.5175,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "2. Архитектурные решения"
+     },
+     {
+      "file": "learnings/active/SINGULARITY-AUDIT.md",
+      "chunk_id": "learnings/active/SINGULARITY-AUDIT.md#7.0",
+      "score": 0.5472,
+      "source": "memory",
+      "type": "learning",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "2026-07-11 14:09"
+     },
+     {
+      "file": "reference/Singularity Incoming Fork Integration Specification.md",
+      "chunk_id": "reference/Singularity Incoming Fork Integration Specification.md#9.1",
+      "score": 0.546,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "9. Functional requirements"
+     },
+     {
+      "file": "03_Tasks/SINGULARITY_INCOMING_FORK_IMPLEMENTATION.md",
+      "chunk_id": "03_Tasks/SINGULARITY_INCOMING_FORK_IMPLEMENTATION.md#13.1",
+      "score": 0.4545,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "T11 — Digest planner и progress journal"
+     },
+     {
+      "file": "rules/Доказательный замер перепроверять при смене популяции_ которую он мерит.md",
+      "chunk_id": "rules/Доказательный замер перепроверять при смене популяции_ которую он мерит.md#2.1",
+      "score": 0.5249,
+      "source": "memory",
+      "type": "rule",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Почему (какой сбой это ловит)"
+     }
+    ],
+    "engine_ms": 11.9,
+    "wall_ms": 52.8,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q05",
+    "kind": "incident",
+    "query": "TLS MITM certificate when downloading a model from Hugging Face",
+    "top": [
+     {
+      "file": "03_Tasks/SINGULARITY-HF-CACHE-WATCHER-ISSUE.md",
+      "chunk_id": "03_Tasks/SINGULARITY-HF-CACHE-WATCHER-ISSUE.md#4.0",
+      "score": 0.5107,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Root cause"
+     },
+     {
+      "file": "decisions/Embedding model lifecycle_ local snapshot _ daemon-resident indexing.md",
+      "chunk_id": "decisions/Embedding model lifecycle_ local snapshot _ daemon-resident indexing.md#3.0",
+      "score": 0.43,
+      "source": "memory",
+      "type": "decision",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Кто и когда"
+     },
+     {
+      "file": "decisions/Embedding model lifecycle_ local snapshot _ daemon-resident indexing.md",
+      "chunk_id": "decisions/Embedding model lifecycle_ local snapshot _ daemon-resident indexing.md#1.0",
+      "score": 0.4202,
+      "source": "memory",
+      "type": "decision",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Контекст"
+     },
+     {
+      "file": "learnings/active/COMFY-MINIMAX-H3.md",
+      "chunk_id": "learnings/active/COMFY-MINIMAX-H3.md#2.0",
+      "score": 0.5653,
+      "source": "memory",
+      "type": "learning",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "2026-08-04 10:15"
+     },
+     {
+      "file": "howto/Avast Free - exclusions in registry and removing it from the network stack.md",
+      "chunk_id": "howto/Avast Free - exclusions in registry and removing it from the network stack.md#8.0",
+      "score": 0.3852,
+      "source": "memory",
+      "type": "howto",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Связанное"
+     }
+    ],
+    "engine_ms": 12.5,
+    "wall_ms": 53.2,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q06",
+    "kind": "rule",
+    "query": "what must be written to memory after a task",
+    "top": [
+     {
+      "file": "rules/Rule - память означает vault.md",
+      "chunk_id": "rules/Rule - память означает vault.md#4.0",
+      "score": 0.5829,
+      "source": "memory",
+      "type": "rule",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Где вживлено (2026-08-05)"
+     },
+     {
+      "file": "incidents/Error - Vault staging duplicates.md",
+      "chunk_id": "incidents/Error - Vault staging duplicates.md#2.0",
+      "score": 0.3132,
+      "source": "memory",
+      "type": "incident",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "What was expected"
+     },
+     {
+      "file": "02_New_System_Design/04_Skills_Workflows_Automations.md",
+      "chunk_id": "02_New_System_Design/04_Skills_Workflows_Automations.md#2.3",
+      "score": 0.5792,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "2. Skills — план переноса"
+     },
+     {
+      "file": "reference/Claude-Code-Prompt-Library.md",
+      "chunk_id": "reference/Claude-Code-Prompt-Library.md#5.8",
+      "score": 0.4276,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Build"
+     },
+     {
+      "file": "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md",
+      "chunk_id": "rules/Rule - перед архивацией вынести знание в индексируемые заметки.md#4.0",
+      "score": 0.5723,
+      "source": "memory",
+      "type": "rule",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Где вживлено"
+     }
+    ],
+    "engine_ms": 11.6,
+    "wall_ms": 52.2,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q07",
+    "kind": "reference",
+    "query": "how the nightly run works and which steps it has",
+    "top": [
+     {
+      "file": "reference/Выбор секции трека - сначала тембр, потом форма.md",
+      "chunk_id": "reference/Выбор секции трека - сначала тембр, потом форма.md#1.0",
+      "score": 0.4902,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Что считает `tempo --sections`"
+     },
+     {
+      "file": "reference/Claude-Code-Prompt-Library.md",
+      "chunk_id": "reference/Claude-Code-Prompt-Library.md#3.0",
+      "score": 0.1147,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Discover"
+     },
+     {
+      "file": "rules/Session end with remaining epic tasks must produce a ready-to-use continuation prompt.md",
+      "chunk_id": "rules/Session end with remaining epic tasks must produce a ready-to-use continuation prompt.md#4.0",
+      "score": 0.4686,
+      "source": "memory",
+      "type": "rule",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Где вживлено (2026-08-05)"
+     },
+     {
+      "file": "reference/Claude-Code-Prompt-Library.md",
+      "chunk_id": "reference/Claude-Code-Prompt-Library.md#3.1",
+      "score": 0.1118,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Discover"
+     },
+     {
+      "file": "learnings/active/SINGULARITY-WIKI.md",
+      "chunk_id": "learnings/active/SINGULARITY-WIKI.md#5.0",
+      "score": 0.4673,
+      "source": "memory",
+      "type": "learning",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "2026-07-28 23:18"
+     }
+    ],
+    "engine_ms": 11.8,
+    "wall_ms": 52.3,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q08",
+    "kind": "decision",
+    "query": "is a watcher over code repositories needed",
+    "top": [
+     {
+      "file": "decisions/CODE-INDEX D4 - без watcher по коду.md",
+      "chunk_id": "decisions/CODE-INDEX D4 - без watcher по коду.md#0.0",
+      "score": 0.5653,
+      "source": "memory",
+      "type": "decision",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": null
+     },
+     {
+      "file": "howto/Поиск по коду - корпус code_index.md",
+      "chunk_id": "howto/Поиск по коду - корпус code_index.md#3.0",
+      "score": 0.5851,
+      "source": "memory",
+      "type": "howto",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Поддерживать"
+     },
+     {
+      "file": "03_Tasks/SINGULARITY-HF-CACHE-WATCHER-ISSUE.md",
+      "chunk_id": "03_Tasks/SINGULARITY-HF-CACHE-WATCHER-ISSUE.md#10.0",
+      "score": 0.3198,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Definition of Done"
+     },
+     {
+      "file": "decisions/CODE-INDEX D4 - без watcher по коду.md",
+      "chunk_id": "decisions/CODE-INDEX D4 - без watcher по коду.md#4.0",
+      "score": 0.5712,
+      "source": "memory",
+      "type": "decision",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Отклонённая альтернатива"
+     },
+     {
+      "file": "03_Tasks/SINGULARITY-HF-CACHE-WATCHER-ISSUE.md",
+      "chunk_id": "03_Tasks/SINGULARITY-HF-CACHE-WATCHER-ISSUE.md#11.0",
+      "score": 0.4269,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Confidence"
+     }
+    ],
+    "engine_ms": 10.9,
+    "wall_ms": 52.3,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q09",
+    "kind": "reference",
+    "query": "markdown chunking overlapping windows and minimum chunk size",
+    "top": [
+     {
+      "file": "incidents/CSS grid minimum size blocks inner scroll container.md",
+      "chunk_id": "incidents/CSS grid minimum size blocks inner scroll container.md#0.0",
+      "score": 0.4198,
+      "source": "memory",
+      "type": "incident",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": null
+     },
+     {
+      "file": "incidents/CSS grid minimum size blocks inner scroll container.md",
+      "chunk_id": "incidents/CSS grid minimum size blocks inner scroll container.md#4.0",
+      "score": 0.3906,
+      "source": "memory",
+      "type": "incident",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Root cause"
+     },
+     {
+      "file": "03_Tasks/SINGULARITY_AUDIT_BACKLOG.md",
+      "chunk_id": "03_Tasks/SINGULARITY_AUDIT_BACKLOG.md#4.0",
+      "score": 0.4739,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "AUD-03 [P1] Windowed chunking без потери текста"
+     }
+    ],
+    "engine_ms": 11.2,
+    "wall_ms": 52.0,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q10",
+    "kind": "learning",
+    "query": "why search answers slowly and what the cold fallback is",
+    "top": [
+     {
+      "file": "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md",
+      "chunk_id": "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md#1.0",
+      "score": 0.4767,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "1. Архитектура (высокоуровнево)"
+     },
+     {
+      "file": "reference/Claude-Code-Prompt-Library.md",
+      "chunk_id": "reference/Claude-Code-Prompt-Library.md#4.1",
+      "score": 0.1872,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Design"
+     },
+     {
+      "file": "reference/Учёт токенов по транскрипту Claude Code.md",
+      "chunk_id": "reference/Учёт токенов по транскрипту Claude Code.md#3.0",
+      "score": 0.4765,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Цена хода и цена переноса — разные вопросы, и второй важнее"
+     },
+     {
+      "file": "reference/Claude-Code-Prompt-Library.md",
+      "chunk_id": "reference/Claude-Code-Prompt-Library.md#3.1",
+      "score": 0.3155,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Discover"
+     },
+     {
+      "file": "learnings/active/SINGULARITY-AUDIT.md",
+      "chunk_id": "learnings/active/SINGULARITY-AUDIT.md#14.0",
+      "score": 0.4659,
+      "source": "memory",
+      "type": "learning",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "2026-07-11 15:14"
+     }
+    ],
+    "engine_ms": 11.7,
+    "wall_ms": 53.1,
+    "cold": false,
+    "warnings": {}
+   }
+  ],
+  "with_code": [
+   {
+    "id": "Q01",
+    "kind": "decision",
+    "query": "why is the index rebuilt in full",
+    "top": [
+     {
+      "file": "singularity/singularity/knowledge/journey.py",
+      "chunk_id": "singularity/singularity/knowledge/journey.py#3",
+      "score": 0.4786,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_learning_entries",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "learnings/active/SINGULARITY-AUDIT.md",
+      "chunk_id": "learnings/active/SINGULARITY-AUDIT.md#7.1",
+      "score": 0.5446,
+      "source": "memory",
+      "type": "learning",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "2026-07-11 14:09"
+     },
+     {
+      "file": "singularity/singularity/search/indexer.py",
+      "chunk_id": "singularity/singularity/search/indexer.py#29",
+      "score": 0.5121,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "update",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "singularity/tests/test_ingest_plan.py",
+      "chunk_id": "singularity/tests/test_ingest_plan.py#11",
+      "score": 0.152,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "test_plan_proposes_pages_with_evidence",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "reference/Claude-Code-Prompt-Library.md",
+      "chunk_id": "reference/Claude-Code-Prompt-Library.md#7.0",
+      "score": 0.0895,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Operate"
+     }
+    ],
+    "engine_ms": 56.7,
+    "wall_ms": 97.1,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q02",
+    "kind": "howto",
+    "query": "how to add a new corpus to semantic search",
+    "top": [
+     {
+      "file": "singularity/singularity/machine/selftest.py",
+      "chunk_id": "singularity/singularity/machine/selftest.py#3",
+      "score": 0.4499,
+      "source": "code",
+      "type": null,
+      "kind": "method",
+      "name": "_found",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "singularity/singularity/search/indexer.py",
+      "chunk_id": "singularity/singularity/search/indexer.py#2",
+      "score": 0.3508,
+      "source": "code",
+      "type": null,
+      "kind": "class",
+      "name": "Corpus",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md",
+      "chunk_id": "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md#3.3",
+      "score": 0.6153,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "3. search-all.py (581 строк) — memory-индексация + единая точка поиска"
+     },
+     {
+      "file": "reference/Claude-Code-Prompt-Library.md",
+      "chunk_id": "reference/Claude-Code-Prompt-Library.md#3.1",
+      "score": 0.2317,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Discover"
+     },
+     {
+      "file": "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md",
+      "chunk_id": "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md#3.1",
+      "score": 0.5955,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "3. search-all.py (581 строк) — memory-индексация + единая точка поиска"
+     }
+    ],
+    "engine_ms": 13.7,
+    "wall_ms": 54.4,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q03",
+    "kind": "incident",
+    "query": "Glob on Windows silently returns an empty result",
+    "top": [
+     {
+      "file": "incidents/Error - Glob subdir pattern silent empty on Windows.md",
+      "chunk_id": "incidents/Error - Glob subdir pattern silent empty on Windows.md#0.0",
+      "score": 0.6943,
+      "source": "memory",
+      "type": "incident",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": null
+     },
+     {
+      "file": "singularity/singularity/search/indexer.py",
+      "chunk_id": "singularity/singularity/search/indexer.py#17",
+      "score": 0.4082,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_glob_matcher",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "incidents/Error - Glob subdir pattern silent empty on Windows.md",
+      "chunk_id": "incidents/Error - Glob subdir pattern silent empty on Windows.md#6.0",
+      "score": 0.6768,
+      "source": "memory",
+      "type": "incident",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Lesson"
+     },
+     {
+      "file": "singularity/singularity/search/chunking.py",
+      "chunk_id": "singularity/singularity/search/chunking.py#7",
+      "score": 0.3963,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_window_text",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "singularity/singularity/skills/mb-llm-delegate/delegate.py",
+      "chunk_id": "singularity/singularity/skills/mb-llm-delegate/delegate.py#0",
+      "score": 0.4102,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "endpoint",
+      "repo": "singularity",
+      "section": null
+     }
+    ],
+    "engine_ms": 13.0,
+    "wall_ms": 53.6,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q04",
+    "kind": "reference",
+    "query": "atomic commit of index generations and torn-write protection",
+    "top": [
+     {
+      "file": "singularity/singularity/search/indexer.py",
+      "chunk_id": "singularity/singularity/search/indexer.py#14",
+      "score": 0.6227,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_commit_generation",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md",
+      "chunk_id": "03_Tasks/SINGULARITY_CODE_INDEX_IMPLEMENTATION.md#2.0",
+      "score": 0.5175,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "2. Архитектурные решения"
+     },
+     {
+      "file": "singularity/singularity/knowledge/sources.py",
+      "chunk_id": "singularity/singularity/knowledge/sources.py#28",
+      "score": 0.5283,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_append_log",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "singularity/singularity/search/indexer.py",
+      "chunk_id": "singularity/singularity/search/indexer.py#12",
+      "score": 0.4824,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "load_committed_index",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "singularity/singularity/llm.py",
+      "chunk_id": "singularity/singularity/llm.py#17",
+      "score": 0.4703,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_acquire_start_lock",
+      "repo": "singularity",
+      "section": null
+     }
+    ],
+    "engine_ms": 13.4,
+    "wall_ms": 53.7,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q05",
+    "kind": "incident",
+    "query": "TLS MITM certificate when downloading a model from Hugging Face",
+    "top": [
+     {
+      "file": "singularity/singularity/config.py",
+      "chunk_id": "singularity/singularity/config.py#47",
+      "score": 0.4703,
+      "source": "code",
+      "type": null,
+      "kind": "method",
+      "name": "apply_env",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "03_Tasks/SINGULARITY-HF-CACHE-WATCHER-ISSUE.md",
+      "chunk_id": "03_Tasks/SINGULARITY-HF-CACHE-WATCHER-ISSUE.md#4.0",
+      "score": 0.5107,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Root cause"
+     },
+     {
+      "file": "singularity/singularity/llm.py",
+      "chunk_id": "singularity/singularity/llm.py#33",
+      "score": 0.3856,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_ssl_context",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "decisions/Embedding model lifecycle_ local snapshot _ daemon-resident indexing.md",
+      "chunk_id": "decisions/Embedding model lifecycle_ local snapshot _ daemon-resident indexing.md#3.0",
+      "score": 0.43,
+      "source": "memory",
+      "type": "decision",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Кто и когда"
+     },
+     {
+      "file": "decisions/Embedding model lifecycle_ local snapshot _ daemon-resident indexing.md",
+      "chunk_id": "decisions/Embedding model lifecycle_ local snapshot _ daemon-resident indexing.md#1.0",
+      "score": 0.4202,
+      "source": "memory",
+      "type": "decision",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Контекст"
+     }
+    ],
+    "engine_ms": 13.2,
+    "wall_ms": 53.8,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q06",
+    "kind": "rule",
+    "query": "what must be written to memory after a task",
+    "top": [
+     {
+      "file": "singularity/singularity/commands/memory.py",
+      "chunk_id": "singularity/singularity/commands/memory.py#4",
+      "score": 0.4131,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_cmd_note_split",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "rules/Rule - память означает vault.md",
+      "chunk_id": "rules/Rule - память означает vault.md#4.0",
+      "score": 0.5829,
+      "source": "memory",
+      "type": "rule",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Где вживлено (2026-08-05)"
+     },
+     {
+      "file": "singularity/singularity/telemetry/session_activity.py",
+      "chunk_id": "singularity/singularity/telemetry/session_activity.py#3",
+      "score": 0.5109,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "is_vault_write_path",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "incidents/Error - Vault staging duplicates.md",
+      "chunk_id": "incidents/Error - Vault staging duplicates.md#2.0",
+      "score": 0.3132,
+      "source": "memory",
+      "type": "incident",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "What was expected"
+     },
+     {
+      "file": "singularity/tests/test_code_index_e2e.py",
+      "chunk_id": "singularity/tests/test_code_index_e2e.py#12",
+      "score": 0.2924,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "test_line_numbers_survive_the_round_trip_to_the_index",
+      "repo": "singularity",
+      "section": null
+     }
+    ],
+    "engine_ms": 13.4,
+    "wall_ms": 53.6,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q07",
+    "kind": "reference",
+    "query": "how the nightly run works and which steps it has",
+    "top": [
+     {
+      "file": "singularity/tests/test_wiki_loop_integration.py",
+      "chunk_id": "singularity/tests/test_wiki_loop_integration.py#17",
+      "score": 0.3698,
+      "source": "code",
+      "type": null,
+      "kind": "method",
+      "name": "boom",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "singularity/tests/test_nightly.py",
+      "chunk_id": "singularity/tests/test_nightly.py#19",
+      "score": 0.3904,
+      "source": "code",
+      "type": null,
+      "kind": "method",
+      "name": "boom",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "singularity/tests/test_wiki_loop_integration.py",
+      "chunk_id": "singularity/tests/test_wiki_loop_integration.py#15",
+      "score": 0.3577,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "test_new_steps_are_present",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "reference/Выбор секции трека - сначала тембр, потом форма.md",
+      "chunk_id": "reference/Выбор секции трека - сначала тембр, потом форма.md#1.0",
+      "score": 0.4902,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Что считает `tempo --sections`"
+     },
+     {
+      "file": "singularity/tests/test_notesplit.py",
+      "chunk_id": "singularity/tests/test_notesplit.py#14",
+      "score": 0.1942,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "test_truncation_suffix_names_the_scale_and_the_command",
+      "repo": "singularity",
+      "section": null
+     }
+    ],
+    "engine_ms": 14.0,
+    "wall_ms": 54.5,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q08",
+    "kind": "decision",
+    "query": "is a watcher over code repositories needed",
+    "top": [
+     {
+      "file": "singularity/tests/test_code_corpus.py",
+      "chunk_id": "singularity/tests/test_code_corpus.py#19",
+      "score": 0.4308,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "test_the_two_corpora_do_not_block_each_other",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "decisions/CODE-INDEX D4 - без watcher по коду.md",
+      "chunk_id": "decisions/CODE-INDEX D4 - без watcher по коду.md#0.0",
+      "score": 0.5653,
+      "source": "memory",
+      "type": "decision",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": null
+     },
+     {
+      "file": "singularity/singularity/knowledge/nightly.py",
+      "chunk_id": "singularity/singularity/knowledge/nightly.py#8",
+      "score": 0.4119,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_step_code_index",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "singularity/singularity/machine/watch.py",
+      "chunk_id": "singularity/singularity/machine/watch.py#1",
+      "score": 0.3725,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_write_heartbeat",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "howto/Поиск по коду - корпус code_index.md",
+      "chunk_id": "howto/Поиск по коду - корпус code_index.md#3.0",
+      "score": 0.5851,
+      "source": "memory",
+      "type": "howto",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Поддерживать"
+     }
+    ],
+    "engine_ms": 12.9,
+    "wall_ms": 53.4,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q09",
+    "kind": "reference",
+    "query": "markdown chunking overlapping windows and minimum chunk size",
+    "top": [
+     {
+      "file": "singularity/singularity/search/chunking.py",
+      "chunk_id": "singularity/singularity/search/chunking.py#7",
+      "score": 0.554,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_window_text",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "incidents/CSS grid minimum size blocks inner scroll container.md",
+      "chunk_id": "incidents/CSS grid minimum size blocks inner scroll container.md#0.0",
+      "score": 0.4198,
+      "source": "memory",
+      "type": "incident",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": null
+     },
+     {
+      "file": "incidents/CSS grid minimum size blocks inner scroll container.md",
+      "chunk_id": "incidents/CSS grid minimum size blocks inner scroll container.md#4.0",
+      "score": 0.3906,
+      "source": "memory",
+      "type": "incident",
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Root cause"
+     },
+     {
+      "file": "03_Tasks/SINGULARITY_AUDIT_BACKLOG.md",
+      "chunk_id": "03_Tasks/SINGULARITY_AUDIT_BACKLOG.md#4.0",
+      "score": 0.4739,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "AUD-03 [P1] Windowed chunking без потери текста"
+     },
+     {
+      "file": "singularity/singularity/search/code_chunking.py",
+      "chunk_id": "singularity/singularity/search/code_chunking.py#6",
+      "score": 0.3288,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_fixed_chunks",
+      "repo": "singularity",
+      "section": null
+     }
+    ],
+    "engine_ms": 13.4,
+    "wall_ms": 54.2,
+    "cold": false,
+    "warnings": {}
+   },
+   {
+    "id": "Q10",
+    "kind": "learning",
+    "query": "why search answers slowly and what the cold fallback is",
+    "top": [
+     {
+      "file": "singularity/singularity/search/client.py",
+      "chunk_id": "singularity/singularity/search/client.py#16",
+      "score": 0.449,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "search",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md",
+      "chunk_id": "01_Genevra_Analysis/memory_system/Semantic_Search_Deep_Dive.md#1.0",
+      "score": 0.4767,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "1. Архитектура (высокоуровнево)"
+     },
+     {
+      "file": "singularity/singularity/search/client.py",
+      "chunk_id": "singularity/singularity/search/client.py#15",
+      "score": 0.4603,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "_cold_search",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "singularity/singularity/search/encoder.py",
+      "chunk_id": "singularity/singularity/search/encoder.py#4",
+      "score": 0.2595,
+      "source": "code",
+      "type": null,
+      "kind": "function",
+      "name": "shared_encoder",
+      "repo": "singularity",
+      "section": null
+     },
+     {
+      "file": "reference/Claude-Code-Prompt-Library.md",
+      "chunk_id": "reference/Claude-Code-Prompt-Library.md#4.1",
+      "score": 0.1872,
+      "source": "memory",
+      "type": null,
+      "kind": null,
+      "name": null,
+      "repo": null,
+      "section": "Design"
+     }
+    ],
+    "engine_ms": 13.9,
+    "wall_ms": 54.3,
+    "cold": false,
+    "warnings": {}
+   }
+  ]
+ }
+}

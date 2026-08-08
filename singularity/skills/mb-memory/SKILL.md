@@ -1,84 +1,85 @@
 ---
 name: mb-memory
-description: Capture knowledge into the user's Obsidian memory vault (Singularity). Use when the user says um, запомни в vault, "запиши в память", "add to memory brain", after completing a phase of work on the Singularity project, or when an important decision/insight/mistake emerges that should persist. Defines what deserves recording and the note contract.
+description: Capture knowledge into the user's Obsidian memory vault (Singularity). Use when the user says um, "remember this in the vault", "write it to memory", "add to memory brain", after completing a phase of work on the Singularity project, or when an important decision/insight/mistake emerges that should persist. Defines what deserves recording and the note contract.
 ---
 
-# mb-memory — запись знаний в vault
+# mb-memory — writing knowledge into the vault
 
-Vault резолвится сам (`--vault` → `MB_HOME` → `~/.singularity.json` → дефолты); где он на этой машине — скажет `mb doctor` (чек `A2-vault-obsidian`). Путь здесь не хардкодится: до 2026-08-04 в этой строке стоял абсолютный путь одной машины, который на macOS/Linux указывал в никуда.
+The vault resolves itself (`--vault` → `MB_HOME` → `~/.singularity.json` → defaults); where it is on this machine is what `mb doctor` reports (check `A2-vault-obsidian`). The path is not hardcoded here: until 2026-08-04 this line held one machine's absolute path, which on macOS/Linux pointed at nothing.
 
-Watcher индексирует сохранённое автоматически (~5-15 с) — после записи ничего запускать не нужно.
+The watcher indexes what you save automatically (~5-15 s) — nothing needs to be run after a write.
 
-## Что записывать (токен-критерий из Genevra)
+## What to record (the token criterion)
 
-- [ ] Записывай ТОЛЬКО: неочевидное / противоречащее ожиданиям / потребовавшее >1 попытки / решение с последствиями.
-- [ ] НЕ записывай: то, что видно из git/кода, тривиальные факты, пересказ файлов. Код — только как `file:line`.
-- [ ] Перед записью — `mb search "<суть>"`: если найдено с score >0.6 — дополни существующую заметку, не создавай дубль.
+- [ ] Record ONLY: the non-obvious / what contradicts expectations / what took more than one attempt / a decision with consequences.
+- [ ] Do NOT record: anything visible from git or the code, trivial facts, retellings of files. Code goes in as `file:line` only.
+- [ ] Before writing — `mb search "<the gist>"`: if something comes back with score >0.6, extend the existing note instead of creating a duplicate.
 
-## Как записывать
+## How to record
 
 ```bash
-mb learn "<плотный инсайт одной-тремя фразами>" --task <TASK-ID>   # быстрый append в learnings/active/<TASK-ID>.md
-mb note new decision "Название решения"    # новая заметка из шаблона
-# типы: learning|decision|howto|incident|rule|reference|daily|moc|changelog — по одному на каждый managed-корень
-mb note new rule "X" --filename "Rule - X"   # конвенция vault: тип в имени файла, title чистый
+mb learn "<a dense insight in one to three sentences>" --task <TASK-ID>   # quick append to learnings/active/<TASK-ID>.md
+mb note new decision "Name of the decision"    # a new note from the template
+# types: learning|decision|howto|incident|rule|reference|daily|moc|changelog — one per managed root
+mb note new rule "X" --filename "Rule - X"   # vault convention: type in the filename, title kept clean
 ```
 
-- [ ] Личное (не относится ни к одному рабочему проекту) — добавь `--project personal` к `mb learn`/`mb note new`, или, если запись уже создаётся в каталоге из `personal_roots` (см. машинный конфиг `~/.singularity.json`), routing применится автоматически. Личные заметки никогда не попадают в digest/curator-предложения и никогда не резолвятся случайным cwd-детектом — только explicit `--project personal` или personal_roots.
+- [ ] Personal material (belonging to no work project) — add `--project personal` to `mb learn`/`mb note new`, or, if the entry is already being created in a directory from `personal_roots` (see the machine config `~/.singularity.json`), routing applies automatically. Personal notes never reach digest/curator suggestions and are never resolved by an accidental cwd detection — only by an explicit `--project personal` or by personal_roots.
 
-### GATE перед любой записью: куда писать
+### GATE before any write: where to write
 
-- [ ] Назначение резолвится ДО первой записи. Если артефакт предназначен vault —
-      пишем **прямо в vault** (или командой `mb`), а не в копию.
-- [ ] **Никаких editable-зеркал**: staging-копия vault-документа во внешней папке
-      с последующим copy-back запрещена — ради редактора, песочницы или
-      patch-инструмента тоже. Вторая рабочая копия остаётся вторым источником
-      правды, пока кто-нибудь не сверит их хэшами.
-- [ ] Внешние каталоги — это ВХОД (чтение исходников) и явно запрошенный экспорт.
-      Ни то, ни другое не даёт права на редактируемый дубль.
-- [ ] Если прямая запись в vault реально заблокирована (права, песочница) —
-      ОСТАНОВИТЬСЯ и сказать об этом, запросив доступ или vault-native путь.
-      Обходить блокировку через staging нельзя.
+- [ ] The destination is resolved BEFORE the first write. If the artefact is meant
+      for the vault — write **straight into the vault** (or with an `mb` command),
+      not into a copy.
+- [ ] **No editable mirrors**: a staging copy of a vault document in an external
+      folder with a later copy-back is forbidden — including for the sake of an
+      editor, a sandbox or a patch tool. A second working copy stays a second
+      source of truth until somebody compares their hashes.
+- [ ] External directories are INPUT (reading sources) and explicitly requested
+      exports. Neither grants the right to an editable duplicate.
+- [ ] If writing directly into the vault really is blocked (permissions, sandbox) —
+      STOP and say so, asking for access or for a vault-native path. Routing
+      around the block through staging is not allowed.
 
-Инцидент, из которого это правило: [[Error - Vault staging duplicates]] — 14
-рабочих копий заметок в домашнем каталоге и copy-back, потому что песочница
-показала эту папку как writable. Уникальных данных не потерялось, но какое-то
-время на машине жили два рабочих набора одних и тех же заметок, и ответить,
-какой канонический, мог только аудит хэшей. Правило «артефакты живут в vault»
-уже существовало — его не было в той точке, где выбирается write path.
+The incident this rule came from: [[Error - Vault staging duplicates]] — 14
+working copies of notes in the home directory plus copy-back, because the sandbox
+showed that folder as writable. No unique data was lost, but for a while the
+machine held two working sets of the same notes, and only a hash audit could say
+which was canonical. The rule "artefacts live in the vault" already existed — it
+was absent at the point where the write path is chosen.
 
-### GATE перед любой записью: чем писать
+### GATE before any write: what to write with
 
-- [ ] **Новый файл в managed-корне** (`learnings/*`, `decisions/`, `howto/`, `incidents/`, `rules/`, `reference/`, `changelog/`, `_moc/`, `daily/`) — ТОЛЬКО `mb note new <type> "<title>"`. Размер записи роли не играет: создай файл командой, а наполняй уже Edit'ом.
-- [ ] **Правка существующей заметки** — Edit/Write, это штатный путь.
-- [ ] **Конфиг** — `mb config set` / `mb project add`, не правка `~/.singularity.json` (машинный конфиг; в vault его нет с v0.9.0).
-- [ ] **Искать в vault** — `mb search`, `mb curator gaps` (битые ссылки, недайджещенные learnings), `mb curator contradictions`, а не `grep`/обход файлов.
+- [ ] **A new file in a managed root** (`learnings/*`, `decisions/`, `howto/`, `incidents/`, `rules/`, `reference/`, `changelog/`, `_moc/`, `daily/`) — ONLY `mb note new <type> "<title>"`. The size of the entry is irrelevant: create the file with the command, then fill it in with Edit.
+- [ ] **Editing an existing note** — Edit/Write, that is the normal path.
+- [ ] **Config** — `mb config set` / `mb project add`, never a hand-edit of `~/.singularity.json` (the machine config; it has not lived in the vault since v0.9.0).
+- [ ] **Searching the vault** — `mb search`, `mb curator gaps` (broken links, undigested learnings), `mb curator contradictions`, rather than `grep` or walking files.
 
-Почему это гейт, а не рекомендация: мимо `mb note new` не применяется `templates/<type>.md` — и запись НЕ падает, просто рождается без `source:` и без обязательных секций (для rule — `## Правило` / `## Почему` / `## Происхождение` с GATE). Такую заметку не отличить от полной, пока кто-нибудь не сверит её с шаблоном руками; ровно так и произошло 2026-08-04. Плюс теряются project-routing и dedup.
+Why this is a gate and not a recommendation: bypassing `mb note new` skips `templates/<type>.md` — and the write does NOT fail, the note is simply born without `source:` and without the mandatory sections the template carries (for a rule: the statement, the failure it catches with its GATE, and the origin). Such a note is indistinguishable from a complete one until somebody compares it against the template by hand; that is exactly what happened on 2026-08-04. Project routing and dedup are lost as well.
 
-`vault_guard` (audit, включён по умолчанию с v0.6.3) отвечает на такой Write строкой `[vault-guard audit] New file created directly in managed knowledge root …` — это сигнал остановиться и пересоздать командой, а не фоновый шум.
+`vault_guard` (audit mode, on by default since v0.6.3) answers such a Write with the line `[vault-guard audit] New file created directly in managed knowledge root …` — that is a signal to stop and recreate it with the command, not background noise.
 
-Наполняя заметку, соблюдай контракт:
+While filling the note in, keep to the contract:
 
-- [ ] Frontmatter обязателен: `type, title, tags, created`; для decision — `owner` и `source` (Never Decide Alone: у решения есть автор и происхождение).
-- [ ] Связи — inline `[[wikilinks]]` на существующие заметки (питают граф Obsidian и graph-фильтр поиска).
-- [ ] Изменение значимого — строка в `changelog/YYYY-MM.md` (единственная история; сами заметки не раздуваем историей правок).
-- [ ] Устаревшее не удалять: `status: superseded` + ссылка на замену.
+- [ ] Frontmatter is mandatory: `type, title, tags, created`; for a decision also `owner` and `source` (Never Decide Alone: a decision has an author and an origin).
+- [ ] Links are inline `[[wikilinks]]` to existing notes (they feed the Obsidian graph and the search graph filter).
+- [ ] A change to something significant gets a line in `changelog/YYYY-MM.md` (the single history; notes themselves are not inflated with edit history).
+- [ ] Never delete what is outdated: `status: superseded` plus a link to the replacement.
 
-## Ошибки → правила (самообучение)
+## Mistakes → rules (self-teaching)
 
-- [ ] Если ошибка ассистента повторилась или стоила времени: создай `mb note new rule "..."` — заметка в vault хранит ПОЧЕМУ (инцидент, цена, происхождение). GATE: «поймало бы это правило именно этот сбой?» — если нет, правило не нужно.
-- [ ] **И вживи его в точку, где принимается соответствующее решение — в движке, не в vault.** Заметка в `rules/` это архив знания; действует текст, стоящий в точке. Реальные точки и их адресаты:
-      `singularity/machine/hooks_state.py` (фрагмент SessionStart → главный поток) ·
-      `singularity/agents/AGENT_SHARED_PREAMBLE.md` §2 (все субагенты) ·
-      `singularity/agents/<agent>.md` (один агент) ·
-      `singularity/skills/<skill>/SKILL.md` (работа этого класса) ·
-      докстринг/дефолт в коде (написание такого кода).
-      Правило, которое обязано действовать без vault, в vault жить не может: подмена или отсутствие памяти меняет доступное знание, но не поведение машины.
-- [ ] Несколько точек — ОДИН источник и инжекция во все (рукописные копии расходятся), плюс **тест на присутствие** в `tests/test_rules_delivery.py`, падающий при удалении инъекции с любой поверхности. Тест проверяется так, как требует само правило: удали инъекцию, убедись, что сьют покраснел, верни.
-- [ ] Проверь встречный текст: если в этой точке уже написано обратное, выигрывает инструкция, а не правило. Приведи их в согласие в том же заходе.
-- [ ] Обнови запись правила в `docs/rules-delivery.md` (реестр «правило → точка») и добавь секцию «Где вживлено» в саму заметку.
+- [ ] If an assistant mistake repeated or cost time: create `mb note new rule "..."` — the vault note holds the WHY (the incident, the cost, the origin). GATE: "would this rule have caught precisely this failure?" — if not, the rule is not needed.
+- [ ] **And graft it into the point where the corresponding decision is made — in the engine, not in the vault.** A note in `rules/` is an archive of knowledge; what acts is the text standing at the point. The real points and their audiences:
+      `singularity/machine/hooks_state.py` (a SessionStart fragment → the main thread) ·
+      `singularity/agents/AGENT_SHARED_PREAMBLE.md` §2 (every subagent) ·
+      `singularity/agents/<agent>.md` (one agent) ·
+      `singularity/skills/<skill>/SKILL.md` (that class of work) ·
+      a docstring or a default in the code (writing that kind of code).
+      A rule that must act without a vault cannot live in the vault: swapping or losing the memory changes the available knowledge, never the machine's behaviour.
+- [ ] Several points — ONE source injected into all of them (hand-written copies drift), plus a **presence test** in `tests/test_rules_delivery.py` that fails when the injection is removed from any surface. The test is checked the way the rule itself demands: delete the injection, watch the suite go red, put it back.
+- [ ] Check the counter-text: if the opposite is already written at that point, the instruction wins, not the rule. Reconcile them in the same pass.
+- [ ] Update the rule's entry in `docs/rules-delivery.md` (the "rule → point" registry) and add a "Where it is grafted" section to the note itself.
 
-## Конец сессии по проекту
+## End of a project session
 
-- [ ] Один вопрос пользователю: «Финализировать learnings?» — и по ответу дописать итог сессии в активный learnings-док.
+- [ ] One question to the user: "Finalise the learnings?" — and on the answer, append the session's outcome to the active learnings document.

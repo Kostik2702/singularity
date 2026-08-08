@@ -8,14 +8,14 @@ status: active
 
 # Phase 3 — Implementation
 
-Родитель: `_router.md`.
+Parent: `_router.md`.
 
-- [ ] Загрузи правила репо (его CLAUDE.md / conventions) и [[Core Discipline - Checkbox Gates]]; пиши в идиомах окружающего кода.
-- [ ] Read-before-edit: файл прочитан перед правкой; правка минимальна по scope плана.
-- [ ] Ни одного молчаливого изменения бизнес-логики сверх плана — заметил необходимость → стоп, зафиксируй решение.
-- [ ] Verification-after-edit (§17 Genevra): после «готово» — `git diff --stat` и глазами: изменено ровно то, что планировалось?
-- [ ] Деструктивные операции (sed -i, перезапись) — только с бэкапом/через tmp-swap.
-- [ ] Кроссплатформенные гейты кода (для Singularity-кода): [[05_Cross_Platform_Strategy]] §4.
-- [ ] Авто-append: что изменено (file:line), отклонения от плана и почему.
+- [ ] Load the repository's rules (its CLAUDE.md / conventions) and [[Core Discipline - Checkbox Gates]]; write in the idiom of the surrounding code.
+- [ ] Read-before-edit: the file is read before it is edited; the edit is minimal within the plan's scope.
+- [ ] Not one silent change to business logic beyond the plan — noticed that one is needed → stop and record the decision.
+- [ ] Verification-after-edit (§17): after "done" — `git diff --stat`, read with your eyes: did exactly the planned thing change?
+- [ ] Destructive operations (sed -i, overwriting) only with a backup or through a tmp swap.
+- [ ] Cross-platform gates for the code (for Singularity's own code): [[05_Cross_Platform_Strategy]] §4.
+- [ ] Auto-append: what changed (file:line), deviations from the plan and why.
 
-**Выход:** диф соответствует плану → `phase-4-review.md`.
+**Exit:** the diff matches the plan → `phase-4-review.md`.

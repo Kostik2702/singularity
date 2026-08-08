@@ -51,33 +51,33 @@ cannot be `[[wikilinked]]`; provenance is `sources: [<id>]` frontmatter.
 ## 3. The cycle
 
 ```
-title Ingest-цикл (один источник)
+title Ingest cycle (one source)
 
-participant Пользователь as U
-participant "Агент / skill mb-ingest" as A
-participant "mb CLI (движок)" as CLI
-participant ".mb/sources/ (raw, вне Obsidian)" as S
+participant User as U
+participant "Agent / skill mb-ingest" as A
+participant "mb CLI (engine)" as CLI
+participant ".mb/sources/ (raw, outside Obsidian)" as S
 participant ".mb/sources_index/ + memory_index" as IDX
-participant "wiki-заметки" as W
+participant "wiki notes" as W
 
-U->A: "проглоти этот документ"
+U->A: "swallow this document"
 A->CLI: mb ingest add <path|--stdin> --title ... --origin ...
 CLI->S: write-once .mb/sources/<YYYY>/<slug>--<id8>.md (frontmatter + raw verbatim)
 CLI->CLI: .mb/sources.json (atomic tmp+replace)
-CLI->IDX: инкрементальный апдейт sources_index (через тёплый демон)
+CLI->IDX: incremental update of sources_index (through the warm daemon)
 CLI-->A: {source_id, duplicate, stored_path, indexed: indexed|pending}
-A->CLI: mb ingest index (если indexed=pending — догнать явно)
+A->CLI: mb ingest index (if indexed=pending — catch up explicitly)
 A->CLI: mb ingest plan <source_id> --json
-CLI->IDX: чтение обоих committed generation (без модели, без записи)
-CLI-->A: {summary_target, touch[<=15] с why, new_pages, conflicts}
-A->U: takeaways + список страниц к правке
-U-->A: подтверждение / корректировка списка
-A->W: summary-заметка (mb note new ... --from-source <id>)
-A->W: правки N существующих заметок (add-only, с цитатой)
+CLI->IDX: read both committed generations (no model, no writes)
+CLI-->A: {summary_target, touch[<=15] with why, new_pages, conflicts}
+A->U: takeaways + the list of pages to edit
+U-->A: confirmation / correction of the list
+A->W: summary note (mb note new ... --from-source <id>)
+A->W: edits to N existing notes (add-only, with a quotation)
 A->CLI: mb ingest mark <id> --notes a.md,b.md --status processed
-CLI->CLI: derived_notes + marks + строка в .mb/ingest-log.jsonl
-A->W: строка в changelog/YYYY-MM.md
-A-->U: отчёт: что записано, что осталось открытым
+CLI->CLI: derived_notes + marks + a line in .mb/ingest-log.jsonl
+A->W: a line in changelog/YYYY-MM.md
+A-->U: report: what was recorded, what stayed open
 ```
 
 Rendered at [sequencediagram.org](https://sequencediagram.org/instructions.html).

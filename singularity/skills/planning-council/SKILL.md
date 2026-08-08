@@ -1,6 +1,6 @@
 ---
 name: planning-council
-description: Multi-agent planning council for task decomposition, dependency mapping, risk assessment, and estimation before implementation. Spawns investigator (Decomposer), critic (Risk Finder), validator (Feasibility & Estimator), historian in adversarial parallel rounds. Triggers - "plc", "planning council", "декомпозиция", "разбей задачу", "break down", "decompose", "план задачи", "plan the task", "оцени сроки", "estimate".
+description: Multi-agent planning council for task decomposition, dependency mapping, risk assessment, and estimation before implementation. Spawns investigator (Decomposer), critic (Risk Finder), validator (Feasibility & Estimator), historian in adversarial parallel rounds. Triggers - "plc", "planning council", "break down", "decompose", "plan the task", "estimate the timeline".
 ---
 
 # Planning Council — Decomposition & Estimation
@@ -35,7 +35,7 @@ PLC-5 Weighted-confidence synthesis + report + decision-note offer
 - [ ] Greenfield vs existing-flow decided. Existing flow → collect code anchors (files, entry points). **"Code already written" is NOT greenfield** — a diff shows what changed, not what correct is; the plan still needs the real baseline.
 - [ ] **Grill offer (never force)**: propose the `grill` skill before the council; user decides. Skip → record `Grill: skipped by user`.
 - [ ] **GOAL CONTRACT formulated** — concrete + falsifiable: `GOAL:` what "done" looks like, derived from the user's exact request (not invented); `UNMET if <X>` — observable condition under which it is NOT done; `Owner:` recorded. If it narrows the user's request → confirm BEFORE launch (pre-launch question, allowed). Agents may challenge the contract itself in Round 1.
-- [ ] **Every environment claim in CONSTRAINTS came from a live probe, not from memory.** «X установлен», «Y доступен», «версия Z» проверяется `import`/`--version`/`Test-Path` в момент сборки контекста и с указанием КОНКРЕТНОГО интерпретатора (`<engine>/.venv/bin/python -c "import PIL"`, не просто `python`): «на машине есть» ≠ «в нужном venv есть». В незнакомом окружении — сначала канарейка (тривиальный no-op отдельным вызовом), потом батч; молчание команды не доказывает, что она стартовала — прочитай лог исполнителя, прежде чем писать root cause. Агенты совета вправе и обязаны перепроверять CONSTRAINTS живьём.
+- [ ] **Every environment claim in CONSTRAINTS came from a live probe, not from memory.** "X is installed", "Y is available", "version Z" is checked with `import`/`--version`/`Test-Path` at the moment the context is assembled, and against a SPECIFIC interpreter (`<engine>/.venv/bin/python -c "import PIL"`, not a bare `python`): "it exists on the machine" ≠ "it exists in the right venv". In an unfamiliar environment run a canary first (a trivial no-op as its own call), then the batch; a silent command does not prove it started — read the executor's log before writing a root cause. Council agents may and must re-check CONSTRAINTS live.
 - [ ] PLANNING_CONTEXT assembled (template below)
 
 **PLANNING_CONTEXT** — the SAME package to every agent, verbatim (fairness + prompt-cache reuse):

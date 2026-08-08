@@ -8,14 +8,14 @@ status: active
 
 # Phase 1 — Investigation
 
-Родитель: `_router.md`.
+Parent: `_router.md`.
 
-- [ ] SEM-FIRST: `mb search` по концепции, затем целевые Read по найденным file:line. Не читай файлы «на всякий случай».
-- [ ] Gap-analysis: чего я НЕ знаю для решения? Каждый gap — закрыт (evidence) или явно OPEN.
-- [ ] Verify code first: каждое утверждение о поведении кода — подтверждено чтением кода (file:line), не памятью и не предположением.
-- [ ] Disproval-first: сформулировав вывод — попытайся его опровергнуть (контрпример, соседний код-путь, edge case). Не смог — вывод жив.
-- [ ] Root-cause вопрос ×3 (для багов): «это ДЕЙСТВИТЕЛЬНО корневая причина, а не симптом?»
-- [ ] Уверенность в выводе — через skill `confidence-calibration` (никогда на глаз).
-- [ ] Авто-append в learnings: находки (file:line), закрытые/открытые gaps, root-cause гипотеза + %.
+- [ ] SEM-FIRST: `mb search` on the concept, then targeted Reads of the file:line you found. Do not read files "just in case".
+- [ ] Gap analysis: what do I NOT know in order to decide? Every gap is either closed (with evidence) or explicitly OPEN.
+- [ ] Verify code first: every claim about the code's behaviour is confirmed by reading the code (file:line), never from memory or assumption.
+- [ ] Disproval-first: having formed a conclusion, try to refute it (a counter-example, a neighbouring code path, an edge case). Could not — the conclusion stands.
+- [ ] The root-cause question ×3 (for bugs): "is this REALLY the root cause, and not a symptom?"
+- [ ] Confidence in a conclusion goes through the `confidence-calibration` skill (never by eye).
+- [ ] Auto-append to the learnings: findings (file:line), gaps closed and open, the root-cause hypothesis plus its %.
 
-**Выход:** выводы с evidence и калиброванным % → `phase-1-5-grill.md` (если дальше план/дизайн) или `phase-3-implementation.md`.
+**Exit:** conclusions with evidence and a calibrated % → `phase-1-5-grill.md` (if a plan or design comes next) or `phase-3-implementation.md`.

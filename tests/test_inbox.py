@@ -21,9 +21,9 @@ def cfg(tmp_path) -> Config:
 
 
 def test_capture_writes_verbatim_and_is_not_a_managed_note(cfg):
-    out = inbox.capture(cfg, "Демон не перечитывает конфиг после set")
+    out = inbox.capture(cfg, "The daemon does not re-read the config after set")
     text = cfg.resolve(out["file"]).read_text(encoding="utf-8")
-    assert "Демон не перечитывает конфиг после set" in text
+    assert "The daemon does not re-read the config after set" in text
     # `type: inbox` is not a managed type, so curator/digest/search filters
     # cannot mistake a capture for knowledge that was actually filed.
     assert "type: inbox" in text
@@ -45,7 +45,7 @@ def test_list_is_oldest_first(cfg):
 
 
 def test_suggest_proposes_and_changes_nothing(cfg):
-    captured = inbox.capture(cfg, "Мы решили: конфиг уезжает из vault. trade-off принят.")
+    captured = inbox.capture(cfg, "We decided: the config moves out of the vault. trade-off accepted.")
     before = sorted(p.name for p in inbox.inbox_dir(cfg).iterdir())
 
     def fake_search(_req):
@@ -64,14 +64,14 @@ def test_suggest_proposes_and_changes_nothing(cfg):
 
 def test_suggest_without_a_search_still_answers(cfg):
     """A daemon round-trip is the caller's choice, not a precondition."""
-    captured = inbox.capture(cfg, "Всегда снимай exit-код с самой команды")
+    captured = inbox.capture(cfg, "Always take the exit code from the command itself")
     out = inbox.suggest(cfg, captured["file"])
     assert out["suggested_type"] == "rule"
     assert out["duplicates"] == [] and out["links"] == []
 
 
 def test_approve_files_into_the_managed_root_and_keeps_provenance(cfg):
-    captured = inbox.capture(cfg, "Как поднять демон\n\n1. mb daemon start")
+    captured = inbox.capture(cfg, "How to start the daemon\n\n1. mb daemon start")
     out = inbox.approve(cfg, captured["file"], "howto")
     assert out["file"].startswith("howto/")
     filed = cfg.resolve(out["file"]).read_text(encoding="utf-8")
@@ -100,9 +100,9 @@ def test_approve_never_overwrites_an_existing_note(cfg):
 
 
 def test_guess_type_is_a_hint_with_a_safe_default():
-    assert inbox.guess_type("мы решили не делить пакет") == "decision"
-    assert inbox.guess_type("сломалось после релиза, traceback") == "incident"
-    assert inbox.guess_type("просто наблюдение без сигналов") == "learning"
+    assert inbox.guess_type("we decided not to split the package") == "decision"
+    assert inbox.guess_type("it broke after the release, traceback") == "incident"
+    assert inbox.guess_type("just an observation with no signals") == "learning"
 
 
 def test_the_command_is_off_until_enabled(tmp_path, capsys):
@@ -122,7 +122,7 @@ def test_a_capture_is_never_indexed_and_never_reported(cfg):
     from singularity.knowledge import curator
     from singularity.search import indexer
 
-    inbox.capture(cfg, "черновая мысль без типа")
+    inbox.capture(cfg, "a rough thought with no type")
     assert not [f for f in indexer._scan_vault(cfg) if "inbox" in str(f)]
     assert not {k: v for k, v in curator.validate(cfg).items() if v}
 
@@ -131,6 +131,6 @@ def test_the_exclusion_does_not_depend_on_a_config_key(cfg):
     """An existing machine has `skip_dirs` materialised, so a new default would
     never reach it — the exclusion has to be structural."""
     cfg.data["skip_dirs"] = []
-    inbox.capture(cfg, "ещё одна мысль")
+    inbox.capture(cfg, "one more thought")
     from singularity.search import indexer
     assert not [f for f in indexer._scan_vault(cfg) if "inbox" in str(f)]

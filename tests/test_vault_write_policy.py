@@ -81,7 +81,7 @@ def test_claude_session_start_carries_the_policy(tmp_path, monkeypatch):
 
 def test_skill_carries_the_destination_gate():
     body = SKILL.read_text(encoding="utf-8")
-    assert "GATE перед любой записью: куда писать" in body
+    assert "GATE before any write: where to write" in body
     assert "Error - Vault staging duplicates" in body, \
         "the gate should point at the incident it came from"
 

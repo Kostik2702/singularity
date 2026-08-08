@@ -38,7 +38,7 @@ holds. It stays under the `mb reflect` guarantee by not persisting at all,
 which is also why a truncated call `target` ("which Read was the 40k one") is
 safe here: it lives in one printed report and is never stored. Callers that
 share the output can drop it with `detail=False`. See
-[[TRANSCRIPTS D1 - приватность транскриптов]].
+the vault decision TRANSCRIPTS D1 (transcript privacy).
 """
 from __future__ import annotations
 

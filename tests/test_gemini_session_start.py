@@ -34,9 +34,9 @@ def test_emits_valid_json_for_each_source(monkeypatch, capsys, source):
 
 
 def test_cyrillic_context_not_escaped(monkeypatch, capsys):
-    monkeypatch.setattr(gsm, "build_context", lambda cwd=None: "Активные задачи: GEMINI-CLI")
+    monkeypatch.setattr(gsm, "build_context", lambda cwd=None: "Active tasks: GEMINI-CLI")
     _, obj = _run(monkeypatch, capsys, '{"source":"startup"}')
-    assert "Активные задачи" in obj["hookSpecificOutput"]["additionalContext"]
+    assert "Active tasks" in obj["hookSpecificOutput"]["additionalContext"]
 
 
 def test_invalid_stdin_still_valid_json(monkeypatch, capsys):

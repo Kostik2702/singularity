@@ -615,7 +615,7 @@ def external_source_id(ref: str) -> str:
 def _looks_external(value: Any) -> bool:
     """A `source:` frontmatter value pointing at a document, not prose.
 
-    The vault is full of `source: "брейншторм + grill, сессия 2026-07-03"` —
+    The vault is full of `source: "brainstorm + grill, session 2026-07-03"` —
     real provenance, but not a retrievable document, and registering it would
     fill the registry with things nobody can ever ingest."""
     text = str(value or "").strip().strip('"\'')

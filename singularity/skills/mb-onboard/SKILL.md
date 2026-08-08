@@ -1,23 +1,23 @@
 ---
 name: mb-onboard
-description: Register a new project in the Singularity vault and give it a persistent SessionStart brain note. Use when the user says onboard this project, "заведи проект в память", "подключи этот репозиторий к памяти", or starts working in a codebase that mb project detect doesn't yet recognize.
+description: Register a new project in the Singularity vault and give it a persistent SessionStart brain note. Use when the user says onboard this project, "add this project to memory", "connect this repository to the memory", or starts working in a codebase that mb project detect doesn't yet recognize.
 ---
 
-# mb-onboard — регистрация нового проекта
+# mb-onboard — registering a new project
 
-Через sanctioned CLI (`mb project`, `mb note new`) плюс ручное редактирование `.mb/context.json` (для него пока нет отдельной CLI-команды — редактируй Edit/Write). Никогда не используй fork-only пути вида `code/...`; проект — это то, что зарегистрировано в registry, а не то, что лежит в каком-то конкретном каталоге.
+Through the sanctioned CLI (`mb project`, `mb note new`) plus a manual edit of `.mb/context.json` (which has no CLI command of its own yet — use Edit/Write). Never use fork-only paths of the form `code/...`; a project is what is registered in the registry, not what happens to sit in some particular directory.
 
-## Протокол
+## Protocol
 
-- [ ] 1. Определи `<id>` (короткий, стабильный, без пробелов), путь к проекту, опционально `--group`/`--about`.
-- [ ] 2. Зарегистрируй: `mb project add <id> <path> [--group G] [--about "..."]`. Если id уже занят или путь пересекается с другим проектом — `mb project list` покажет конфликт, не форсируй перезапись.
-- [ ] 3. Создай starter brain-заметку: `mb note new reference "<Project> Brain"` — коротко (цель проекта, ключевые пути/команды, архитектурные решения, которые агент должен знать в КАЖДОЙ сессии этого проекта). Это не документация проекта целиком — только то, что стоит бюджета `brain_max_lines` (по умолчанию 40 строк, `mb config get brain_max_lines`).
-- [ ] 4. Пропиши bridge в `.mb/context.json` (Edit/Write, atomic — читай файл, дополняй объект, не перезаписывай другие проекты): `{"<id>": {"brain_note": "<vault-relative путь к заметке из шага 3>"}}`. Без этого шага SessionStart не найдёт заметку — `mb project add` регистрирует ТОЛЬКО путь проекта, не brain note.
-- [ ] 5. Проверь: `mb project detect <path проекта>` должен вернуть `<id>`; следующая сессия в этом каталоге должна показать "Project brain (`<id>`)" в SessionStart-контексте.
-- [ ] 6. Сообщи пользователю одной строкой: проект зарегистрирован, brain note создан, что в нём стоит дополнить со временем.
+- [ ] 1. Decide the `<id>` (short, stable, no spaces), the path to the project, and optionally `--group`/`--about`.
+- [ ] 2. Register it: `mb project add <id> <path> [--group G] [--about "..."]`. If the id is taken or the path overlaps another project, `mb project list` will show the conflict — do not force an overwrite.
+- [ ] 3. Create the starter brain note: `mb note new reference "<Project> Brain"` — briefly (the project's purpose, key paths and commands, architectural decisions the agent must know in EVERY session of this project). This is not the project's documentation in full — only what is worth the `brain_max_lines` budget (40 lines by default, `mb config get brain_max_lines`).
+- [ ] 4. Write the bridge into `.mb/context.json` (Edit/Write, atomically — read the file, extend the object, do not overwrite other projects): `{"<id>": {"brain_note": "<vault-relative path to the note from step 3>"}}`. Without this step SessionStart will not find the note — `mb project add` registers ONLY the project's path, not the brain note.
+- [ ] 5. Verify: `mb project detect <project path>` must return `<id>`; the next session in that directory should show "Project brain (`<id>`)" in the SessionStart context.
+- [ ] 6. Tell the user in one line: the project is registered, the brain note is created, and what is worth adding to it over time.
 
-## Не делай
+## Do not
 
-- [ ] Не создавай project id `general`/`personal` — они зарезервированы (RESERVED_IDS), `mb project add` их отклонит.
-- [ ] Не пиши в `.mb/context.json` без предварительного чтения текущего содержимого — это shared-файл, перезапись стирает другие проекты.
-- [ ] Module-context (`context_map` внутри записи проекта, per-module notes) — отдельная, более редкая настройка; не добавляй её проактивно, только если пользователь явно просит per-module context.
+- [ ] Do not create the project ids `general`/`personal` — they are reserved (RESERVED_IDS) and `mb project add` will reject them.
+- [ ] Do not write to `.mb/context.json` without reading the current contents first — it is a shared file, and an overwrite erases other projects.
+- [ ] Module context (`context_map` inside a project's entry, per-module notes) is a separate and rarer setting; do not add it proactively, only when the user explicitly asks for per-module context.

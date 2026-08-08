@@ -1,6 +1,6 @@
 ---
 name: report
-description: Capture an assistant mistake as a PENDING error-report note in the vault (incidents/, tag error-report) with root cause analysis. Triggers: report, mistake, "ты ошибся", "запиши ошибку", wrong answer, "зафиксируй фейл". AUTO-TRIGGER: when the user corrects the assistant twice on the same thing, offer to run this skill.
+description: Capture an assistant mistake as a PENDING error-report note in the vault (incidents/, tag error-report) with root cause analysis. Triggers: report, mistake, "you got it wrong", "record the mistake", wrong answer, "log the failure". AUTO-TRIGGER: when the user corrects the assistant twice on the same thing, offer to run this skill.
 ---
 
 # report — error capture (self-learning pipeline: INPUT)

@@ -4,8 +4,8 @@ The first version of this file greped the tool's source for `sha256` and
 `returncode`. Both words also occur in its docstring and in an f-string, so the
 asserts survived deleting the restore verification and survived replacing the
 exit-code verdict with a substring match on stdout — the exact defect
-[[Пайп поверх тестовой команды не должен глотать exit-код]] exists to prevent.
-That is [[Rule - сканер исходника не пишет то, что ищет]] committed by the test
+[[A pipe over the test command must not swallow the exit code]] exists to prevent.
+That is [[Rule - a source scanner must not write what it searches for]] committed by the test
 of the tool that exists to catch it.
 
 So nothing here reads the source. Every test drives `run_case` and asserts on

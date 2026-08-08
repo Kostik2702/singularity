@@ -1,50 +1,50 @@
 ---
 name: motion-3d-implementer
-description: Реализация motion/3D-слайса из принятого adaptation recipe (или явно помеченного greenfield spike) — выбор самого дешёвого достаточного runtime (CSS → Web Animations → Canvas2D → GSAP → R3F → prerendered media), единая motion-грамматика, lifecycle-гигиена, progressive enhancement; каждая реализация закрывается motion-qa + determinism + fidelity evidence. Use when "реализуй секцию/эффект", implement slice, вёрстка motion/3D по рецепту, после pattern-adapter и до visual-приёмки.
+description: Implementation of a motion/3D slice from an accepted adaptation recipe (or an explicitly marked greenfield spike) — picking the cheapest sufficient runtime (CSS → Web Animations → Canvas2D → GSAP → R3F → prerendered media), a single motion grammar, lifecycle hygiene, progressive enhancement; every implementation is closed by motion-qa + determinism + fidelity evidence. Use when "implement the section/effect", implement slice, motion/3D markup from a recipe, after pattern-adapter and before visual acceptance.
 ---
 
-# motion-3d-implementer — согласованная сцена, не коллекция эффектов
+# motion-3d-implementer — a coherent scene, not a collection of effects
 
-Вход строго один из двух: **валидный recipe** (`component-intake recipe --validate` exit 0) или **greenfield spike, явно помеченный** в learnings. Free-form «сделай красиво» — не вход.
+The input is strictly one of two: a **valid recipe** (`component-intake recipe --validate` exit 0) or a **greenfield spike explicitly marked** in the learnings. Free-form "make it pretty" is not an input.
 
-> **Правило нулевого кода QA:** проверки — только существующими гейтами (motion-qa, check-visual-determinism, a11y-audit, fidelity-audit, imgqa). 0 новых скриптов за реализацию.
+> **Zero-code QA rule:** checks come only from the existing gates (motion-qa, check-visual-determinism, a11y-audit, fidelity-audit, imgqa). 0 new scripts per implementation.
 
-## 1. Выбор runtime — самый дешёвый достаточный (решение §8)
+## 1. Choosing the runtime — the cheapest sufficient one (decision §8)
 
-Спускайся сверху; каждый шаг вниз — только с причиной, записанной в learnings:
+Descend from the top; every step down needs a reason recorded in the learnings:
 
 1. **CSS / Web Animations** — reveal/hover/state transitions.
-2. **Canvas2D island** — плотные процедурные 2D (rain, glitch wall). Прецедент GT: letter-glitch порт = Canvas2D, 3KB, вместо 302KB React-пути (spike E01).
-3. **GSAP** — сложные timeline/pin/scrub (только при реальной оркестровке).
-4. **R3F/three** — только при scene graph / camera / materials из брифа; всегда lazy island + static fallback (constraints роутера S3).
-5. **Prerendered media** — если интерактивность не нужна и real-time дороже.
+2. **Canvas2D island** — dense procedural 2D (rain, glitch wall). GT precedent: the letter-glitch port was Canvas2D, 3KB, instead of a 302KB React path (spike E01).
+3. **GSAP** — complex timeline/pin/scrub (only with real orchestration).
+4. **R3F/three** — only when the brief calls for a scene graph, camera or materials; always a lazy island plus a static fallback (router constraints S3).
+5. **Prerendered media** — when interactivity is not needed and real-time costs more.
 
-Профиль проекта (stackrouter) — потолок: в static-lite React не появляется ради эффекта.
+The project profile (stackrouter) is the ceiling: React does not appear in static-lite for the sake of an effect.
 
-## 2. Обязательные свойства реализации (инварианты viewer'а)
+## 2. Mandatory properties of the implementation (the viewer's invariants)
 
-- **Motion-грамматика:** durations/easings/тики — из токенов проекта или чисел рецепта; случайные значения «на глаз» = дефект.
-- **Детерминизм:** `?visual-test=1` даёт байт-стабильный кадр (seeded PRNG, анимации off) — контракт harness WSF-08.
-- **Lifecycle:** destroy() с cancelAnimationFrame + removeEventListener + observer.disconnect; пауза вне viewport (IntersectionObserver). Проверяет motion-qa `raf-after-settle`.
-- **Reduced-motion:** статичный содержательный кадр + live-реакция на смену media query; site-wide CSS kill-switch обязателен.
-- **No-JS:** смысл и CTA секции живут в разметке, не в canvas.
-- **Wall-time, не кадры:** всё «за время» (распад частиц, fade, скорость) считается через `delta = time - lastTime` с clamp ~100 мс, движение нормализуется `pos += v * (delta/16.7)`. rAF не гарантирует 60fps: под троттлингом (headless-прогон, слабая машина, энергосбережение) «0.5 с при 60fps» превращается в 5-10 реальных секунд — декор виснет, e2e флейкают. Признак: константа вида `decay = 1/40` «на кадр», `alpha += STEP` без delta; тест стабилен в изоляции и флейкает в полном прогоне.
-- **Иконка, которая должна краситься контекстом, инжектится как inline `<svg>`:** `<img src="icon.svg">` не наследует `currentColor` и CSS-переменные страницы. Делать системно (модуль-инжектор + пометка `data-inline-icon`), а не точечно; иначе иконки чернеют на цветных подложках.
-- **Атрибуция лицензии** — в шапке кода, если рецепт требует.
+- **Motion grammar:** durations, easings and ticks come from the project's tokens or the recipe's numbers; values picked by eye are a defect.
+- **Determinism:** `?visual-test=1` yields a byte-stable frame (seeded PRNG, animation off) — the WSF-08 harness contract.
+- **Lifecycle:** destroy() with cancelAnimationFrame + removeEventListener + observer.disconnect; pause outside the viewport (IntersectionObserver). motion-qa checks this with `raf-after-settle`.
+- **Reduced-motion:** a static, meaningful frame plus a live reaction to the media query changing; a site-wide CSS kill switch is mandatory.
+- **No-JS:** the section's meaning and CTA live in the markup, not in the canvas.
+- **Wall-time, not frames:** everything "over time" (particle decay, fade, speed) is computed through `delta = time - lastTime` with a clamp of ~100 ms, and movement is normalised as `pos += v * (delta/16.7)`. rAF does not guarantee 60fps: under throttling (a headless run, a weak machine, power saving) "0.5 s at 60fps" turns into 5-10 real seconds — the decor hangs and e2e tests flake. The tell-tale: a constant like `decay = 1/40` "per frame", or `alpha += STEP` with no delta; the test is stable in isolation and flakes in a full run.
+- **An icon that must be coloured by its context is injected as an inline `<svg>`:** `<img src="icon.svg">` does not inherit `currentColor` or the page's CSS variables. Do it systematically (an injector module plus a `data-inline-icon` marker), not case by case; otherwise icons turn black on coloured backgrounds.
+- **Licence attribution** goes in the code header when the recipe requires it.
 
-## 3. Порядок
+## 3. The order
 
 ```bash
-# 0. Recipe валиден (или spike помечен)
-component-intake recipe --validate <recipe.json>          # exit 0 обязателен
-# 1. Реализация в feature branch проекта по patch_set рецепта
-# 2. Evidence-цикл (каждый круг, cap 3 итерации -> эскалация владельцу):
-npm run check:visual-determinism                          # STABLE обязателен
+# 0. The recipe is valid (or the spike is marked)
+component-intake recipe --validate <recipe.json>          # exit 0 is mandatory
+# 1. Implementation in the project's feature branch, per the recipe's patch_set
+# 2. The evidence cycle (every round, cap 3 iterations -> escalate to the owner):
+npm run check:visual-determinism                          # STABLE is mandatory
 node .../motion-qa.mjs --project <proj> --url <live> --budgets <proj budgets>
-node .../fidelity-audit.mjs ... (скриншот для приёмки)
-# 3. СТОП перед baseline: visual-приёмка и baseline — только владелец (GATE-5)
+node .../fidelity-audit.mjs ... (a screenshot for acceptance)
+# 3. STOP before the baseline: visual acceptance and the baseline belong to the owner alone (GATE-5)
 ```
 
-## GT-прецедент (эталон исполнения)
+## GT precedent (the reference execution)
 
-letter-glitch-wall в matrix-3d-web (2026-07-19): из accepted recipe, Canvas2D island, все инварианты §2 выполнены, motion-qa PASS 9/9, determinism STABLE ×3, два пойманных гейтами гэпа исправлены в том же цикле. Реализация обязана выдерживать это же качество evidence.
+letter-glitch-wall in matrix-3d-web (2026-07-19): from an accepted recipe, a Canvas2D island, every §2 invariant met, motion-qa PASS 9/9, determinism STABLE ×3, and two gaps caught by gates fixed in the same cycle. An implementation must hold up to that same quality of evidence.

@@ -1,7 +1,7 @@
 """Search engine core: index loading, cosine search, filters, trim_meta,
 compact formatting. Used warm by the daemon and cold by the client fallback.
 
-Ported from Genevra search-daemon.py::_search_source/_trim_meta with the
+Ported from the predecessor's search daemon (_search_source/_trim_meta) with the
 wikilinks filter extension. Embeddings are L2-normalized at encode time,
 so cosine similarity == dot product (numpy only, no sklearn).
 """
@@ -161,7 +161,7 @@ class SearchEngine:
         has_filters = any(req.get(k) for k in
                           ("filter_type", "filter_tags", "path_prefix",
                            "filter_wikilinks", "repos", "filter_project"))
-        pool = top_k * (20 if has_filters else 3)   # Genevra candidate pool
+        pool = top_k * (20 if has_filters else 3)   # candidate pool
         scores = embs @ q_emb                        # cosine (normalized)
         order = np.argsort(scores)[::-1][:pool]
         lexical_hits: set[int] = set()
@@ -251,7 +251,7 @@ class SearchEngine:
 
     # ------------------------------------------------------------------
     def _trim_meta(self, meta: dict[str, Any], req: dict[str, Any]) -> dict[str, Any]:
-        """Token-economy trim (Genevra): drop denormalized/empty/default fields,
+        """Token-economy trim: drop denormalized/empty/default fields,
         strip frontmatter from content, cut to excerpt."""
         out = {}
         excerpt = int(req.get("excerpt_chars", self.cfg.get("excerpt_chars")))

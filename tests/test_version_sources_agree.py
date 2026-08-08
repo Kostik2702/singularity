@@ -56,3 +56,51 @@ def test_pyproject_and_package_agree() -> None:
 def test_the_version_is_a_release_number() -> None:
     """Guards the shape, so a typo cannot pass the agreement check by matching it."""
     assert re.fullmatch(r"\d+\.\d+\.\d+", _package_version()), _package_version()
+
+
+def test_nothing_claims_a_version_that_does_not_exist_yet():
+    """`pyproject` and `__init__` agreeing says nothing about PROSE.
+
+    Four docstrings were written on 2026-08-08 saying "changed in v0.17.0" while
+    the repo stood at 0.16.0 and the CHANGELOG had no such entry — a sentence
+    that reads as authoritative and is unverifiable, and that becomes false if
+    the work ships as 0.16.1 instead. Dates are facts and need no release; a
+    version number is a promise about one.
+
+    Scoped to THIS project's major series. The first version of the check
+    matched any `vX.Y.Z` and flagged the Node versions in the CLI-locator
+    fixtures — a check that cries wolf is a check somebody switches off
+    (`redact.py` says the same about its own placeholder list). Comparing majors
+    follows the project automatically if it ever leaves 0.x.
+    """
+    import re
+    import subprocess
+    from pathlib import Path
+
+    engine = Path(__file__).resolve().parents[1]
+    current = tuple(int(p) for p in _pyproject_version().split("."))
+    pattern = re.compile(r"\bv(\d+)\.(\d+)\.(\d+)\b")
+
+    tracked = subprocess.run(["git", "ls-files"], cwd=engine, capture_output=True,
+                             text=True, check=True).stdout.split("\n")
+    ahead: dict[str, set[str]] = {}
+    for rel in tracked:
+        if not rel or not rel.endswith((".py", ".md")):
+            continue
+        if rel == f"tests/{Path(__file__).name}":
+            continue                     # this file names the example it forbids
+        try:
+            text = (engine / rel).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        future = {m.group(0) for m in pattern.finditer(text)
+                  if int(m.group(1)) == current[0]
+                  and tuple(int(g) for g in m.groups()) > current}
+        if future:
+            ahead[rel] = future
+
+    assert ahead == {}, (
+        f"these name a version later than {'.'.join(map(str, current))}, which "
+        f"has not shipped:\n  "
+        + "\n  ".join(f"{rel}: {', '.join(sorted(v))}" for rel, v in sorted(ahead.items()))
+        + "\nUse the date instead — it is true without waiting for a release.")

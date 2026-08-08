@@ -1,98 +1,99 @@
-# Корпус кода (`.mb/code_index/`)
+# The code corpus (`.mb/code_index/`)
 
-Третий поисковый корпус Singularity: семантический поиск по исходникам наравне
-с памятью. Закрывает MB-05 (`TASK-05_Code_Indexer`, висел `todo` с 2026-07-02),
-реализован эпиком `SINGULARITY-CODE` (C00–C07).
+Singularity's third search corpus: semantic search over source files, level with
+memory. It closes MB-05 (`TASK-05_Code_Indexer`, sitting at `todo` since
+2026-07-02) and was implemented by the `SINGULARITY-CODE` epic (C00–C07).
 
-**Одной строкой:** «как у нас реализован retry» должно находиться в коде так
-же быстро, как решение находится в памяти — но код никогда не попадает в
-выдачу без явного `--with-code`.
+**In one line:** "how did we implement retry" should be findable in the code as
+fast as a decision is findable in memory — but code never reaches the results
+without an explicit `--with-code`.
 
 ---
 
-## 1. Быстрый старт
+## 1. Quick start
 
 ```powershell
-mb config set code_repos_dir "<path/to/your/repos>"   # каталог, ГДЕ ЛЕЖАТ репозитории
-mb index rebuild --code                               # первая сборка
-mb search "как реализован retry" --with-code
+mb config set code_repos_dir "<path/to/your/repos>"   # the directory the repositories LIVE IN
+mb index rebuild --code                               # the first build
+mb search "how is retry implemented" --with-code
 mb search "retry" --code-only --repos api,web
 ```
 
-Путь — это каталог-**родитель** репозиториев, а не один репозиторий: первый
-сегмент относительного пути становится значением `repo` в чанке, по которому
-работает `--repos`. Поддерживается `~` (`~/code`).
+The path is the **parent** directory of the repositories, not one repository:
+the first segment of the relative path becomes the chunk's `repo` value, which
+is what `--repos` filters on. `~` is supported (`~/code`).
 
-Не задан `code_repos_dir` — корпус выключен. Это единственный выключатель;
-отдельного булева ключа нет намеренно (решение **D1**), иначе появился бы
-второй источник правды, способный разойтись с первым.
+With `code_repos_dir` unset the corpus is off. That is the only switch; there is
+deliberately no separate boolean key (decision **D1**), because a second source
+of truth could drift from the first.
 
-## 2. Команды и ключи
+## 2. Commands and keys
 
-| Команда | Что делает |
+| Command | What it does |
 |---|---|
-| `mb index rebuild --code` | полная сборка корпуса кода |
-| `mb index update --code` | инкремент по (mtime, size); удалённые файлы теряют чанки |
-| `mb index inspect <path> --code` | чанки одного файла в текущем поколении |
-| `mb search <q> --with-code` | память + код (код НЕ в дефолтной выдаче) |
-| `mb search <q> --code-only` | только код |
-| `mb search <q> --repos api,web` | фильтр по репозиториям (применяется только к коду) |
-| `mb nightly` | шаг `code_index` догоняет корпус |
-| `mb stats` / `mb status` | строка кода, когда корпус сконфигурирован |
-| `mb doctor` | блок `K1-code-index`: WARN/SKIP/PASS, **никогда не FAIL** |
-| `mb doctor --fix --heavy` | соберёт корпус, если он сконфигурирован, но не собран |
+| `mb index rebuild --code` | a full build of the code corpus |
+| `mb index update --code` | an increment by (mtime, size); deleted files lose their chunks |
+| `mb index inspect <path> --code` | the chunks of one file in the current generation |
+| `mb search <q> --with-code` | memory + code (code is NOT in the default results) |
+| `mb search <q> --code-only` | code only |
+| `mb search <q> --repos api,web` | filter by repository (applies to code only) |
+| `mb nightly` | the `code_index` step catches the corpus up |
+| `mb stats` / `mb status` | a code line, once the corpus is configured |
+| `mb doctor` | the `K1-code-index` block: WARN/SKIP/PASS, **never FAIL** |
+| `mb doctor --fix --heavy` | builds the corpus if it is configured but not built |
 
-| Конфиг-ключ | Дефолт | Смысл |
+| Config key | Default | Meaning |
 |---|---|---|
-| `code_repos_dir` | `null` | каталог с репозиториями; `null` = корпус выключен |
-| `code_index_max_age_days` | `7` | после этого `mb doctor` даёт WARN о протухании |
-| `code_skip_dirs` | `[]` | дополнительные имена каталогов, вырезаемые на любой глубине |
+| `code_repos_dir` | `null` | the directory holding the repositories; `null` = corpus off |
+| `code_index_max_age_days` | `7` | past this `mb doctor` WARNs about staleness |
+| `code_skip_dirs` | `[]` | extra directory names cut at any depth |
 
-**Репозиторий вне корня** подключается ссылкой, без переноса:
+**A repository outside the root** is attached by a link, without moving it:
 
 ```powershell
 # Windows
-New-Item -ItemType Junction -Path "<корень>\<имя>" -Target "<путь к репозиторию>"
+New-Item -ItemType Junction -Path "<root>\<name>" -Target "<path to the repository>"
 ```
 ```bash
 # macOS / Linux
-ln -s "<путь к репозиторию>" "<корень>/<имя>"
+ln -s "<path to the repository>" "<root>/<name>"
 ```
 
-Репозиторий индексируется как обычный ребёнок корня, а его editable-install,
-хуки и `.venv` остаются на месте. Убрать — удалить ссылку, данные не
-затрагиваются.
+The repository is indexed as an ordinary child of the root, while its editable
+install, its hooks and its `.venv` stay where they are. To detach it, delete the
+link; no data is touched.
 
-> **Кросс-платформенная тонкость, из-за которой это работает.** Корпус кода
-> сканируется с `follow_links=True`. Windows-junction `os.walk` проходит и без
-> этого (Python сообщает про него `islink=False`), а POSIX-симлинк — **нет**:
-> без опции репозиторий на macOS/Linux молча не индексировался бы вовсе.
-> Следование ссылкам делает достижимым цикл (ссылка на предка), поэтому каждый
-> каталог запоминается по `realpath` — на Windows цикл через junction был
-> достижим и раньше, без всякой опции.
+> **The cross-platform subtlety that makes this work.** The code corpus is
+> scanned with `follow_links=True`. `os.walk` traverses a Windows junction even
+> without it (Python reports `islink=False` for one), but a POSIX symlink —
+> **no**: without the option a repository on macOS/Linux would silently not be
+> indexed at all. Following links makes a cycle reachable (a link to an
+> ancestor), so every directory is remembered by `realpath` — on Windows a cycle
+> through a junction was reachable before, with no option at all.
 >
-> Корпуса памяти и источников ссылки **не** следуют намеренно: дерево заметок
-> пишется на месте, и тихо уйти по ссылке наружу значило бы проиндексировать
-> файлы, которых пользователь в vault не клал.
+> The memory and sources corpora deliberately do **not** follow links: the note
+> tree is written in place, and quietly walking out through a link would index
+> files the user never put in the vault.
 
-`~` в `code_repos_dir` разворачивается: `config.example.json` намеренно хранит
-этот ключ home-относительным для переносимости.
+`~` in `code_repos_dir` is expanded: `config.example.json` deliberately keeps
+this key home-relative for portability.
 
-## 3. Что индексируется, что нет и почему
+## 3. What is indexed, what is not, and why
 
-### Расширения (`code_chunking.CODE_PATTERNS`)
+### Extensions (`code_chunking.CODE_PATTERNS`)
 
 `*.py` · `*.ts` · `*.tsx` · `*.js` · `*.jsx`
 
-`.rb` нет **осознанно** (решение **D6**): в кодбейсе ноль `.rb`-файлов, а
-чанкер под язык, который нечем протестировать — это непроверенная догадка.
-`.rb` попадает в fallback-окна и честно не притворяется поддержанным.
+`.rb` is absent **on purpose** (decision **D6**): there are zero `.rb` files in
+the codebase, and a chunker for a language nothing can test it against is an
+unverified guess. `.rb` falls into fallback windows and honestly does not
+pretend to be supported.
 
-Расширения — это ещё и первый слой приватности (**D5**): `.env`, `.pem`,
-дампы и ключи исключены *по построению*, а не потому что кто-то вспомнил про
-них в skip-списке.
+Extensions are also the first layer of privacy (**D5**): `.env`, `.pem`, dumps
+and keys are excluded *by construction*, not because somebody remembered to put
+them in a skip list.
 
-### Каталоги (`SKIP_DIRS`) — вырезаются на любой глубине
+### Directories (`SKIP_DIRS`) — cut at any depth
 
 `.git` `.hg` `.svn` · `node_modules` `bower_components` `vendor` `third_party` ·
 `.venv` `venv` `env` `virtualenv` `site-packages` · `__pycache__`
@@ -102,325 +103,369 @@ ln -s "<путь к репозиторию>" "<корень>/<имя>"
 `__snapshots__` `__tests__` · `Pods` `DerivedData` `.idea` `.vscode` `.mb` ·
 `_static`
 
-Это **самый эффективный фильтр во всей фиче** и единственный, который режет
-до входа в подкаталог. Отсюда и переход `_scan_corpus` с `rglob` на `os.walk`:
-`rglob` спускается в `node_modules` и выбрасывает результат уже потом, то есть
-платит полную цену обхода.
+This is **the most effective filter in the whole feature** and the only one that
+cuts before entering a subdirectory. Hence `_scan_corpus` moving from `rglob` to
+`os.walk`: `rglob` descends into `node_modules` and throws the result away
+afterwards, which is to say it pays the full price of the walk.
 
-> `skip_dirs` в `Corpus` (первый сегмент пути) и `prune_dirs` (имя каталога на
-> любой глубине) — разные механизмы. Для vault, укоренённого в своих заметках,
-> хватало первого; для корня с 13 репозиториями `node_modules` лежит на третьем
-> уровне, и первый механизм его не видит вообще.
+> `skip_dirs` in `Corpus` (the first path segment) and `prune_dirs` (a directory
+> name at any depth) are different mechanisms. For a vault rooted in its own
+> notes the first was enough; for a root holding 13 repositories `node_modules`
+> sits at the third level, and the first mechanism never sees it.
 
-### Файлы (`SKIP_FILE_PATTERNS`) — глоб по всему относительному пути
+### Files (`SKIP_FILE_PATTERNS`) — a glob over the whole relative path
 
 `*.test.*` `*.spec.*` · `*.min.js` `*.min.css` `*.bundle.js` `*.map` ·
 `*.d.ts` · `*/migrations/*` `*_pb2.py` `*_pb2_grpc.py` `*.generated.*` ·
 `*secret*` `*credential*`
 
-Матчинг регистронезависимый на всех платформах намеренно: `fnmatch` складывает
-регистр только на Windows, и skip-правило, тихо переставшее работать на Linux,
-— это ровно тот класс расхождений, который замечают через полгода.
+Matching is case-insensitive on every platform, deliberately: `fnmatch` folds
+case only on Windows, and a skip rule that quietly stopped working on Linux is
+exactly the class of divergence people notice six months later.
 
-*Следствие на файловых системах с учётом регистра* (Linux, и macOS при
-case-sensitive томе): матчинг **включающих** паттернов тоже регистро-независим,
-поэтому `README.MD` или `Setup.PY` теперь попадают в индекс, тогда как прежний
-`rglob("*.md")` их пропускал (`pathlib` сравнивает через `os.path.normcase`, а
-на POSIX это тождество). Изменение идёт в сторону «проиндексировано больше», то
-есть в видимую, а не в молчаливую.
+*A consequence on case-sensitive filesystems* (Linux, and macOS on a
+case-sensitive volume): matching of the **including** patterns is
+case-insensitive too, so `README.MD` or `Setup.PY` now reach the index where the
+old `rglob("*.md")` skipped them (`pathlib` compares through `os.path.normcase`,
+which on POSIX is the identity). The change moves toward "more was indexed",
+which is the visible direction rather than the silent one.
 
-### Вендоренные дистрибутивы (`VENDORED_DIR_PATTERN`)
+### Vendored distributions (`VENDORED_DIR_PATTERN`)
 
 ```
 ^.+[-_]v?\d+(?:\.\d+){2,}(?:[-_.].*)?$
 ```
 
-Каталог, имя которого несёт **версию из трёх и более числовых компонентов**
-(`renpy-8.5.2-sdk`, `node-v18.17.1-win-x64`, `python-3.11.4`, `jdk-17.0.2`) —
-это распакованный сторонний дистрибутив, а не написанный руками код.
-`SKIP_DIRS` такое не выражает: имя содержит версию, а версии не перечислимы.
+A directory whose name carries a **version of three or more numeric components**
+(`renpy-8.5.2-sdk`, `node-v18.17.1-win-x64`, `python-3.11.4`, `jdk-17.0.2`) is an
+unpacked third-party distribution, not hand-written code. `SKIP_DIRS` cannot
+express that: the name contains a version, and versions are not enumerable.
 
-**Почему именно три компонента, а не два.** Два матчили бы `core-2.0`,
-`sd-1.5`, `lr-0.001`, `api-v2` — то есть свой же код. Это правило ошибается
-**молча**: лишнее исключение убирает настоящий код и ничего не говорит, тогда
-как пропуск виден в выдаче и чинится одной строкой в `code_skip_dirs`. Когда
-направления ошибки несимметричны, правило обязано клониться в громкую сторону.
+**Why three components and not two.** Two would match `core-2.0`, `sd-1.5`,
+`lr-0.001`, `api-v2` — your own code, that is. This rule errs **silently**: a
+spurious exclusion removes real code and says nothing, whereas a miss is visible
+in the results and fixed by one line in `code_skip_dirs`. When the two
+directions of error are asymmetric, the rule must lean toward the loud one.
 
-**Известные пропуски** (осознанные, закреплены тестом): версия через
-подчёркивания (`boost_1_82_0`), одно-компонентная (`node-v20`), слитная
-(`Qt5.15`). Лечение — добавить имя каталога в `code_skip_dirs`.
+**Known misses** (deliberate, pinned by a test): a version separated by
+underscores (`boost_1_82_0`), a single component (`node-v20`), a fused one
+(`Qt5.15`). The cure is to add the directory name to `code_skip_dirs`.
 
-**Ложные срабатывания тоже возможны**, и у них своё лечение. Правило матчит и
-правдоподобные *свои* имена — `schema-1.0.0`, `proto-3.21.12`, `chart-0.1.0`.
-`code_skip_dirs` тут не поможет: он умеет только ДОБАВЛЯТЬ вырезание, не
-отменять. Поэтому сам паттерн — конфигурируемый:
+**False positives are possible too**, and they have their own cure. The rule also
+matches plausible names of your *own* — `schema-1.0.0`, `proto-3.21.12`,
+`chart-0.1.0`. `code_skip_dirs` does not help there: it can only ADD an
+exclusion, never cancel one. So the pattern itself is configurable:
 
-| Значение `code_vendored_pattern` | Смысл |
+| `code_vendored_pattern` value | Meaning |
 |---|---|
-| `null` (дефолт) | встроенный `VENDORED_DIR_PATTERN` |
-| `""` | правило выключено целиком |
-| своя regex-строка | заменяет встроенную (валидируется при записи) |
+| `null` (default) | the built-in `VENDORED_DIR_PATTERN` |
+| `""` | the rule is off entirely |
+| your own regex string | replaces the built-in one (validated on write) |
 
-Диагностика: вырезанное всегда названо по имени в выводе `mb index rebuild
---code`, в `mb stats` и в `tools/code_index_audit.py` — если там оказался ваш
-каталог, это видно, а не выясняется через месяц по пустой выдаче.
+Diagnostics: what was cut is always named, by name, in the output of `mb index
+rebuild --code`, in `mb stats` and in `tools/code_index_audit.py` — so if your
+directory ended up there, you can see it rather than discover it a month later
+through empty results.
 
-Правило **не применяется** к markdown-корпусам: `Corpus.vendored_dir_pattern`
-у них пустой, поэтому заметка в папке `reference-1.2.3` продолжает
-индексироваться.
+The rule does **not** apply to markdown corpora: their `Corpus.vendored_dir_pattern`
+is empty, so a note in a folder called `reference-1.2.3` keeps being indexed.
 
-### Репозитории (`SKIP_REPOS`)
+### Repositories (`SKIP_REPOS`)
 
-`test-project` · `genevra-portable` (решение **D1**).
+`test-project` (decision **D1**).
 
-Ошибка в сторону «лишнее проиндексировано» выбрана осознанно: она видна в
-выдаче и правится одной строкой, тогда как allowlist ошибается молча.
+Erring toward "something extra got indexed" is deliberate: that failure is
+visible in the results and fixed by one line, whereas an allowlist fails
+silently.
 
-### Размер
+### Size
 
-`MAX_FILE_BYTES = 100_000`. Граница включительна: ровно 100 000 байт
-индексируется, 100 001 — нет.
+`MAX_FILE_BYTES = 100_000`. The boundary is inclusive: exactly 100 000 bytes is
+indexed, 100 001 is not.
 
-### Порядок отсева — это контракт, а не стиль
+### The order of rejection is a contract, not a style
 
 ```
-1. prune каталога       во время обхода, подкаталог не открывается
-2. glob по имени файла  строковое сравнение, без syscall
-3. skip_dirs/skip_parts сравнение относительного пути, без syscall
-4. skip_file_patterns   regex по относительному пути, без syscall
-5. stat()               единственный syscall, только для выживших
+1. prune the directory   during the walk, the subdirectory is never opened
+2. glob on the filename  a string comparison, no syscall
+3. skip_dirs/skip_parts  a relative-path comparison, no syscall
+4. skip_file_patterns    a regex over the relative path, no syscall
+5. stat()                the only syscall, and only for the survivors
 ```
 
-Перестановка 4 и 5 стоит одного `stat()` на каждого кандидата. На разведке
-кодбейса (эпик §2) это была разница между 504 нужными файлами и 56 094
-кандидатами — 111×. Порядок закреплён тестом со счётчиком-шпионом
+Swapping 4 and 5 costs one `stat()` per candidate. On the codebase survey (epic
+§2) that was the difference between 504 wanted files and 56 094 candidates —
+111×. The order is pinned by a test with a spy counter
 (`tests/test_indexer.py::test_scan_never_stats_a_file_it_already_rejected`).
 
-## 4. Чанкер: границы символов, не AST
+## 4. The chunker: symbol boundaries, not an AST
 
-`singularity/search/code_chunking.py`. Regex по строкам — сознательный отказ
-от tree-sitter: парсер на язык это зависимость, беговая дорожка версий и
-жёсткий отказ на первом же файле, который не разобрался, в обмен на, может
-быть, 20% лучшие границы. Regex деградирует в окна фиксированного размера
-вместо падения — именно то поведение, которое нужно на корне, полном
-недописанных черновиков.
+`singularity/search/code_chunking.py`. Line-based regex is a conscious refusal of
+tree-sitter: a parser per language is a dependency, a treadmill of versions and a
+hard failure on the first file that does not parse, in exchange for maybe 20%
+better boundaries. Regex degrades into fixed-size windows instead of failing —
+exactly the behaviour needed on a root full of unfinished drafts.
 
-| Константа | Значение | Зачем |
+| Constant | Value | What for |
 |---|---|---|
-| `MAX_BODY_LINES` | 60 | обрезка тела символа |
-| `DOC_LOOKBACK_LINES` | 7 | комментарий-баннер над сигнатурой |
-| `DOC_DESCRIPTION_LINES` | 4 | сколько строк дока идёт в `description` |
-| `MIN_CHUNK_CHARS` | 30 | ниже — заглушка или ре-экспорт, не символ |
-| `FALLBACK_WINDOW_LINES` | 40 | окно, когда границ нет вообще |
-| `FALLBACK_OVERLAP_LINES` | 10 | перекрытие окон |
-| `FALLBACK_MIN_CHARS` | 50 | минимум для окна |
-| `EMBED_CODE_CHARS` | 250 | сколько тела попадает в эмбеддинг |
-| `CODE_CHUNK_SCHEMA_VERSION` | 1 | версия формата чанка **этого** корпуса |
+| `MAX_BODY_LINES` | 60 | truncation of a symbol's body |
+| `DOC_LOOKBACK_LINES` | 7 | a banner comment above the signature |
+| `DOC_DESCRIPTION_LINES` | 4 | how many doc lines go into `description` |
+| `MIN_CHUNK_CHARS` | 30 | below this it is a stub or a re-export, not a symbol |
+| `FALLBACK_WINDOW_LINES` | 40 | the window when there are no boundaries at all |
+| `FALLBACK_OVERLAP_LINES` | 10 | overlap between windows |
+| `FALLBACK_MIN_CHARS` | 50 | the minimum for a window |
+| `EMBED_CODE_CHARS` | 250 | how much of the body reaches the embedding |
+| `CODE_CHUNK_SCHEMA_VERSION` | 1 | the chunk format version of **this** corpus |
 
-**Python — главный путь** (69% кодбейса, решение D6) и полностью новый код:
-у Genevra `.py` шёл через TS-чанкер и почти всегда падал в fallback.
-Реализовано: `def` / `async def` / `class`, метод внутри класса отдельным
-чанком, декораторы втягиваются в чанк снизу (`@app.route("/orders")` — самый
-искомый факт о хендлере), docstring читается **вперёд** от сигнатуры (включая
-многострочную), `#`-баннер — назад.
+**Python is the main path** (69% of the codebase, decision D6) and entirely new
+code: in the predecessor `.py` went through the TS chunker and almost always fell
+into fallback. Implemented: `def` / `async def` / `class`, a method inside a class
+as its own chunk, decorators pulled into the chunk below them (`@app.route("/orders")`
+is the single most-searched fact about a handler), the docstring read **forward**
+from the signature (including a multi-line one), and a `#` banner read backward.
 
-**TS/JS/JSX** — портированные границы: `class` / `interface` / `function` /
-`enum` и `export const|let|var` (покрывает и стрелочные функции, и объекты
-конфигурации — публичная поверхность модуля).
+**TS/JS/JSX** — ported boundaries: `class` / `interface` / `function` / `enum` and
+`export const|let|var` (which covers both arrow functions and configuration
+objects — a module's public surface).
 
-Поля чанка: `file`, `repo`, `kind`, `name`, `description`, `content`,
-`line_start`, `line_end`, `chunk_id`, `text`. Имена не выбирались заново:
-`engine._compact_line` уже читает `kind`/`name`, а `_match_filters` — `repo`.
-Читающая половина была построена в W03 заранее и намеренно.
+Chunk fields: `file`, `repo`, `kind`, `name`, `description`, `content`,
+`line_start`, `line_end`, `chunk_id`, `text`. The names were not chosen afresh:
+`engine._compact_line` already reads `kind`/`name`, and `_match_filters` reads
+`repo`. The reading half was built ahead of time in W03, deliberately.
 
-Два осознанных отступления от буквы ТЗ:
+Two conscious departures from the letter of the spec:
 
-1. Эмбеддится `"{file} — {kind} {name}: {doc} | {код[:250]}"`, а **не**
-   `"{repo}/{file} — …"`: `file` здесь относителен корню корпуса и уже
-   начинается с сегмента репозитория (ключ формирует `_scan_corpus`, и по нему
-   же `_update` считает keep-маску), так что `repo` спереди дал бы
-   `api/api/app.py`.
-2. `line_end` — последняя **включённая** строка после обрезки тела, а не
-   реальный конец символа. Так пара `(line_start, line_end)` проверяема:
-   чтение этих строк из файла воспроизводит `content` — что и проверяет тест.
+1. What is embedded is `"{file} — {kind} {name}: {doc} | {code[:250]}"`, and
+   **not** `"{repo}/{file} — …"`: `file` here is relative to the corpus root and
+   already begins with the repository segment (the key is formed by
+   `_scan_corpus`, and `_update` computes the keep-mask from the same one), so a
+   leading `repo` would give `api/api/app.py`.
+2. `line_end` is the last **included** line after the body was truncated, not the
+   real end of the symbol. That keeps the pair `(line_start, line_end)`
+   verifiable: reading those lines from the file reproduces `content` — which is
+   what the test checks.
 
-**Известное ограничение:** преамбула файла (модульный docstring, импорты) в
-чанк не превращается — чанк начинается на первой границе символа. Файл вообще
-без границ (конфиг-объект, голый скрипт) уходит в fallback-окна целиком.
+**Known limitation:** a file's preamble (the module docstring, the imports) does
+not become a chunk — a chunk starts at the first symbol boundary. A file with no
+boundaries at all (a config object, a bare script) goes entirely into fallback
+windows.
 
-## 5. Цифры на реальном кодбейсе (C06)
+## 5. Numbers on a real codebase (C06)
 
-Снято 2026-07-29 на реальном корне репозиториев (13 репозиториев смешанного
-стека: Python-инструменты, ComfyUI-ноды, несколько фронтендов, один проект с
-вендоренным движком). Windows 11 Pro 26200, энкодер на CPU.
+Taken 2026-07-29 on a real repository root (13 repositories of a mixed stack:
+Python tools, ComfyUI nodes, several frontends, one project with a vendored
+engine). Windows 11 Pro 26200, encoder on CPU.
 
-| Метрика | Значение |
+| Metric | Value |
 |---|---|
-| Репозиториев | 13 |
-| Файлов проиндексировано | **440** |
-| Чанков | **3666** (память для сравнения: 3216 → отношение **1.1×**) |
-| Эмбеддинги | 5.6 МБ float32 |
-| `metadata.json` | 4.6 МБ |
-| Полная сборка (холодный старт демона + загрузка модели + 3666 эмбеддингов) | **71.4 с** |
-| `mb index update --code` без изменений | **0.5 с** |
-| Вырезано как вендоринг | `renpy-novel/renpy-8.5.2-sdk` |
-| Тёплый `mb search` без флагов | 13.5–18.1 мс (среднее 15.3) |
-| Тёплый `mb search --with-code` | 14.6–21.1 мс (среднее 16.8) |
+| Repositories | 13 |
+| Files indexed | **440** |
+| Chunks | **3666** (memory for comparison: 3216 → a ratio of **1.1×**) |
+| Embeddings | 5.6 MB float32 |
+| `metadata.json` | 4.6 MB |
+| Full build (cold daemon start + model load + 3666 embeddings) | **71.4 s** |
+| `mb index update --code` with no changes | **0.5 s** |
+| Cut as vendored | `renpy-novel/renpy-8.5.2-sdk` |
+| Warm `mb search` with no flags | 13.5–18.1 ms (mean 15.3) |
+| Warm `mb search --with-code` | 14.6–21.1 ms (mean 16.8) |
 
-**Доля fallback — 1.7%.** Это главный показатель качества чанкера: в 98.3%
-случаев regex нашёл настоящую границу символа, а не сдался в окна. Риск R3
-(«мусорные чанки на незнакомых стилях») на этом кодбейсе не реализовался.
+**The fallback share is 1.7%.** That is the chunker's main quality figure: in
+98.3% of cases the regex found a real symbol boundary rather than giving up into
+windows. Risk R3 ("junk chunks on unfamiliar styles") did not materialise on this
+codebase.
 
-**Бюджет не превышен.** Фильтры сужены не из-за бюджета, а из-за состава: см. §7.
+**The budget was not exceeded.** The filters were narrowed because of the
+composition, not because of the budget: see §7.
 
-### Приватность: проверка факта, а не гипотезы (D5, слой 3)
+### Privacy: checking a fact, not a hypothesis (D5, layer 3)
 
-Grep по `metadata.json` собранного корпуса:
+A grep over the built corpus's `metadata.json`:
 
-| Маркер | Найдено |
+| Marker | Found |
 |---|---|
 | `AKIA[0-9A-Z]{16}` | 0 |
 | `-----BEGIN … PRIVATE KEY-----` | 0 |
 | `password = "…"` | 0 |
 | `api_key` / `secret` / `token = "…"` | 0 |
-| `Bearer <20+ символов>` | 0 |
+| `Bearer <20+ characters>` | 0 |
 | `sk-…` / `ghp_…` | 0 |
-| **Итого** | **0** |
+| **Total** | **0** |
 
-Файлов с расширением `.env` / `.pem` / `.key` / `.p12` / `.pfx` / `.sql` /
-`.dump` в индексе: **0**. Файлов, в пути которых есть `secret`/`credential`:
+Files with the extensions `.env` / `.pem` / `.key` / `.p12` / `.pfx` / `.sql` /
+`.dump` in the index: **0**. Files with `secret`/`credential` in their path:
 **0**.
 
-Первые два слоя (расширения, skip-паттерны) — гипотезы о том, где живут
-секреты. Этот, третий — единственный, который проверяет факт:
+The first two layers (extensions, skip patterns) are hypotheses about where
+secrets live. This third one is the only one that checks a fact:
 
 ```powershell
-python tools/code_index_audit.py          # exit 1, если найден хоть один маркер
+python tools/code_index_audit.py          # exit 1 if even one marker is found
 python tools/code_index_audit.py --json
 ```
 
-Он же печатает состав корпуса — долю fallback и долю самого крупного
-репозитория (см. §7: доля выше 50% почти всегда означает вендоренную
-зависимость, проскочившую мимо `SKIP_DIRS`).
+It also prints the corpus composition — the fallback share and the share of the
+largest repository (see §7: a share above 50% almost always means a vendored
+dependency slipped past `SKIP_DIRS`).
 
-### Изоляция от памяти
+### Isolation from memory
 
-`memory_index/CURRENT` = `gen_1785272708380_4116_000032` **до и после** обеих
-полных сборок корпуса кода. Ни одна операция с кодом не тронула поколение
-памяти. Гейт C01 (апгрейд не форсит rebuild) проверен отдельно: `mb curator
---json` и `mb digest plan --json` совпали побайтово по SHA-256
+`memory_index/CURRENT` = `gen_1785272708380_4116_000032` **before and after** both
+full builds of the code corpus. No code operation touched the memory generation.
+Gate C01 (an upgrade must not force a rebuild) was checked separately: `mb curator
+--json` and `mb digest plan --json` matched byte for byte by SHA-256
 (`D956B408…`, `A59CA966…`).
 
-## 6. Решение D2 по цифрам
+## 6. Decision D2, by the numbers
 
-D2 сделал код opt-in (`--with-code`) с явной оговоркой: пересмотреть по
-цифрам C06. Цифры сняты — те же 10 контрольных запросов из
-[baseline](code-index-baseline.md), одна сессия, одна переменная:
+D2 made code opt-in (`--with-code`) with an explicit caveat: revisit it on the
+C06 numbers. The numbers were taken — the same 10 control queries from the
+[baseline](code-index-baseline.md), one session, one variable:
 
-Замер делался **дважды**, и второй раз перевернул вывод первого. Это и есть
-главный результат раздела.
+The measurement was taken **twice**, and the second run overturned the
+conclusion of the first. That is the section's main result.
 
-| Q | \| код-хитов \| C06 → C10 | \| вытеснено \| C06 → C10 | top-1 сменился, C06 → C10 |
+| Q | \| code hits \| C06 → C10 | \| displaced \| C06 → C10 | top-1 changed, C06 → C10 |
 |---|---|---|---|
-| Q01 | 0 → 2 | 0 → 2 | нет → **да** |
-| Q02 | 1 → 1 | 0 → 0 | нет → нет |
-| Q03 | 3 → 3 | 0 → 0 | нет → нет |
-| Q04 | 0 → **5** | 0 → **5** | нет → **да** |
-| Q05 | 0 → 1 | 0 → 1 | нет → **да** |
-| Q06 | 0 → 0 | 0 → 0 | нет → нет |
-| Q07 | 1 → 1 | 1 → 1 | нет → нет |
-| Q08 | 1 → 1 | 0 → 1 | нет → нет |
-| Q09 | 3 → 2 | 2 → 1 | нет → **да** |
-| Q10 | 1 → 2 | 1 → 2 | нет → нет |
-| **итого** | **10 → 18** / 50 | **4 → 13** / 50 | **0 → 4** / 10 |
+| Q01 | 0 → 2 | 0 → 2 | no → **yes** |
+| Q02 | 1 → 1 | 0 → 0 | no → no |
+| Q03 | 3 → 3 | 0 → 0 | no → no |
+| Q04 | 0 → **5** | 0 → **5** | no → **yes** |
+| Q05 | 0 → 1 | 0 → 1 | no → **yes** |
+| Q06 | 0 → 0 | 0 → 0 | no → no |
+| Q07 | 1 → 1 | 1 → 1 | no → no |
+| Q08 | 1 → 1 | 0 → 1 | no → no |
+| Q09 | 3 → 2 | 2 → 1 | no → **yes** |
+| Q10 | 1 → 2 | 1 → 2 | no → no |
+| **total** | **10 → 18** / 50 | **4 → 13** / 50 | **0 → 4** / 10 |
 
-**Первый замер (C06)** — корпус из 5775 чанков, 83% которых давал вендоренный
-чужой SDK. Вытеснение 8% слотов, top-1 не менялся ни разу. Вывод тогда: страх
-R1 не подтвердился, цифры разрешают вернуть мёрж по умолчанию.
+**The first measurement (C06)** — a corpus of 5775 chunks, 83% of which came
+from a vendored third-party SDK. Displacement of 8% of the slots, and top-1 never
+changed. The conclusion then: the R1 fear was not confirmed, and the numbers
+permit turning the merge back on by default.
 
-**Второй замер (после C09/C10)** — тот же инструмент, те же 10 запросов, корпус
-из 3666 чанков: чужой SDK вырезан, зато вошёл собственный код Singularity
-(204 файла). Вытеснение **утроилось**, top-1 сменился на 4 запросах из 10.
-Q04 («atomic commit поколений индекса») отдал 5 код-хитов из 5 и вынес весь
-топ-5 памяти.
+**The second measurement (after C09/C10)** — the same tool, the same 10 queries,
+a corpus of 3666 chunks: the third-party SDK was cut, but Singularity's own code
+came in (204 files). Displacement **tripled**, and top-1 changed on 4 queries out
+of 10. Q04 ("atomic commit of index generations") gave 5 code hits out of 5 and
+pushed the entire memory top-5 out.
 
-**Почему так, и почему это НЕ деградация.** Q04 теперь отвечает
-`_commit_generation` — то есть настоящей реализацией вместо заметки о ней.
-Качество ответа выросло; изменилась цена вопроса. Корпус кода вытесняет память
-ровно в меру того, насколько код релевантен запросу, а релевантность резко
-подскочила, когда в корпус вошёл **один** существенный первопартийный
-репозиторий.
+**Why, and why this is NOT a degradation.** Q04 is now answered by
+`_commit_generation` — the real implementation instead of a note about it. The
+answer got better; what changed is the price of the question. The code corpus
+displaces memory exactly in proportion to how relevant the code is to the query,
+and relevance jumped sharply the moment **one** substantial first-party
+repository entered the corpus.
 
-**Следствие для D2 — обратное тому, что показал первый замер.** Аргумент
-«вытеснение мало, можно включать мёрж по умолчанию» держался на составе
-корпуса, а не на свойстве системы: он рассыпался от добавления одного репо.
-Владелец сохранил opt-in именно с этой мотивировкой — «сейчас кода мало, но на
-больших продуктах это сыграет злую шутку», — и второй замер её подтвердил
-цифрами. **D2 остаётся: код только по `--with-code`.**
+**The consequence for D2 is the opposite of what the first measurement showed.**
+The argument "displacement is small, the merge can be on by default" rested on
+the corpus's composition, not on a property of the system: it collapsed when one
+repository was added. The owner kept opt-in with exactly this reasoning — "there
+is little code now, but on large products this will play a nasty trick" — and the
+second measurement confirmed it with figures. **D2 stands: code only with
+`--with-code`.**
 
-Мораль замера: одноразовые цифры про вытеснение измеряют не систему, а
-сегодняшний состав корпуса. Перепроверять после каждого изменения состава —
+The moral of the measurement: one-off displacement figures measure today's corpus
+composition, not the system. Re-check after every change of composition —
 `python tools/code_index_baseline.py capture --both && ... compare`.
 
-Гейт C04 отдельно: **дефолтная выдача `mb search` без флагов совпала с
-baseline C00 по всем 10 запросам, 0/10 расхождений** (`chunk_id` + `score` до
-4 знаков). При opt-in это обязано выполняться строго — любое расхождение было
-бы багом плумбинга.
+### Third measurement, 2026-08-08 — and what of it is comparable
 
-> **Открытый вопрос владельцу.** Цифры разрешают переключить дефолт на мёрж.
-> Решение не меняется автоматически: D2 выбирал сторону не по объёму, а по
-> асимметрии обратимости (opt-in → мёрж дёшево, обратно — ломать сложившуюся
-> привычку и чужие скрипты). Смена дефолта — отдельное решение владельца.
+`docs/code-index-baseline-2026-08-08.json` (`capture --both`, daemon restarted
+first so it served the current modules). The C00 file is NOT overwritten: it
+records a state that cannot be reproduced, since the corpus exists now.
 
-## 7. Наблюдения C06, требующие решения владельца
+| | C06 | C10 (v0.5.0) | 2026-08-08 |
+|---|---|---|---|
+| code hits in top-5 | 10 / 50 | 18 / 50 | **29 / 50** |
+| notes displaced | 4 / 50 | 13 / 50 | 24 / 50 |
+| top-1 changed | 0 / 10 | 4 / 10 | 9 / 10 |
 
-C06 нашёл две вещи, невидимые на фикстурах, — ровно поэтому он существует
-отдельной задачей. **Обе закрыты**, и обе оказались решениями владельца, а не
-багами.
+**Two variables moved at once, so the row was checked before it was believed.**
+This run's ten questions were re-worded into English while the vault is not; the
+code is. A wording that favours the code corpus would inflate every number here
+for a reason that has nothing to do with the corpus.
 
-**1. Репозиторий самого инструмента в корпус не попадал.** Он лежал вне
-`code_repos_dir`, а корень ровно один. Запрос «как у нас реализован atomic
-write» находил что угодно, кроме собственного кода.
+Re-measured with the ORIGINAL wording, same corpus, same session, one variable:
 
-*Закрыто junction'ом* (см. §2): репозиторий остаётся на месте, но виден из
-корня как обычный ребёнок. Перенос папки был отвергнут после проверки — от
-него отваливаются editable-install (`mb` перестаёт импортироваться), четыре
-хука Claude Code с абсолютными путями и `.venv` с зашитым старым путём.
-Многокорневой `code_repos_dir` тоже отвергнут: состязательное ревью показало,
-что он ломает `SKIP_REPOS` и `*/migrations/*` (имя репозитория уезжает из
-`sub` в префикс), требует миграции схемы и не выражается через `mb config set`
-на Windows. Junction даёт тот же результат одной командой и без единой строки
-кода.
+| | English wording | original wording |
+|---|---|---|
+| code hits in top-5 | 29 / 50 | **29 / 50** |
+| notes displaced | 24 / 50 | 21 / 50 |
+| top-1 changed | 9 / 10 | **5 / 10** |
 
-**2. Один репозиторий с вендоренным движком давал 83% корпуса.** Проект с
-распакованным SDK стороннего движка внутри (4776 чанков из 5775) доминировал
-в выдаче: на код-ориентированной пробе 5 из 10 первых попаданий приходили
-оттуда — например, метод ожидания анимации на запрос про retry-бэкофф.
+So: **code hits are robust to the wording** and the rise from 18 to 29 is the
+corpus, which is a real result and the one D2 is argued on. **top-1 is not** —
+9/10 against the earlier 4/10 compares two different question sets and means
+nothing. Displacement sits in between and should be read as "roughly a fifth to
+a half", not as a trend line.
 
-*Закрыто правилом `VENDORED_DIR_PATTERN`* (см. §3): каталог с версией из ≥3
-числовых компонентов вырезается на любой глубине, а вырезанное **называется
-по имени** в `mb index rebuild --code`, в `mb stats`, в `metadata.json` и в
-аудите. Счётчика было бы недостаточно: он не отличает «вырезан чужой движок»
-от «вырезан твой снапшот», то есть удовлетворяет букве правила против
-молчаливых исключений и не удовлетворяет его смыслу.
+D2 is untouched by this: every number moved in the direction the owner's
+reasoning already predicted ("there is little code now, but on large products
+this will play a nasty trick"), and the decision was never about the size of the
+effect.
 
-Диагностика состава в одну команду:
+Gate C04 separately: **the default `mb search` results with no flags matched the
+C00 baseline on all 10 queries, 0/10 divergences** (`chunk_id` + `score` to 4
+places). Under opt-in that has to hold strictly — any divergence would be a
+plumbing bug.
+
+> **An open question for the owner.** The numbers permit switching the default to
+> a merge. The decision does not change automatically: D2 chose its side not by
+> volume but by the asymmetry of reversibility (opt-in → merge is cheap, the
+> other way means breaking an established habit and other people's scripts).
+> Changing the default is a separate decision by the owner.
+
+## 7. C06 observations that need an owner decision
+
+C06 found two things invisible on fixtures — which is exactly why it exists as a
+separate task. **Both are closed**, and both turned out to be owner decisions
+rather than bugs.
+
+**1. The tool's own repository never reached the corpus.** It lay outside
+`code_repos_dir`, and there is exactly one root. The query "how did we implement
+atomic write" found anything except its own code.
+
+*Closed with a junction* (see §2): the repository stays where it is but is
+visible from the root as an ordinary child. Moving the folder was rejected after
+a check — it breaks the editable install (`mb` stops importing), four Claude Code
+hooks with absolute paths, and a `.venv` with the old path baked in. A
+multi-root `code_repos_dir` was rejected too: adversarial review showed it breaks
+`SKIP_REPOS` and `*/migrations/*` (the repository name moves out of `sub` into
+the prefix), requires a schema migration, and cannot be expressed through
+`mb config set` on Windows. A junction gives the same result in one command and
+without a single line of code.
+
+**2. One repository with a vendored engine produced 83% of the corpus.** A
+project with an unpacked third-party engine SDK inside it (4776 chunks out of
+5775) dominated the results: on a code-oriented probe 5 of the first 10 hits came
+from there — for example an animation-wait method for a query about retry
+backoff.
+
+*Closed by the `VENDORED_DIR_PATTERN` rule* (see §3): a directory with a version
+of ≥3 numeric components is cut at any depth, and what was cut is **named by
+name** in `mb index rebuild --code`, in `mb stats`, in `metadata.json` and in the
+audit. A counter would not have been enough: it does not distinguish "somebody
+else's engine was cut" from "your snapshot was cut", which satisfies the letter of
+the rule against silent exclusions and not its meaning.
+
+Composition diagnostics in one command:
 
 ```powershell
-python tools/code_index_audit.py     # строка `largest repo`
+python tools/code_index_audit.py     # the `largest repo` line
 ```
 
-Доля выше 50% на одном репозитории — сигнал, а не приговор: у вендоренной
-зависимости она такая же, как у вашего главного репозитория. На этой машине
-после обеих правок крупнейшим стал сам Singularity (72.7%) — это правильный
-исход, а не находка.
+A share above 50% for one repository is a signal, not a verdict: a vendored
+dependency has the same share as your main repository would. On this machine,
+after both fixes, the largest became Singularity itself (72.7%) — which is the
+right outcome, not a finding.
 
-## 8. Поток
+## 8. The flow
 
 ```text
-title Индексация и поиск по коду
+title Indexing and searching code
 
-participant U as "Пользователь"
+participant U as "User"
 participant CLI as "mb CLI"
 participant D as "search daemon"
 participant Corp as "Corpus(code)"
@@ -429,52 +474,52 @@ participant Idx as ".mb/code_index/"
 participant Eng as "SearchEngine"
 
 U->CLI: mb index rebuild --code
-CLI->CLI: code_repos_dir задан? нет -> exit 2 с подсказкой
+CLI->CLI: is code_repos_dir set? no -> exit 2 with a hint
 CLI->D: {"cmd":"index","action":"rebuild","corpus":"code"}
-D->D: тот же гейт ещё раз (единственная точка, через которую\nпроходят CLI, nightly и doctor --fix)
+D->D: the same gate again (the single point through which\nCLI, nightly and doctor --fix all pass)
 D->Corp: resolve_corpus(cfg, "code")
-Corp->Corp: _writer_lock("code") -- НЕ блокирует память
+Corp->Corp: _writer_lock("code") -- does NOT block memory
 Corp->Corp: _scan_corpus: prune SKIP_DIRS -> glob CODE_PATTERNS ->\nskip_dirs=SKIP_REPOS -> SKIP_FILE_PATTERNS -> stat()
-loop по каждому выжившему файлу
+loop over every surviving file
 Corp->Chunk: extract_code_chunks(path, rel)
-Chunk->Chunk: границы regex; декораторы вверх, docstring вперёд (Python)
-Chunk->Chunk: обрезка 60 строк; нет границ -> окна 40/10
+Chunk->Chunk: regex boundaries; decorators pulled up, docstring read forward (Python)
+Chunk->Chunk: truncate at 60 lines; no boundaries -> windows 40/10
 Chunk-->Corp: chunks[{repo,file,kind,name,description,\nline_start,line_end,chunk_id,text,content}]
 end
 Corp->Idx: encode -> _commit_generation(chunk_schema=CODE_CHUNK_SCHEMA_VERSION)
-Idx->Idx: gen_<token>/ + summary.json, затем атомарный swap CURRENT
-D->Eng: engine.reload() -- сверка модели с памятью
+Idx->Idx: gen_<token>/ + summary.json, then an atomic swap of CURRENT
+D->Eng: engine.reload() -- checks the model against memory
 
-== поиск ==
-U->CLI: mb search "как устроен retry" --with-code --repos api
+== search ==
+U->CLI: mb search "how does retry work" --with-code --repos api
 CLI->D: payload include_code / repos
 D->Eng: search(req)
-Eng->Eng: память всегда; код только при include_code|code_only
-Eng->Eng: repos применяется лишь к чанкам, у которых ЕСТЬ repo
-Eng->Eng: мёрж по score -> max_per_file -> строгий top_k
-Eng-->U: "api/retry.py | 0.61 | [function] | retry_with_backoff | код…"
+Eng->Eng: memory always; code only under include_code|code_only
+Eng->Eng: repos applies only to chunks that HAVE a repo
+Eng->Eng: merge by score -> max_per_file -> strict top_k
+Eng-->U: "api/retry.py | 0.61 | [function] | retry_with_backoff | code…"
 ```
 
-## 9. Что этот корпус НЕ делает
+## 9. What this corpus does NOT do
 
-* **не имеет watcher-а** (решение **D4**). Свежесть держат шаг `code_index`
-  в `mb nightly` и ручной `mb index update --code`. `mb doctor` даёт WARN,
-  когда корпус старше `code_index_max_age_days`;
-* **не участвует в аналитике памяти**: `mb curator`, `mb digest`,
-  `mb ingest plan` его не видят вообще — это разные каталоги индексов и разные
-  поколения;
-* **не парсит AST** — см. §4;
-* **не может уронить `mb doctor`**: блок `K1-code-index` не выдаёт FAIL ни в
-  одном сценарии. `.mb/code_index/` полностью восстановим пересборкой, в
-  отличие от `.mb/sources/`, где потеря данных необратима.
+* **it has no watcher** (decision **D4**). Freshness is kept by the `code_index`
+  step in `mb nightly` and by a manual `mb index update --code`. `mb doctor`
+  WARNs when the corpus is older than `code_index_max_age_days`;
+* **it takes no part in memory analytics**: `mb curator`, `mb digest` and
+  `mb ingest plan` cannot see it at all — different index directories and
+  different generations;
+* **it does not parse an AST** — see §4;
+* **it cannot fail `mb doctor`**: the `K1-code-index` block never emits FAIL in
+  any scenario. `.mb/code_index/` is fully recoverable by a rebuild, unlike
+  `.mb/sources/`, where data loss is irreversible.
 
-## 10. Откат
+## 10. Rollback
 
-Полностью описан в [ROLLBACK.md](ROLLBACK.md). Коротко:
+Fully described in [ROLLBACK.md](ROLLBACK.md). In short:
 
 ```powershell
-mb config set code_repos_dir null      # корпус выключен, поиск снова только по памяти
-Remove-Item -Recurse "<vault>/.mb/code_index"   # опционально: вернуть ~30 МБ
+mb config set code_repos_dir null      # the corpus is off, search is memory-only again
+Remove-Item -Recurse "<vault>/.mb/code_index"   # optional: reclaim ~30 MB
 ```
 
-Ни одна заметка при этом не затрагивается.
+No note is touched by any of this.

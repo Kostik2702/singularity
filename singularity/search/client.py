@@ -1,7 +1,7 @@
 """Search client + daemon control.
 
-Auto-start of the daemon on first query (Genevra pattern: subprocess start,
-then retry connect) and — unlike Genevra's daemon-only policy — a graceful
+Auto-start of the daemon on first query (subprocess start, then retry connect)
+and — unlike the predecessor's daemon-only policy — a graceful
 COLD fallback: if the daemon cannot be started (AV, broken env), the query
 is answered in-process with a one-off model load and a warning.
 """
