@@ -87,11 +87,13 @@ ALLOWED: dict[str, str] = {
         "a non-ASCII Windows path plus a non-ASCII directory name; argv on "
         "Windows arrives through ANSI and this is the regression for it",
     "singularity/machine/rules_delivery.py":
-        "one heading, quoted from the vault. 27 rule notes declare their "
-        "delivery point under `## Где вживлено`; the inventory check has to "
-        "match the heading that is actually there, or it reports 27 accounted "
-        "notes as orphans and gets switched off for crying wolf. Vault content, "
-        "not engine prose",
+        "one heading, quoted from the vault: 27 rule notes declare their "
+        "delivery point under its Russian spelling, and the inventory check "
+        "has to match the heading that is actually there or it reports 27 "
+        "accounted notes as orphans and gets switched off for crying wolf. "
+        "The spelling itself lives in `rules_delivery.DELIVERY_SECTION_MARKERS` "
+        "and is deliberately NOT repeated here: a scanner may not write what it "
+        "searches for. Vault content, not engine prose",
     "golden-registry/files/letter-glitch-wall/reference-implementation-index.html":
         "`const GLYPHS` is the alphabet the glitch wall renders. Those "
         "characters are the effect's pixels, not words addressed to a reader",
