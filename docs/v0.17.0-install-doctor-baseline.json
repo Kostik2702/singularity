@@ -1,0 +1,594 @@
+{
+ "taken_at": "2026-08-08T19:43:54",
+ "note": "v0.15.0 baseline: the same eight surfaces, taken on the release merge commit. What this release makes askable of a baseline is a DELIVERY question rather than a feature one: a fourth Claude hook now runs on every prompt (UserPromptSubmit), the ten-phase workflow moved out of the vault into the engine, and the SessionStart payload changed shape — two fragments merged into one, two added. So the rows that matter most are the hook registration, the package layout (the phase files are engine files now, like the preamble since v0.13.0) and the config/path resolution, because the machine must still behave identically with no vault at all. Sixth macOS snapshot after four on Windows",
+ "version": "0.17.0",
+ "commit": "3f96eabe210633e48bb342f1270a681b20c0c0b8",
+ "environment": {
+  "platform": "macOS-26.6-arm64-arm-64bit-Mach-O",
+  "python": "3.13.14",
+  "package_path": "/Users/konstantingritsuk/projects/singularity/singularity/__init__.py",
+  "vault": "/Users/konstantingritsuk/projects/memory-vault"
+ },
+ "issue_9_16_launchers": {
+  "runs": [
+   {
+    "launcher": "bin/_launch.py",
+    "tool": "mb",
+    "cwd": "neutral",
+    "exit_code": 0,
+    "stdout": "mb 0.17.0",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "bin/_launch.py",
+    "tool": "mb",
+    "cwd": "shadowing",
+    "exit_code": 0,
+    "stdout": "mb 0.17.0",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "bin/_launch.py",
+    "tool": "imgqa",
+    "cwd": "neutral",
+    "exit_code": 0,
+    "stdout": "imgqa 0.1.0.dev0 (schema 2)",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "bin/_launch.py",
+    "tool": "imgqa",
+    "cwd": "shadowing",
+    "exit_code": 0,
+    "stdout": "imgqa 0.1.0.dev0 (schema 2)",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "bin/_launch.py",
+    "tool": "design-scout",
+    "cwd": "neutral",
+    "exit_code": 0,
+    "stdout": "design-scout 0.1.0",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "bin/_launch.py",
+    "tool": "design-scout",
+    "cwd": "shadowing",
+    "exit_code": 0,
+    "stdout": "design-scout 0.1.0",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "sh bin/mb",
+    "tool": "mb",
+    "cwd": "neutral",
+    "exit_code": 0,
+    "stdout": "mb 0.17.0",
+    "namespace_shadowed": false,
+    "pass": true
+   },
+   {
+    "launcher": "sh bin/mb",
+    "tool": "mb",
+    "cwd": "shadowing",
+    "exit_code": 0,
+    "stdout": "mb 0.17.0",
+    "namespace_shadowed": false,
+    "pass": true
+   }
+  ],
+  "executable_bit_in_index": {
+   "install/install.sh": "100755",
+   "bin/mb": "100755",
+   "bin/imgqa": "100755",
+   "bin/design-scout": "100755"
+  },
+  "pass": true
+ },
+ "issue_10_cli_locator": {
+  "search_locations": 8,
+  "runs": [
+   {
+    "layout": "nvm_versions_tree",
+    "found": true,
+    "where_kind": "version-manager",
+    "pass": true
+   },
+   {
+    "layout": "nvm_versions_tree_older",
+    "found": true,
+    "where_kind": "version-manager",
+    "pass": true
+   },
+   {
+    "layout": "volta",
+    "found": true,
+    "where_kind": "version-manager",
+    "pass": true
+   },
+   {
+    "layout": "fnm",
+    "found": true,
+    "where_kind": "version-manager",
+    "pass": true
+   },
+   {
+    "layout": "newest_node_wins",
+    "found": true,
+    "selected": "v24.19.0",
+    "expected": "v24.19.0",
+    "pass": true
+   }
+  ],
+  "pass": true,
+  "suppressed_env": [
+   "NVM_BIN",
+   "NVM_DIR"
+  ]
+ },
+ "issue_11_13_14_15_doctor": {
+  "exit_code": 0,
+  "counts": {
+   "PASS": 40
+  },
+  "checks": [
+   {
+    "id": "A1-config",
+    "status": "PASS"
+   },
+   {
+    "id": "A2-vault-obsidian",
+    "status": "PASS"
+   },
+   {
+    "id": "A7-config-location",
+    "status": "PASS"
+   },
+   {
+    "id": "A8-machine-setup",
+    "status": "PASS"
+   },
+   {
+    "id": "A6-config-paths",
+    "status": "PASS",
+    "detail": "2 configured path(s) all resolve on this machine"
+   },
+   {
+    "id": "A3-folders",
+    "status": "PASS"
+   },
+   {
+    "id": "A4-mb-dir",
+    "status": "PASS"
+   },
+   {
+    "id": "A5-secrets",
+    "status": "PASS"
+   },
+   {
+    "id": "B2-deps",
+    "status": "PASS"
+   },
+   {
+    "id": "B3-model",
+    "status": "PASS"
+   },
+   {
+    "id": "B4-index",
+    "status": "PASS"
+   },
+   {
+    "id": "B6b-sessions",
+    "status": "PASS"
+   },
+   {
+    "id": "B7-daemon",
+    "status": "PASS"
+   },
+   {
+    "id": "B8-smoke",
+    "status": "PASS"
+   },
+   {
+    "id": "B9-daemon-identity",
+    "status": "PASS"
+   },
+   {
+    "id": "C1-nightly",
+    "status": "PASS"
+   },
+   {
+    "id": "C2-watcher",
+    "status": "PASS"
+   },
+   {
+    "id": "C5-lock",
+    "status": "PASS"
+   },
+   {
+    "id": "D4-cli",
+    "status": "PASS"
+   },
+   {
+    "id": "D8-git-identity",
+    "status": "PASS",
+    "detail": "git can commit into the vault"
+   },
+   {
+    "id": "D7-cli-on-path",
+    "status": "PASS",
+    "detail": "mb -> /Users/konstantingritsuk/projects/singularity/.venv/bin/mb"
+   },
+   {
+    "id": "D2-agents",
+    "status": "PASS"
+   },
+   {
+    "id": "D1-hooks",
+    "status": "PASS"
+   },
+   {
+    "id": "D3-module-context",
+    "status": "PASS"
+   },
+   {
+    "id": "D5-vault-guard",
+    "status": "PASS"
+   },
+   {
+    "id": "D6-posix-shim",
+    "status": "PASS",
+    "detail": "`sh bin/mb --version` -> mb 0.17.0 (neutral CWD and a CWD containing singularity/)"
+   },
+   {
+    "id": "D9-route-hook",
+    "status": "PASS"
+   },
+   {
+    "id": "D10-rules-inventory",
+    "status": "PASS"
+   },
+   {
+    "id": "E1-gemini",
+    "status": "PASS"
+   },
+   {
+    "id": "E2-gemini-profile",
+    "status": "PASS"
+   },
+   {
+    "id": "E3-gemini-skills",
+    "status": "PASS"
+   },
+   {
+    "id": "E4-gemini-hooks",
+    "status": "PASS"
+   },
+   {
+    "id": "F1-grok",
+    "status": "PASS"
+   },
+   {
+    "id": "F2-grok-profile",
+    "status": "PASS"
+   },
+   {
+    "id": "F3-grok-skills",
+    "status": "PASS"
+   },
+   {
+    "id": "F4-grok-capture",
+    "status": "PASS"
+   },
+   {
+    "id": "W1-sources-integrity",
+    "status": "PASS"
+   },
+   {
+    "id": "W2-sources-index",
+    "status": "PASS"
+   },
+   {
+    "id": "W3-sources-portability",
+    "status": "PASS"
+   },
+   {
+    "id": "K1-code-index",
+    "status": "PASS",
+    "detail": "3528 chunk(s) from 272 file(s), model matches the vault index"
+   }
+  ],
+  "new_in_this_release": [
+   "A6-config-paths",
+   "D7-cli-on-path",
+   "D8-git-identity"
+  ],
+  "pass": true
+ },
+ "issue_14_config_paths": {
+  "entries": [
+   {
+    "key": "code_repos_dir",
+    "foreign_os": null,
+    "exists": true
+   },
+   {
+    "key": "projects.singularity.path",
+    "foreign_os": null,
+    "exists": true
+   }
+  ],
+  "count": 2,
+  "foreign": [],
+  "missing": []
+ },
+ "issue_12_live_config_reload": {
+  "ran": true,
+  "key": "excerpt_chars",
+  "daemon_value_before_write": 150,
+  "daemon_value_after_write_before_reload": 150,
+  "reload_reported_changed": [
+   "excerpt_chars"
+  ],
+  "daemon_value_after_reload": 151,
+  "restored_to": 150,
+  "pass": true
+ },
+ "config_write_path": {
+  "cases": [
+   {
+    "case": "dotted key reaches the nested value",
+    "cmd": "config set projects.p.path /posix/p",
+    "exit_code": 0,
+    "nested_value": "/posix/p",
+    "literal_top_level_keys": [],
+    "siblings_kept": true,
+    "pass": true
+   },
+   {
+    "case": "indexed key (the args[i] form A6 prints)",
+    "cmd": "config set llm.models.m.args[3] /posix/t.jinja",
+    "exit_code": 0,
+    "value": "/posix/t.jinja",
+    "pass": true
+   },
+   {
+    "case": "unknown section fails loudly, writes nothing",
+    "cmd": "config set projects.ghost.path /x",
+    "exit_code": 1,
+    "stderr": "[mb] projects.ghost.path: no such config section `projects.ghost` — this command rewrites existing values and does not c",
+    "pass": true
+   },
+   {
+    "case": "read-back answers for the same notation",
+    "cmd": "config get projects.p.path",
+    "exit_code": 0,
+    "stdout": "\"/posix/p\"",
+    "pass": true
+   },
+   {
+    "case": "project add repoints without dropping metadata",
+    "cmd": "project add p /posix/p2",
+    "exit_code": 0,
+    "entry": {
+     "path": "/posix/p2",
+     "group": "g",
+     "about": "a"
+    },
+    "pass": true
+   }
+  ],
+  "pass": true
+ },
+ "v090_machine_config": {
+  "cases": [
+   {
+    "case": "upgrade migrates the vault config into the machine file",
+    "exit_code": 0,
+    "stdout": "200",
+    "machine_file_created": true,
+    "excerpt_chars": 200,
+    "projects_kept": {
+     "p": {
+      "path": "/kept",
+      "group": "g"
+     }
+    },
+    "vault_path_bound": true,
+    "legacy_file_gone": true,
+    "legacy_preserved_as": [
+     "config.json.migrated-20260808-194353"
+    ],
+    "pass": true
+   },
+   {
+    "case": "the migrated file records every decision, default-valued or not",
+    "keys": [
+     "excerpt_chars",
+     "min_score",
+     "projects",
+     "schema_version",
+     "vault_path"
+    ],
+    "min_score_persisted": true,
+    "pass": true
+   },
+   {
+    "case": "a configured machine is not overwritten by an arriving vault",
+    "exit_code": 0,
+    "stdout": "300",
+    "machine_value": 300,
+    "legacy_untouched": true,
+    "pass": true
+   },
+   {
+    "case": "no shipped module names a drive letter",
+    "offenders": [],
+    "pass": true
+   }
+  ],
+  "pass": true
+ },
+ "v0100_cli_window": {
+  "pass": true,
+  "rows": [
+   {
+    "case": "the window lists exactly the commands the facade declares",
+    "exit_code": 0,
+    "visible": [
+     "search",
+     "learn",
+     "note",
+     "ingest",
+     "status",
+     "doctor",
+     "curator",
+     "llm",
+     "service",
+     "setup"
+    ],
+    "pass": true
+   },
+   {
+    "case": "`mb help --all` names every command the parser has",
+    "exit_code": 0,
+    "commands": 28,
+    "missing": [],
+    "pass": true
+   },
+   {
+    "case": "group: `mb service daemon --help` == `mb daemon --help`",
+    "exit_codes": [
+     0,
+     0
+    ],
+    "identical_stdout": true,
+    "pass": true
+   },
+   {
+    "case": "group: `mb setup config --help` == `mb config --help`",
+    "exit_codes": [
+     0,
+     0
+    ],
+    "identical_stdout": true,
+    "pass": true
+   },
+   {
+    "case": "host: `mb curator nightly --help` == `mb nightly --help`",
+    "exit_codes": [
+     0,
+     0
+    ],
+    "identical_stdout": true,
+    "pass": true
+   },
+   {
+    "case": "host: `mb status stats --help` == `mb stats --help`",
+    "exit_codes": [
+     0,
+     0
+    ],
+    "identical_stdout": true,
+    "pass": true
+   },
+   {
+    "case": "a host still dispatches to its own command",
+    "exit_code": 0,
+    "rejected_by_parser": false,
+    "pass": true
+   },
+   {
+    "case": "exit codes: help is not an error, unknown still is",
+    "codes": {
+     "mb help": 0,
+     "mb <unknown>": 2,
+     "mb service <unknown>": 2
+    },
+    "pass": true
+   }
+  ]
+ },
+ "v0110_package_layout": {
+  "expected_packages": [
+   {
+    "package": "singularity.knowledge",
+    "discovered": true
+   },
+   {
+    "package": "singularity.machine",
+    "discovered": true
+   },
+   {
+    "package": "singularity.telemetry",
+    "discovered": true
+   },
+   {
+    "package": "singularity.commands",
+    "discovered": true
+   }
+  ],
+  "imports": [
+   {
+    "module": "singularity.knowledge.sources",
+    "ok": true
+   },
+   {
+    "module": "singularity.machine.status",
+    "ok": true
+   },
+   {
+    "module": "singularity.telemetry.reflect",
+    "ok": true
+   },
+   {
+    "module": "singularity.commands.memory",
+    "ok": true
+   },
+   {
+    "module": "singularity.render",
+    "ok": true
+   },
+   {
+    "module": "singularity.contracts",
+    "ok": true
+   },
+   {
+    "module": "singularity.search.lexical",
+    "ok": true
+   },
+   {
+    "module": "singularity.search.metrics",
+    "ok": true
+   }
+  ],
+  "package_root_files": [
+   "__init__.py",
+   "__main__.py",
+   "cli.py",
+   "config.py",
+   "contracts.py",
+   "doctor.py",
+   "facade.py",
+   "llm.py",
+   "log.py",
+   "render.py"
+  ],
+  "pass": true
+ },
+ "tests": [
+  {
+   "target": "tests/",
+   "exit_code": 0,
+   "summary": "2260 passed, 13 skipped in 80.91s (0:01:20)"
+  }
+ ],
+ "all_pass": true
+}
