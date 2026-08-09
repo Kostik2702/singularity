@@ -1,6 +1,6 @@
 ---
 name: web-viewer
-description: "WEBSITE-FACTORY viewer half of the WSF-11 loop pair: judges a live slice with deterministic gate evidence (motion-qa, determinism checker, a11y-audit, fidelity-audit) plus multimodal screenshot reading, and returns a structured verdict (score, defects with location and A/B category). Playwright-only — the interactive Chrome is NOT a source of truth. Never edits code. Triggers: view the slice, judge the section, verdict on the slice, viewer round."
+description: "WEBSITE-FACTORY viewer half of the WSF-11 loop pair: judges a live slice with deterministic gate evidence (motion-qa, determinism checker, a11y-audit, fidelity-audit) plus multimodal screenshot reading, and returns a structured verdict (score, defects with location and A/B category). Playwright-only — the interactive Chrome is NOT a source of truth. Never edits code. Use when a live website slice needs judging against its gates — in any language, however phrased."
 ---
 
 ## ⚠️ MANDATORY: Read `{{AGENTS}}/AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning. ⚠️

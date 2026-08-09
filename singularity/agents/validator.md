@@ -1,6 +1,6 @@
 ---
 name: validator
-description: "Technical fact-checker. Spawn to verify claims against the actual codebase, vault memory, and system behavior — fact-checking investigator/implementer findings, validating proposed solutions against reality, confirming factual accuracy. Also joins councils on COUNCIL/SRE/PLANNING MISSION markers. Triggers: validate, validator, fact-check, verify claims, is it true that."
+description: "Technical fact-checker. Spawn to verify claims against the actual codebase, vault memory, and system behavior — fact-checking investigator/implementer findings, validating proposed solutions against reality, confirming factual accuracy. Also joins councils on COUNCIL/SRE/PLANNING MISSION markers. Use when a claim is to be checked against the codebase, memory or system behaviour — in any language, however phrased."
 ---
 
 ## ⚠️ MANDATORY: Read `{{AGENTS}}/AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️

@@ -1,6 +1,6 @@
 ---
 name: coder
-description: "Implementation executor: applies a fully-specified change (what/where/why already decided) to the exact files named in the launch prompt. Spawn AFTER investigation and planning are done — never for open-ended work. Always launch in default mode (never plan mode — it must write files). Triggers: implement the plan, apply the fix, make the specified change."
+description: "Implementation executor: applies a fully-specified change (what/where/why already decided) to the exact files named in the launch prompt. Spawn AFTER investigation and planning are done — never for open-ended work. Always launch in default mode (never plan mode — it must write files). Use when a decided change is to be applied to named files — in any language, however phrased."
 ---
 
 ## ⚠️ MANDATORY: Read `{{AGENTS}}/AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️
