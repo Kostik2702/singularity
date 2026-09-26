@@ -58,12 +58,18 @@ def cmd_build(root: Path) -> dict:
             time.sleep(0.5)
     t = threading.Thread(target=sample, daemon=True)
     t.start()
-    started = time.perf_counter()
+    started, cpu_started = time.perf_counter(), time.process_time()
     summary = build.build_unit(cfg, unit)
     elapsed = time.perf_counter() - started
+    cpu_over_wall = (time.process_time() - cpu_started) / elapsed
     stop.set()
     t.join()
+    # The build is one CPU-bound thread: a ratio far below 1 means the process
+    # sat waiting on something outside it, and the wall time measures the
+    # machine, not the code. Seen 2026-09-26: two long background runs at
+    # ~0.1-0.3 took 953 s and 649 s; the same build in the foreground, 459 s.
     summary.update(wall_seconds=round(elapsed, 1), peak_rss_mb=round(max(peak) / 2**20),
+                   cpu_over_wall=round(cpu_over_wall, 2), contaminated=cpu_over_wall < 0.8,
                    budget_B7_seconds=600, within_B7=elapsed <= 600)
     return summary
 

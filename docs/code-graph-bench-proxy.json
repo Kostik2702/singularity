@@ -8,53 +8,6 @@
   "files_in_graph_unit": 44294,
   "why_fewer": "the proxy is copied library trees; 30,658 files sit in nested node_modules/.venv/venv/vendor dirs the scope prunes by design (13,462 + 9,588 + 4,862 + 380 + ...), 1,448 are .cjs/.mjs (not in the shared code suffix list), 770 exceed MAX_FILE_BYTES=100000"
  },
- "B7_full_build": {
-  "budget_seconds": 600,
-  "verdict": "FAIL",
-  "as_shipped": {
-   "files": 44294,
-   "by_lang": {
-    "ts": 16199,
-    "python": 28095
-   },
-   "nodes": 580917,
-   "edges": {
-    "CALLS": 511064,
-    "IMPORTS": 68684,
-    "INHERITS": 26212
-   },
-   "unresolved": 730304,
-   "timings": {
-    "scan": 1.35,
-    "extract": 717.31,
-    "resolve": 207.3,
-    "write": 25.11
-   },
-   "wall_seconds": 953.1,
-   "peak_rss_mb": 2671
-  },
-  "experiment_gc_disabled": {
-   "timings": {
-    "scan": 1.35,
-    "extract": 415.89,
-    "resolve": 203.8,
-    "write": 25.55
-   },
-   "wall_seconds": 648.9,
-   "peak_rss_mb": 2672
-  },
-  "linear_extrapolation_to_100k_files_seconds": {
-   "as_shipped": 2152,
-   "gc_disabled": 1465
-  },
-  "extract_in_isolation_ms_per_file": {
-   "gc_on_8000_files_retained": 4.66,
-   "gc_off_8000_files_retained": 3.4,
-   "inside_the_build_gc_on": 16.19,
-   "inside_the_build_gc_off": 9.39
-  },
-  "memory_note": "peak RSS 2.6 GB at 44k files is ~60 KB/file; linear to 100k is ~6 GB"
- },
  "B1_in_process": {
   "budget_p95_ms": 200,
   "verdict": "PASS",
@@ -135,5 +88,65 @@
   "mb_help_ms_p50": 104,
   "verdict": "EDGE: p50 240, p95 ~305 on 20 runs",
   "where_the_time_goes": "load_config -> apply_env -> truststore.inject_into_ssl imports requests/urllib3/chardet: ~150 ms of a 194 ms in-process run; the graph query itself is 1-5 ms"
+ },
+ "B7_full_build": {
+  "budget_seconds": 600,
+  "valid_run": {
+   "files": 44294,
+   "by_lang": {
+    "ts": 16199,
+    "python": 28095
+   },
+   "nodes": 580917,
+   "edges": {
+    "CALLS": 511064,
+    "IMPORTS": 68684,
+    "INHERITS": 26212
+   },
+   "unresolved": 730304,
+   "timings": {
+    "scan": 1.44,
+    "extract": 221.84,
+    "resolve": 209.64,
+    "write": 24.28
+   },
+   "wall_seconds": 459.2,
+   "peak_rss_mb": 2672,
+   "cpu_over_wall": 0.95
+  },
+  "verdict_on_proxy_44k": "PASS (459 s)",
+  "verdict_extrapolated_to_100k": "FAIL: linear 1037 s; resolve alone ~473 s single-threaded",
+  "per_file_ms": {
+   "extract": 5.01,
+   "resolve": 4.73,
+   "write": 0.55
+  },
+  "discarded_runs": {
+   "why": "run as long background jobs, the process spent ~70-90% of its wall time waiting (thread state Wait:Executive, cpu/wall ~0.1-0.3, no memory pressure, no power throttling, reads 0.04 ms in other processes). The same code on the same first 5000 files: 74 s in the stalled process, 10 s in a fresh one. Cause not identified; the bench now records cpu_over_wall and flags contaminated runs.",
+   "gc_on_background": {
+    "wall_seconds": 953.1,
+    "timings": {
+     "scan": 1.35,
+     "extract": 717.31,
+     "resolve": 207.3,
+     "write": 25.11
+    }
+   },
+   "gc_off_background": {
+    "timings": {
+     "scan": 1.35,
+     "extract": 415.89,
+     "resolve": 203.8,
+     "write": 25.55
+    },
+    "wall_seconds": 648.9,
+    "peak_rss_mb": 2672
+   }
+  },
+  "gc_effect_foreground_8000_files_retained_ms_per_file": {
+   "gc_on": 4.66,
+   "gc_off": 3.4
+  },
+  "memory_note": "peak RSS 2.6 GB at 44k files is ~60 KB/file; linear to 100k is ~6 GB"
  }
 }
