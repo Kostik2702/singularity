@@ -145,7 +145,7 @@ def extract(path: str, src: bytes) -> FileFacts:
                     qname=qname, name=name, kind=dkind, parent=prefix, spans=[span],
                     signature=_signature(node, src), doc1=_doc1(node.child_by_field_name("body")),
                     decorators=_decorators(node), exported=prefix is None and not name.startswith("_"),
-                    bases=bases)
+                    bases=bases, returns=_text(node.child_by_field_name("return_type")) or None)
             if kind == "function_definition":
                 hints.extend(_params(node, qname))
             body = node.child_by_field_name("body")

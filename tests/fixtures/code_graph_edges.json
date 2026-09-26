@@ -759,9 +759,9 @@
    "call_text": "response.text()",
    "caller": "packages/shared/src/http/read-json.ts::readJsonBody",
    "callee_name": "text",
-   "expect": null,
-   "category": "external-collision",
-   "why": "Name matches exactly ONE first-party definition, so a unique-name resolver draws a false edge: fetch Response.text; the only first-party `text` is packages/shared/src/video-tool/ffmpeg-runner.ts::TailBuffer.text (lines 9 and 17 of this file are the same call inside a comment, deliberately not used)"
+   "expect": "packages/shared/src/http/read-json.ts::ReadableBody.text",
+   "category": "same-file",
+   "why": "CORRECTED 2026-09-26 (P1b): `response` is declared `response: ReadableBody` (read-json.ts:60), a first-party interface defined in this file (line 33) with `text(): Promise<string>`, so the static target is ReadableBody.text. The P0 label said 'fetch Response.text', taken from the naive regex's name table, which misses interface method signatures; the parameter's type was never read."
   },
   {
    "id": "e-uc-07",

@@ -359,3 +359,53 @@ writestr xzopen year zeros zeros_like zfill zip zip_longest zipf zlib
 """
 
 PY_STOPLIST = frozenset(_NAMES.split())
+
+# JavaScript / TypeScript: members of the ECMAScript built-ins (Object, Array,
+# String, Number, Promise, Map, Set, JSON, Math, Date, RegExp, Reflect,
+# Symbol), of Node's Buffer/process/fs/path/events/streams and http
+# request/response, of fetch's Response/Request/Headers/URL, of the DOM
+# basics, and of the libraries this codebase's calls most often land in
+# (zod, express, test runners). Hand-curated 2026-09-26 from the specs and
+# the P0 yardstick's collisions (`Promise.all`, `response.text`,
+# `Buffer.byteLength`, `Object.keys`, `JobParamsSchema.parse`, `counters.get`).
+_TS_NAMES = """
+abort add addEventListener all allSettled any append apply assign at bind body byteLength call
+catch charAt charCodeAt clear clearTimeout close codePointAt concat connect construct create
+defineProperty delete destroy dispatchEvent emit end endsWith entries error every exec exists
+existsSync extend fill filter finally find findIndex findLast findLastIndex flat flatMap floor
+forEach format freeze from fromEntries get getItem getOwnPropertyNames getTime has hasOwn
+hasOwnProperty headers includes indexOf info isArray isFinite isInteger isNaN join json keys
+lastIndexOf listen localeCompare log map match matchAll max min mkdir mkdirSync next normalize
+now object of off on once optional padEnd padStart parse parseFloat parseInt pipe pop post push
+put race random read readFile readFileSync readdir readdirSync reduce reduceRight reject
+removeEventListener removeItem removeListener replace replaceAll resolve reverse rm rmSync round
+safeParse send set setHeader setItem setTimeout shift slice some sort splice split sqrt
+startsWith stat statSync status string stringify substring test text then toFixed toISOString
+toJSON toLowerCase toString toUpperCase trim trimEnd trimStart unshift unlink unlinkSync update
+use values warn write writeFile writeFileSync writeHead
+array boolean number enum union literal nullable strict extends omit pick partial transform
+refine describe it expect beforeEach afterEach beforeAll afterAll toBe toEqual toBeDefined
+toThrow toHaveBeenCalled toHaveBeenCalledWith mockReturnValue mockResolvedValue
+select from where orderBy groupBy having limit offset innerJoin leftJoin rightJoin fullJoin
+returning values onConflictDoUpdate onConflictDoNothing execute prepare transaction query
+insert delete resume pause destroy cork uncork setEncoding writeHead flushHeaders
+"""
+
+TS_STOPLIST = frozenset(_TS_NAMES.split())
+
+# Names a TypeScript module can use without importing them: a call through one
+# is into the platform, never into first-party code.
+_TS_GLOBAL_NAMES = """
+Object Array JSON Math Promise console Number String Boolean Date RegExp Error TypeError
+RangeError Map Set WeakMap WeakSet Symbol Reflect Proxy Intl globalThis window document
+process Buffer require module exports setTimeout clearTimeout setInterval clearInterval
+setImmediate queueMicrotask structuredClone fetch URL URLSearchParams AbortController
+AbortSignal TextEncoder TextDecoder Response Request Headers FormData Blob File ReadableStream
+WritableStream crypto performance parseInt parseFloat isNaN isFinite encodeURIComponent
+decodeURIComponent encodeURI decodeURI atob btoa BigInt Uint8Array ArrayBuffer DataView
+Int32Array Float32Array Float64Array describe it test expect beforeEach afterEach beforeAll
+afterAll vi jest Partial Readonly Record Pick Omit ReturnType Awaited Iterable AsyncIterable
+NodeJS Function Event EventTarget
+"""
+
+TS_GLOBALS = frozenset(_TS_GLOBAL_NAMES.split())

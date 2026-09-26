@@ -239,6 +239,29 @@ def _wanted(path: str, skip: frozenset[str], vendored: re.Pattern[str] | None,
     return not any(fnmatch.fnmatchcase(lowered, pat) for pat in PRIVACY_PATTERNS)
 
 
+_MANIFEST = re.compile(r"^(package\.json|tsconfig[\w.-]*\.json)$")
+
+
+def list_manifests(unit: Unit, cfg: Config) -> list[str]:
+    """`package.json` and `tsconfig*.json` files the TypeScript resolver reads
+    to map `@scope/pkg` specifiers and path aliases onto files of this unit.
+    Same prunes as code files: a node_modules manifest is not ours."""
+    skip, vendored = _skip_dirs(cfg), _vendored(cfg)
+    if unit.is_git:
+        candidates, _ = _git_entries(unit.root)
+    else:
+        candidates, _ = _walk_plain(unit.root, skip, vendored)
+    out = []
+    for path in sorted(set(candidates)):
+        parts = path.split("/")
+        if not _MANIFEST.match(parts[-1]) or any(_pruned(p, skip, vendored) for p in parts[:-1]):
+            continue
+        if any(path.startswith(n + "/") for n in unit.nested):
+            continue
+        out.append(path)
+    return out
+
+
 def list_files(unit: Unit, cfg: Config) -> list[FileEntry]:
     """The unit's files the graph reads, sorted, with the stat taken now."""
     skip, vendored = _skip_dirs(cfg), _vendored(cfg)

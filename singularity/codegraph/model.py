@@ -21,6 +21,7 @@ class Definition:
     decorators: list[str]
     exported: bool
     bases: list[str] = field(default_factory=list)   # class only: base expressions as written
+    returns: str | None = None     # declared return type, as written
 
 
 @dataclass
@@ -45,8 +46,10 @@ class CallSite:
 class TypeHint:
     scope: str                 # function qname, or class qname for `self.x`
     target: str                # `x` or `self.x`
-    type_expr: str             # constructor called or annotation written
-    source: str                # ctor | annotation
+    type_expr: str             # constructor called, annotation written, function called, or name aliased
+    source: str                # ctor | annotation | call (a function's declared return) | alias
+    origin: str | None = None  # scope in which `type_expr` is resolved, when not `scope` itself
+                               # (`this.#x = x` in a constructor: `x` is the constructor's)
 
 
 @dataclass
@@ -58,3 +61,9 @@ class FileFacts:
     imports: list[ImportBinding]
     calls: list[CallSite]
     hints: list[TypeHint]
+    # What the file makes importable beyond its own top-level definitions:
+    # re-exports (`export { a as b } from './m'`, `export * from './m'`) and
+    # renamed local exports (`export { a as b }`, `export default X`).
+    # `local` = the exported name, `module` = the source specifier ('' for a
+    # local export), `attr` = the original name, '*' for a star re-export.
+    exports: list[ImportBinding] = field(default_factory=list)
