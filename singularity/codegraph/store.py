@@ -28,7 +28,9 @@ from typing import Any
 from ..config import Config
 from ..platform import proc
 
-SCHEMA_VERSION = 1
+# 2: index on unresolved(src) -- `callees` scanned the table whole, 1.8 ms on
+# 25k rows and seconds on the millions of a 100k-file unit.
+SCHEMA_VERSION = 2
 _LOCK_WAIT_SECONDS = 5.0
 
 DDL = """
@@ -53,6 +55,7 @@ CREATE INDEX edges_src ON edges(src, kind);
 CREATE INDEX edges_dst ON edges(dst, kind);
 CREATE INDEX edges_site ON edges(file_id, line);
 CREATE INDEX unresolved_name ON unresolved(name);
+CREATE INDEX unresolved_src ON unresolved(src);
 CREATE INDEX unresolved_site ON unresolved(file_id, line);
 """
 
@@ -156,7 +159,30 @@ def write_generation(cfg: Config, unit_key: str, *, meta: dict[str, Any],
     pointer_tmp = base / f"CURRENT.{os.getpid()}.tmp"
     pointer_tmp.write_text(gen, encoding="utf-8")
     os.replace(pointer_tmp, base / "CURRENT")
+    # What a reader needs to pick this unit for a path, without opening any
+    # database or asking git: key and root. Hooks and `mb code` read only this.
+    card_tmp = base / f"unit.json.{os.getpid()}.tmp"
+    card_tmp.write_text(json.dumps({"key": unit_key, "root": meta.get("root"),
+                                    "generation": gen, "built_at": meta.get("built_at")}),
+                        encoding="utf-8")
+    os.replace(card_tmp, base / "unit.json")
     return {"generation": gen, "gc_pending": collect_garbage(base, keep=gen)}
+
+
+def built_units(cfg: Config) -> list[dict[str, Any]]:
+    """Every unit with a graph on this machine, from its `unit.json` card."""
+    out = []
+    root = cfg.code_graph_dir
+    if not root.is_dir():
+        return out
+    for card in sorted(root.glob("*/unit.json")):
+        try:
+            data = json.loads(card.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(data, dict) and data.get("key") and data.get("root"):
+            out.append(data)
+    return out
 
 
 def collect_garbage(base: Path, keep: str) -> list[str]:

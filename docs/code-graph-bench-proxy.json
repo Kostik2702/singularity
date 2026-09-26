@@ -1,0 +1,139 @@
+{
+ "what": "CODE-GRAPH budgets B1 / B2 / B7 measured on the 100k proxy with the shipped extractor and resolver (tools/code_graph_bench.py, resolver v4, schema 2)",
+ "date": "2026-09-26",
+ "machine": "Windows 11, 20 logical CPUs, Python 3.10.6 (.venv), warm file cache",
+ "proxy": {
+  "built_by": "tools/code_graph_proxy.py",
+  "files_copied": 74952,
+  "files_in_graph_unit": 44294,
+  "why_fewer": "the proxy is copied library trees; 30,658 files sit in nested node_modules/.venv/venv/vendor dirs the scope prunes by design (13,462 + 9,588 + 4,862 + 380 + ...), 1,448 are .cjs/.mjs (not in the shared code suffix list), 770 exceed MAX_FILE_BYTES=100000"
+ },
+ "B7_full_build": {
+  "budget_seconds": 600,
+  "verdict": "FAIL",
+  "as_shipped": {
+   "files": 44294,
+   "by_lang": {
+    "ts": 16199,
+    "python": 28095
+   },
+   "nodes": 580917,
+   "edges": {
+    "CALLS": 511064,
+    "IMPORTS": 68684,
+    "INHERITS": 26212
+   },
+   "unresolved": 730304,
+   "timings": {
+    "scan": 1.35,
+    "extract": 717.31,
+    "resolve": 207.3,
+    "write": 25.11
+   },
+   "wall_seconds": 953.1,
+   "peak_rss_mb": 2671
+  },
+  "experiment_gc_disabled": {
+   "timings": {
+    "scan": 1.35,
+    "extract": 415.89,
+    "resolve": 203.8,
+    "write": 25.55
+   },
+   "wall_seconds": 648.9,
+   "peak_rss_mb": 2672
+  },
+  "linear_extrapolation_to_100k_files_seconds": {
+   "as_shipped": 2152,
+   "gc_disabled": 1465
+  },
+  "extract_in_isolation_ms_per_file": {
+   "gc_on_8000_files_retained": 4.66,
+   "gc_off_8000_files_retained": 3.4,
+   "inside_the_build_gc_on": 16.19,
+   "inside_the_build_gc_off": 9.39
+  },
+  "memory_note": "peak RSS 2.6 GB at 44k files is ~60 KB/file; linear to 100k is ~6 GB"
+ },
+ "B1_in_process": {
+  "budget_p95_ms": 200,
+  "verdict": "PASS",
+  "hubs": 50,
+  "callers": {
+   "n": 50,
+   "p50_ms": 0.84,
+   "p95_ms": 2.7,
+   "max_ms": 5.21,
+   "mean_ms": 1.05
+  },
+  "callees": {
+   "n": 50,
+   "p50_ms": 0.05,
+   "p95_ms": 0.09,
+   "max_ms": 0.12,
+   "mean_ms": 0.05
+  },
+  "trace_d3": {
+   "n": 50,
+   "p50_ms": 1.2,
+   "p95_ms": 4.06,
+   "max_ms": 7.54,
+   "mean_ms": 1.91
+  },
+  "outline": {
+   "n": 50,
+   "p50_ms": 0.15,
+   "p95_ms": 0.53,
+   "max_ms": 1.14,
+   "mean_ms": 0.21
+  },
+  "_all": {
+   "n": 200,
+   "p95_ms": 3.35,
+   "budget_B1_p95_ms": 200,
+   "within_B1": true
+  }
+ },
+ "B2_end_to_end_no_refresh": {
+  "budget_p95_ms": 300,
+  "proxy_callers_top_hub_ms_sorted_20_runs": [
+   218,
+   218,
+   224,
+   226,
+   226,
+   229,
+   232,
+   233,
+   240,
+   240,
+   242,
+   243,
+   244,
+   246,
+   247,
+   251,
+   256,
+   260,
+   305,
+   393
+  ],
+  "proxy_trace_top_hub_ms_sorted_10_runs": [
+   224,
+   225,
+   226,
+   227,
+   235,
+   239,
+   242,
+   243,
+   243,
+   270
+  ],
+  "singularity_p50_ms": 204,
+  "singularity_p95_ms": 223,
+  "mb_help_ms_p50": 104,
+  "verdict": "EDGE: p50 240, p95 ~305 on 20 runs",
+  "where_the_time_goes": "load_config -> apply_env -> truststore.inject_into_ssl imports requests/urllib3/chardet: ~150 ms of a 194 ms in-process run; the graph query itself is 1-5 ms"
+ }
+}

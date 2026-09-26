@@ -31,6 +31,8 @@ mb reflect [--days N] [--json]   # privacy-safe adoption telemetry (offline tran
 mb usage [--session ID] [--list [--days N]] [--turns] [--top N] [--json]
                                  # per-step token cost + what each step added to the context
 mb llm start|stop|status|list|logs|code|setup
+mb code status|build [--all]|outline <file>|snippet|callers|callees|trace <symbol>|find <text>|schema
+                                 # the structural code graph (off until code_graph_enabled)
 mb init            # write ~/.singularity.json pointer + folder tree
 mb uninstall       # remove hooks/scheduler jobs/daemon (vault untouched)
 """
@@ -96,6 +98,32 @@ def _build_parser() -> argparse.ArgumentParser:
     sesst.add_argument("--json", action="store_true")
     sessub.add_parser("index", help="index sessions written since the last run")
     sessub.add_parser("purge", help="delete the store; transcripts and vault untouched")
+
+    cg = sub.add_parser("code", help="the structural code graph: callers, callees, trace, outline")
+    cgsub = cg.add_subparsers(dest="code_action", required=True)
+    cgsub.add_parser("status", help="which repositories have a graph").add_argument("--json", action="store_true")
+    cgb = cgsub.add_parser("build", help="parse and resolve this repository (or --all) into its graph")
+    cgb.add_argument("--all", action="store_true", help="every unit under code_repos_dir and the extra roots")
+    for verb, target_help in (("outline", "file, relative to the repository"),
+                              ("snippet", "symbol: qname, Class.method or a unique name"),
+                              ("callers", "symbol"), ("callees", "symbol"), ("trace", "symbol"),
+                              ("find", "substring of a name or qname"), ("schema", None)):
+        cgv = cgsub.add_parser(verb, help=f"{verb} ({target_help})" if target_help else verb)
+        if target_help:
+            cgv.add_argument("target")
+        if verb == "trace":
+            cgv.add_argument("--direction", choices=["callers", "callees"], default="callers")
+            cgv.add_argument("--depth", type=int, default=3)
+        cgv.add_argument("--limit", type=int, default=50)
+        cgv.add_argument("--offset", type=int, default=0)
+        cgv.add_argument("--no-refresh", action="store_true",
+                         help="answer from the last build without checking for changes "
+                              "(the only mode until refresh-before-query lands)")
+        cgv.add_argument("--json", action="store_true")
+    for cgv in (cgb, *[cgsub.choices[v] for v in ("outline", "snippet", "callers", "callees",
+                                                     "trace", "find", "schema")]):
+        cgv.add_argument("--project", help="a registered project id instead of the current directory")
+    cgb.add_argument("--json", action="store_true")
 
     d = sub.add_parser("daemon", help="daemon control")
     d.add_argument("action",
@@ -552,6 +580,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "sessions":
         from .commands.memory import cmd_sessions
         return cmd_sessions(cfg, args)
+    if args.command == "code":
+        from .commands.code import cmd_code
+        return cmd_code(cfg, args)
     if args.command == "journey":
         from .knowledge import journey as journey_mod
         data = journey_mod.collect(cfg, days=args.days, project=args.project)
