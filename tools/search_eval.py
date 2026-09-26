@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from collections import defaultdict
@@ -99,12 +100,29 @@ def load_fixture(path: Path = FIXTURE) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _exists_as_spelled(root: Path, rel: str) -> bool:
+    """True only if every segment of `rel` exists under `root` with exactly
+    this spelling. `Path.exists()` is not enough: on a case-insensitive
+    filesystem it says yes to `singularity/x.py` when the directory is
+    `Singularity`, while ranking compares the spelling the index recorded --
+    so the case would score a miss forever with verification green."""
+    here = root
+    for part in Path(rel).parts:
+        try:
+            if part not in os.listdir(here):
+                return False
+        except OSError:
+            return False
+        here = here / part
+    return True
+
+
 def verify_targets(cases: list[dict[str, Any]], vault: Path) -> list[str]:
-    """Every expected note must exist. Returns the missing ones."""
+    """Every expected note must exist, spelled as on disk. Returns the missing ones."""
     missing = []
     for case in cases:
         for rel in case["expect"]:
-            if not (vault / rel).exists():
+            if not _exists_as_spelled(vault, rel):
                 missing.append(f"{case['id']} -> {rel}")
     return missing
 

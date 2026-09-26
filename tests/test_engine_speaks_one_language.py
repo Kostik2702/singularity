@@ -111,6 +111,10 @@ ALLOWED.update({
         "the re-record taken after the questions were re-worded. Same category "
         "as the others: what the vault returned, note paths and section names "
         "included",
+    "docs/code-index-baseline-2026-09-26.json":
+        "the CODE-GRAPH P0 re-record on a corpus three times larger (the D2 gate "
+        "for graph enrichment). Recorded output: the note paths and section "
+        "names the vault returned",
     "docs/code-index-baseline.md":
         "its prose is English; the Q01-Q10 blocks are the queries as issued and "
         "the rows as returned, naming real notes in the vault. Rewriting them "
@@ -241,14 +245,20 @@ def test_the_detector_actually_catches_a_foreign_letter():
 BUDGET: dict[str, int] = {
     "docs/code-index-baseline.json": 1011,
     "docs/code-index-baseline-2026-08-08.json": 1145,
+    "docs/code-index-baseline-2026-09-26.json": 1345,
     "docs/code-index-baseline.md": 700,
     "docs/search-eval-baseline.json": 12738,
-    "docs/search-eval-code-baseline.json": 424,
+    # 424 -> 502 (CODE-GRAPH P0): re-recorded on 20 code cases, one of them a new
+    # RU query against a ComfyUI node pack, and on the corrected `Singularity/`
+    # spelling, which turned 12 recorded misses back into real result lists.
+    "docs/search-eval-code-baseline.json": 502,
     "docs/v0.5.0-baseline.json": 1908,
     "golden-registry/files/letter-glitch-wall/reference-implementation-index.html": 10,
     "singularity/machine/rules_delivery.py": 11,
     "tests/fixtures/grok/README.md": 2,
-    "tests/fixtures/search_eval.json": 3347,
+    # 3347 -> 3386 (CODE-GRAPH P0): one crosslingual code case, c-xl-06, a RU query
+    # whose target is outside this engine; the set had none before.
+    "tests/fixtures/search_eval.json": 3386,
     "tests/test_chunking.py": 203,
     "tests/test_context_map.py": 29,
     "tests/test_contradictions.py": 87,

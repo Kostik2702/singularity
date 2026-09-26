@@ -1,0 +1,336 @@
+{
+ "name-first": {
+  "_overall": {
+   "n": 58,
+   "tp": 31,
+   "wrong": 9,
+   "miss": 0,
+   "tn": 3,
+   "false_edge": 15,
+   "precision": 0.5636,
+   "recall": 0.775,
+   "false_edge_rate": 0.8333
+  },
+  "same-file": {
+   "n": 6,
+   "tp": 5,
+   "wrong": 1,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 0.8333,
+   "recall": 0.8333,
+   "false_edge_rate": null
+  },
+  "import-resolved": {
+   "n": 9,
+   "tp": 9,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "false_edge_rate": null
+  },
+  "self-method": {
+   "n": 4,
+   "tp": 4,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "false_edge_rate": null
+  },
+  "inherited": {
+   "n": 1,
+   "tp": 0,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 1,
+   "false_edge": 0,
+   "precision": null,
+   "recall": null,
+   "false_edge_rate": 0.0
+  },
+  "module-level": {
+   "n": 2,
+   "tp": 0,
+   "wrong": 2,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 0.0,
+   "recall": 0.0,
+   "false_edge_rate": null
+  },
+  "common-name": {
+   "n": 4,
+   "tp": 1,
+   "wrong": 3,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 0.25,
+   "recall": 0.25,
+   "false_edge_rate": null
+  },
+  "external-collision": {
+   "n": 15,
+   "tp": 0,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 15,
+   "precision": 0.0,
+   "recall": null,
+   "false_edge_rate": 1.0
+  },
+  "builtin-external": {
+   "n": 2,
+   "tp": 0,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 2,
+   "false_edge": 0,
+   "precision": null,
+   "recall": null,
+   "false_edge_rate": 0.0
+  },
+  "needs-types": {
+   "n": 6,
+   "tp": 5,
+   "wrong": 1,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 0.8333,
+   "recall": 0.8333,
+   "false_edge_rate": null
+  },
+  "decorated": {
+   "n": 1,
+   "tp": 1,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "false_edge_rate": null
+  },
+  "barrel": {
+   "n": 3,
+   "tp": 3,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "false_edge_rate": null
+  },
+  "this-method": {
+   "n": 2,
+   "tp": 2,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "false_edge_rate": null
+  },
+  "di-member": {
+   "n": 2,
+   "tp": 0,
+   "wrong": 2,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 0.0,
+   "recall": 0.0,
+   "false_edge_rate": null
+  },
+  "test-calls-prod": {
+   "n": 1,
+   "tp": 1,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "false_edge_rate": null
+  }
+ },
+ "name-unique": {
+  "_overall": {
+   "n": 58,
+   "tp": 26,
+   "wrong": 0,
+   "miss": 14,
+   "tn": 9,
+   "false_edge": 9,
+   "precision": 0.7429,
+   "recall": 0.65,
+   "false_edge_rate": 0.5
+  },
+  "same-file": {
+   "n": 6,
+   "tp": 3,
+   "wrong": 0,
+   "miss": 3,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 0.5,
+   "false_edge_rate": null
+  },
+  "import-resolved": {
+   "n": 9,
+   "tp": 8,
+   "wrong": 0,
+   "miss": 1,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 0.8889,
+   "false_edge_rate": null
+  },
+  "self-method": {
+   "n": 4,
+   "tp": 3,
+   "wrong": 0,
+   "miss": 1,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 0.75,
+   "false_edge_rate": null
+  },
+  "inherited": {
+   "n": 1,
+   "tp": 0,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 1,
+   "false_edge": 0,
+   "precision": null,
+   "recall": null,
+   "false_edge_rate": 0.0
+  },
+  "module-level": {
+   "n": 2,
+   "tp": 0,
+   "wrong": 0,
+   "miss": 2,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": null,
+   "recall": 0.0,
+   "false_edge_rate": null
+  },
+  "common-name": {
+   "n": 4,
+   "tp": 1,
+   "wrong": 0,
+   "miss": 3,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 0.25,
+   "false_edge_rate": null
+  },
+  "external-collision": {
+   "n": 15,
+   "tp": 0,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 6,
+   "false_edge": 9,
+   "precision": 0.0,
+   "recall": null,
+   "false_edge_rate": 0.6
+  },
+  "builtin-external": {
+   "n": 2,
+   "tp": 0,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 2,
+   "false_edge": 0,
+   "precision": null,
+   "recall": null,
+   "false_edge_rate": 0.0
+  },
+  "needs-types": {
+   "n": 6,
+   "tp": 4,
+   "wrong": 0,
+   "miss": 2,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 0.6667,
+   "false_edge_rate": null
+  },
+  "decorated": {
+   "n": 1,
+   "tp": 1,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "false_edge_rate": null
+  },
+  "barrel": {
+   "n": 3,
+   "tp": 3,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "false_edge_rate": null
+  },
+  "this-method": {
+   "n": 2,
+   "tp": 2,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "false_edge_rate": null
+  },
+  "di-member": {
+   "n": 2,
+   "tp": 0,
+   "wrong": 0,
+   "miss": 2,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": null,
+   "recall": 0.0,
+   "false_edge_rate": null
+  },
+  "test-calls-prod": {
+   "n": 1,
+   "tp": 1,
+   "wrong": 0,
+   "miss": 0,
+   "tn": 0,
+   "false_edge": 0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "false_edge_rate": null
+  }
+ }
+}

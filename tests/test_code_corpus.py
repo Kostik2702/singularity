@@ -40,6 +40,7 @@ def _repos(tmp_path: Path) -> Path:
     (root / "api" / "node_modules" / "left-pad").mkdir(parents=True)
     (root / "web" / "src").mkdir(parents=True)
     (root / "test-project" / "src").mkdir(parents=True)      # SKIP_REPOS
+    (root / "api" / "__MACOSX" / "handlers").mkdir(parents=True)   # zip debris
 
     (root / "api" / "handlers" / "orders.py").write_text(
         "def create_order(payload):\n"
@@ -66,6 +67,13 @@ def _repos(tmp_path: Path) -> Path:
         "def fixture_helper():\n    return 'ignored repository entirely'\n",
         encoding="utf-8")
     (root / "api" / "README.md").write_text("# not code\n", encoding="utf-8")
+    # The AppleDouble twin a macOS archiver writes next to every file: same
+    # name, `._` prefix, resource-fork bytes. It matches `*.py`, so without the
+    # prune it is chunked as code — 22 such chunks were live in the index on
+    # 2026-09-26, all from one unzipped repository.
+    (root / "api" / "__MACOSX" / "handlers" / "._orders.py").write_text(
+        "def appledouble_debris():\n    return 'resource fork, not source'\n",
+        encoding="utf-8")
     return root
 
 
@@ -144,6 +152,7 @@ def test_rebuild_code_collects_exactly_the_wanted_files(cfg):
     ("web/src/vendor.min.js", "skip_file_patterns"),
     ("web/src/huge.js", "max_file_bytes"),
     ("test-project/src/fixture.py", "SKIP_REPOS (D1)"),
+    ("api/__MACOSX/handlers/._orders.py", "macOS zip debris"),
     ("api/README.md", "not a code pattern"),
 ])
 def test_rebuild_code_excludes(cfg, excluded, why):

@@ -101,7 +101,14 @@ them in a skip list.
 `out` `target` `.next` `.nuxt` `.svelte-kit` `.turbo` `.parcel-cache` `.cache`
 `.gradle` `.terraform` · `coverage` `htmlcov` `storybook-static`
 `__snapshots__` `__tests__` · `Pods` `DerivedData` `.idea` `.vscode` `.mb` ·
-`_static`
+`_static` · `__MACOSX` (macOS zip debris: `._<name>` resource-fork twins that
+carry the source file's extension — 22 of them were live chunks on 2026-09-26)
+
+Owner-specific exclusions do **not** belong in this list. A repository name
+the engine should not carry (a former employer's code, a one-off unpacked
+virtualenv like `venv-capcut`) goes in the machine-local `code_skip_dirs`:
+commit `6628a90` removed such a name from `SKIP_REPOS` on purpose, and the
+repository quietly re-entered the index because nothing replaced it in config.
 
 This is **the most effective filter in the whole feature** and the only one that
 cuts before entering a subdirectory. Hence `_scan_corpus` moving from `rglob` to
@@ -205,6 +212,18 @@ tree-sitter: a parser per language is a dependency, a treadmill of versions and 
 hard failure on the first file that does not parse, in exchange for maybe 20%
 better boundaries. Regex degrades into fixed-size windows instead of failing —
 exactly the behaviour needed on a root full of unfinished drafts.
+
+> **Reversed for the code graph, 2026-09-26 (decision CODE-GRAPH D1).** The
+> "hard failure on the first file that does not parse" describes the stdlib
+> `ast` module, not tree-sitter: tree-sitter recovers with ERROR nodes. On a
+> 100k-file proxy it failed hard on 0 files (119 parsed partially), and on a
+> deliberately broken file it still recovered 5 definitions where `ast`
+> recovered 0. What survives of the refusal is the version treadmill, and it is
+> answered by hash-pinned wheels and a doctor check in both interpreters.
+> Regex fallback remains only for a grammar that fails to LOAD. The chunker
+> itself stays on regex (schema 1) until a chunker v2 is measured against the
+> code retrieval set in `tests/fixtures/search_eval.json` — the graph and the
+> chunker are separate reversals.
 
 | Constant | Value | What for |
 |---|---|---|
