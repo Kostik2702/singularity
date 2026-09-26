@@ -9,10 +9,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import time
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from importlib.metadata import PackageNotFoundError, version
+from itertools import repeat
+from pathlib import Path
 from typing import Any
 
 from ..config import Config
@@ -30,6 +34,13 @@ from .resolve_ts import TsResolver, load_workspace
 RESOLVER_VERSION = 4
 _PARSER_PACKAGES = ("tree-sitter", "tree-sitter-python", "tree-sitter-typescript",
                     "tree-sitter-javascript")
+# Extraction is per file and CPU-bound, so a large unit is parsed in a process
+# pool (B7: 222 s -> 19 s on the 44k-file proxy with 16 workers). Below
+# _POOL_MIN_FILES the pool costs more than it saves: every worker is spawned
+# and re-imports tree-sitter and the grammars.
+_POOL_MIN_FILES = 2000
+_MAX_WORKERS = 16
+_MAX_BATCH = 250
 
 
 def parser_versions() -> dict[str, str]:
@@ -71,7 +82,42 @@ def _read_text(unit: scope.Unit):
     return read
 
 
-def build_unit(cfg: Config, unit: scope.Unit) -> dict[str, Any]:
+def _extract_batch(root: str, paths: list[str]) -> list[tuple[str, FileFacts, str]]:
+    """(lang, facts, content hash) for each path, in order. Module level: a
+    pool worker finds it by name."""
+    out = []
+    for path in paths:
+        data = (Path(root) / path).read_bytes()
+        if path.endswith(".py"):
+            out.append(("python", extract_py.extract(path, data), hashlib.sha256(data).hexdigest()))
+        else:
+            out.append(("ts", extract_ts.extract(path, data), hashlib.sha256(data).hexdigest()))
+    return out
+
+
+def _worker_count(n_files: int, workers: int | None) -> int:
+    if workers is not None:
+        return max(1, workers)
+    if n_files < _POOL_MIN_FILES:
+        return 1
+    return max(1, min(_MAX_WORKERS, (os.cpu_count() or 2) - 1))
+
+
+def _extract_all(root: Path, paths: list[str], workers: int) -> list[tuple[str, FileFacts, str]]:
+    """Same result, same order, whatever `workers` is. A worker that fails
+    (a file deleted since the scan, a killed process) fails the build before
+    anything is written, exactly as the serial loop does."""
+    if workers == 1:
+        return _extract_batch(str(root), paths)
+    size = max(1, min(_MAX_BATCH, -(-len(paths) // (workers * 4))))
+    batches = [paths[i:i + size] for i in range(0, len(paths), size)]
+    with ProcessPoolExecutor(workers) as pool:
+        return [r for part in pool.map(_extract_batch, repeat(str(root)), batches) for r in part]
+
+
+def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None) -> dict[str, Any]:
+    """`workers`: None sizes the pool by the unit (serial below
+    _POOL_MIN_FILES); a number forces it -- tests force 2 on a small unit."""
     started = time.perf_counter()
     timings: dict[str, float] = {}
     with store.build_lock(cfg, unit.key):
@@ -84,22 +130,17 @@ def build_unit(cfg: Config, unit: scope.Unit) -> dict[str, Any]:
         py_facts: dict[str, FileFacts] = {}
         ts_facts: dict[str, FileFacts] = {}
         langs: Counter[str] = Counter()
-        for fid, entry in enumerate(entries, 1):
-            data = (unit.root / entry.path).read_bytes()
-            if entry.path.endswith(".py"):
-                lang, facts = "python", extract_py.extract(entry.path, data)
-                py_facts[entry.path] = facts
-            else:
-                lang, facts = "ts", extract_ts.extract(entry.path, data)
-                ts_facts[entry.path] = facts
+        n_workers = _worker_count(len(entries), workers)
+        extracted = _extract_all(unit.root, [e.path for e in entries], n_workers)
+        for fid, (entry, (lang, facts, digest)) in enumerate(zip(entries, extracted, strict=True), 1):
+            (py_facts if lang == "python" else ts_facts)[entry.path] = facts
             langs[lang] += 1
             file_rows.append({"id": fid, "path": entry.path, "lang": lang, "size": entry.size,
-                              "mtime_ns": entry.mtime_ns,
-                              "content_hash": hashlib.sha256(data).hexdigest(),
+                              "mtime_ns": entry.mtime_ns, "content_hash": digest,
                               "parse_status": "partial" if facts.degraded else "ok",
                               "is_test": int(entry.is_test)})
         timings["extract"] = time.perf_counter() - t
-        t = time.perf_counter()
+        t, cpu = time.perf_counter(), time.process_time()
         test_paths = {e.path for e in entries if e.is_test}
         edges, unresolved = PyResolver(py_facts, test_paths=test_paths).resolve()
         if ts_facts:
@@ -108,6 +149,9 @@ def build_unit(cfg: Config, unit: scope.Unit) -> dict[str, Any]:
             edges += ts_edges
             unresolved += ts_unresolved
         timings["resolve"] = time.perf_counter() - t
+        # Resolve is one CPU-bound thread in this process: well below 1 means the
+        # process was kept waiting and the timings measure the machine.
+        resolve_cpu_over_wall = (time.process_time() - cpu) / max(timings["resolve"], 1e-9)
         t = time.perf_counter()
         file_id = {r["path"]: r["id"] for r in file_rows}
         node_rows = [{"qname": d.qname, "name": d.name, "kind": d.kind, "file_id": file_id[f.path],
@@ -128,5 +172,7 @@ def build_unit(cfg: Config, unit: scope.Unit) -> dict[str, Any]:
     return {"unit": unit.key, "files": len(file_rows), "by_lang": dict(langs),
             "parse_status": dict(statuses), "nodes": len(node_rows),
             "edges": dict(Counter(e.kind for e in edges)), "call_tiers": dict(tiers),
-            "unresolved": len(unresolved_rows), "seconds": round(time.perf_counter() - started, 2),
+            "unresolved": len(unresolved_rows), "workers": n_workers,
+            "resolve_cpu_over_wall": round(resolve_cpu_over_wall, 2),
+            "seconds": round(time.perf_counter() - started, 2),
             "timings": {k: round(v, 2) for k, v in timings.items()}, **written}

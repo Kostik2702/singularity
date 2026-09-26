@@ -150,6 +150,13 @@ class TsResolver:
                 self.hints[h.scope][h.target].append(h)
         self._mod_cache: dict[tuple[str, str], str | None] = {}
         self._reach_cache: dict[str, set[str | None]] = {}
+        # Same memo tables and reason as PyResolver: `this.cur = this.cur.next`
+        # written k times recurses through every hint at every hop (~k**5
+        # type_of calls at k=8). Depth stays in the key; output unchanged.
+        self._type_cache: dict[tuple, tuple[str | None, str | None, str | None]] = {}
+        self._chain_cache: dict[tuple[str, str], tuple[str, ...]] = {}
+        self._local_cache: dict[str, bool] = {}
+        self._hits_cache: dict[tuple[str, bool], list[str]] = {}
 
     # --- modules ---------------------------------------------------------------
 
@@ -272,7 +279,11 @@ class TsResolver:
 
     # --- names, types, members ------------------------------------------------
 
-    def _chain(self, scope: str, path: str) -> list[str]:
+    def _chain(self, scope: str, path: str) -> tuple[str, ...]:
+        key = (scope, path)
+        hit = self._chain_cache.get(key)
+        if hit is not None:
+            return hit
         out: list[str] = []
         q: str | None = scope
         while q and q in self.defs:
@@ -280,7 +291,8 @@ class TsResolver:
                 out.append(q)
             q = self.defs[q].parent
         out.append(_module_scope(path))
-        return out
+        self._chain_cache[key] = tuple(out)
+        return self._chain_cache[key]
 
     def lookup_name(self, name: str, scope: str, path: str) -> tuple[str | None, str | None, str | None]:
         for s in self._chain(scope, path):
@@ -393,6 +405,14 @@ class TsResolver:
 
     def type_of(self, expr: str, scope: str, path: str, klass: str | None, depth: int = 0
                 ) -> tuple[str | None, str | None, str | None]:
+        key = (expr, scope, path, klass, depth)
+        hit = self._type_cache.get(key)
+        if hit is None:
+            hit = self._type_cache[key] = self._type_of(expr, scope, path, klass, depth)
+        return hit
+
+    def _type_of(self, expr: str, scope: str, path: str, klass: str | None, depth: int
+                 ) -> tuple[str | None, str | None, str | None]:
         if depth > _MAX_HOPS or not expr or "(" in expr or "[" in expr:
             return (None, None, None)
         parts = expr.replace("?.", ".").split(".")
@@ -494,12 +514,18 @@ class TsResolver:
         return self._reach_cache[path]
 
     def _is_local(self, qname: str) -> bool:
+        hit = self._local_cache.get(qname)
+        if hit is not None:
+            return hit
+        local = False
         q = self.defs[qname].parent
         while q and q in self.defs:
             if self.defs[q].kind not in _TYPELIKE:
-                return True
+                local = True
+                break
             q = self.defs[q].parent
-        return False
+        self._local_cache[qname] = local
+        return local
 
     def _guess(self, name: str, caller_path: str) -> tuple[str | None, str | None, bool]:
         """The weakest tier. Hardened after two out-of-sample audits found it
@@ -509,7 +535,10 @@ class TsResolver:
         if name in TS_STOPLIST or name in TS_GLOBALS:
             return None, None, False
         from_test = caller_path in self.test_paths
-        hits = [q for q in self.by_name.get(name, [])
+        hits = self._hits_cache.get((name, from_test))
+        if hits is None:
+            hits = self._hits_cache[(name, from_test)] = [
+                q for q in self.by_name.get(name, [])
                 if not self._is_local(q) and (from_test or self.def_file[q] not in self.test_paths)
                 and self.defs[q].kind not in ("interface", "type", "enum", "getter", "setter")]
         if len(hits) != 1:
@@ -522,6 +551,7 @@ class TsResolver:
         edges: list[Edge] = []
         unresolved: list[Unresolved] = []
         for path, f in self.facts.items():
+            self._type_cache.clear()       # its keys carry the file: bounded memory, little lost
             seen: set[str] = set()
             for b in f.imports:
                 dst = self.module_path(path, b.module)

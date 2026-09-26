@@ -147,3 +147,22 @@ def test_imports_and_inheritance_are_edges_too():
     inherits = {(e.src, e.dst) for e in edges if e.kind == "INHERITS"}
     assert (f"{E}::Engine", f"{E}::Base") in inherits
     assert not any(src.endswith("_Parser") for src, _ in inherits)          # base is the stdlib's
+
+
+def test_a_name_reassigned_from_itself_does_not_explode_the_type_walk():
+    """`s = s.replace(...)` written k times gives `s` k hints that each lead
+    back to `s`: the walk was k**6 calls deep (310M calls, 220 s on the 100k
+    proxy). Memoised by depth, it is linear, and the answer is unchanged."""
+    k = 12
+    src = "def walk(s):\n" + "    s = s.replace(1)\n" * k + "    s.visit()\n"
+    resolver = PyResolver({"w.py": extract("w.py", src.encode())})
+    calls = [0]
+    inner = resolver.type_of
+
+    def counted(*args):
+        calls[0] += 1
+        return inner(*args)
+    resolver.type_of = counted
+    edges, unresolved = resolver.resolve()
+    assert calls[0] < 500, calls[0]          # uncached: ~47k at k=8, millions at k=12
+    assert [u.name for u in unresolved] == ["replace"] * k + ["visit"]

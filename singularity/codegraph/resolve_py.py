@@ -81,6 +81,17 @@ class PyResolver:
             for h in f.hints:
                 self.hints[h.scope][h.target].append(h)
         self._mro_cache: dict[str, tuple[list[str], bool]] = {}
+        # Memo tables for pure lookups over the tables above (nothing below
+        # writes to them once built). `type_of` recurses through every hint
+        # of a name, and `x = x.parent` written k times in one function makes
+        # that k**_MAX_HOPS calls: 310M calls for 1.3M receivers on the 100k
+        # proxy, 220 of 300 profiled seconds. Depth stays in the key, so a
+        # result cut short by the hop limit is never reused where the limit
+        # would not have cut it -- the output is the uncached one, exactly.
+        self._type_cache: dict[tuple, tuple[str | None, str | None, str | None]] = {}
+        self._chain_cache: dict[tuple[str, str], tuple[str, ...]] = {}
+        self._local_cache: dict[str, bool] = {}
+        self._guess_cache: dict[tuple[str, bool], tuple[str | None, str | None, bool]] = {}
 
     # --- modules ---------------------------------------------------------------
 
@@ -154,9 +165,13 @@ class PyResolver:
 
     # --- scopes and types -----------------------------------------------------
 
-    def _chain(self, scope: str, path: str) -> list[str]:
+    def _chain(self, scope: str, path: str) -> tuple[str, ...]:
         """Lookup scopes for a name used in `scope`: enclosing FUNCTIONS, then
         the module. Class bodies are skipped, as Python skips them."""
+        key = (scope, path)
+        hit = self._chain_cache.get(key)
+        if hit is not None:
+            return hit
         out: list[str] = []
         q: str | None = scope
         while q and q in self.defs:
@@ -164,7 +179,8 @@ class PyResolver:
                 out.append(q)
             q = self.defs[q].parent
         out.append(_module_of(path))
-        return out
+        self._chain_cache[key] = tuple(out)
+        return self._chain_cache[key]
 
     def lookup_name(self, name: str, scope: str, path: str) -> tuple[str | None, str | None, str | None]:
         """-> (kind, target, tier) for a bare name."""
@@ -186,6 +202,14 @@ class PyResolver:
     def type_of(self, expr: str, scope: str, path: str, klass: str | None, depth: int = 0
                 ) -> tuple[str | None, str | None, str | None]:
         """-> (kind, target, tier): kind in module | class | instance | external | None."""
+        key = (expr, scope, path, klass, depth)
+        hit = self._type_cache.get(key)
+        if hit is None:
+            hit = self._type_cache[key] = self._type_of(expr, scope, path, klass, depth)
+        return hit
+
+    def _type_of(self, expr: str, scope: str, path: str, klass: str | None, depth: int
+                 ) -> tuple[str | None, str | None, str | None]:
         if depth > _MAX_HOPS or not expr:
             return (None, None, None)
         if expr.startswith("self.") and klass and expr.count(".") == 1:
@@ -309,22 +333,31 @@ class PyResolver:
     def _is_local(self, qname: str) -> bool:
         """Defined inside a function (at any depth): unreachable by name from
         anywhere else, so never a candidate for a guess."""
+        hit = self._local_cache.get(qname)
+        if hit is not None:
+            return hit
+        local = False
         q = self.defs[qname].parent
         while q and q in self.defs:
             if self.defs[q].kind != "class":
-                return True
+                local = True
+                break
             q = self.defs[q].parent
-        return False
+        self._local_cache[qname] = local
+        return local
 
     def _guess(self, name: str, caller_path: str) -> tuple[str | None, str | None, bool]:
         if name in PY_STOPLIST or name in _BUILTINS:
             return None, None, False
         from_test = caller_path in self.test_paths
+        key = (name, from_test)
+        hit = self._guess_cache.get(key)
+        if hit is not None:
+            return hit
         hits = [q for q in self.by_name.get(name, [])
                 if not self._is_local(q) and (from_test or self.def_file[q] not in self.test_paths)]
-        if len(hits) == 1:
-            return hits[0], "name-unique", False
-        return None, None, False
+        self._guess_cache[key] = (hits[0], "name-unique", False) if len(hits) == 1 else (None, None, False)
+        return self._guess_cache[key]
 
     # --- everything ---------------------------------------------------------
 
@@ -332,6 +365,7 @@ class PyResolver:
         edges: list[Edge] = []
         unresolved: list[Unresolved] = []
         for path, f in self.facts.items():
+            self._type_cache.clear()       # its keys carry the file: bounded memory, little lost
             seen_imports: set[str] = set()
             for b in f.imports:
                 dst_path = self.imported_module(path, b)

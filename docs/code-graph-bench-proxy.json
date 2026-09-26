@@ -91,36 +91,6 @@
  },
  "B7_full_build": {
   "budget_seconds": 600,
-  "valid_run": {
-   "files": 44294,
-   "by_lang": {
-    "ts": 16199,
-    "python": 28095
-   },
-   "nodes": 580917,
-   "edges": {
-    "CALLS": 511064,
-    "IMPORTS": 68684,
-    "INHERITS": 26212
-   },
-   "unresolved": 730304,
-   "timings": {
-    "scan": 1.44,
-    "extract": 221.84,
-    "resolve": 209.64,
-    "write": 24.28
-   },
-   "wall_seconds": 459.2,
-   "peak_rss_mb": 2672,
-   "cpu_over_wall": 0.95
-  },
-  "verdict_on_proxy_44k": "PASS (459 s)",
-  "verdict_extrapolated_to_100k": "FAIL: linear 1037 s; resolve alone ~473 s single-threaded",
-  "per_file_ms": {
-   "extract": 5.01,
-   "resolve": 4.73,
-   "write": 0.55
-  },
   "discarded_runs": {
    "why": "run as long background jobs, the process spent ~70-90% of its wall time waiting (thread state Wait:Executive, cpu/wall ~0.1-0.3, no memory pressure, no power throttling, reads 0.04 ms in other processes). The same code on the same first 5000 files: 74 s in the stalled process, 10 s in a fresh one. Cause not identified; the bench now records cpu_over_wall and flags contaminated runs.",
    "gc_on_background": {
@@ -147,6 +117,76 @@
    "gc_on": 4.66,
    "gc_off": 3.4
   },
-  "memory_note": "peak RSS 2.6 GB at 44k files is ~60 KB/file; linear to 100k is ~6 GB"
+  "memory_note": "peak RSS 2.6 GB at 44k files is ~60 KB/file; linear to 100k is ~6 GB",
+  "before_optimisation": {
+   "valid_run": {
+    "files": 44294,
+    "by_lang": {
+     "ts": 16199,
+     "python": 28095
+    },
+    "nodes": 580917,
+    "edges": {
+     "CALLS": 511064,
+     "IMPORTS": 68684,
+     "INHERITS": 26212
+    },
+    "unresolved": 730304,
+    "timings": {
+     "scan": 1.44,
+     "extract": 221.84,
+     "resolve": 209.64,
+     "write": 24.28
+    },
+    "wall_seconds": 459.2,
+    "peak_rss_mb": 2672,
+    "cpu_over_wall": 0.95
+   },
+   "verdict_on_proxy_44k": "PASS (459 s)",
+   "verdict_extrapolated_to_100k": "FAIL: linear 1037 s; resolve alone ~473 s single-threaded",
+   "per_file_ms": {
+    "extract": 5.01,
+    "resolve": 4.73,
+    "write": 0.55
+   }
+  },
+  "after_optimisation": {
+   "changes": [
+    "extraction in a process pool (16 workers, units >= 2000 files)",
+    "resolver memo tables keyed with the hop depth: type_of, scope chain, is-local, unique-name hits"
+   ],
+   "run": {
+    "files": 44294,
+    "nodes": 580917,
+    "edges": {
+     "CALLS": 511064,
+     "IMPORTS": 68684,
+     "INHERITS": 26212
+    },
+    "unresolved": 730304,
+    "workers": 16,
+    "timings": {
+     "scan": 1.44,
+     "extract": 35.89,
+     "resolve": 26.82,
+     "write": 24.8
+    },
+    "wall_seconds": 90.8,
+    "peak_rss_mb": 3138,
+    "resolve_cpu_over_wall": 0.93,
+    "contaminated": false
+   },
+   "verdict_on_proxy_44k": "PASS (90.8 s)",
+   "verdict_extrapolated_to_100k": "PASS: linear 205 s against 600",
+   "same_graph": "nodes/edges/unresolved counts equal to the pre-optimisation build; resolver output on the saved proxy facts byte-identical (sha256 of pickled edges+unresolved: py f9063b062d59a06c, ts 84dcb31082cb0eeb, before and after)",
+   "resolve_profile_before": "py: 310M type_of calls for 1.3M receivers, 221 of 300 profiled seconds -- 's = s.replace(...)' written k times makes k**6 recursive calls at _MAX_HOPS=6",
+   "resolve_seconds": {
+    "py_before": 200.4,
+    "py_after": 25.8,
+    "ts_before": 7.3,
+    "ts_after": 3.1
+   },
+   "memory_note": "peak RSS incl. workers 3.1 GB at 44k files; linear to 100k ~7 GB -- open risk, not a B7 criterion"
+  }
  }
 }

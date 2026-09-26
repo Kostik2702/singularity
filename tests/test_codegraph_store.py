@@ -124,3 +124,28 @@ def test_a_live_owners_lock_is_never_taken(tmp_path, monkeypatch):
 def test_a_version_mismatch_is_named_package_by_package():
     meta = {"versions": {**build.parser_versions(), "tree-sitter-python": "0.0.1"}}
     assert set(build.version_mismatch(meta)) == {"tree-sitter-python"}
+
+
+def _dump(cfg: Config, key: str) -> dict[str, list[tuple]]:
+    con = store.connect_ro(store.current_db(cfg, key))
+    out = {t: [tuple(r) for r in con.execute(f"SELECT * FROM {t} ORDER BY rowid")]
+           for t in ("files", "nodes", "edges", "unresolved")}
+    con.close()
+    return out
+
+
+def test_a_pooled_build_writes_the_graph_a_serial_one_does(tmp_path):
+    """B7 moved extraction into a process pool; order and ids must not move
+    with it. Two workers are forced on a unit far below the pool threshold,
+    with both languages, so each worker process imports both extractors."""
+    files = dict(SRC)
+    files["web/app.ts"] = "import { h } from './h';\nexport class App {\n  run(): void { h(); }\n}\n"
+    files["web/h.ts"] = "export function h(): void {}\n"
+    files.update({f"pkg/m{i}.py": f"from .b import g\n\ndef f{i}():\n    return g()\n" for i in range(9)})
+    cfg, unit = _unit(tmp_path, files)
+    serial = build.build_unit(cfg, unit, workers=1)
+    serial_rows = _dump(cfg, unit.key)
+    pooled = build.build_unit(cfg, unit, workers=2)
+    assert (serial["workers"], pooled["workers"]) == (1, 2)
+    assert _dump(cfg, unit.key) == serial_rows
+    assert ("web/app.ts::App.run", "web/h.ts::h") in {r[:2] for r in serial_rows["edges"]}

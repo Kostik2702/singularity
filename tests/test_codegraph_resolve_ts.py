@@ -146,6 +146,26 @@ def test_the_unique_name_guess_is_refused_where_the_p1b_audit_found_it_wrong():
     assert calls[("waitFor", "until")] == "packages/persistence/src/wait.ts::WaitOptions.until"
 
 
+def test_a_field_reassigned_from_itself_does_not_explode_the_type_walk():
+    """`this.cur = this.cur.next` written k times: every hop re-walks every
+    hint of `this.cur` (~37k type_of calls at k=8, growing ~k**5).
+    Memoised by depth, it is linear, and the answer is unchanged."""
+    k = 12
+    src = ("export class W {\n  cur: any;\n  step(): void {\n"
+           + "    this.cur = this.cur.next;\n" * k + "    this.cur.visit();\n  }\n}\n")
+    resolver = TsResolver({"w.ts": extract("w.ts", src.encode())})
+    calls = [0]
+    inner = resolver.type_of
+
+    def counted(*args):
+        calls[0] += 1
+        return inner(*args)
+    resolver.type_of = counted
+    _, unresolved = resolver.resolve()
+    assert calls[0] < 500, calls[0]
+    assert [u.name for u in unresolved] == ["visit"]
+
+
 def test_overload_signatures_merge_into_one_node():
     facts = extract("o.ts", b"export function f(a: string): void;\nexport function f(a: number): void;\n"
                             b"export function f(a: any) {}\n")

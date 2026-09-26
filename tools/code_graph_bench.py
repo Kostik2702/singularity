@@ -53,23 +53,31 @@ def cmd_build(root: Path) -> dict:
     stop = threading.Event()
 
     def sample():
+        # the build's pool workers included: their RSS is the build's too
         while not stop.is_set():
-            peak.append(proc.memory_info().rss)
+            total = proc.memory_info().rss
+            for child in proc.children(recursive=True):
+                try:
+                    total += child.memory_info().rss
+                except psutil.Error:
+                    pass
+            peak.append(total)
             time.sleep(0.5)
     t = threading.Thread(target=sample, daemon=True)
     t.start()
-    started, cpu_started = time.perf_counter(), time.process_time()
+    started = time.perf_counter()
     summary = build.build_unit(cfg, unit)
     elapsed = time.perf_counter() - started
-    cpu_over_wall = (time.process_time() - cpu_started) / elapsed
     stop.set()
     t.join()
-    # The build is one CPU-bound thread: a ratio far below 1 means the process
-    # sat waiting on something outside it, and the wall time measures the
-    # machine, not the code. Seen 2026-09-26: two long background runs at
-    # ~0.1-0.3 took 953 s and 649 s; the same build in the foreground, 459 s.
+    # Resolve runs on one thread of this process, CPU-bound: a ratio far below
+    # 1 means the process sat waiting on something outside it, and the wall
+    # time measures the machine, not the code. Seen 2026-09-26: two long
+    # background runs at ~0.1-0.3 took 953 s and 649 s; the same build in the
+    # foreground, 459 s. (The whole-build ratio says nothing once extraction
+    # runs in a pool: this process waits on its workers by design.)
     summary.update(wall_seconds=round(elapsed, 1), peak_rss_mb=round(max(peak) / 2**20),
-                   cpu_over_wall=round(cpu_over_wall, 2), contaminated=cpu_over_wall < 0.8,
+                   contaminated=summary["resolve_cpu_over_wall"] < 0.8,
                    budget_B7_seconds=600, within_B7=elapsed <= 600)
     return summary
 
