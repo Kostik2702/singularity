@@ -28,6 +28,12 @@ secrets = ["keyring>=24"]
 # owner decision OD-1 2026-07-14) and is reached via the `cutout` dispatch
 # subcommand, so this extras group can never drag numpy pins that break `mb`.
 imgqa = ["Pillow>=10", "scipy>=1.10"]
+# graph: the code graph's parser (CODE-GRAPH D1). EXACT pins, because a grammar
+# bump moves node boundaries and a graph built by two grammar versions is two
+# graphs pretending to be one; `requirements-graph.txt` carries the same pins
+# with wheel hashes. Native wheels, no transitive dependencies.
+graph = ["tree-sitter==0.26.0", "tree-sitter-python==0.25.0",
+         "tree-sitter-typescript==0.23.2", "tree-sitter-javascript==0.25.0"]
 # Everything the fast suite needs, and nothing heavy: the runtime deps come
 # from [project.dependencies], keyring and Pillow/scipy from the extras that
 # already declare them, and pytest is the only genuine addition — no second
@@ -38,7 +44,7 @@ imgqa = ["Pillow>=10", "scipy>=1.10"]
 # and the only way to know about `requirements-test.txt` was to read the CI
 # workflow. `tests/test_dev_extras_parity.py` pins this group to that file,
 # which stays the CI entry point.
-dev = ["singularity[imgqa,secrets]", "pytest>=7.0", "ruff>=0.6"]
+dev = ["singularity[imgqa,secrets,graph]", "pytest>=7.0", "ruff>=0.6"]
 
 [project.scripts]
 mb = "singularity.cli:main"

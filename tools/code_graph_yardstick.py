@@ -36,8 +36,9 @@ import json
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
@@ -282,6 +283,67 @@ def name_unique(edges: list[dict[str, Any]], tables: dict[str, dict[str, list[st
     return out
 
 
+# --- the shipped resolver, read back from the graph it built -----------------
+
+_LANG_SUFFIX = {"py": (".py",), "ts": (".ts", ".tsx", ".js", ".jsx"), "all": None}
+
+
+def graph_predictions(cfg: Any, edges: list[dict[str, Any]]) -> dict[str, str | None]:
+    """The target the graph recorded at each labelled site: the CALLS edge on
+    that file and line whose called name matches, or None when the site went
+    to `unresolved` or was judged external."""
+    from singularity.codegraph import store
+    preds: dict[str, str | None] = {}
+    cons: dict[str, Any] = {}
+    for e in edges:
+        if e["unit"] not in cons:
+            db = store.current_db(cfg, e["unit"])
+            cons[e["unit"]] = store.connect_ro(db) if db else None
+        con = cons[e["unit"]]
+        row = None if con is None else con.execute(
+            "SELECT e.dst FROM edges e JOIN files f ON f.id = e.file_id"
+            " WHERE f.path = ? AND e.line = ? AND e.callee = ? AND e.kind = 'CALLS' LIMIT 1",
+            (e["file"], e["line"], e["callee_name"])).fetchone()
+        preds[e["id"]] = row[0] if row else None
+    for con in cons.values():
+        if con is not None:
+            con.close()
+    return preds
+
+
+def _graph(data: dict[str, Any], live: list[dict[str, Any]], args: Any) -> int:
+    from singularity.codegraph import build, scope
+    from singularity.config import load_config
+    cfg = load_config()
+    wanted = {e["unit"] for e in live}
+    if not args.no_build:
+        units = {u.key: u for u in scope.discover_units(cfg)}
+        missing = sorted(wanted - set(units))
+        if missing:
+            print(f"[yardstick] labelled units not found as graph units: {missing}", file=sys.stderr)
+            return 2
+        for key in sorted(wanted):
+            s = build.build_unit(cfg, units[key])
+            print(f"[yardstick] built {key}: {s['files']} files, {s['nodes']} nodes, "
+                  f"{s['edges']}, {s['unresolved']} unresolved, {s['seconds']}s")
+    suffixes = _LANG_SUFFIX[args.lang]
+    scored = [e for e in live if suffixes is None or e["file"].endswith(suffixes)]
+    preds = graph_predictions(cfg, scored)
+    sc = score(scored, preds)
+    _render(f"shipped resolver ({args.lang})", sc)
+    wrong = [e for e in scored if preds[e["id"]] is not None and preds[e["id"]] != e["expect"]]
+    for e in wrong:
+        print(f"   WRONG {e['id']} [{e['category']}] {e['call_text']}: got {preds[e['id']]}, "
+              f"want {e['expect']}")
+    misses = gate(sc["_overall"])
+    for m in misses:
+        print(f"[yardstick] GATE MISSED: {m}", file=sys.stderr)
+    if args.out:
+        Path(args.out).write_text(json.dumps({"lang": args.lang, "predictions": preds, "scores": sc},
+                                             indent=1), encoding="utf-8")
+    return 1 if misses else 0
+
+
 # --- CLI ---------------------------------------------------------------------
 
 def _unit_root_factory() -> Callable[[str], Path]:
@@ -313,6 +375,11 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--out", help="write the scores as JSON")
     s = sub.add_parser("score", help="score a resolver's predictions")
     s.add_argument("predictions")
+    g = sub.add_parser("graph", help="build the labelled units' graphs and score the SHIPPED resolver")
+    g.add_argument("--lang", choices=("py", "ts", "all"), default="all",
+                   help="score only sites in files of this language")
+    g.add_argument("--no-build", action="store_true", help="score the graphs as they are")
+    g.add_argument("--out", help="write the predictions and scores as JSON")
     args = ap.parse_args(argv)
 
     data = load_fixture()
@@ -336,6 +403,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "check":
         print(f"[yardstick] {len(live)} labelled sites verified on disk")
         return 0
+
+    if args.cmd == "graph":
+        return _graph(data, live, args)
 
     if args.cmd == "score":
         preds = json.loads(Path(args.predictions).read_text(encoding="utf-8"))

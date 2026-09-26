@@ -63,7 +63,7 @@ def test_an_unanswered_site_is_a_miss_or_a_correct_abstention():
 def test_a_perfect_resolver_scores_one_and_a_constant_one_does_not():
     edges = [_edge("a", "a.py::f"), _edge("b", "a.py::h"), _edge("c", None, "builtin-external")]
     perfect = score(edges, {"a": "a.py::f", "b": "a.py::h", "c": None})["_overall"]
-    constant = score(edges, {k: "a.py::f" for k in "abc"})["_overall"]
+    constant = score(edges, dict.fromkeys("abc", "a.py::f"))["_overall"]
     assert perfect["precision"] == perfect["recall"] == 1.0
     assert constant["precision"] < 1.0 and constant["false_edge_rate"] == 1.0
 
@@ -137,7 +137,7 @@ def test_locate_keeps_intact_sites_follows_moved_ones_and_fails_vanished_ones(tm
 def test_python_definitions_carry_their_enclosing_class():
     lines = ["class Config:", "    def save(self):", "        def inner():", "            pass",
              "def save():", "    pass"]
-    got = dict((q, n) for n, q in _py_defs("c.py", lines))
+    got = {q: n for n, q in _py_defs("c.py", lines)}
     assert "c.py::Config.save" in got and "c.py::Config.save.inner" in got
     assert "c.py::save" in got
 

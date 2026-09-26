@@ -187,6 +187,16 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # (`schema-1.0.0`, `proto-3.21.12`) and `code_skip_dirs` can only ADD
     # prunes — without this key such a directory had no remedy but a source edit.
     "code_vendored_pattern": None,
+    # --- CODE-GRAPH (decision CODE-GRAPH D1): the structural code graph. A
+    # second switch next to `code_repos_dir` is an EXPLICIT extension of D1's
+    # "one switch", recorded in the decision: the semantic corpus stays on for
+    # this root, while the graph is a new and heavier store the owner turns on.
+    "code_graph_enabled": False,
+    # Graph-only roots OUTSIDE `code_repos_dir` — D1's own "a list of paths is
+    # backward compatible if the repositories move apart" clause. They never
+    # reach the semantic corpus: a 100k-file work monorepo there would be hours
+    # of embedding (D4) and displaced search results (D2).
+    "code_graph_extra_roots": [],
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -204,7 +214,9 @@ _PATH_KEYS = {"code_repos_dir", "hf_cache"}
 # sensitive value (a local model-cache path with no portable meaning);
 # actual secrets never live in config.json at all (singularity.platform.
 # secrets routes them through the OS keyring / an explicit opt-in file).
-_EXAMPLE_REDACTED_KEYS = {"hf_cache"}
+# `code_graph_extra_roots` names repositories outside the shared root — a work
+# monorepo, typically — and the example exists to be committed and shared.
+_EXAMPLE_REDACTED_KEYS = {"hf_cache", "code_graph_extra_roots"}
 _EXAMPLE_HOME_RELATIVE_KEYS = {"code_repos_dir"}
 
 
@@ -409,7 +421,9 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
         v = data["nightly_schedule_time"]
         if not (isinstance(v, str) and re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v)):
             errors.append("nightly_schedule_time: must be 'HH:MM' 24h string")
-    for key in ("skip_dirs", "skip_path_parts", "code_skip_dirs"):
+    if "code_graph_enabled" in data and not isinstance(data["code_graph_enabled"], bool):
+        errors.append("code_graph_enabled: must be a boolean")
+    for key in ("skip_dirs", "skip_path_parts", "code_skip_dirs", "code_graph_extra_roots"):
         if key in data and (not isinstance(data[key], list)
                             or not all(isinstance(x, str) for x in data[key])):
             errors.append(f"{key}: must be a list of strings")
@@ -496,6 +510,19 @@ class Config:
         if raw is None or not str(raw).strip():
             return None
         return Path(str(raw).strip()).expanduser()
+
+    @property
+    def code_graph_dir(self) -> Path:
+        """Per-unit graph stores (CODE-GRAPH D1). Machine-local on purpose:
+        rows key absolute paths of THIS machine's repositories, which AUD-19
+        keeps out of the portable `.mb` root."""
+        return self.machine_dir / "code_graph"
+
+    @property
+    def code_graph_extra_roots(self) -> list[Path]:
+        """Graph-only repository roots outside `code_repos_dir`, `~` expanded."""
+        raw = self.data.get("code_graph_extra_roots") or []
+        return [Path(str(r).strip()).expanduser() for r in raw if str(r).strip()]
 
     @property
     def sources_dir(self) -> Path:

@@ -1,0 +1,361 @@
+"""Names the call resolver never guesses from alone (CODE-GRAPH P1).
+
+The weakest resolution tier links `obj.name(...)` to the ONE first-party
+definition called `name` when nothing better is known. On the P0 yardstick
+that guess drew a false edge for `np.save` (-> Config.save), `Promise.all`,
+`img.save` and `f.write`: external calls whose method name happens to exist
+once in our code. Every name below is an attribute of a builtin or common
+standard-library type, numpy or Pillow, and is too likely to be one of those
+to be guessed.
+
+Static on purpose. Built from `dir()` at run time it would differ between
+the two interpreters that run this engine, and one graph would then hold
+edges decided by two different lists (UNMET o). Regenerate with the script
+in the module comment below and commit the result; a change here is a
+change in resolution and is measured on the yardstick.
+
+# Generated 2026-09-26 on CPython 3.10.6 (+ numpy, Pillow) from dir() of the
+# builtin types, io/pathlib/re/os/json/subprocess/threading/collections/
+# logging/datetime/sqlite3/socket/argparse/hashlib/zipfile/tarfile/html.parser/
+# urllib/asyncio/concurrent.futures/... objects, dunders dropped.
+"""
+from __future__ import annotations
+
+_NAMES = """
+ABOVE_NORMAL_PRIORITY_CLASS ADAPTIVE ADDITEMS AFFINE ALL_COMPLETED APPEND APPENDS
+AbstractAsyncContextManager AbstractContextManager AbstractEventLoop AbstractEventLoopPolicy
+AbstractServer ArgInfo ArgSpec Arguments ArithmeticError AssertionError AsyncContextDecorator
+AsyncExitStack Attribute AttributeError BELOW_NORMAL_PRIORITY_CLASS BICUBIC BILINEAR BINBYTES
+BINBYTES8 BINFLOAT BINGET BININT BININT1 BININT2 BINPERSID BINPUT BINSTRING BINUNICODE
+BINUNICODE8 BOX BPF BUILD BYTEARRAY8 BadGzipFile BaseEventLoop BaseException BaseProtocol
+BaseTransport BitGenerator BlockFinder BlockingIOError BoundArguments BoundedSemaphore
+BrokenPipeError BufferError BufferedProtocol BytesWarning CDATA_CONTENT_ELEMENTS COPY_BUFSIZE
+CORO_CLOSED CORO_CREATED CORO_RUNNING CORO_SUSPENDED CO_ASYNC_GENERATOR CO_COROUTINE
+CO_GENERATOR CO_ITERABLE_COROUTINE CO_NESTED CO_NEWLOCALS CO_NOFREE CO_OPTIMIZED CO_VARARGS
+CO_VARKEYWORDS CREATE_BREAKAWAY_FROM_JOB CREATE_DEFAULT_ERROR_MODE CREATE_NEW_CONSOLE
+CREATE_NEW_PROCESS_GROUP CREATE_NO_WINDOW CalledProcessError CancelledError ChildProcessError
+ClassFoundException ClosureVars CompletedProcess Condition ConnectionAbortedError
+ConnectionError ConnectionRefusedError ConnectionResetError ContextDecorator DECODERS
+DEFAULT_PROTOCOL DEFAULT_STRATEGY DETACHED_PROCESS DEVNULL DICT DUP DataError DatabaseError
+DatagramProtocol DatagramTransport DecoderInput DecompressionBombError DecompressionBombWarning
+DefaultEventLoopPolicy DeferredError DefragResult DefragResultBytes DeprecationWarning Dialect
+DictReader DictWriter DirEntry Dither EMPTY_DICT EMPTY_LIST EMPTY_SET EMPTY_TUPLE ENCODERS
+EOFError EXT1 EXT2 EXT4 EXTENSION EXTENT ElementTree Ellipsis EncodingWarning EndOfBlock
+EnvironmentError Error Event Exception ExecError Exif ExifTags ExitStack FALSE FASTOCTREE
+FCOMMENT FEXTRA FHCRC FILTERED FIRST_COMPLETED FIRST_EXCEPTION FIXED FLIP_LEFT_RIGHT
+FLIP_TOP_BOTTOM FLOAT FLOYDSTEINBERG FNAME FRAME FROZENSET FTEXT F_OK False False_
+FileExistsError FileNotFoundError FloatingPointError Formatter FrameInfo FrameSummary
+FullArgSpec FunctionType Future FutureWarning GEN_CLOSED GEN_CREATED GEN_RUNNING GEN_SUSPENDED
+GET GLOBAL Generator GeneratorExit GenericAlias GzipFile HAMMING HIGHEST_PROTOCOL
+HIGH_PRIORITY_CLASS HUFFMAN_ONLY Handle ID IDLE_PRIORITY_CLASS INST INT IO IOError Image
+ImageMode ImagePointHandler ImagePointTransform ImageTransformHandler ImportError ImportWarning
+IncompleteReadError IndentationError IndexError IntEnum IntegrityError InterfaceError
+InternalError InterruptedError InvalidStateError IocpProactor IsADirectoryError JSONDecodeError
+JSONDecoder JSONEncoder KeyError KeyboardInterrupt LANCZOS LIBIMAGEQUANT LIST LOG4 LONG LONG1
+LONG4 LONG_BINGET LONG_BINPUT LifoQueue LimitOverrunError Lock LookupError MARK MAXBINSIZE
+MAXCOVERAGE MAXLINESIZE MAX_CACHE_SIZE MAX_IMAGE_PIXELS MEDIANCUT MEMOIZE MESH MIME MODES
+MT19937 Mapping MemoryError MethodType ModuleNotFoundError MutableMapping NEAREST NEWFALSE
+NEWOBJ NEWOBJ_EX NEWTRUE NEXT_BUFFER NONE NORMAL_PRIORITY_CLASS NV_MAGICCONST NameError
+NamedTemporaryFile None NotADirectoryError NotImplemented NotImplementedError NotSupportedError
+OBJ OPEN OPEN_METH ORDERED OSError O_APPEND O_BINARY O_CREAT O_EXCL O_NOINHERIT O_RANDOM
+O_RDONLY O_RDWR O_SEQUENTIAL O_SHORT_LIVED O_TEMPORARY O_TEXT O_TRUNC O_WRONLY OperationalError
+OrderedDict OverflowError PCG64 PCG64DXSM PERSID PERSPECTIVE PIPE POP POP_MARK PROTO PUT
+P_DETACH P_NOWAIT P_NOWAITO P_OVERLAY P_WAIT Palette Parameter ParseResult ParseResultBytes
+PathLike PendingDeprecationWarning PermissionError Philox PickleBuffer PickleError Pickler
+PicklingError Popen PriorityQueue ProactorEventLoop ProcessLookupError ProgrammingError Protocol
+PyStringMap QUAD QUOTE_ALL QUOTE_MINIMAL QUOTE_NONE QUOTE_NONNUMERIC Quantize Queue QueueEmpty
+QueueFull Quoter RASTERIZE READ READONLY_BUFFER REALTIME_PRIORITY_CLASS RECIP_BPF REDUCE RLE
+RLock ROTATE_180 ROTATE_270 ROTATE_90 R_OK Random RandomState ReadError ReadTransport
+RecursionError ReferenceError RegistryError Resampling ResourceWarning ResultBase RuntimeError
+RuntimeWarning SAVE SAVE_ALL SEEK_CUR SEEK_END SEEK_SET SETITEM SETITEMS SFC64 SG_MAGICCONST
+SHORT_BINBYTES SHORT_BINSTRING SHORT_BINUNICODE STACK_GLOBAL STARTF_USESHOWWINDOW
+STARTF_USESTDHANDLES STARTUPINFO STDOUT STD_ERROR_HANDLE STD_INPUT_HANDLE STD_OUTPUT_HANDLE STOP
+STRING SW_HIDE SameFileError ScalarType SeedSequence SelectorEventLoop Semaphore
+SendfileNotAvailableError Server Signature Sniffer SpecialFileError SplitResult SplitResultBytes
+SpooledTemporaryFile StackSummary StopAsyncIteration StopIteration StreamReader
+StreamReaderProtocol StreamWriter StringIO Struct SubprocessError SubprocessProtocol
+SubprocessTransport SupportsArrayInterface SupportsArrowArrayInterface SupportsGetData
+SyntaxError SyntaxWarning SystemError SystemExit SystemRandom T TMP_MAX TPFLAGS_IS_ABSTRACT
+TRANSPOSE TRANSVERSE TRUE TUPLE TUPLE1 TUPLE2 TUPLE3 TWOPI TYPE_CHECKING TabError Task Template
+TemporaryDirectory TemporaryFile TextWrapper TiffTags TimeoutError TimeoutExpired TimerHandle
+Traceback TracebackException Transform Transport Transpose True True_ TypeError UNICODE
+UnboundLocalError UnicodeDecodeError UnicodeEncodeError UnicodeError UnicodeTranslateError
+UnicodeWarning UnidentifiedImageError Unpickler UnpicklingError UserWarning ValueError
+WARN_POSSIBLE_FORMATS WEB WRAPPER_ASSIGNMENTS WRAPPER_UPDATES WRITE W_OK Warning WarningMessage
+WindowsError WindowsProactorEventLoopPolicy WindowsSelectorEventLoopPolicy WriteTransport X_OK
+ZeroDivisionError _85encode _A85END _A85START _ALWAYS_SAFE _ALWAYS_SAFE_BYTES _ARCHIVE_FORMATS
+_AddedDllDirectory _AsyncGeneratorContextManager _B32_DECODE_DOCSTRING
+_B32_DECODE_MAP01_DOCSTRING _B32_ENCODE_DOCSTRING _BZ2_SUPPORTED _BaseExitStack _CHUNK_SIZE
+_COMPRESS_LEVEL_BEST _COMPRESS_LEVEL_FAST _COMPRESS_LEVEL_TRADEOFF _CacheInfo _ChainMap
+_ClassFinder _ClassMethodWrapper _CopyMode _DefragResultBase _Dialect _ENDIAN _EXTENSION_PLUGIN
+_Environ _ExifBase _Framer _Future__get_result _GeneratorContextManager
+_GeneratorContextManagerBase _GiveupOnFastCopy _GzipReader _HAS_FCOPYFILE _HAVE_PICKLE_BUFFER
+_HTMLParser__starttag_text _HashedSeq _Image__transformer _KEYWORD_ONLY _LCMAP_LOWERCASE
+_LCMapStringEx _LOCALE_NAME_INVARIANT _LZMA_SUPPORTED _MAPMODES _MethodWrapper _NOT_FOUND
+_NetlocResultMixinBase _NetlocResultMixinBytes _NetlocResultMixinStr _NoValue
+_NonUserDefinedCallables _ONE _OptionError _PARAM_NAME_MAPPING _POSITIONAL_ONLY
+_POSITIONAL_OR_KEYWORD _PaddedFile _ParameterKind _ParseResultBase _Pickler _RECURSIVE_CUTOFF
+_RELOADING _Random _RandomNameSequence _RealGetContents _RedirectStream _ResultMixinBytes
+_ResultMixinStr _STRUCT_TM_ITEMS _Sentinel _Sequence _Set _SplitResultBase _Stop
+_TemporaryFileCloser _TemporaryFileWrapper _UNPACK_FORMATS _UNSAFE_URL_BYTES_TO_REMOVE
+_USE_CP_SENDFILE _USE_POSIX_SPAWN _USE_VFORK _Unframer _Unpickler _VAR_KEYWORD _VAR_POSITIONAL
+_WINDOWS _WIN_DEFAULT_PATHEXT _WrapperDescriptor _ZLIB_SUPPORTED _a85chars _a85chars2 _abc
+_abc_impl _abspath_fallback _accept _access_check _accessor _accumulate _acos _acquire_restore
+_active _add_action _add_container_actions _add_filter _adjust_thread_count _allocate_lock
+_apply_env_variables _args_from_interpreter_flags _array_api_info _asciire
+_asyncio_future_blocking _at_fork_reinit _attach_default_encoderinfo _b32alphabet _b32decode
+_b32encode _b32hexalphabet _b32rev _b32tab2 _b85alphabet _b85chars _b85chars2 _b85dec _basename
+_bin_openflags _bisect _blksize _bootstrap _bootstrap_external _bootstrap_inner
+_bounded_integers _bytes_from_decode_data _c3_merge _c3_mro _cached_cparts _callbacks
+_cancel_message _candidate_tempdir_list _cause_message _ceil _check _checkClosed _checkReadable
+_checkSeekable _checkWritable _check_class _check_close _check_conflict _check_instance
+_check_methods _check_sendfile_params _check_size _check_timeout _check_unpack_options
+_check_value _checknetloc _child_created _cleanup _clearcache _close_conn
+_close_exclusive_fp_after_loading _close_pipe_fds _closed _coerce_args _collections_abc _common
+_communicate _compat_pickle _compile_pattern _compose_mro _compression _context_message
+_conv_type_shape _convert _copy _copy_dispatch _copy_immutable _copyfileobj_readinto _copytree
+_copyxattr _core _coro _cos _counter _cparts _crop _dbg _dealloc_warn _decl_otherchars
+_decode_args _decompression_bomb_check _decref_socketios _deepcopy_atomic _deepcopy_dict
+_deepcopy_dispatch _deepcopy_list _deepcopy_method _deepcopy_tuple _default_decoder
+_default_encoder _defaultaction _delete _destinsrc _dir_open_flags _distributor_init _drv _dump
+_dumps _e _empty _encode_result _ensure_directory _ensure_mutable _enter_task _errno _exception
+_execute_child _execvpe _exists _exit _exp _expired_attrs_2_0 _extension_cache
+_extension_registry _extract_member _fastcopy_fcopyfile _fastcopy_sendfile _filesbymodname
+_filter_handle_list _filters_mutated _filters_support _finalizing _find_impl _find_link_target
+_find_unpack_format _findclass _finddoc _floor _format_final_exc_line _format_parsed_parts
+_formatwarning_orig _formatwarnmsg _formatwarnmsg_impl _fpclose _from_parsed_parts _from_parts
+_fromarray_typemap _fspath _functools _fut_waiter _ge_from_gt _ge_from_le _ge_from_lt _generator
+_get _get_args _get_bothseps _get_candidate_names _get_chunk_left _get_default_tempdir
+_get_devnull _get_exports_list _get_formatter _get_gid _get_handler _get_handles _get_kwargs
+_get_nargs_pattern _get_option_tuples _get_optional_actions _get_optional_kwargs
+_get_params_preserve _get_positional_actions _get_positional_kwargs _get_running_loop
+_get_safe_box _get_uid _get_value _get_values _getaction _getattribute _getcategory _getdecoder
+_getencoder _getfinalpathname _getfinalpathname_nonstrict _getfullpathname _getmember
+_getscaleoffset _gettempdir _getvolumepathname _glob0 _glob1 _glob2 _globals _grouper
+_gt_from_ge _gt_from_le _gt_from_lt _handle_conflict_error _handle_conflict_resolve
+_has_code_flag _hash _hexdig _hextobyte _hostprog _iglob _imp _implicit_encoding
+_implicit_errors _import_plugin_for_extension _index _infer_return_type _init _initial_missing
+_initialized _initializer_failed _input_type_check _inst _int_extended_msg _internal_poll
+_inverted_registry _invoke_callbacks _io _io_refs _is_immutable _is_internal_frame _is_owned
+_is_type _isdir _isfinite _ishidden _islink _isrecursive _iterdir _join _keep_alive
+_keep_positive _le_from_ge _le_from_gt _le_from_lt _leading_whitespace_re _leave_task _lexists
+_listdir _load _loads _log _log_destroy_pending _log_traceback _loop _lru_cache_wrapper
+_lt_from_ge _lt_from_gt _lt_from_le _main _make_cancelled_error _make_child _make_child_relpath
+_make_inheritable _make_key _make_tarball _make_zipfile _mat _match_argument
+_match_arguments_partial _missing_arguments _mkstemp_inner _msg _mswindows _mt19937 _must_cancel
+_name_sequence _new _next_external_frame _nextgroupnum _noop _nt_readlink _ntuple_diskusage
+_once_lock _onceregistry _open_to_write _optim_args_from_interpreter_flags _os _pack_uint32
+_parse_args _parse_cache _parse_doctype_attlist _parse_doctype_element _parse_doctype_entity
+_parse_doctype_notation _parse_doctype_subset _parse_known_args _parse_optional _parse_value_tb
+_parts _pcg64 _peek_chunked _philox _pi _pickle _plugins _pop_action_class _portprog _pparts
+_print_message _processoptions _put _pyinstaller_hooks_dir _pytesttester _qsize _random _re
+_read1_chunked _read_and_discard_trailer _read_args_from_files _read_chunked
+_read_next_chunk_size _read_status _readerthread _readinto_chunked _readlink_deep _real_close
+_reconstruct _register_task _registry_get _release_save _reload_exif _remaining_time
+_remove_action _repeat _repr_image _repr_info _repr_jpeg_ _repr_png_ _repr_pretty_
+_reset_internal_locks _result _rlistdir _rmtree_isdir _rmtree_islink _rmtree_safe_fd
+_rmtree_unsafe _root _safe_quoters _safe_read _safe_readinto _samefile _sanitize_params
+_sanitize_windows_name _scan_name _sendfile_use_send _sendfile_use_sendfile _sentinel
+_sentinel_dict _set_ident _set_native_id _set_running_loop _set_tstate_lock _setoption _setroot
+_sfc64 _sha512 _shadowed_dict _show _showwarning_orig _showwarnmsg _showwarnmsg_impl _shutil
+_signature_bound_method _signature_from_builtin _signature_from_callable
+_signature_from_function _signature_fromstr _signature_get_bound_param _signature_get_partial
+_signature_get_user_defined_method _signature_is_builtin _signature_is_functionlike
+_signature_strip_non_python_syntax _sin _some_str _source_traceback _specific_msg _splitattr
+_splithost _splitnetloc _splitnport _splitparams _splitpasswd _splitport _splitquery _splittag
+_splittype _splituser _splitvalue _sqrt _stat _state _static_getmro _stdin_write _stop _str
+_string _sys _tee _tee_dataobject _test _test_generator _text_openflags _thread _time _to_bytes
+_too_many _translate_newlines _tuplesize2code _type_info _typeprog _types _typing
+_unpack_tarfile _unpack_uint32 _unpack_zipfile _unregister_task _unwrap_partial _urandom
+_urlsafe_decode_translation _urlsafe_encode_translation _use_fd_functions _use_posix_spawn
+_utils _void _wait _wait_for_tstate_lock _walk _warn _warn_unawaited_coroutine _warnings
+_weakref _whitespace _whitespace_only_re _winapi _windows_illegal_name_trans_table _wrap_close
+_write_end_record _writecheck a85decode a85encode abc abort abs absolute abspath accept access
+accumulate aclosing acos acosh acquire add addFilter addHandler add_argument add_argument_group
+add_dll_directory add_done_callback add_header add_mutually_exclusive_group add_subparsers
+addfile aiter all all_tasks allclose alpha_composite altsep altzone amax amin anchor anext angle
+annotations any append appendleft apply_along_axis apply_over_axes apply_transparency arange
+arccos arccosh arcsin arcsinh arctan arctan2 arctanh argmax argmin argpartition args argsort
+argwhere around array array2string array_equal array_equiv array_repr array_split array_str
+arraysize as_bytes as_completed as_integer_ratio as_posix as_string as_uri asanyarray asarray
+asarray_chkfinite ascii ascii_letters ascii_lowercase ascii_uppercase ascontiguousarray asctime
+asfortranarray asin asinh asmatrix ast astimezone astype asynccontextmanager atan atan2 atanh
+atexit atleast_1d atleast_2d atleast_3d attach attrgetter attrib average b16decode b16encode
+b32decode b32encode b32hexdecode b32hexencode b64decode b64encode b85decode b85encode backup
+bartlett base base_events base_futures base_repr base_subprocess base_tasks basename begin beta
+betavariate bin binary_repr binascii bincount bind binomial bit_count bit_generator bit_length
+bitwise_and bitwise_count bitwise_invert bitwise_left_shift bitwise_not bitwise_or
+bitwise_right_shift bitwise_xor blackman blend block block_size bmat bool bool_ breakpoint
+broadcast broadcast_arrays broadcast_shapes broadcast_to buffer builtins busday_count
+busday_offset busdaycalendar byte bytearray bytes bytes_ bytes_le bytes_types byteswap bz2open
+c_ c_contiguous cache cached_property calcsize call callHandlers callable can_cast cancel
+cancelled capitalize capwords casefold cast catch_warnings cbrt cdouble ceil center chain char
+character chdir check_call check_for_whole_start_tag check_output check_returncode chisquare
+chmod choice choices choose chown chr classify_class_attrs classmethod cleandoc clear
+clear_cache clear_cdata_mode clear_frames clip clock_seq clock_seq_hi_variant clock_seq_low
+clongdouble close closed closefd closerange closing cmp_to_key codecs collections column_stack
+comb combinations combinations_with_replacement combine comment commit common_type commonpath
+commonprefix communicate compatible_formats compile complex complex128 complex64 complexfloating
+composite compress concat concatenate conj conjugate connect connect_ex connection constants
+contextlib contextmanager contiguous convert convert_arg_line_to_args convolve copy copy2
+copyfile copyfileobj copymode copyright copysign copystat copyto copytree core coroutine
+coroutines corrcoef correlate cos cosh count count_nonzero cov cpu_count createLock
+create_aggregate create_collation create_function create_subprocess_exec create_subprocess_shell
+create_task credits critical crop cross csingle ctime ctypes ctypeslib cumprod cumsum
+cumulative_prod cumulative_sum curdir current_task currentframe cursor cwd cycle daemon data
+date datetime64 datetime_as_string datetime_data day daylight days debug decode decode_long
+decodebytes decoder decompress dedent deepcopy default_factory default_rng defaultaction defpath
+deg2rad degrees del_param delattr delete denominator deprecate deque dereference description
+detach detect_encoding device device_encoding devnull diag diag_indices diag_indices_from
+diagflat diagonal dict diff difference difference_update digest digest_size digitize digits dir
+dirichlet dirname dis discard disk_usage dispatch_table dist divide divmod done dot double draft
+drive dropwhile dsplit dst dstack dtype dtypes dump dumps dup dup2 e ediff1d effect_mandelbrot
+effect_noise effect_spread einsum einsum_path elements emath emit empty empty_like
+enable_load_extension encode encode_long encodebytes encoder encoding end endpos endswith
+ensure_future entropy enum enumerate environ equal erf erfc errno error errorlevel errors
+errstate escape euler_gamma eval events excel excel_tab exception exceptions exec execl execle
+execlp execlpe execute executemany executescript execv execve execvp execvpe exists exit exp
+exp2 expand expand_dims expandtabs expanduser expandvars expm1 exponential expovariate extend
+extendleft extract extract_stack extract_tb extractall extractfile extsep eye f f2py
+f_contiguous fabs factorial family fatal fcntl fdopen feed fetchall fetchmany fetchone fft
+field_size_limit fields fileno fileobject fill fill_diagonal filter filterfalse filters
+filterwarnings find findCaller find_loader findall finditer findsource findtext finfo fix flags
+flat flatiter flatnonzero flatten flexible flip fliplr flipud float float16 float32 float64
+float_power floating floor floor_divide flush fmax fmin fmod fnmatch fnmatchcase fold format
+format_description format_exc format_exception format_exception_only format_float_positional
+format_float_scientific format_help format_helpers format_list format_map format_stack format_tb
+format_usage format_version formatannotation formatannotationrelativeto formatargspec
+formatargvalues formatwarning fp frexp from_bytes from_dlpack fromarray fromarrow frombuffer
+frombytes fromfile fromfunction fromhex fromisocalendar fromisoformat fromiter fromkeys
+fromordinal frompyfunc fromqimage fromqpixmap fromregex fromstring fromtimestamp frozenset
+fsdecode fsencode fspath fstat fsum fsync ftruncate full full_like fullmatch functools futures
+gamma gammavariate gather gauss gcd generic genericpath genfromtxt geometric geomspace get
+getChild getEffectiveLevel getName get_all get_annotations get_archive_formats get_bit_generator
+get_boundary get_cache_token get_charset get_charsets get_child_images get_child_watcher
+get_clock_info get_content_charset get_content_disposition get_content_maintype
+get_content_subtype get_content_type get_coro get_default get_default_type get_dialect
+get_event_loop get_event_loop_policy get_exec_path get_filename get_flattened_data
+get_handle_inheritable get_include get_inheritable get_loop get_name get_nowait get_param
+get_params get_payload get_printoptions get_running_loop get_stack get_starttag_text get_state
+get_terminal_size get_unixfrom get_unpack_formats getabsfile getargs getargspec getargvalues
+getatime getattr getattr_static getbands getbbox getblock getblocking getbuffer getbufsize
+getcallargs getchannel getclasstree getclosurevars getcode getcolors getcomments
+getcoroutinelocals getcoroutinestate getctime getcwd getcwdb getdata getdoc getenv geterr
+geterrcall getexif getextrema getfield getfile getframeinfo getfullargspec getgeneratorlocals
+getgeneratorstate getheader getheaders getim getinfo getinnerframes getlineno getlogin getmember
+getmembers getmodebandnames getmodebands getmodebase getmodetype getmodule getmodulename getmro
+getmtime getnames getouterframes getoutput getpalette getpeername getpid getpixel getpos getppid
+getprojection getrandbits getroot getsize getsockname getsockopt getsource getsourcefile
+getsourcelines getstate getstatusoutput gettarinfo gettempdir gettempdirb gettempprefix
+gettempprefixb gettimeout geturl getvalue getxmp glob glob0 glob1 globals gmtime goahead
+gradient greater greater_equal group groupby groupdict groupindex groups gumbel gzopen half
+hamming handle handleError handle_charref handle_comment handle_data handle_decl handle_endtag
+handle_entityref handle_pi handle_startendtag handle_starttag hanning hardlink_to hasHandlers
+has_magic has_transparency_data hasattr hash heaviside height help hex hexdigest hexdigits
+histogram histogram2d histogram_bin_edges histogramdd home hour hsplit hstack hypergeometric
+hypot i0 i32le id ident identity iglob ignore_patterns ignore_zeros iinfo im imag import_module
+importlib in1d in_transaction indent indentsize index index_exp indices inexact inf info
+infolist init inner input insert int int16 int32 int64 int8 int_ intc integer interp interrupt
+intersect1d intersection intersection_update intp invalidate_caches invert io ioctl isDaemon
+isEnabledFor isSet is_absolute is_alive is_block_device is_busday is_char_device is_dir is_fifo
+is_file is_integer is_mount is_multipart is_path is_relative_to is_reserved is_safe is_set
+is_socket is_symlink isabs isabstract isalnum isalpha isascii isasyncgen isasyncgenfunction
+isatty isawaitable isbuiltin isclass isclose isclosed iscode iscomplex iscomplexobj iscoroutine
+iscoroutinefunction isdatadescriptor isdecimal isdigit isdir isdisjoint isdtype isfile isfinite
+isfortran isframe isfunction isfuture isgenerator isgeneratorfunction isgetsetdescriptor
+isidentifier isin isinf isinstance islice islink islower ismemberdescriptor ismethod
+ismethoddescriptor ismodule ismount isnan isnat isneginf isnumeric isocalendar isoformat
+isolation_level isoweekday isposinf isprintable isqrt isreal isrealobj isroutine isscalar
+isspace issubclass issubdtype issubset issuperset istitle istraceback isupper item items itemset
+itemsize iter iter_unpack iterable iterdir iterdump iterfind itertext itertools ix_ join
+joinpath k kaiser keys kill kron laplace lastgroup lastindex lastrowid lchmod lcm ldexp
+left_shift len less less_equal lexists lexsort lgamma lib license linalg line_buffering
+linear_gradient linecache linesep link link_to linspace list list2cmdline list_dialects listdir
+listen little_endian ljust load load_extension loads loadtxt locals localtime locks log log10
+log1p log2 logaddexp logaddexp2 logger logging logical_and logical_not logical_or logical_xor
+logistic lognormal lognormvariate logseries logspace long longdouble longlong lower lru_cache
+lseek lstat lstrip mT ma machinery magic_check magic_check_bytes main makeRecord make_archive
+makedev makedir makedirs makeelement makefifo makefile makelink maketrans makeunknown manager
+map mask_indices match math matmul matrix matrix_transpose matvec max maximum maxlen maxsize
+may_share_memory mean median memmap memoryview merge meshgrid mgrid microsecond microseconds min
+min_scalar_type minimum mintypecode minute mixins mkdir mkdtemp mkstemp mktemp mktime mod
+mod_dict mode modf module modulesbyfile monotonic monotonic_ns month most_common move
+move_to_end moveaxis mro msvcrt mtrand multinomial multiply multivariate_normal name namedtuple
+namelist nan nan_to_num nanargmax nanargmin nancumprod nancumsum nanmax nanmean nanmedian nanmin
+nanpercentile nanprod nanquantile nanstd nansum nanvar native_id nbytes ndarray ndenumerate ndim
+ndindex nditer negative negative_binomial nested_iters new new_event_loop newaxis newbyteorder
+newlines next nextafter node non_hierarchical noncentral_chisquare noncentral_f nonzero normal
+normalvariate normcase normpath not_equal notify notifyAll notify_all now nt nullcontext number
+numerator o32be o32le obj object object_ oct octdigits ogrid onceregistry ones ones_like open
+open_connection ord os outer owner pack pack_into packbits pad pairwise pardir parent parents
+pareto paretovariate parse parse_args parse_bogus_comment parse_comment parse_declaration
+parse_endtag parse_html_declaration parse_intermixed_args parse_known_args
+parse_known_intermixed_args parse_marked_section parse_pi parse_qs parse_qsl parse_starttag
+partial partialmethod partition parts paste path pathsep pattern peek percentile perf_counter
+perf_counter_ns perm permutation permutations permute_dims pi piecewise pipe place point poisson
+poll poly poly1d polyadd polyder polydiv polyfit polyint polymul polynomial polysub polyval pop
+popen popitem popleft pos positive posix posixpath pow power preinit print print_exc
+print_exception print_help print_last print_list print_stack print_tb print_usage printable
+printdir printoptions proactor_events process_time process_time_ns prod product promote_types
+property proto protocols ptp punctuation put put_along_axis put_nowait putalpha putdata putenv
+putmask putpalette putpixel qsize quantile quantize queues quit quote quote_from_bytes
+quote_plus r_ rad2deg radial_gradient radians rand randbytes randint randn random
+random_integers random_sample randrange ranf range ravel ravel_multi_index raw raw_items
+rayleigh re read read1 read_bytes read_text readable readall reader readinto readinto1 readline
+readlines readlink readonly real real_if_close realpath rec recarray reciprocal reconfigure
+record recursive_repr recv recv_into recvfrom recvfrom_into redirect_stderr redirect_stdout
+reduce register register_archive_format register_decoder register_dialect register_encoder
+register_extension register_extensions register_mime register_open register_save
+register_save_all register_unpack_format registered_extensions regs relative_to release reload
+relpath remainder remap_palette remove removeFilter removeHandler remove_done_callback
+removedirs removeprefix removesuffix rename renames repeat replace replace_header repr require
+reset resetwarnings reshape resize resolution resolve result result_type reverse reversed rfind
+rglob right_shift rindex rint rjust rmdir rmtree roll rollaxis rollback root roots rot90 rotate
+round row_factory row_stack rowcount rpartition rsplit rstrip run run_coroutine_threadsafe
+runners running s_ samefile sameopenfile samestat sample save savetxt savez savez_compressed
+scandir scanner scheme_chars sctypeDict search searchsorted second seconds seed seek seekable
+select selector_events send send_signal sendall sendfile sendto sep set setDaemon setFormatter
+setLevel setName set_authorizer set_bit_generator set_boundary set_cdata_mode set_charset
+set_child_watcher set_default_type set_defaults set_event_loop set_event_loop_policy
+set_exception set_handle_inheritable set_inheritable set_name set_param set_payload
+set_printoptions set_progress_handler set_raw set_result set_running_or_notify_cancel set_state
+set_trace_callback set_type set_unixfrom setattr setblocking setbufsize setdefault setdiff1d
+seterr seterrcall setfield setflags setinputsizes setoutputsize setpassword setsockopt setstate
+settimeout setxor1d shape share shares_memory shield short shorten show show_config show_runtime
+showwarning shuffle shutdown sign signal signature signbit signedinteger simplefilter sin sinc
+single singledispatch singledispatchmethod sinh size sleep slice sort sort_complex sorted
+spacing span spawnl spawnle spawnv spawnve split splitattr splitdrive splitext splithost
+splitlines splitnport splitpasswd splitport splitquery splittag splittype splituser splitvalue
+sqrt square squeeze sslproto st stack staggered standard_b64decode standard_b64encode
+standard_cauchy standard_exponential standard_gamma standard_normal standard_t starmap start
+start_server startfile startswith stat stat_result staticmethod statvfs_result std stem step
+stop str str_ streams strerror strftime strides string strings strip strptime struct struct_time
+sub submit subn suboffsets subprocess subtract suffix suffixes sum super supports_bytes_environ
+supports_dir_fd supports_effective_ids supports_fd supports_follow_symlinks
+supports_unicode_filenames suppress swapaxes swapcase symlink symlink_to symmetric_difference
+symmetric_difference_update sys system tag tail take take_along_axis takewhile tan tanh tarinfo
+taropen task_done tasks tau tee tell tempdir tempfile template tensordot terminal_size terminate
+test testing testzip text text_factory thread_time thread_time_ns threading threads thumbnail
+tile time time_hi_version time_low time_mid time_ns timedelta64 timeout times times_result
+timestamp timetuple timetz timezone title to_bytes to_device to_thread tobitmap tobytes today
+tofile token tokenize tolist toordinal toqimage toqpixmap toreadonly tostring total
+total_changes total_ordering total_seconds touch trace transform translate transports transpose
+trapezoid trapz tri triangular tril tril_indices tril_indices_from trim_zeros triu triu_indices
+triu_indices_from trsock true_divide trunc truncate tuple type typecodes typename types typing
+tzinfo tzname ubyte ufunc uint uint16 uint32 uint64 uint8 uintc uintp ulong ulonglong ulp umask
+uname_result uniform union union1d unique unique_all unique_counts unique_inverse unique_values
+universal_newlines unix_dialect unknown_decl unlink unpack unpack_archive unpack_from unpackbits
+unquote unquote_plus unquote_to_bytes unravel_index unregister_archive_format unregister_dialect
+unregister_unpack_format unsetenv unsignedinteger unstack unwrap update update_wrapper updatepos
+upper urandom urldefrag urlencode urljoin urlparse urlsafe_b64decode urlsafe_b64encode urlsplit
+urlunparse urlunsplit urn uses_fragment uses_netloc uses_params uses_query uses_relative ushort
+utcfromtimestamp utcnow utcoffset utctimetuple util utime v values vander var variant vars vdot
+vecdot vecmat vectorize verify version view void vonmises vonmisesvariate vsplit vstack wait
+wait_for waitpid waitstatus_to_exitcode wald walk walk_stack walk_tb walktree warn warn_explicit
+warning warnings weekday weibull weibullvariate where which whichmodule whitespace width
+windows_events windows_utils with_name with_stem with_suffix with_traceback wrap wrap_future
+wraps writable write write32u write_bytes write_c14n write_text write_through writelines writer
+writestr xzopen year zeros zeros_like zfill zip zip_longest zipf zlib
+"""
+
+PY_STOPLIST = frozenset(_NAMES.split())
