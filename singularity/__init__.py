@@ -5,4 +5,4 @@ Reference implementation; the design docs live in the vault
 (see vault: 02_New_System_Design).
 """
 
-__version__ = "0.17.0"
+__version__ = "0.18.0"
