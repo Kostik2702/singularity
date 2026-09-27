@@ -60,7 +60,41 @@ def compute(cfg: Config) -> dict[str, Any]:
     indexed_meta["unindexed"] = len(unindexed)
     indexed_meta["sources"] = _sources_stats(cfg)
     indexed_meta["code"] = _code_stats(cfg)
+    indexed_meta["code_graph"] = _code_graph_stats(cfg)
     return indexed_meta
+
+
+def _code_graph_stats(cfg: Config) -> dict[str, Any]:
+    """The structural code graph (CODE-GRAPH P6): counts from each built
+    graph's own tables, read-only, never a row's content. `enabled` is
+    reported apart from the graphs, because graphs built while the switch was
+    on stay on disk after it is turned off. `db_bytes` is the current
+    generation (database and its WAL); old generations are doctor K2's."""
+    import sqlite3
+
+    from ..codegraph import store
+
+    units: list[dict[str, Any]] = []
+    for card in store.built_units(cfg):
+        unit: dict[str, Any] = {"unit": card["key"], "root": card["root"]}
+        db = store.current_db(cfg, card["key"])
+        if db is None:
+            unit["error"] = "no current generation"
+            units.append(unit)
+            continue
+        unit["db_bytes"] = sum(p.stat().st_size for p in (db, db.with_name(db.name + "-wal")) if p.is_file())
+        try:
+            con = store.connect_ro(db)
+            try:
+                for table in ("files", "nodes", "edges"):
+                    unit[table] = con.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            finally:
+                con.close()
+        except sqlite3.DatabaseError as exc:
+            unit["error"] = str(exc)
+        units.append(unit)
+    return {"enabled": bool(cfg.data.get("code_graph_enabled")), "units": units,
+            **{k: sum(u.get(k, 0) for u in units) for k in ("files", "nodes", "edges", "db_bytes")}}
 
 
 def _code_stats(cfg: Config) -> dict[str, Any]:

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Config
-from . import arch, extract_py, extract_ts, fresh, scope, sidecar, store
+from . import arch, audit, extract_py, extract_ts, fresh, scope, sidecar, store
 from .model import FileFacts, encode_facts
 from .resolve_py import PyResolver
 from .resolve_ts import TsResolver, load_workspace
@@ -203,6 +203,12 @@ def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None,
             communities=[(file_id[p], c) for p, c in sorted(comm.items())],
             community_labels=sorted(comm_labels.items()))
         timings["write"] = time.perf_counter() - t
+        # The secret audit is part of every full build (CODE-GRAPH D1): it reads what was
+        # just written and keeps the count in meta for doctor K2 (see audit).
+        t = time.perf_counter()
+        audited = audit.audit_db(store.unit_dir(cfg, unit.key) / written["generation"] / "graph.db")
+        timings["audit"] = time.perf_counter() - t
+        # last, so the hooks' sidecar describes the generation as it finally stands
         sidecar.record(store.unit_dir(cfg, unit.key) / written["generation"] / "graph.db")
     tiers = Counter(e.tier for e in edges if e.kind == "CALLS")
     return {"unit": unit.key, "files": len(file_rows), "by_lang": dict(langs),
@@ -210,6 +216,7 @@ def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None,
             "deps": len(deps), "lookups": len(lookups),
             "edges": dict(Counter(e.kind for e in edges)), "call_tiers": dict(tiers),
             "unresolved": len(unresolved_rows), "workers": n_workers,
+            "audit": {"findings": audited["count"], "by_kind": audited["by_kind"], "recorded": audited["recorded"]},
             "resolve_cpu_over_wall": round(resolve_cpu_over_wall, 2),
             "seconds": round(time.perf_counter() - started, 2),
             "timings": {k: round(v, 2) for k, v in timings.items()}, **written}

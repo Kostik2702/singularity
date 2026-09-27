@@ -139,10 +139,25 @@ def curator(payload: dict[str, Any], *, orphan_source_days: int, stale_days: int
     return "\n".join(out)
 
 
+def _code_graph_line(g: dict[str, Any]) -> str | None:
+    """Shown when the graph is on or graphs are on disk; otherwise no line,
+    like the code corpus: a switch never turned on leaves no empty line."""
+    if not g.get("enabled") and not g.get("units"):
+        return None
+    if not g.get("units"):
+        return "code graph    : on, nothing built — run `mb code build`"
+    broken = sum(1 for u in g["units"] if "error" in u)
+    return (f"code graph    : {len(g['units'])} graphs, {g['files']} files, {g['nodes']} nodes, "
+            f"{g['edges']} edges, {g['db_bytes'] / 1e6:.1f} MB"
+            + (f", {broken} unreadable (mb doctor)" if broken else "")
+            + ("" if g.get("enabled") else " — switched off, still on disk"))
+
+
 def stats(s: dict[str, Any]) -> str:
+    graph = _code_graph_line(s.get("code_graph") or {})
     if not s.get("present"):
         return (f"index: absent — {s.get('vault_notes', 0)} vault notes, "
-                f"{s.get('unindexed', 0)} unindexed")
+                f"{s.get('unindexed', 0)} unindexed") + (f"\n{graph}" if graph else "")
     out = [f"notes indexed : {s['notes']} / {s['vault_notes']} vault "
            f"({s['unindexed']} unindexed)",
            f"chunks        : {s['chunks']} ({s['avg_chunks_per_note']}/note, "
@@ -174,6 +189,8 @@ def stats(s: dict[str, Any]) -> str:
         else:
             out.append("code          : configured but not built — "
                        "run `mb index rebuild --code`")
+    if graph:
+        out.append(graph)
     return "\n".join(out)
 
 
