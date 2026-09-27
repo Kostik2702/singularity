@@ -216,7 +216,7 @@ def doctor_report(cfg) -> dict:
         rc = doctor.run(cfg, as_json=True)
     payload = json.loads((cfg.mb_dir / "doctor-last.json").read_text(encoding="utf-8"))
     verbose = {"A6-config-paths", "D7-cli-on-path", "D8-git-identity",
-               "K1-code-index", "D6-posix-shim"}
+               "K1-code-index", "D6-posix-shim", "K2-code-graph"}
     return {
         "exit_code": rc,
         "counts": payload["counts"],
@@ -225,7 +225,7 @@ def doctor_report(cfg) -> dict:
                    for c in payload["checks"]],
         "new_in_this_release": sorted(
             c["id"] for c in payload["checks"]
-            if c["id"] in {"A6-config-paths", "D7-cli-on-path", "D8-git-identity"}),
+            if c["id"] in {"K2-code-graph"}),                     # v0.18.0
         "pass": rc == 0,
     }
 
@@ -618,8 +618,12 @@ def package_layout() -> dict:
 
     from setuptools import find_packages
 
+    # v0.18.0 adds the code graph package and the platform lock every writer
+    # lock now goes through; the hooks import codegraph.sidecar on every
+    # SessionStart, so a wheel without it breaks the first session, not a command
     expected = ["singularity.knowledge", "singularity.machine",
-                "singularity.telemetry", "singularity.commands"]
+                "singularity.telemetry", "singularity.commands",
+                "singularity.codegraph", "singularity.platform"]
     discovered = set(find_packages(where=str(REPO), include=["singularity*"]))
     rows = [{"package": name, "discovered": name in discovered} for name in expected]
 
@@ -627,7 +631,8 @@ def package_layout() -> dict:
     for module in ("singularity.knowledge.sources", "singularity.machine.status",
                    "singularity.telemetry.reflect", "singularity.commands.memory",
                    "singularity.render", "singularity.contracts",
-                   "singularity.search.lexical", "singularity.search.metrics"):
+                   "singularity.search.lexical", "singularity.search.metrics",
+                   "singularity.codegraph.sidecar", "singularity.platform.fslock"):
         try:
             importlib.import_module(module)
             imports.append({"module": module, "ok": True})
@@ -656,7 +661,7 @@ def main() -> None:
 
     snap = {
         "taken_at": datetime.now().isoformat(timespec="seconds"),
-        "note": "v0.15.0 baseline: the same eight surfaces, taken on the release merge commit. What this release makes askable of a baseline is a DELIVERY question rather than a feature one: a fourth Claude hook now runs on every prompt (UserPromptSubmit), the ten-phase workflow moved out of the vault into the engine, and the SessionStart payload changed shape — two fragments merged into one, two added. So the rows that matter most are the hook registration, the package layout (the phase files are engine files now, like the preamble since v0.13.0) and the config/path resolution, because the machine must still behave identically with no vault at all. Sixth macOS snapshot after four on Windows",
+        "note": "v0.18.0 baseline: the same eight surfaces, taken on the release merge commit. The release adds a subsystem (the code graph, off by default) that reaches the machine in three places a snapshot can see: a new doctor check (K2-code-graph), a new skill every client is meant to carry (mb-code), and a SessionStart line read from a sidecar. The first Windows snapshot since v0.12.0, after eight on macOS, and the first release since v0.15.0 whose CI matrix actually ran: its 25 Windows-only suite failures, and a Windows lock defect in the product, were fixed before this snapshot and the tag moved to the green merge",
         "version": singularity.__version__,
         "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(REPO),
                                  capture_output=True, text=True).stdout.strip(),
