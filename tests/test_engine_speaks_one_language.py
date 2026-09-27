@@ -120,6 +120,10 @@ ALLOWED.update({
         "the rows as returned, naming real notes in the vault. Rewriting them "
         "would turn a measurement into a fiction, and a re-record would put them "
         "straight back",
+    "docs/search-eval-code-v2.json":
+        "the CODE-GRAPH P7 chunker gate: the same 20 code cases as the P0 record, "
+        "run six times (v1/v2 x fusion off/on/boost), so the RU crosslingual "
+        "queries appear once per run as issued. Recorded output, not prose",
     "docs/code-graph-p1b-audit.json":
         "the CODE-GRAPH P1b out-of-sample audit: call sites sampled from another "
         "repository and quoted verbatim, two of them receivers carrying that "
@@ -259,6 +263,8 @@ BUDGET: dict[str, int] = {
     # RU query against a ComfyUI node pack, and on the corrected `Singularity/`
     # spelling, which turned 12 recorded misses back into real result lists.
     "docs/search-eval-code-baseline.json": 502,
+    # CODE-GRAPH P7: the P0 code cases x 6 recorded runs instead of 2 (3 x 502).
+    "docs/search-eval-code-v2.json": 1506,
     "docs/v0.5.0-baseline.json": 1908,
     "golden-registry/files/letter-glitch-wall/reference-implementation-index.html": 10,
     "singularity/machine/rules_delivery.py": 11,
