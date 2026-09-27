@@ -14,6 +14,12 @@ Usage — a JSON list of cases on stdin or in a file:
 
     python tools/plant.py cases.json
 
+A command word `{python}` is the interpreter running this tool. A case
+declared with a path to one machine's venv (`.venv/bin/python`) found no
+interpreter on Windows, where a venv keeps it in `Scripts`, nor on a CI runner,
+which has no venv at all -- every such case came back ERROR everywhere but the
+machine that wrote it.
+
 Exit code is 0 only when every case matched its expectation, so this can be a
 gate rather than a report someone reads.
 
@@ -52,6 +58,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(os.environ.get("PLANT_ROOT", Path(__file__).resolve().parents[1]))
+PYTHON = "{python}"                     # a command word: the interpreter running this tool
 
 
 def _digest(data: bytes) -> str:
@@ -93,6 +100,7 @@ def _drop_bytecode(path: Path) -> None:
 
 def _run(cmd, cwd, timeout) -> tuple[int | None, str]:
     """(exit code, last meaningful line). None means the command never ran."""
+    cmd = [sys.executable if word == PYTHON else word for word in cmd]
     try:
         proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
     except FileNotFoundError:

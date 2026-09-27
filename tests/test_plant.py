@@ -29,7 +29,9 @@ def target(tmp_path, monkeypatch):
     """A file inside a throwaway ROOT, so a mutation never touches the repo."""
     monkeypatch.setattr(plant, "ROOT", tmp_path)
     f = tmp_path / "subject.txt"
-    f.write_text("ANCHOR\n", encoding="utf-8")
+    # bytes, not text: `write_text` wrote "ANCHOR\r\n" on Windows, and a test
+    # recognising the restore by its exact bytes never saw it happen
+    f.write_bytes(b"ANCHOR\n")
     return f
 
 

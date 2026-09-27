@@ -20,7 +20,7 @@ TOOL = ENGINE / "tools" / "code_index_baseline.py"
 
 def _run(src: Path, verb: str = "render") -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(TOOL), verb, str(src)],
-                          cwd=ENGINE, capture_output=True, text=True)
+                          cwd=ENGINE, capture_output=True, text=True, encoding="utf-8")
 
 
 def _capture_like(tmp_path: Path, queries: dict[str, str]) -> Path:

@@ -376,6 +376,14 @@ def cmd_compare_boost(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # the recorded queries and hits are vault text: under a legacy code page
+    # (cp1252 on the Windows CI runners) `render` died on the first Cyrillic
+    # character -- the engine's own rule from `cli.main`
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):
+            pass
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)

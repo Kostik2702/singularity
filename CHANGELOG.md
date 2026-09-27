@@ -87,6 +87,42 @@ chunks cut at the graph's definitions, grammars pinned) and `--graph-boost`
 both passed their gates and both stay off: v2 indexes 14 more secret-shaped
 markers that need a look before anyone switches it on.
 
+## The CI matrix is green again, and what it had been hiding
+
+From v0.16.0 on, no CI job started (the account's billing, not the code), so
+the three-OS matrix last judged a change in early August. Its first real run
+on this release failed on every job: 15 failures and an error on Linux and
+macOS, 27-28 and the same error on Windows. None was a defect of the code graph; each was a test, a tool or an
+installer that assumed the machine it was written on.
+
+* **Every plant case named `.venv/bin/python`.** Windows keeps a venv's
+  interpreter in `Scripts`, a CI runner has no venv, so all fifteen cases came
+  back ERROR everywhere else and the suite that proves gates can fail proved
+  nothing there. `{python}` is now the interpreter running the suite, and a
+  test refuses any case that names one machine's interpreter.
+* **The release gate's privacy check started a real search daemon.**
+  `nightly.run` indexes through the daemon; the test spawned one for its tmp
+  vault, and on a machine without `~/.singularity.json` -- every runner -- its
+  first `load_config` wrote one. The index steps now run in the test's process,
+  and a daemon start fails the test.
+* **Issue #17, open since v0.13.0.** `{{AGENTS}}` rendered with `str()` and the
+  template appended `/AGENT_SHARED_PREAMBLE.md`, so Windows got
+  `C:\...\agents/AGENT_SHARED_PREAMBLE.md`. Windows opened it; three tests could
+  never match it. It renders with `as_posix()` now, like `{{WORKFLOW}}`.
+* **Decoding by the console code page.** The routing hook and
+  `code_index_baseline` write UTF-8; the tests read them in the locale's
+  encoding, and the tool itself died on Cyrillic under cp1252. Both now say
+  UTF-8.
+* **Clock and platform assumptions in three tests:** a fixture wrote
+  `ANCHOR\r\n` through `write_text` on Windows and never saw its restore; a
+  global `os.walk` stub broke `shutil.rmtree` on Python 3.12, which walks with
+  `topdown=False`; a pooled-versus-serial graph build compared stats of files
+  younger than the racy window, so the slower pool start on Windows recorded a
+  real mtime where the serial build had recorded 0.
+
+Local reproduction before any push: Python 3.12 on Windows with an empty home
+and `MB_HOME` in a temp directory, the runner's conditions -- 2558 passed.
+
 ## Also in this release
 
 * An agent's `description:` says when to dispatch it, not which words to
