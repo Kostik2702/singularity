@@ -51,6 +51,15 @@ def cmd_search(cfg, args) -> int:
               "`mb config set code_graph_enabled true`, then `mb code build`",
               file=sys.stderr)
         return 2
+    graph_boost = getattr(args, "graph_boost", False)
+    if graph_boost and not (args.with_code or args.code_only):
+        print("[mb] --graph-boost re-ranks code hits: add --with-code or --code-only",
+              file=sys.stderr)
+        return 2
+    if graph_boost and not cfg.get("code_graph_enabled"):
+        print("[mb] --graph-boost reads the code graph, which is off — "
+              "`mb config set code_graph_enabled true`", file=sys.stderr)
+        return 2
 
     payload = {
         "cmd": "search",
@@ -72,7 +81,8 @@ def cmd_search(cfg, args) -> int:
         "full_content": args.full,
         "explain": args.explain,
         "max_per_file": args.max_per_file,
-        "format": "json" if args.json else "compact",
+        # the boost needs the hits, not their rendering; it renders them itself
+        "format": "json" if args.json or graph_boost else "compact",
     }
     if graph:
         # The enrichment needs each hit's fields, which only the JSON answer
@@ -82,6 +92,10 @@ def cmd_search(cfg, args) -> int:
     if "error" in resp:
         print(f"[mb] error: {resp['error']}", file=sys.stderr)
         return 1
+    if graph_boost:
+        # re-rank first; with --graph the lines are rendered below, after enrichment
+        from ..search import graph_boost as boost
+        resp = boost.apply(cfg, resp, explain=args.explain, as_lines=not args.json and not graph)
     if graph:
         # CLI-side and read-only (CODE-GRAPH D1): the daemon never opens a graph.
         from ..codegraph import enrich
@@ -100,7 +114,7 @@ def cmd_search(cfg, args) -> int:
             session_hits = sessions_mod.search(cfg, args.query, limit=args.top,
                                                project=None)
             resp["sessions"] = session_hits
-    for key in ("sources_warning", "code_warning"):
+    for key in ("sources_warning", "code_warning", "graph_boost_warning"):
         if resp.get(key) and not args.json:
             print(f"[mb] warning: {resp[key]}", file=sys.stderr)
     if args.json:

@@ -187,6 +187,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # (`schema-1.0.0`, `proto-3.21.12`) and `code_skip_dirs` can only ADD
     # prunes — without this key such a directory had no remedy but a source edit.
     "code_vendored_pattern": None,
+    # CODE-GRAPH D1 / P7: which chunker cuts the code corpus. "v1" = regex
+    # symbol boundaries (`search.code_chunking`); "v2" = definition boundaries
+    # from the graph's tree-sitter extractors (`search.code_chunking_v2`),
+    # written only by an interpreter whose parser matches the pins in
+    # requirements-graph.txt. Chosen HERE, never by whether a parser happens to
+    # be installed; switching it rebuilds the code corpus and nothing else.
+    "code_chunk_schema": "v1",
     # --- CODE-GRAPH (decision CODE-GRAPH D1): the structural code graph. A
     # second switch next to `code_repos_dir` is an EXPLICIT extension of D1's
     # "one switch", recorded in the decision: the semantic corpus stays on for
@@ -423,6 +430,8 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
             errors.append("nightly_schedule_time: must be 'HH:MM' 24h string")
     if "code_graph_enabled" in data and not isinstance(data["code_graph_enabled"], bool):
         errors.append("code_graph_enabled: must be a boolean")
+    if "code_chunk_schema" in data and data["code_chunk_schema"] not in ("v1", "v2"):
+        errors.append("code_chunk_schema: must be 'v1' or 'v2'")
     for key in ("skip_dirs", "skip_path_parts", "code_skip_dirs", "code_graph_extra_roots"):
         if key in data and (not isinstance(data[key], list)
                             or not all(isinstance(x, str) for x in data[key])):

@@ -28,8 +28,9 @@ from collections.abc import Callable
 import numpy as np
 
 from ..config import INBOX_DIR, Config
-from . import chunking, code_chunking
+from . import chunking, code_chunking, code_chunking_v2
 from .chunking import extract_chunks, extract_source_chunks, should_skip
+from .code_chunking_v2 import GrammarPinRefused  # noqa: F401  (the daemon names it here)
 from .encoder import shared_encoder
 
 CURRENT_FILE = "CURRENT"          # names the committed generation dir
@@ -136,6 +137,13 @@ class Corpus:
     # vault and `.mb/sources/` keep the permissive default: a vault that has
     # never ingested anything legitimately has no sources dir yet.
     root_must_exist: bool = False
+    # CODE-GRAPH P7: a corpus whose chunk boundaries come from a parser names
+    # the check a writer must pass before touching it. Called first thing by
+    # every write; returns the grammar pins to stamp on the generation, or
+    # raises `GrammarPinRefused` with nothing scanned and nothing written.
+    # None (every corpus but code under schema v2) = no parser, no stamp, and
+    # metadata exactly as before this field existed.
+    pin_guard: Callable[[], dict[str, str]] | None = None
 
 
 def memory_corpus(cfg: Config) -> Corpus:
@@ -164,6 +172,24 @@ class CodeCorpusNotConfigured(RuntimeError):
     to guess which of the two they are looking at."""
 
 
+def _code_chunker(cfg: Config) -> tuple[Callable[..., list[dict[str, Any]]], int,
+                                          Callable[[], dict[str, str]] | None]:
+    """(chunker, chunk schema, pin guard) named by `code_chunk_schema`.
+
+    By CONFIG only (CODE-GRAPH D1, UNMET r): whether the parser is installed
+    decides whether a v2 write may proceed, never which schema is written. A
+    v2 config on an interpreter without the grammars refuses; it does not
+    quietly become v1."""
+    schema = cfg.get("code_chunk_schema") or "v1"
+    if schema == "v1":
+        return (code_chunking.extract_code_chunks,
+                code_chunking.CODE_CHUNK_SCHEMA_VERSION, None)
+    if schema == "v2":
+        return (code_chunking_v2.extract_code_chunks,
+                code_chunking_v2.CODE_CHUNK_SCHEMA_VERSION, code_chunking_v2.writer_guard)
+    raise ValueError(f"code_chunk_schema must be 'v1' or 'v2', not {schema!r}")
+
+
 def code_corpus(cfg: Config) -> Corpus:
     """Third corpus (C03): source files under `cfg.code_repos_dir`.
 
@@ -176,6 +202,7 @@ def code_corpus(cfg: Config) -> Corpus:
             "code_repos_dir is not set — the code corpus is off. Point it at "
             "the directory that HOLDS your repositories: "
             '`mb config set code_repos_dir "<path/to/your/repos>"`')
+    chunker, chunk_schema, pin_guard = _code_chunker(cfg)
     return Corpus(
         name="code", root=root, index_dir=cfg.code_index_dir,
         # first-segment match == repository name, which is exactly what
@@ -189,8 +216,9 @@ def code_corpus(cfg: Config) -> Corpus:
         patterns=code_chunking.CODE_PATTERNS,
         skip_file_patterns=code_chunking.SKIP_FILE_PATTERNS,
         max_file_bytes=code_chunking.MAX_FILE_BYTES,
-        chunker=code_chunking.extract_code_chunks,
-        chunk_schema=code_chunking.CODE_CHUNK_SCHEMA_VERSION,
+        chunker=chunker,
+        chunk_schema=chunk_schema,
+        pin_guard=pin_guard,
         # a repository living outside the root is linked in — and a symlink is
         # the only way to do that on macOS/Linux
         follow_links=True,
@@ -580,7 +608,19 @@ def _load_index(index_dir: Path) -> tuple[np.ndarray, dict[str, Any]] | None:
         return None
 
 
-def _save_index(corpus: Corpus, embs: np.ndarray, meta: dict[str, Any]) -> None:
+GRAMMAR_PINS_KEY = "grammar_pins"
+
+
+def _grammar_pins(corp: Corpus) -> dict[str, str] | None:
+    """The pins this write may stamp, or None for a corpus without a parser.
+    Raises `GrammarPinRefused` BEFORE the caller has scanned or written."""
+    return corp.pin_guard() if corp.pin_guard is not None else None
+
+
+def _save_index(corpus: Corpus, embs: np.ndarray, meta: dict[str, Any],
+                pins: dict[str, str] | None = None) -> None:
+    if pins is not None:
+        meta[GRAMMAR_PINS_KEY] = pins
     _commit_generation(corpus.index_dir, embs, meta,
                        chunk_schema=corpus.chunk_schema)
 
@@ -644,6 +684,7 @@ def _existing_chunk_count(corp: Corpus) -> int:
 def _rebuild(cfg: Config, progress: bool = True,
              corpus: str | Corpus | None = None) -> dict[str, int]:
     corp = resolve_corpus(cfg, corpus)
+    pins = _grammar_pins(corp)
     report: dict[str, Any] = {}
     files = _scan_corpus(corp, report)
     _guard_scan(corp, report, _existing_chunk_count(corp))
@@ -665,7 +706,7 @@ def _rebuild(cfg: Config, progress: bool = True,
     excluded = report.get("excluded") or []
     _save_index(corp, embs,
                 {"model": cfg.model, "file_meta": file_meta, "chunks": chunks,
-                 "excluded": excluded})
+                 "excluded": excluded}, pins)
     size_mb = embs.nbytes / 1e6
     out: dict[str, Any] = {"files": len(files), "chunks": len(chunks),
                            "size_mb": round(size_mb, 1)}
@@ -703,6 +744,9 @@ def update(cfg: Config, only_files: list[str] | None = None,
 def _update(cfg: Config, only_files: list[str] | None = None,
             corpus: str | Corpus | None = None) -> dict[str, int]:
     corp = resolve_corpus(cfg, corpus)
+    # First, before the index is even read: a writer that may not write this
+    # corpus must not rebuild it either.
+    pins = _grammar_pins(corp)
     loaded = _load_index(corp.index_dir)
     if loaded is None:
         return _rebuild(cfg, progress=False, corpus=corp)
@@ -718,6 +762,12 @@ def _update(cfg: Config, only_files: list[str] | None = None,
         # A genuinely stale generation (older markdown format, or an absent
         # stamp) still forces the full rebuild it always did.
         return _rebuild(cfg, progress=False, corpus=corp)  # old chunk format -> full rebuild
+    if pins is not None and meta.get(GRAMMAR_PINS_KEY) != pins:
+        # CODE-GRAPH D1: the lock moved, so every boundary may have moved with
+        # it. Compared with the PINS, never with what this interpreter loaded
+        # -- the guard above already refused a writer whose wheels differ, so
+        # two interpreters taking turns cannot ping-pong the corpus.
+        return _rebuild(cfg, progress=False, corpus=corp)
 
     report: dict[str, Any] = {}
     files = _scan_corpus(corp, report)
@@ -772,7 +822,7 @@ def _update(cfg: Config, only_files: list[str] | None = None,
         meta["chunks"].extend(new_chunks)
 
     meta["file_meta"] = old_meta
-    _save_index(corp, embs, meta)
+    _save_index(corp, embs, meta, pins)
     out = {"added": len(added_or_changed), "deleted": len(deleted),
            "chunks": len(meta["chunks"])}
     if excluded:

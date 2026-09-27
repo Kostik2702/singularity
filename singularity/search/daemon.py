@@ -163,6 +163,10 @@ class SearchDaemon:
                 # the index was deliberately left untouched — this is a refusal,
                 # not a failed write
                 return {"error": str(exc), "error_type": "CorpusRootUnavailable"}
+            except indexer.GrammarPinRefused as exc:
+                # code_chunk_schema v2 and this interpreter's parser differs from
+                # the pins, or cannot load: refused before anything was written
+                return {"error": str(exc), "error_type": "GrammarPinRefused"}
             counts = self.engine.reload()
             return {"status": "indexed", "stats": stats, "index": counts,
                     "corpus": corpus}

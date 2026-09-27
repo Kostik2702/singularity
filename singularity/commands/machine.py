@@ -69,7 +69,7 @@ def cmd_index(cfg, args) -> int:
     except client.RemoteIndexError as exc:
         if exc.error_type == "IndexLockedError":
             print("[mb] another index writer in progress (lock present)", file=sys.stderr)
-        elif exc.error_type == "CorpusRootUnavailable":
+        elif exc.error_type in ("CorpusRootUnavailable", "GrammarPinRefused"):
             print(f"[mb] {exc}", file=sys.stderr)
             return 2
         else:

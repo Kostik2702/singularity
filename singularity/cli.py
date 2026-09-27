@@ -80,6 +80,9 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="with --with-code/--code-only: add what the code graph knows "
                         "about each code hit — its definition, callers, callees — read "
                         "as last written, never refreshed (CODE-GRAPH D1)")
+    s.add_argument("--graph-boost", action="store_true", dest="graph_boost",
+                   help="re-rank code hits by how many callers the code graph knows "
+                        "for their symbol (read-only; off by default, CODE-GRAPH P7)")
     s.add_argument("--with-sources", action="store_true", dest="with_sources",
                    help="also search ingested raw sources (.mb/sources_index/) — "
                         "escalation when the wiki has no answer")

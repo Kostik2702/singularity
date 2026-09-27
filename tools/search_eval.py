@@ -21,15 +21,23 @@ Usage:
     python tools/search_eval.py run --hybrid both         # the comparable pair
     python tools/search_eval.py run --out docs/search-eval-baseline.json
     python tools/search_eval.py compare old.json new.json
+    python tools/search_eval.py chunker --scratch <empty dir> --out docs/search-eval-code-v2.json
+
+`chunker` (CODE-GRAPH P7) never measures the live index: it copies the code
+corpus's input and the memory index into `--scratch`, builds the code corpus
+there with v1 and with v2, and gates v2 by the rule in `GATE`.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import shutil
 import sys
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -128,11 +136,21 @@ def verify_targets(cases: list[dict[str, Any]], vault: Path) -> list[str]:
 
 
 def run_once(cases: list[dict[str, Any]], hybrid: bool | None,
-             corpus: str = "memory") -> dict[str, Any]:
-    from singularity.config import load_config
-    from singularity.search import client
+             corpus: str = "memory",
+             search: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+             ) -> dict[str, Any]:
+    """`search`: answers one payload. None = the live `mb search` path (daemon,
+    cold fallback) against this machine's config -- what the tool always did.
+    The chunker gate passes an in-process engine over an isolated copy."""
+    if search is None:
+        from singularity.config import load_config
+        from singularity.search import client
 
-    cfg = load_config()
+        cfg = load_config()
+
+        def search(payload: dict[str, Any]) -> dict[str, Any]:
+            return client.search(cfg, payload)
+
     code = corpus == "code"
     rows, per_case = [], []
     started = time.time()
@@ -145,7 +163,7 @@ def run_once(cases: list[dict[str, Any]], hybrid: bool | None,
             # min_score is deliberately NOT overridden: the number this tool
             # reports must be the recall a real `mb search` would deliver.
         }
-        resp = client.search(cfg, payload)
+        resp = search(payload)
         if "error" in resp:
             raise SystemExit(f"[eval] search failed on {case['id']}: {resp['error']}")
         ranking = ranked_files(resp.get("results") or [])
@@ -198,6 +216,269 @@ def render_delta(a: dict[str, Any], b: dict[str, Any]) -> None:
         print(f"{name:<14}{cells}{eb['mrr'] - ea['mrr']:>+9.3f}")
 
 
+# --- chunker v2 against v1, on an isolated copy (CODE-GRAPH P7) -------------
+#
+# The rule below was written BEFORE the first run and is not tuned after it.
+# Both fusion modes are gated: fusion on is what `mb search --with-code`
+# serves for code (the engine fuses code whatever the config says), fusion
+# off is the pure vector ranking, where chunk boundaries act most directly.
+
+GATE_METRICS = ("recall@1", "recall@5", "recall@10", "mrr")
+GATE = ("v2 is not worse than v1 when, in both fusion modes (on and off), every _overall "
+        "metric -- recall@1, recall@5, recall@10 and MRR -- of v2 is at least v1's minus "
+        "the weight of ONE case (1/n). Per-class numbers are reported, not gated: with 6-8 "
+        "cases a class, one case moves a class metric by 12-17 points.")
+# `.claude/worktrees` inside a repository holds whole copies of it that
+# parallel agents are editing: indexed, every target would get several
+# near-identical twins, and they would change between the two builds.
+SCRATCH_EXTRA_SKIP = ("worktrees",)
+# config values that shape a code search; everything else stays at its default
+_CARRIED = ("model", "min_score", "excerpt_chars", "hybrid_search", "batch_size",
+            "encoder_device", "code_vendored_pattern")
+
+
+def gate_verdict(v1: dict[str, Any], v2: dict[str, Any]) -> dict[str, Any]:
+    """v1, v2: {"fusion_on": run, "fusion_off": run}. Pure, so the suite can
+    prove the rule on synthetic numbers."""
+    checks = []
+    for mode in ("fusion_on", "fusion_off"):
+        a, b = v1[mode]["metrics"]["_overall"], v2[mode]["metrics"]["_overall"]
+        one_case = 1.0 / a["n"]
+        for metric in GATE_METRICS:
+            floor = round(a[metric] - one_case, 4)
+            checks.append({"mode": mode, "metric": metric, "v1": a[metric], "v2": b[metric],
+                           "floor": floor, "pass": b[metric] >= floor - 1e-9})
+    return {"rule": GATE, "not_worse": all(c["pass"] for c in checks), "checks": checks}
+
+
+def _sha256(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def _tree_digest(directory: Path) -> str | None:
+    if not directory.is_dir():
+        return None
+    rows = [f"{p.relative_to(directory).as_posix()}\t{_sha256(p)}"
+            for p in sorted(directory.rglob("*")) if p.is_file()]
+    return hashlib.sha256("\n".join(rows).encode("utf-8")).hexdigest()
+
+
+def _refuse_inside(scratch: Path, *real: Path | None) -> None:
+    """The copy exists so that nothing can write where a live index or a live
+    repository lives; a scratch directory inside one of them defeats it."""
+    target = scratch.resolve()
+    for parent in real:
+        if parent is None:
+            continue
+        try:
+            target.relative_to(parent.resolve())
+        except ValueError:
+            continue
+        raise SystemExit(f"[eval] refusing scratch {scratch}: it is inside {parent}")
+
+
+def _isolated_data(real: Any, scratch: Path, **extra: Any) -> dict[str, Any]:
+    data = {k: real.get(k) for k in _CARRIED if real.get(k) is not None}
+    data.update(code_repos_dir=str(scratch / "repos"), hf_cache=str(real.hf_cache),
+                code_skip_dirs=[*(real.get("code_skip_dirs") or []), *SCRATCH_EXTRA_SKIP],
+                code_graph_extra_roots=[], ingest_index_sources=False,
+                # read only by `mb code` and `--graph-boost`; indexing ignores it
+                code_graph_enabled=True)
+    data.update(extra)
+    return data
+
+
+def _copy_memory_index(real_dir: Path, vault: Path) -> dict[str, Any]:
+    """The live memory corpus's committed generation, copied byte for byte:
+    the control queries rank notes against code, and the builds below must
+    be seen to leave this copy alone (D3)."""
+    from singularity.search import indexer
+
+    files = indexer.index_files(real_dir)
+    if files is None:
+        return {"copied": False}
+    gen = files[0].parent
+    name = gen.name if gen.name.startswith("gen_") else "gen_copy"
+    target = vault / ".mb" / "memory_index"
+    (target / name).mkdir(parents=True, exist_ok=True)
+    for fname in ("embeddings.npy", "metadata.json", indexer.SUMMARY_FILE):
+        if (gen / fname).is_file():
+            shutil.copy2(gen / fname, target / name / fname)
+    (target / indexer.CURRENT_FILE).write_text(name, encoding="utf-8")
+    return {"copied": True, "generation": name, "digest": _tree_digest(target)}
+
+
+def prepare_isolated(scratch: Path, schemas: tuple[str, ...] = ("v1", "v2")) -> dict[str, Any]:
+    """Freeze the code corpus's input, copy the memory corpus, build the code
+    corpus once per schema and a code graph -- all under `scratch`.
+
+    What touches the machine: READS of the repositories root, the live memory
+    index and the model cache. Nothing is written outside `scratch`; the live
+    CURRENT pointers are hashed before and after to show it."""
+    from singularity.codegraph import build, scope
+    from singularity.config import Config, load_config
+    from singularity.search import indexer
+
+    real = load_config()
+    if real.code_repos_dir is None:
+        raise SystemExit("[eval] code_repos_dir is not set on this machine")
+    _refuse_inside(scratch, real.vault, real.code_repos_dir)
+    if scratch.exists() and any(scratch.iterdir()):
+        raise SystemExit(f"[eval] {scratch} is not empty; give a fresh directory or --reuse")
+    live = {"memory_CURRENT": real.memory_index_dir / indexer.CURRENT_FILE,
+            "code_CURRENT": real.code_index_dir / indexer.CURRENT_FILE}
+    before = {k: _sha256(p) for k, p in live.items()}
+
+    # 1. the input, frozen: the two builds must read the same bytes
+    scan = Config(vault=scratch / "scan",
+                  data=_isolated_data(real, scratch, code_repos_dir=str(real.code_repos_dir)))
+    report: dict[str, Any] = {}
+    selected = indexer._scan_corpus(indexer.code_corpus(scan), report)
+    rows = []
+    for rel, src in sorted(selected.items()):
+        dst = scratch / "repos" / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        rows.append(f"{rel}\t{_sha256(dst)}")
+    snapshot = {"source": str(real.code_repos_dir), "files": len(rows),
+                "digest": hashlib.sha256("\n".join(rows).encode("utf-8")).hexdigest(),
+                "extra_skip": list(SCRATCH_EXTRA_SKIP),
+                "excluded": [e["path"] for e in report.get("excluded") or []],
+                "live_index_files": (indexer.index_summary(real.code_index_dir) or {})
+                .get("file_count")}
+
+    configs: dict[str, dict[str, Any]] = {}
+    memory: dict[str, Any] = {}
+    builds: dict[str, Any] = {}
+    for schema in schemas:
+        name = f"vault_{schema}"
+        configs[schema] = {"vault": str(scratch / name),
+                           "data": _isolated_data(real, scratch, code_chunk_schema=schema)}
+        memory[schema] = {"before": _copy_memory_index(real.memory_index_dir, scratch / name)}
+    # 2. the code corpus, once per schema, each into its own vault
+    for schema in schemas:
+        cfg = Config(vault=Path(configs[schema]["vault"]), data=configs[schema]["data"])
+        started = time.perf_counter()
+        stats = indexer.rebuild(cfg, progress=False, corpus="code")
+        _, meta_path = indexer.index_files(cfg.code_index_dir)
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        builds[schema] = {"seconds": round(time.perf_counter() - started, 1), **stats,
+                          "chunk_schema": meta.get("chunk_schema"),
+                          "grammar_pins": meta.get(indexer.GRAMMAR_PINS_KEY),
+                          "file_meta_digest": hashlib.sha256(json.dumps(
+                              meta["file_meta"], sort_keys=True).encode("utf-8")).hexdigest()}
+        memory[schema]["after"] = _tree_digest(cfg.memory_index_dir)
+    # 3. the graph the boost reads: built once, copied next to every schema,
+    #    so `--graph-boost` finds it where the real CLI looks (`code_graph_dir`)
+    first = Config(vault=Path(configs[schemas[0]]["vault"]), data=configs[schemas[0]]["data"])
+    started = time.perf_counter()
+    units = scope.discover_units(first)
+    for unit in units:
+        build.build_unit(first, unit)
+    for schema in schemas[1:]:
+        other = Config(vault=Path(configs[schema]["vault"]), data=configs[schema]["data"])
+        shutil.copytree(first.code_graph_dir, other.code_graph_dir)
+    graph = {"units": len(units), "seconds": round(time.perf_counter() - started, 1),
+             "digest": _tree_digest(first.code_graph_dir)}
+
+    after = {k: _sha256(p) for k, p in live.items()}
+    manifest = {"schemas": list(schemas), "configs": configs, "snapshot": snapshot,
+                "builds": builds, "graph": graph, "memory_copy": memory,
+                "live": {"vault": str(real.vault), "before": before, "after": after,
+                         "untouched": before == after}}
+    (scratch / "setup.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1),
+                                        encoding="utf-8")
+    return manifest
+
+
+def load_isolated(scratch: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(manifest, {schema: Config}) of a prepared copy."""
+    from singularity.config import Config
+
+    manifest = json.loads((scratch / "setup.json").read_text(encoding="utf-8"))
+    cfgs = {name: Config(vault=Path(c["vault"]), data=c["data"])
+            for name, c in manifest["configs"].items()}
+    return manifest, cfgs
+
+
+def cmd_chunker(args: argparse.Namespace) -> int:
+    from singularity.search import graph_boost
+    from singularity.search.engine import SearchEngine
+
+    scratch = Path(args.scratch)
+    if not args.reuse:
+        prepare_isolated(scratch)
+    manifest, cfgs = load_isolated(scratch)
+    cases = load_fixture()["code_cases"]
+    missing = verify_targets(cases, scratch / "repos")
+    if missing:
+        print(f"[eval] {len(missing)} expected file(s) missing from the copy:", file=sys.stderr)
+        for m in missing:
+            print(f"   {m}", file=sys.stderr)
+        return 2
+
+    runs: dict[str, dict[str, Any]] = {}
+    for schema in manifest["schemas"]:
+        engine = SearchEngine(cfgs[schema])
+
+        def boosted(payload: dict[str, Any], engine: SearchEngine = engine,
+                    cfg: Any = cfgs[schema]) -> dict[str, Any]:
+            return graph_boost.apply(cfg, engine.search(payload))
+
+        runs[schema] = {"fusion_off": run_once(cases, False, "code", engine.search),
+                        "fusion_on": run_once(cases, True, "code", engine.search),
+                        "fusion_on_boost": run_once(cases, True, "code", boosted)}
+        for label, run in runs[schema].items():
+            print(f"-- schema {schema}, {label}")
+            render(run, show_misses=not args.quiet)
+            print()
+    verdict = gate_verdict(runs["v1"], runs["v2"])
+    for check in verdict["checks"]:
+        print(f"   {check['mode']:<11}{check['metric']:<10} v1 {check['v1']:.4f}  "
+              f"v2 {check['v2']:.4f}  floor {check['floor']:.4f}  "
+              f"{'ok' if check['pass'] else 'WORSE'}")
+    print(f"\n[eval] chunker v2 {'is not worse than' if verdict['not_worse'] else 'is WORSE than'} v1")
+
+    # D5, layer 3, on both builds: v2 indexes module headers (constants,
+    # imports) that v1 never emitted, so its fact-check must be re-run on it.
+    # Counts only -- samples of a match are exactly what must not be committed.
+    from tools.code_index_audit import audit
+
+    privacy = {}
+    for schema in manifest["schemas"]:
+        rep = audit(cfgs[schema])
+        privacy[schema] = {k: rep.get(k) for k in ("chunks", "files", "fallback_share",
+                                                   "secret_marker_total", "by_kind")}
+        privacy[schema]["markers"] = {name: f["count"]
+                                      for name, f in (rep.get("secret_markers") or {}).items()}
+        print(f"[audit] {schema}: {privacy[schema]['secret_marker_total']} secret marker(s) "
+              f"{privacy[schema]['markers']}")
+
+    p0 = REPO / "docs" / "search-eval-code-baseline.json"
+    p0_runs = json.loads(p0.read_text(encoding="utf-8")).get("runs", []) if p0.is_file() else []
+    payload = {
+        "about": "Chunker v2 (definition boundaries) against v1 (regex) on the code eval set, "
+                 "same session, same frozen input, same model; plus the graph boost on the "
+                 "served fusion mode. CODE-GRAPH P7.",
+        "taken_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "gate": verdict,
+        "isolation": {k: manifest[k] for k in ("snapshot", "live", "memory_copy", "graph")},
+        "builds": manifest["builds"],
+        "privacy_audit": privacy,
+        "runs": runs,
+        "p0_record": {("fusion_on" if r.get("hybrid") else "fusion_off"): r["metrics"]
+                      for r in p0_runs},
+    }
+    if args.out:
+        Path(args.out).write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n",
+                                  encoding="utf-8")
+        print(f"[eval] wrote {args.out}")
+    return 0 if verdict["not_worse"] else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -215,7 +496,17 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("before")
     c.add_argument("after")
 
+    k = sub.add_parser("chunker", help="chunker v2 vs v1 (and the graph boost) on the code "
+                                       "set, built into an isolated copy")
+    k.add_argument("--scratch", required=True,
+                   help="an EMPTY directory outside the vault and the repositories root")
+    k.add_argument("--reuse", action="store_true", help="measure a copy prepared earlier")
+    k.add_argument("--out", help="write the record as JSON (docs/search-eval-code-v2.json)")
+    k.add_argument("--quiet", action="store_true", help="metrics only, no miss list")
+
     args = ap.parse_args(argv)
+    if args.cmd == "chunker":
+        return cmd_chunker(args)
 
     if args.cmd == "compare":
         a = json.loads(Path(args.before).read_text(encoding="utf-8"))

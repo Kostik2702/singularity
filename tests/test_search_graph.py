@@ -454,6 +454,29 @@ def test_the_index_generation_read_is_the_indexer_s(world, tmp_path, monkeypatch
         monkeypatch.setattr(enrich, "parse_file_meta", whole_parse)
 
 
+# --- with the boost --------------------------------------------------------------
+
+def test_graph_and_the_graph_boost_work_together(world, capsys):
+    """Both flags ask the daemon for JSON and both render the text lines; they
+    were written apart (P7a, P7b). Together: the boost re-orders the hits, the
+    enrichment then describes the same hits, and the text shows each graph line."""
+    eng = engine_for(world)
+    base = ["search", "retry worker", "--top", "30", "--code-only", "--max-per-file", "0", "--graph"]
+    code, out, err, _ = run_search(world, [*base, "--graph-boost", "--json"], eng.search, capsys)
+    assert code == 0, err
+    both = json.loads(out)["results"]
+    code, out, err, _ = run_search(world, [*base, "--json"], eng.search, capsys)
+    alone = json.loads(out)["results"]
+
+    def key(r):
+        return r["meta"]["file"], r["meta"].get("name"), r["meta"].get("line")
+    assert sorted(map(key, both)) == sorted(map(key, alone))           # re-ordered, never added or dropped
+    assert all("graph" in r for r in both if r["source"] == "code")
+    code, out, err, _ = run_search(world, [*base, "--graph-boost"], eng.search, capsys)
+    assert code == 0, err
+    assert out.count("   graph: ") == sum(1 for r in both if "graph" in r) > 0
+
+
 # --- refusals and the import floor --------------------------------------------
 
 def test_graph_is_refused_without_code_or_with_the_graph_off(tmp_path, capsys):
