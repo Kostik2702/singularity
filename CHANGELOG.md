@@ -113,6 +113,15 @@ installer that assumed the machine it was written on.
   `code_index_baseline` write UTF-8; the tests read them in the locale's
   encoding, and the tool itself died on Cyrillic under cp1252. Both now say
   UTF-8.
+* **One defect of the product, found by the only test that flaked.** A
+  directory lock its holder is removing stays "delete pending" on Windows
+  while any handle to it is open, and creating it in that window is refused
+  as ACCESS DENIED, not "already exists". Every lock caught only the latter,
+  so two concurrent `mb ingest` writers could fail instead of waiting. A
+  diagnostic run on the runners put it at 10-18 failures per 3000
+  acquisitions, all at the lock's `mkdir` (a desktop Windows 11 never showed
+  it); after the fix, 0. The four locks share `platform.fslock` now, and a
+  scanner refuses a fifth raw `mkdir(exist_ok=False)`.
 * **Clock and platform assumptions in three tests:** a fixture wrote
   `ANCHOR\r\n` through `write_text` on Windows and never saw its restore; a
   global `os.walk` stub broke `shutil.rmtree` on Python 3.12, which walks with
