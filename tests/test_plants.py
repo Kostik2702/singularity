@@ -56,6 +56,18 @@ def test_the_declaration_has_controls():
     assert len(greens) >= 2, "at least two GREEN controls are required"
 
 
+def test_no_case_names_one_machine_s_interpreter():
+    """`.venv/bin/python` in every case turned all fifteen into ERROR on
+    Windows (a venv keeps it in `Scripts`) and on every CI runner (no venv at
+    all): the file measured nothing anywhere but the machine that wrote it.
+    `{python}` is the interpreter running the suite. Planted: one case back on
+    `.venv/bin/python` -- red."""
+    for case in CASES:
+        interpreters = [w for w in case["cmd"] if Path(w).name.lower().startswith("python")]
+        assert interpreters == [], (
+            f"{case['label']}: names {interpreters}; use {plant.PYTHON!r}, the interpreter running the suite")
+
+
 def test_every_case_names_itself():
     for case in CASES:
         assert case.get("label"), f"unlabelled case on {case['file']}"

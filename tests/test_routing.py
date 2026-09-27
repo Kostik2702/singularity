@@ -230,9 +230,13 @@ def _run_hook(event: dict, vault: Path | None = None) -> dict:
     env = dict(os.environ)
     if vault is not None:
         env["MB_HOME"] = str(vault)
+    # the hook writes UTF-8 whatever the console code page (as the client reads
+    # it); decoding with the locale turned every non-ASCII byte of the table
+    # into another character on Windows, and six languages "differed"
     proc = subprocess.run(
         [sys.executable, str(ENGINE / "singularity" / "hooks" / "user_prompt_submit.py")],
-        input=json.dumps(event), capture_output=True, text=True, cwd=ENGINE, env=env)
+        input=json.dumps(event), capture_output=True, text=True, encoding="utf-8",
+        cwd=ENGINE, env=env)
     assert proc.returncode == 0, f"hook exited {proc.returncode}: {proc.stderr}"
     return json.loads(proc.stdout or "{}")
 

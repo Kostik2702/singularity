@@ -133,9 +133,9 @@ def test_an_unreadable_skipped_directory_does_not_block_the_vault_index(
 
     real_walk = indexer_mod.os.walk
 
-    def walk_denying_git(top, onerror=None, followlinks=False):
+    def walk_denying_git(top, onerror=None, **kw):
         for dirpath, dirnames, filenames in real_walk(
-                top, onerror=onerror, followlinks=followlinks):
+                top, onerror=onerror, **kw):
             if Path(dirpath).name == ".git" and onerror is not None:
                 onerror(PermissionError(13, "Access is denied",
                                         str(Path(dirpath) / "objects")))
@@ -159,9 +159,9 @@ def test_an_unreadable_INDEXABLE_directory_still_blocks(tmp_path, monkeypatch):
 
     real_walk = indexer_mod.os.walk
 
-    def walk_denying_howto(top, onerror=None, followlinks=False):
+    def walk_denying_howto(top, onerror=None, **kw):
         for dirpath, dirnames, filenames in real_walk(
-                top, onerror=onerror, followlinks=followlinks):
+                top, onerror=onerror, **kw):
             if Path(dirpath).name == "howto" and onerror is not None:
                 onerror(PermissionError(13, "Access is denied", str(dirpath)))
             yield dirpath, dirnames, filenames
@@ -174,10 +174,10 @@ def test_an_unreadable_INDEXABLE_directory_still_blocks(tmp_path, monkeypatch):
 def test_a_pruned_directory_error_is_ignored_for_the_code_corpus(built, monkeypatch):
     real_walk = indexer_mod.os.walk
 
-    def walk_denying_pruned(top, onerror=None, followlinks=False):
+    def walk_denying_pruned(top, onerror=None, **kw):
         first = True
         for dirpath, dirnames, filenames in real_walk(
-                top, onerror=onerror, followlinks=followlinks):
+                top, onerror=onerror, **kw):
             if first and onerror is not None:
                 onerror(PermissionError(13, "denied",
                                         str(Path(dirpath) / "api" / "node_modules")))

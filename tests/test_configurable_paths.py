@@ -148,7 +148,7 @@ def test_installer_renders_the_real_vault_when_it_differs(tmp_path, monkeypatch)
     # and the mechanism half: the preamble is addressed where it is deployed,
     # not through the vault
     every = (home / ".claude" / "agents" / "investigator.md").read_text(encoding="utf-8")
-    assert str(home / ".claude" / "agents" / "AGENT_SHARED_PREAMBLE.md") in every
+    assert (home / ".claude" / "agents" / "AGENT_SHARED_PREAMBLE.md").as_posix() in every
     assert (home / ".claude" / "agents" / "AGENT_SHARED_PREAMBLE.md").exists(), \
         "agents point at a preamble the installer did not deploy"
 
@@ -216,7 +216,7 @@ def test_a_users_own_edit_is_backed_up_never_overwritten(tmp_path, monkeypatch):
     assert backups[0].read_text(encoding="utf-8") == "my own agent, do not touch"
     # and the replacement is a real rendering for this machine, not the template
     written = (agents / "critic.md").read_text(encoding="utf-8")
-    assert str(agents / "AGENT_SHARED_PREAMBLE.md") in written
+    assert (agents / "AGENT_SHARED_PREAMBLE.md").as_posix() in written
     assert "{{" not in written
 
 

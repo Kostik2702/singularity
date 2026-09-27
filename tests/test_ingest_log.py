@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import threading
+import traceback
 
 import numpy as np
 import pytest
@@ -197,13 +198,15 @@ def test_sweep_on_a_missing_log(cfg):
 
 def test_concurrent_marks_do_not_tear_the_journal(cfg):
     sid = _ingest(cfg)["source_id"]
-    errors: list[BaseException] = []
+    # whole tracebacks: CI once reported only "PermissionError(13, 'Access is
+    # denied')", and finding the line (the lock's mkdir) took a separate run
+    errors: list[str] = []
 
     def worker(i):
         try:
             sources.attach_notes(cfg, sid, [f"reference/n{i}.md"], log=True)
-        except BaseException as exc:  # noqa: BLE001
-            errors.append(exc)
+        except BaseException:  # noqa: BLE001
+            errors.append(traceback.format_exc())
 
     threads = [threading.Thread(target=worker, args=(i,)) for i in range(10)]
     for t in threads:

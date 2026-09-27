@@ -5,7 +5,7 @@
     "old": "The boundary is WHEN, not who.",
     "new": "This DOES loosen it: stop and ask whenever unsure.",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -19,7 +19,7 @@
     "old": "traces back to the request",
     "new": "is relevant to the work",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -33,7 +33,7 @@
     "old": "over-engineered",
     "new": "fine as it is",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -47,7 +47,7 @@
     "old": "No scope expansion beyond the recipe/verdict",
     "new": "Scope is flexible",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -61,7 +61,7 @@
     "old": "New file in a managed root \u2014",
     "new": "Write **directly** to the vault path \u2014",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -75,7 +75,7 @@
     "old": "a second working copy is a second source of truth",
     "new": "copies are fine",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -89,7 +89,7 @@
     "old": "mb hooks status [--json]",
     "new": "mb hooks status [--json]\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -103,7 +103,7 @@
     "old": "        \"title\": \"development / code fix\",",
     "new": "        \"title\": \"development / code fix\",\n        \"markers\": (\"fix\", \"implement\"),",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -117,7 +117,7 @@
     "old": "    return not any(sig in low for sig in SYSTEM_PROMPT_SIGNALS)",
     "new": "    return True",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -131,7 +131,7 @@
     "old": "# Phase 6",
     "new": "# Phase 6\n<!-- [[phase-7-docs-selflearn]] -->",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -145,7 +145,7 @@
     "old": "OPEN_QUESTION_HEADINGS = (\"open questions\", \"open:\", \"todo\", \"questions\")",
     "new": "OPEN_QUESTION_HEADINGS = (\"open questions\", \"\u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0435\", \"todo\", \"questions\")",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -159,7 +159,7 @@
     "old": "One instance of a defect is not the defect.",
     "new": "Fix the instance you found.",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -173,7 +173,7 @@
     "old": "Six deterministic signals, no model, no network, no writes (D5):",
     "new": "Six deterministic signals, no model, no network, no writes (na\u00efve D5):",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -187,7 +187,7 @@
     "old": "Searching is a command too:",
     "new": "Search is a command too:",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",
@@ -201,7 +201,7 @@
     "old": "Noticed dead code nearby",
     "new": "Spotted dead code nearby",
     "cmd": [
-      ".venv/bin/python",
+      "{python}",
       "-m",
       "pytest",
       "-q",

@@ -16,6 +16,7 @@ from typing import Any
 from ..config import Config
 from ..log import log
 from ..platform import proc
+from ..platform.fslock import make_lock_dir
 
 START_TIMEOUT_TRIES = 30   # x1s: model load can take ~10-20s on first run
 CONNECT_TIMEOUT = 5.0
@@ -83,19 +84,16 @@ def start_daemon(cfg: Config, wait: bool = True) -> bool:
         return True
     lock = cfg.daemon_start_lock
     lock.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        lock.mkdir(exist_ok=False)
-        owns_lock = True
-    except FileExistsError:
+    owns_lock = make_lock_dir(lock)
+    if not owns_lock:
         # another starter is mid-spawn — don't spawn a second; wait for its ping
-        owns_lock = False
-        if time.time() - lock.stat().st_mtime > 120:
+        try:
+            abandoned = time.time() - lock.stat().st_mtime > 120
+        except OSError:                      # released between the two calls
+            abandoned = False
+        if abandoned:
             _reap_lock(lock)                 # abandoned start lock -> take over
-            try:
-                lock.mkdir(exist_ok=False)
-                owns_lock = True
-            except FileExistsError:
-                owns_lock = False
+            owns_lock = make_lock_dir(lock)
     try:
         if owns_lock:
             if ping(cfg):                    # someone won the race before us

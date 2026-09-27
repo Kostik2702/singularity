@@ -143,6 +143,14 @@ def test_a_pooled_build_writes_the_graph_a_serial_one_does(tmp_path):
     files["web/h.ts"] = "export function h(): void {}\n"
     files.update({f"pkg/m{i}.py": f"from .b import g\n\ndef f{i}():\n    return g()\n" for i in range(9)})
     cfg, unit = _unit(tmp_path, files)
+    # older than store.RACY_NS: a file read within 2 s of its write is stored
+    # with mtime 0, so a serial build straight after the write and a pooled
+    # one after a slow pool start (Windows CI) recorded different stats for
+    # the same bytes -- the difference was the clock, not the pool
+    past = unit.root.stat().st_mtime - 60
+    for p in unit.root.rglob("*"):
+        if p.is_file():
+            os.utime(p, (past, past))
     serial = build.build_unit(cfg, unit, workers=1)
     serial_rows = _dump(cfg, unit.key)
     pooled = build.build_unit(cfg, unit, workers=2)

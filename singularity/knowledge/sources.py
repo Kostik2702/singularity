@@ -41,6 +41,7 @@ from typing import Any
 
 from .capture import normalize_gist
 from ..config import Config, atomic_write_json
+from ..platform.fslock import make_lock_dir
 
 REGISTRY_SCHEMA_VERSION = 1
 LOG_NAME = "ingest-log.jsonl"   # D3: machine history, sibling of nightly-history.jsonl
@@ -208,24 +209,22 @@ def registry_lock(cfg: Config, wait_seconds: float = _LOCK_WAIT_SECONDS):
     owns = False
     deadline = time.monotonic() + max(wait_seconds, 0.0)
     while True:
-        try:
-            lock.mkdir(exist_ok=False)
+        if make_lock_dir(lock):              # False also while its holder is releasing it
             owns = True
             break
-        except FileExistsError:
-            try:
-                age = time.time() - lock.stat().st_mtime
-            except OSError:
-                age = 0.0
-            if age >= STALE_LOCK_SECONDS:
-                owns = True          # stale -> take over; we now own cleanup
-                break
-            if time.monotonic() >= deadline:
-                raise RegistryLockedError(     # noqa: B904 — state, not a wrapped error
-                    "another `mb ingest` writer holds the registry lock "
-                    f"({lock}); retry shortly, or remove the directory if no "
-                    "ingest is running")
-            time.sleep(_LOCK_POLL_SECONDS)
+        try:
+            age = time.time() - lock.stat().st_mtime
+        except OSError:
+            age = 0.0
+        if age >= STALE_LOCK_SECONDS:
+            owns = True              # stale -> take over; we now own cleanup
+            break
+        if time.monotonic() >= deadline:
+            raise RegistryLockedError(
+                "another `mb ingest` writer holds the registry lock "
+                f"({lock}); retry shortly, or remove the directory if no "
+                "ingest is running")
+        time.sleep(_LOCK_POLL_SECONDS)
     try:
         yield
     finally:

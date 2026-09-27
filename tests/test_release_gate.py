@@ -278,19 +278,27 @@ def test_privacy_inventory_no_snapshot_file_contains_a_planted_secret(monkeypatc
         f"---\ntype: learning\ncreated: 2026-01-01\n---\n\n## S\n{SECRET}\n", encoding="utf-8")
 
     cfg = Config(vault=vault, data={})
-    from singularity.search import indexer
+    import singularity.search.indexer as indexer_mod
+    from singularity.search import client
 
     class _FakeEncoder:
         def encode(self, texts, progress=False):
             import numpy as np
             return np.ones((len(texts), 4), dtype="float32")
-    import singularity.search.indexer as indexer_mod
-    orig = indexer_mod.shared_encoder
-    indexer_mod.shared_encoder = lambda *a, **k: _FakeEncoder()
-    try:
-        indexer.rebuild(cfg, progress=False)
-    finally:
-        indexer_mod.shared_encoder = orig
+    monkeypatch.setattr(indexer_mod, "shared_encoder", lambda *a, **k: _FakeEncoder())
+    indexer_mod.rebuild(cfg, progress=False)
+
+    # nightly's index steps write through the daemon. Left real, they spawned
+    # one for this tmp vault, and its first load_config wrote
+    # ~/.singularity.json on any machine that had none -- every CI runner.
+    # The writes run here instead, in this process, with the fake encoder.
+    monkeypatch.setattr(client, "run_index",
+                        lambda cfg, action="update", files=None, corpus=None:
+                        indexer_mod.update(cfg, only_files=files, corpus=corpus))
+
+    def no_daemon(*_a, **_k):
+        raise AssertionError("the privacy gate started a real search daemon")
+    monkeypatch.setattr(client, "start_daemon", no_daemon)
 
     from singularity.knowledge import nightly
     nightly.run(cfg)

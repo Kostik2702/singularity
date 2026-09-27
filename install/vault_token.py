@@ -66,15 +66,18 @@ def render_text(text: str, vault: Path, agents: Path | None = None,
     `{{AGENTS}}` by the deployed-agents directory, every `{{WORKFLOW}}` by the
     engine's phase directory.
 
-    `{{WORKFLOW}}` renders via `as_posix()`, the other two via `str()` as
-    before. Not an inconsistency left standing by accident: `str()` on Windows
-    yields backslashes and produces a MIXED separator wherever a template
-    appends `/<file>` — that is issue #17, open and out of scope here, so the
-    two existing tokens keep their current behaviour byte for byte. The new one
-    is simply born on the correct side of it."""
+    `{{AGENTS}}` and `{{WORKFLOW}}` render via `as_posix()`, `{{VAULT}}` via
+    `str()`. `str()` on Windows yields backslashes and produced a MIXED
+    separator wherever a template appends `/<file>` (issue #17):
+    `\\deployed\\agents/AGENT_SHARED_PREAMBLE.md`. Windows opened it, so rules
+    delivery worked, but the delivered text differed per platform and every
+    test building its expectation with `Path` joins went red on Windows. Forward
+    slashes open on every platform and read the same to the model that follows
+    them. `{{VAULT}}` keeps `str()` byte for byte: issue #17 names only
+    `{{AGENTS}}`."""
     out = text.replace(TOKEN, str(vault))
-    out = out.replace(AGENTS_TOKEN, str(agents if agents is not None
-                                        else default_agents_dir()))
+    out = out.replace(AGENTS_TOKEN, (agents if agents is not None
+                                     else default_agents_dir()).as_posix())
     return out.replace(WORKFLOW_TOKEN, (workflow if workflow is not None
                                         else default_workflow_dir()).as_posix())
 
