@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sqlite3
 import time
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
@@ -18,11 +19,11 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Config
-from . import extract_py, extract_ts, fresh, scope, store
+from . import arch, extract_py, extract_ts, fresh, scope, store
 from .model import FileFacts, encode_facts
 from .resolve_py import PyResolver
 from .resolve_ts import TsResolver, load_workspace
-from .rows import dep_rows, node_rows, workspace_meta
+from .rows import dep_rows, name_ref_counts, node_rows, workspace_meta
 from .versions import RESOLVER_VERSION, parser_versions, version_mismatch  # noqa: F401  (re-exported)
 
 # Extraction is per file and CPU-bound, so a large unit is parsed in a process
@@ -74,11 +75,32 @@ def watched(unit: scope.Unit, cfg: Config) -> dict[str, list]:
     return out
 
 
+def _communities(cfg: Config, key: str, paths: list[str], edges) -> tuple[dict[str, int], dict[int, str], str | None]:
+    """Louvain over the file graph, numbered against the current generation
+    (see arch). Without networkx the build goes on and `arch` says why it is empty."""
+    previous: dict[str, int] = {}
+    db = store.current_db(cfg, key)
+    if db is not None:
+        con = store.connect_ro(db)
+        try:
+            previous = dict(con.execute(
+                "SELECT f.path, c.community FROM communities c JOIN files f ON f.id = c.file_id").fetchall())
+        except sqlite3.OperationalError:          # a generation from before communities existed
+            pass
+        finally:
+            con.close()
+    try:
+        assign, names = arch.communities(paths, arch.file_weights((e.src, e.dst) for e in edges), previous)
+    except ImportError:
+        return {}, {}, "networkx is not installed in the interpreter that built this graph"
+    return assign, names, None
+
+
 def _dirty(unit: scope.Unit, cfg: Config, *states: fresh.GitState) -> list[str]:
     skip, vendored = scope._skip_dirs(cfg), scope._vendored(cfg)
     listed = set().union(*(s.listed for s in states))
-    return sorted(p for p in listed
-                  if scope._wanted(p, skip, vendored, unit.nested) or fresh.is_watched(p))
+    return sorted(p for p in listed if scope._wanted(p, skip, vendored, unit.nested)
+                  or fresh.watchable_path(p, True, skip, vendored, unit.nested))
 
 
 def _worker_count(n_files: int, workers: int | None) -> int:
@@ -156,6 +178,9 @@ def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None,
         # process was kept waiting and the timings measure the machine.
         resolve_cpu_over_wall = (time.process_time() - cpu) / max(timings["resolve"], 1e-9)
         t = time.perf_counter()
+        comm, comm_labels, arch_note = _communities(cfg, unit.key, [r["path"] for r in file_rows], edges)
+        timings["arch"] = time.perf_counter() - t
+        t = time.perf_counter()
         file_id = {r["path"]: r["id"] for r in file_rows}
         nodes = [n for facts_by_path in (py_facts, ts_facts) for f in facts_by_path.values()
                  for n in node_rows(f, file_id[f.path])]
@@ -167,11 +192,16 @@ def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None,
                 "nested": list(unit.nested), "indexed_head": before.head if before else None,
                 "versions": parser_versions(), "scope": fresh.scope_fingerprint(cfg),
                 "watched": watch, "workspace": workspace_meta(packages, aliases),
-                "built_at": time.time(), "files": len(file_rows)}
+                "built_at": time.time(), "files": len(file_rows),
+                "arch": {"seed": arch.SEED, "computed_at_seq": 0, "note": arch_note}}
+        refs = name_ref_counts(list(py_facts.values()) + list(ts_facts.values()))
         written = store.write_generation(
             cfg, unit.key, meta=meta, files=file_rows, nodes=nodes, edges=edge_rows,
             unresolved=unresolved_rows, facts=facts_rows, deps=deps, lookups=lookups,
-            dirty=_dirty(unit, cfg, before, after) if before and after else [])
+            dirty=_dirty(unit, cfg, before, after) if before and after else [],
+            name_refs=[(lang, name, n) for (lang, name), n in sorted(refs.items())],
+            communities=[(file_id[p], c) for p, c in sorted(comm.items())],
+            community_labels=sorted(comm_labels.items()))
         timings["write"] = time.perf_counter() - t
     tiers = Counter(e.tier for e in edges if e.kind == "CALLS")
     return {"unit": unit.key, "files": len(file_rows), "by_lang": dict(langs),

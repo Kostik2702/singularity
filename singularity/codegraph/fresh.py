@@ -38,9 +38,22 @@ from . import scope
 WATCHED = scope._MANIFEST            # package.json / tsconfig*.json, by basename
 
 
-def is_watched(path: str) -> bool:
+def is_watched(path: str, git: bool = True) -> bool:
+    """A file whose change is a rebuild. `.gitignore` only in a git unit:
+    outside git it decides nothing (and the build does not record it)."""
     name = path.rsplit("/", 1)[-1]
-    return name == ".gitignore" or bool(WATCHED.match(name))
+    return (git and name == ".gitignore") or bool(WATCHED.match(name))
+
+
+def watchable_path(path: str, git: bool, skip, vendored, nested: tuple[str, ...]) -> bool:
+    """A file the build records in `watched`: the same prunes as its list
+    (scope.list_manifests), so a manifest under node_modules or vendor, or a
+    .gitignore outside git, can never look like one that "appeared" -- a unit
+    outside git with a .gitignore would otherwise ask for a rebuild on every
+    query (found on voice-text-recognition, 2026-09-27)."""
+    parts = path.split("/")
+    return (is_watched(path, git=git) and not any(scope._pruned(x, skip, vendored) for x in parts[:-1])
+            and not any(path.startswith(n + "/") for n in nested))
 
 
 def scope_fingerprint(cfg: Config) -> str:
@@ -251,13 +264,18 @@ def detect(cfg: Config, meta: dict[str, Any], con: sqlite3.Connection,
     def wanted(p: str) -> bool:
         return scope._wanted(p, skip, vendored, nested)
 
+    is_git = bool(meta.get("is_git"))
+
+    def watchable(p: str) -> bool:
+        return watchable_path(p, is_git, skip, vendored, nested)
+
     watched: dict[str, list] = meta.get("watched") or {}
     det = Detection()
-    if not meta.get("is_git"):
+    if not is_git:
         files, found_nested = scope.walk_stat(root, skip, vendored)
         if sorted(found_nested) != sorted(nested):
             return Detection(rebuild="a nested repository appeared or went away")
-        why = _watched_changed(root, {p for p in files if is_watched(p)} | set(watched), watched)
+        why = _watched_changed(root, {p for p in files if watchable(p)} | set(watched), watched)
         if why:
             return Detection(rebuild=why)
         _compare_all(root, con, {p: st for p, st in files.items()
@@ -266,7 +284,7 @@ def detect(cfg: Config, meta: dict[str, Any], con: sqlite3.Connection,
 
     state = git_state(root)
     det.head = state.head
-    det.dirty = {p for p in state.listed if wanted(p) or is_watched(p)}
+    det.dirty = {p for p in state.listed if wanted(p) or watchable(p)}
     for d in state.dirs:                   # `? inner/`: a repository inside an untracked tree
         if d not in nested and (root / d / ".git").exists() and not any(
                 scope._pruned(part, skip, vendored) for part in d.split("/")):
@@ -283,7 +301,7 @@ def detect(cfg: Config, meta: dict[str, Any], con: sqlite3.Connection,
             candidates |= since
         elif base is not None:
             det.head_unreachable = True
-    why = _watched_changed(root, {p for p in candidates if is_watched(p)} | (
+    why = _watched_changed(root, {p for p in candidates if watchable(p)} | (
         set(watched) if det.head_unreachable else set()), watched)
     if why:
         return Detection(rebuild=why)

@@ -33,7 +33,10 @@ from ..platform import proc
 # 3: what an in-place update needs (P3): each file's facts, what its
 # resolution read (`deps`: paths, misses included; `lookups`: unique-name
 # lookups), the snapshot's dirty set, the stale set, `nodes.local`.
-SCHEMA_VERSION = 3
+# 4: what P4 reads -- per-language counts of files naming each name (`deadcode`
+# must not call a function handed over as a value dead), file communities with
+# stable labels (`arch`), `nodes.bases`.
+SCHEMA_VERSION = 4
 _LOCK_WAIT_SECONDS = 5.0
 # A writer that finds another writer busy polls instead of sleeping in
 # SQLite's busy handler: 16 contending callers took 601-1784 ms with the
@@ -51,7 +54,11 @@ CREATE TABLE nodes(
     id INTEGER PRIMARY KEY, qname TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
     kind TEXT NOT NULL, file_id INTEGER NOT NULL, parent TEXT, spans TEXT NOT NULL,
     signature TEXT NOT NULL, doc1 TEXT, decorators TEXT NOT NULL, exported INTEGER NOT NULL,
-    local INTEGER NOT NULL DEFAULT 0);
+    local INTEGER NOT NULL DEFAULT 0, bases TEXT NOT NULL DEFAULT '[]');
+CREATE TABLE name_refs(lang TEXT NOT NULL, name TEXT NOT NULL, files INTEGER NOT NULL,
+    PRIMARY KEY(lang, name));
+CREATE TABLE communities(file_id INTEGER PRIMARY KEY, community INTEGER NOT NULL);
+CREATE TABLE community_labels(community INTEGER PRIMARY KEY, label TEXT NOT NULL);
 CREATE TABLE facts(file_id INTEGER PRIMARY KEY, blob BLOB NOT NULL);
 CREATE TABLE dep_paths(id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE);
 CREATE TABLE deps(file_id INTEGER NOT NULL, path_id INTEGER NOT NULL);
@@ -80,6 +87,7 @@ CREATE INDEX deps_path ON deps(path_id);
 CREATE INDEX deps_file ON deps(file_id);
 CREATE INDEX lookups_name ON lookups(name);
 CREATE INDEX lookups_file ON lookups(file_id);
+CREATE INDEX communities_by ON communities(community);
 """
 
 
@@ -164,7 +172,8 @@ def write_generation(cfg: Config, unit_key: str, *, meta: dict[str, Any],
                      files: list[dict[str, Any]], nodes: list[dict[str, Any]],
                      edges: list[tuple], unresolved: list[tuple],
                      facts: list[tuple] = (), deps: list[tuple] = (), lookups: list[tuple] = (),
-                     dirty: list[str] = ()) -> dict[str, Any]:
+                     dirty: list[str] = (), name_refs: list[tuple] = (), communities: list[tuple] = (),
+                     community_labels: list[tuple] = ()) -> dict[str, Any]:
     """Write a complete new generation, then point CURRENT at it."""
     base = unit_dir(cfg, unit_key)
     gen = f"gen_{time.time_ns()}_{os.getpid()}"
@@ -190,6 +199,9 @@ def write_generation(cfg: Config, unit_key: str, *, meta: dict[str, Any],
             insert_deps(con, deps)
             con.executemany("INSERT INTO lookups(file_id, name) VALUES (?, ?)", lookups)
             con.executemany("INSERT INTO dirty(path) VALUES (?)", [(p,) for p in dirty])
+            con.executemany("INSERT INTO name_refs(lang, name, files) VALUES (?, ?, ?)", name_refs)
+            con.executemany("INSERT INTO communities(file_id, community) VALUES (?, ?)", communities)
+            con.executemany("INSERT INTO community_labels(community, label) VALUES (?, ?)", community_labels)
         con.executescript(INDEXES)
         con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     finally:
@@ -238,8 +250,8 @@ def collect_garbage(base: Path, keep: str) -> list[str]:
 def insert_nodes(con: sqlite3.Connection, nodes: list[dict[str, Any]]) -> None:
     con.executemany(
         "INSERT INTO nodes(qname, name, kind, file_id, parent, spans, signature, doc1, decorators, exported,"
-        " local) VALUES (:qname, :name, :kind, :file_id, :parent, :spans, :signature, :doc1, :decorators,"
-        " :exported, :local)", nodes)
+        " local, bases) VALUES (:qname, :name, :kind, :file_id, :parent, :spans, :signature, :doc1,"
+        " :decorators, :exported, :local, :bases)", nodes)
 
 
 def insert_deps(con: sqlite3.Connection, deps: list[tuple[int, str]]) -> None:

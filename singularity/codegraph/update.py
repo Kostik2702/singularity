@@ -39,6 +39,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -310,7 +311,7 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
     `wait`: how long to wait for another writer (store default if None)."""
     from .resolve_py import PyResolver
     from .resolve_ts import TsResolver
-    from .rows import dep_rows, node_rows, workspace_from_meta
+    from .rows import dep_rows, name_ref_counts, node_rows, workspace_from_meta
 
     with store.write_transaction(db, **({} if wait is None else {"wait": wait})) as con:
         meta = store.read_meta(con)
@@ -377,8 +378,20 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
         names = _looked_up(con, names)
         before = _outcomes(con, names)
 
+        # name mentions: the old versions' out, the new versions' in (deadcode reads the counts)
+        mentions: Counter[tuple[str, str]] = Counter()
+        for chunk in _chunks(gone_ids):
+            for (blob,) in con.execute(f"SELECT blob FROM facts WHERE file_id IN ({_marks(chunk)})", chunk):
+                mentions.subtract(name_ref_counts([decode_facts(blob)]))
+        mentions.update(name_ref_counts([v[2] for v in (*modified.values(), *added.values())]))
+        con.executemany("INSERT INTO name_refs(lang, name, files) VALUES (?, ?, ?) ON CONFLICT(lang, name)"
+                        " DO UPDATE SET files = files + excluded.files",
+                        [(lang, n, d) for (lang, n), d in mentions.items() if d])
+        con.execute("DELETE FROM name_refs WHERE files <= 0")
+
         # the files themselves
         _delete_rows(con, ("edges", "unresolved", "deps", "lookups", "facts", "nodes"), gone_ids)
+        _delete_rows(con, ("communities",), [rows[p][0] for p in deleted])
         for chunk in _chunks([rows[p][0] for p in deleted]):
             con.execute(f"DELETE FROM files WHERE id IN ({_marks(chunk)})", chunk)
         for p, st in touched.items():

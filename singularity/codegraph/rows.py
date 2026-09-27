@@ -5,6 +5,7 @@ bookkeeping runs without tree-sitter in the interpreter.
 from __future__ import annotations
 
 import json
+from collections import Counter
 from typing import Any
 
 from .model import FileFacts
@@ -20,7 +21,16 @@ def node_rows(f: FileFacts, file_id: int) -> list[dict[str, Any]]:
     return [{"qname": d.qname, "name": d.name, "kind": d.kind, "file_id": file_id, "parent": d.parent,
              "spans": json.dumps(d.spans), "signature": d.signature, "doc1": d.doc1,
              "decorators": json.dumps(d.decorators), "exported": int(d.exported),
-             "local": int(is_local(defs, d.qname, containers))} for d in f.definitions]
+             "local": int(is_local(defs, d.qname, containers)), "bases": json.dumps(d.bases)}
+            for d in f.definitions]
+
+
+def name_ref_counts(facts: dict[str, FileFacts] | list[FileFacts]) -> Counter[tuple[str, str]]:
+    """(lang, name) -> number of files that mention the name (FileFacts.refs)."""
+    out: Counter[tuple[str, str]] = Counter()
+    for f in (facts.values() if isinstance(facts, dict) else facts):
+        out.update((f.lang, n) for n in f.refs)
+    return out
 
 
 def dep_rows(file_deps: dict[str, tuple[frozenset[str], frozenset[str]]],

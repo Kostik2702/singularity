@@ -306,3 +306,16 @@ def test_the_update_verb_reports_what_it_did(tmp_path, capsys, monkeypatch):
     code = cmd_code(cfg, cli._build_parser().parse_args(["code", "update", "--json"]))
     out = json.loads(capsys.readouterr().out)
     assert code == 0 and out["mode"] == "update" and out["updated"] == ["pkg/lone.py"]
+
+
+def test_a_unit_outside_git_with_a_gitignore_is_not_rebuilt_on_every_query(tmp_path):
+    """Found on a real repository: outside git a .gitignore decides nothing, so
+    the build does not record it -- and detection took it for a watched file
+    that had just appeared, asking for a rebuild on every query. The same rule
+    for a package.json under a pruned directory (vendor/)."""
+    files = {**SRC, ".gitignore": "build/\n", "vendor/lib/package.json": json.dumps({"name": "v"})}
+    cfg, unit, root = _unit(tmp_path, files, git=False)
+    fr = update.refresh(cfg, unit.key)
+    assert fr.checked and fr.stale_all is None and not fr.updated
+    (root / "vendor" / "lib" / "package.json").write_text(json.dumps({"name": "v2"}), encoding="utf-8")
+    assert update.refresh(cfg, unit.key).stale_all is None

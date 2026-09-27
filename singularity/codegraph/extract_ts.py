@@ -15,6 +15,8 @@ Barrels are recorded, not resolved: `export * from './x'` and
 """
 from __future__ import annotations
 
+import re
+
 import tree_sitter as ts
 import tree_sitter_javascript as tsj
 import tree_sitter_typescript as tst
@@ -33,6 +35,24 @@ _SIG_MAX = 200
 _FUNCTION_VALUES = {"arrow_function", "function_expression", "function", "generator_function"}
 _FUNCTION_DECLS = {"function_declaration", "generator_function_declaration", "function_signature"}
 _CLASS_DECLS = {"class_declaration", "abstract_class_declaration"}
+# Names a file mentions (FileFacts.refs). A definition's own name node is never
+# pushed onto the walk, so it never lands here.
+_REF_KINDS = {"identifier", "property_identifier", "type_identifier", "shorthand_property_identifier",
+              "shorthand_property_identifier_pattern"}
+_IDENT_STRING = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
+
+
+def _names_in(node: ts.Node | None) -> set[str]:
+    """Every name in a subtree the main walk does not descend into (a class's
+    `extends`, an interface body, an export list)."""
+    out: set[str] = set()
+    todo = [node] if node is not None else []
+    while todo:
+        n = todo.pop()
+        if n.type in _REF_KINDS:
+            out.add(_text(n))
+        todo.extend(n.children)
+    return out
 
 
 def _text(node: ts.Node | None) -> str:
@@ -105,6 +125,7 @@ class _Facts:
         self.exports: list[ImportBinding] = []
         self.calls: list[CallSite] = []
         self.hints: list[TypeHint] = []
+        self.refs: set[str] = set()
 
     def define(self, node: ts.Node, name: str, kind: str, prefix: str | None, *,
                returns: str | None = None, bases: list[str] | None = None,
@@ -172,6 +193,12 @@ def extract(path: str, src: bytes) -> FileFacts:
     while stack:
         node, scope, prefix, klass, in_ctor = stack.pop()
         kind = node.type
+        if kind in _REF_KINDS:
+            f.refs.add(_text(node))
+            continue
+        if kind == "string_fragment" and _IDENT_STRING.match(text := _text(node)):
+            f.refs.add(text)              # `obj["handler"]`, a route table keyed by name
+            continue
 
         if kind == "import_statement":
             spec = _string_value(node.child_by_field_name("source"))
@@ -201,6 +228,7 @@ def extract(path: str, src: bytes) -> FileFacts:
             ns_export = next((c for c in node.named_children if c.type == "namespace_export"), None)
             is_default = any(c.type == "default" for c in node.children)
             if clause is not None:
+                f.refs |= _names_in(clause)          # `export { helper }` uses `helper`
                 for s in clause.named_children:
                     if s.type == "export_specifier":
                         name = _text(s.child_by_field_name("name"))
@@ -238,10 +266,12 @@ def extract(path: str, src: bytes) -> FileFacts:
                     stack.append((child, scope, prefix, klass, in_ctor))
                 continue
             returns = _type_text(node.child_by_field_name("return_type")) or None
+            f.refs |= _names_in(node.child_by_field_name("return_type"))     # `(): Result` uses Result
             if kind in _CLASS_DECLS:
                 heritage = next((c for c in node.named_children if c.type == "class_heritage"), None)
                 bases = []
                 if heritage is not None:
+                    f.refs |= _names_in(heritage)    # a class used only as a base is used
                     for clause in heritage.named_children:
                         if clause.type == "extends_clause":
                             v = clause.child_by_field_name("value")
@@ -257,6 +287,7 @@ def extract(path: str, src: bytes) -> FileFacts:
                 if ext is not None:
                     bases = [_flat(t) for t in ext.named_children]
                 body = node.child_by_field_name("body") or node.child_by_field_name("value")
+                f.refs |= _names_in(ext) | _names_in(body)   # types a member or a base names
                 qname = f.define(node, name, "interface" if kind == "interface_declaration" else "type",
                                  prefix, bases=bases)
                 if body is not None and body.type in ("interface_body", "object_type"):
@@ -363,4 +394,5 @@ def extract(path: str, src: bytes) -> FileFacts:
             stack.append((child, scope, prefix, klass, in_ctor))
 
     return FileFacts(path=path, lang="ts", degraded=root.has_error, definitions=list(f.defs.values()),
-                     imports=f.imports, calls=f.calls, hints=f.hints, exports=f.exports)
+                     imports=f.imports, calls=f.calls, hints=f.hints, exports=f.exports,
+                     refs=sorted(f.refs))

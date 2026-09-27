@@ -69,6 +69,11 @@ class FileFacts:
     # `local` = the exported name, `module` = the source specifier ('' for a
     # local export), `attr` = the original name, '*' for a star re-export.
     exports: list[ImportBinding] = field(default_factory=list)
+    # Every name the file mentions outside a definition's own name: a function
+    # handed over as a value (`pool.map(work, ...)`, a dispatch table, a
+    # decorator) is used without being called, and `deadcode` must not call
+    # it dead (P4). Sorted, one entry per name.
+    refs: list[str] = field(default_factory=list)
 
 
 # --- stored form ---------------------------------------------------------------
@@ -89,11 +94,12 @@ def encode_facts(f: FileFacts) -> bytes:
         [[c.caller, c.line, c.callee, c.receiver, c.klass] for c in f.calls],
         [[h.scope, h.target, h.type_expr, h.source, h.origin] for h in f.hints],
         [_binding(b) for b in f.exports],
+        f.refs,
     ], separators=(",", ":"), ensure_ascii=False).encode("utf-8"), 1)
 
 
 def decode_facts(blob: bytes) -> FileFacts:
-    path, lang, degraded, defs, imports, calls, hints, exports = json.loads(zlib.decompress(blob))
+    path, lang, degraded, defs, imports, calls, hints, exports, refs = json.loads(zlib.decompress(blob))
     return FileFacts(
         path=path, lang=lang, degraded=degraded,
         definitions=[Definition(q, n, k, p, [tuple(s) for s in spans], sig, doc, dec, exp, bases, ret)
@@ -101,4 +107,5 @@ def decode_facts(blob: bytes) -> FileFacts:
         imports=[ImportBinding(*b) for b in imports],
         calls=[CallSite(*c) for c in calls],
         hints=[TypeHint(*h) for h in hints],
-        exports=[ImportBinding(*b) for b in exports])
+        exports=[ImportBinding(*b) for b in exports],
+        refs=refs)

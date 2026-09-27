@@ -263,7 +263,8 @@ def dump(cfg, key: str) -> dict[str, list]:
             "files": sorted((r[0], r[1], r[2], r[3], str(r[4])) for r in con.execute(
                 "SELECT path, lang, content_hash, parse_status, is_test FROM files")),
             "nodes": rows("SELECT file_id, qname, name, kind, parent, spans, signature, doc1, decorators,"
-                          " exported, local FROM nodes"),
+                          " exported, local, bases FROM nodes"),
+            "name_refs": sorted(tuple(map(str, r)) for r in con.execute("SELECT lang, name, files FROM name_refs")),
             "edges": rows("SELECT file_id, src, dst, kind, tier, callee, line FROM edges"),
             "unresolved": rows("SELECT file_id, src, name, receiver, line FROM unresolved"),
             "deps": rows("SELECT d.file_id, p.path FROM deps d JOIN dep_paths p ON p.id = d.path_id"),

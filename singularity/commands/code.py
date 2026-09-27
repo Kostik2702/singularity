@@ -65,6 +65,8 @@ def cmd_code(cfg, args) -> int:
         # the graph and small changes are written in first. --no-refresh skips
         # the comparison but still reports what the graph knows to be stale.
         fr = None if args.no_refresh else update.refresh(cfg, card["key"])
+        if action == "impact" and fr is not None and (fr.stale_files or fr.stale_all):
+            fr = _whole_diff(cfg, card, fr, update)
         g = query.open_card(cfg, card)
         try:
             if fr is None:
@@ -77,7 +79,7 @@ def cmd_code(cfg, args) -> int:
         for c in exc.candidates[:20]:
             print(f"  {c}", file=sys.stderr)
         return 2
-    except (GraphError, KeyError) as exc:
+    except (GraphError, KeyError, RuntimeError) as exc:     # RuntimeError: git failed, impact refused
         print(f"[mb] {exc}", file=sys.stderr)
         return 2
 
@@ -130,6 +132,18 @@ def _update(cfg, args, card, update) -> int:
     return 0
 
 
+def _whole_diff(cfg, card, fr, update):
+    """impact walks the graph from the changed files, so all of them must be
+    in it (decision D1): whatever the refresh left stale is updated now, not
+    in the background -- or, past IMPACT_MAX_FILES, refused with the count."""
+    from ..codegraph.impact import IMPACT_MAX_FILES, ImpactRefused
+    if len(fr.stale_files) > IMPACT_MAX_FILES:
+        raise ImpactRefused(f"{len(fr.stale_files)} files differ from the graph; impact needs all of them in "
+                            f"it and does that for up to {IMPACT_MAX_FILES}: run `mb code update` first")
+    update.update_unit(cfg, card["key"])
+    return update.refresh(cfg, card["key"])
+
+
 def _freshness_note(fr) -> str | None:
     """One line on stderr for the text answers; JSON carries it in the envelope."""
     parts = []
@@ -145,6 +159,56 @@ def _freshness_note(fr) -> str | None:
     if fr.note and (fr.stale_files or fr.stale_all or not fr.checked):
         parts.append(fr.note)
     return "[mb] " + "; ".join(parts) if parts else None
+
+
+def _whole_graph(g, args, env) -> int:
+    from ..codegraph import analysis
+    action = args.code_action
+    if action == "impact":
+        from ..codegraph.impact import impact
+        data = impact(g.con, g.root, args.base, args.depth, args.limit, args.offset)
+        cov = data["coverage"]
+        text = [f"impact against {data['base']['what']} ({data['base']['commit'][:10]}): "
+                f"{len(data['changed']['symbols'])} changed symbol(s) in {cov['code_files']} code file(s)"]
+        text += [f"  {s['change']:<12} {s['symbol']}" + (f"  (was {s['was']})" if s.get("was") else "")
+                 for s in data["changed"]["symbols"]]
+        text.append(f"reached through callers (depth ≤{cov['depth']}):")
+        text += _fmt_page(data["impacted"], lambda i: f"  {'  ' * (i['depth'] - 1)}{i['symbol']}"
+                                                      + ("  [test]" if i["test"] else ""))
+        text.append("tests: " + (", ".join(data["tests"]) or "none reached"))
+        if data["possibly_broken"]:
+            text.append(f"call sites of deleted names, now unresolved ({len(data['possibly_broken'])}):")
+            text += [f"  {b['file']}:{b['line']}  {b['caller']} -> {b['name']}" for b in data["possibly_broken"][:20]]
+        if cov["outside_graph"]:
+            text.append(f"not in the graph ({len(cov['outside_graph'])}): " + ", ".join(cov["outside_graph"][:8])
+                        + (" …" if len(cov["outside_graph"]) > 8 else ""))
+        text.append(f"unplaced call sites of the changed names: {cov['unresolved_same_name_sites']}")
+        _emit(args, env(action, data), "\n".join(text))
+        return 0
+    if action == "arch":
+        data = analysis.arch_view(g.con, g.meta, args.top)
+        text = [f"{data['communities']['total']} communities, {data['isolated_files']} isolated file(s)"]
+        text += [f"  #{c['community']:<5} {c['files']:>6} files  {c['label']}   core: {', '.join(c['core_files'][:3])}"
+                 for c in data["communities"]["items"]]
+        text.append("coupling:")
+        text += [f"  {k['edges']:>6}  #{k['communities'][0]} {k['between'][0]} <-> "
+                 f"#{k['communities'][1]} {k['between'][1]}" for k in data["coupling"]]
+        text.append("most called:")
+        text += [f"  {h['callers']:>6}  {h['symbol']}" for h in data["hotspot_symbols"]]
+        if data["computed"]["note"]:
+            text.append(f"note: {data['computed']['note']}")
+        _emit(args, env(action, data), "\n".join(text))
+        return 0
+    data = analysis.deadcode(g.con, g.root, g.meta, args.limit, args.offset, args.unknown)
+    text = [f"{data['dead']['total']} dead, {data['unknown']['total']} unknown of {data['candidates']} "
+            f"uncalled definitions ({data['entry_points']} entry points declared)"]
+    text += _fmt_page(data["dead"], lambda d: f"  {d['file']}:{d['line']}  {d['kind']:<8} {d['qname'].split('::', 1)[1]}")
+    text.append("unknown, by reason: " + ", ".join(f"{k} {n}" for k, n in data["unknown"]["by_reason"].items()))
+    if args.unknown:
+        text += _fmt_page(data["unknown"]["items"],
+                          lambda d: f"  {d['file']}:{d['line']}  {d['qname'].split('::', 1)[1]}  — {d['why']}")
+    _emit(args, env(action, data), "\n".join(text))
+    return 0
 
 
 def _answer(g, args, fr) -> int:
@@ -172,6 +236,8 @@ def _answer(g, args, fr) -> int:
         _emit(args, env(action, data),
               "\n".join(_fmt_page(data["matches"], lambda n: f"  {n['kind']:<9} {n['qname']}")))
         return 0
+    if action in ("impact", "arch", "deadcode"):
+        return _whole_graph(g, args, env)
     symbol = query.resolve_symbol(g.con, args.target)
     if action == "snippet":
         node = query.snippet(g, symbol)

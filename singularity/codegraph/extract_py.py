@@ -12,6 +12,8 @@ the file silently.
 """
 from __future__ import annotations
 
+import re
+
 import tree_sitter as ts
 import tree_sitter_python as tsp
 
@@ -19,6 +21,9 @@ from .model import CallSite, Definition, FileFacts, ImportBinding, TypeHint
 
 _LANGUAGE = ts.Language(tsp.language())
 _PARSER = ts.Parser(_LANGUAGE)
+# A string that is nothing but a name refers to that name more often than not
+# (getattr, __all__, a dispatch table keyed by name): a mention for `deadcode`.
+_IDENT_STRING = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _SIG_MAX = 200
 
 
@@ -121,12 +126,21 @@ def extract(path: str, src: bytes) -> FileFacts:
     imports: list[ImportBinding] = []
     calls: list[CallSite] = []
     hints: list[TypeHint] = []
+    refs: set[str] = set()
 
     # (node, scope qname used as caller, definition qname prefix or None, enclosing class qname)
     stack: list[tuple[ts.Node, str, str | None, str | None]] = [(root, module_scope, None, None)]
     while stack:
         node, scope, prefix, klass = stack.pop()
         kind = node.type
+        if kind == "identifier":          # a definition's own name is never pushed, so never here
+            refs.add(_text(node))
+            continue
+        if kind == "string_content":      # `getattr(mod, "fn")`, `__all__`, a registry keyed by name
+            text = _text(node)
+            if _IDENT_STRING.match(text):
+                refs.add(text)
+            continue
         if kind in ("function_definition", "class_definition"):
             name = _text(node.child_by_field_name("name"))
             qname = f"{prefix}.{name}" if prefix else f"{path}::{name}"
@@ -148,6 +162,9 @@ def extract(path: str, src: bytes) -> FileFacts:
                     bases=bases, returns=_text(node.child_by_field_name("return_type")) or None)
             if kind == "function_definition":
                 hints.extend(_params(node, qname))
+                returns = node.child_by_field_name("return_type")
+                if returns is not None:                     # `-> Result` uses Result
+                    stack.append((returns, scope, prefix, klass))
             body = node.child_by_field_name("body")
             child_class = qname if kind == "class_definition" else klass
             for child in reversed(node.children):
@@ -187,4 +204,5 @@ def extract(path: str, src: bytes) -> FileFacts:
             stack.append((child, scope, prefix, klass))
 
     return FileFacts(path=path, lang="python", degraded=root.has_error,
-                     definitions=list(defs.values()), imports=imports, calls=calls, hints=hints)
+                     definitions=list(defs.values()), imports=imports, calls=calls, hints=hints,
+                     refs=sorted(refs))

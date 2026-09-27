@@ -31,9 +31,11 @@ imgqa = ["Pillow>=10", "scipy>=1.10"]
 # graph: the code graph's parser (CODE-GRAPH D1). EXACT pins, because a grammar
 # bump moves node boundaries and a graph built by two grammar versions is two
 # graphs pretending to be one; `requirements-graph.txt` carries the same pins
-# with wheel hashes. Native wheels, no transitive dependencies.
+# with wheel hashes. Native wheels, no transitive dependencies; networkx (pure
+# Python) is `mb code arch`'s Louvain, used at build time only.
 graph = ["tree-sitter==0.26.0", "tree-sitter-python==0.25.0",
-         "tree-sitter-typescript==0.23.2", "tree-sitter-javascript==0.25.0"]
+         "tree-sitter-typescript==0.23.2", "tree-sitter-javascript==0.25.0",
+         "networkx==3.4.2"]
 # Everything the fast suite needs, and nothing heavy: the runtime deps come
 # from [project.dependencies], keyring and Pillow/scipy from the extras that
 # already declare them, and pytest is the only genuine addition — no second

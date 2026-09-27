@@ -6,8 +6,15 @@
 # one of them only is how sentence-transformers drifted past its `<5` unseen.
 #
 # Hashes are of the Windows amd64 wheels (cp310 for the core, abi3 for the
-# grammars). A new platform adds its wheels' hashes here; `pip download
-# --only-binary=:all: --no-deps` + `pip hash` produce them.
+# grammars; networkx is pure Python, one wheel for every platform). A new
+# platform adds its wheels' hashes here; `pip download --only-binary=:all:
+# --no-deps` + `pip hash` produce them.
+#
+# networkx: Louvain for `mb code arch`, run at build time only (P4). Pinned
+# because a different Louvain implementation partitions the same graph
+# differently, and a community's number is what people refer to.
+networkx==3.4.2 \
+    --hash=sha256:df5d4365b724cf81b8c6a7312509d0c22386097011ad1abe274afd5e9d3bbc5f
 tree-sitter==0.26.0 \
     --hash=sha256:f289be0225ba2ace8e87d6c9639b2bc9ff2b5271afb7c5d39282a4a00e248682
 tree-sitter-javascript==0.25.0 \
