@@ -76,6 +76,9 @@ def _build_parser() -> argparse.ArgumentParser:
                         "never in the default result set (CODE-INDEX D2)")
     s.add_argument("--repos", help="comma-separated repository names to keep, "
                                    "e.g. --repos api,web (code corpus only)")
+    s.add_argument("--graph-boost", action="store_true", dest="graph_boost",
+                   help="re-rank code hits by how many callers the code graph knows "
+                        "for their symbol (read-only; off by default, CODE-GRAPH P7)")
     s.add_argument("--with-sources", action="store_true", dest="with_sources",
                    help="also search ingested raw sources (.mb/sources_index/) — "
                         "escalation when the wiki has no answer")
