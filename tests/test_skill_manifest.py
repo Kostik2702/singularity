@@ -36,7 +36,9 @@ CLIENTS = ["claude", "codex", "gemini", "grok"]
 # GRK-01: the approved portable baseline — every cross-client skill, in
 # manifest order. Codex/Gemini golden regression AND the Grok launch set.
 PORTABLE_BASELINE = [
-    "mb-search", "mb-memory", "mb-llm-delegate", "mb-onboard", "mb-triage",
+    # CODE-GRAPH P6: mb-code drives the `mb code` CLI through Bash only, like
+    # mb-search beside it, so every client gets it.
+    "mb-search", "mb-code", "mb-memory", "mb-llm-delegate", "mb-onboard", "mb-triage",
     # W09: mb-ingest is Bash-only (it drives the `mb ingest` CLI) and carries no
     # Claude-specific machinery, so it ships to every client like its siblings.
     "mb-ingest",

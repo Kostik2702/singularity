@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Config
-from . import fresh, scope, store, versions
+from . import fresh, scope, sidecar, store, versions
 from .model import FileFacts, decode_facts
 
 
@@ -481,6 +481,7 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
                         [(k, json.dumps(v)) for k, v in {"indexed_head": det.head, "seq": seq_seen + 1,
                                                          "updated_at": time.time(),
                                                          "stale_all": stale_all}.items()])
+    sidecar.record(db)
     return Applied(updated=changed, resolved=len(targets), stale=stale, stale_all=stale_all)
 
 

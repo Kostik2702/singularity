@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Config
-from . import arch, extract_py, extract_ts, fresh, scope, store
+from . import arch, extract_py, extract_ts, fresh, scope, sidecar, store
 from .model import FileFacts, encode_facts
 from .resolve_py import PyResolver
 from .resolve_ts import TsResolver, load_workspace
@@ -203,6 +203,7 @@ def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None,
             communities=[(file_id[p], c) for p, c in sorted(comm.items())],
             community_labels=sorted(comm_labels.items()))
         timings["write"] = time.perf_counter() - t
+        sidecar.record(store.unit_dir(cfg, unit.key) / written["generation"] / "graph.db")
     tiers = Counter(e.tier for e in edges if e.kind == "CALLS")
     return {"unit": unit.key, "files": len(file_rows), "by_lang": dict(langs),
             "parse_status": dict(statuses), "nodes": len(nodes),
