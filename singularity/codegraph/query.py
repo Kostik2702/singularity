@@ -249,8 +249,12 @@ def find(con: sqlite3.Connection, pattern: str, limit: int = 50, offset: int = 0
 
 
 def schema(g: OpenGraph) -> dict[str, Any]:
+    """What the graph holds, and the views `mb code sql` reads: this engine's
+    (store.VIEWS), which a graph of another `views_version` does not have."""
     con = g.con
     return {"meta": g.meta,
+            "views_version": g.meta.get("views_version"),
+            "views": {name: {"row": row, "columns": dict(cols)} for name, (row, cols, _) in store.VIEWS.items()},
             "files": dict(con.execute("SELECT lang, count(*) FROM files GROUP BY lang").fetchall()),
             "parse_status": dict(con.execute("SELECT parse_status, count(*) FROM files GROUP BY parse_status")),
             "nodes": dict(con.execute("SELECT kind, count(*) FROM nodes GROUP BY kind").fetchall()),

@@ -31,7 +31,7 @@ mb reflect [--days N] [--json]   # privacy-safe adoption telemetry (offline tran
 mb usage [--session ID] [--list [--days N]] [--turns] [--top N] [--json]
                                  # per-step token cost + what each step added to the context
 mb llm start|stop|status|list|logs|code|setup
-mb code status|build [--all]|update|outline <file>|snippet|callers|callees|trace <symbol>|find <text>|schema|impact|arch|deadcode|audit
+mb code status|build [--all]|update|outline <file>|snippet|callers|callees|trace <symbol>|find <text>|schema|impact|arch|deadcode|sql|audit
                                  # the structural code graph (off until code_graph_enabled)
 mb init            # write ~/.singularity.json pointer + folder tree
 mb uninstall       # remove hooks/scheduler jobs/daemon (vault untouched)
@@ -153,6 +153,17 @@ def _build_parser() -> argparse.ArgumentParser:
                                                                       "trace", "find", "schema")]):
         cgv.add_argument("--project", help="a registered project id instead of the current directory")
     cgb.add_argument("--json", action="store_true")
+    # No positional: the SQL never passes through argv, where the shell would
+    # have its say on quotes and `*` first (decision CODE-GRAPH D1).
+    cgs = cgsub.add_parser("sql", help="one read-only SELECT over the v1_* views (`mb code schema` lists "
+                                       "them); the SQL comes from --sql-file or stdin")
+    cgs.add_argument("--sql-file", help="read the SQL from this file (default: stdin)")
+    cgs.add_argument("--limit", type=int, default=100, help="rows at most; a cut answer says so")
+    cgs.add_argument("--timeout", type=float, default=5.0, help="seconds the query may run before it is stopped")
+    cgs.add_argument("--no-refresh", action="store_true",
+                     help="answer from the graph as last written, without comparing it with the tree first")
+    cgs.add_argument("--json", action="store_true")
+    cgs.add_argument("--project", help="a registered project id instead of the current directory")
 
     d = sub.add_parser("daemon", help="daemon control")
     d.add_argument("action",

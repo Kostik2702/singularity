@@ -273,6 +273,7 @@ BUDGET: dict[str, int] = {
     # whose target is outside this engine; the set had none before.
     "tests/fixtures/search_eval.json": 3386,
     "tests/test_chunking.py": 203,
+    "tests/test_codegraph_sql.py": 14,
     "tests/test_context_map.py": 29,
     "tests/test_contradictions.py": 87,
     "tests/test_gaps.py": 26,
