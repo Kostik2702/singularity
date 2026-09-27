@@ -28,6 +28,7 @@ from collections.abc import Callable
 import numpy as np
 
 from ..config import INBOX_DIR, Config
+from ..platform.fslock import make_lock_dir
 from . import chunking, code_chunking, code_chunking_v2
 from .chunking import extract_chunks, extract_source_chunks, should_skip
 from .code_chunking_v2 import GrammarPinRefused  # noqa: F401  (the daemon names it here)
@@ -417,15 +418,14 @@ def _writer_lock(cfg: Config, corpus_name: str = "memory"):
     the lock (freshly acquired, or a stale takeover)."""
     lock = cfg.corpus_lock_dir(corpus_name)
     lock.parent.mkdir(parents=True, exist_ok=True)
-    owns_lock = False
-    try:
-        lock.mkdir(exist_ok=False)
-        owns_lock = True
-    except FileExistsError:
-        age = time.time() - lock.stat().st_mtime
+    owns_lock = make_lock_dir(lock)
+    if not owns_lock:
+        try:
+            age = time.time() - lock.stat().st_mtime
+        except OSError:    # released between the two calls: it was held a moment ago
+            age = 0.0
         if age < STALE_LOCK_SECONDS:
-            raise IndexLockedError(
-                "another index writer holds the lock") from None
+            raise IndexLockedError("another index writer holds the lock")
         owns_lock = True   # stale -> take over; we now own cleanup
     try:
         yield

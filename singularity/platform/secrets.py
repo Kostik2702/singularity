@@ -16,6 +16,8 @@ import stat
 import time
 from pathlib import Path
 
+from .fslock import make_lock_dir
+
 SERVICE = "singularity"
 _FALLBACK = Path.home() / ".singularity-secrets.json"
 _HEALTH_PROBE = "__mb_healthprobe__"
@@ -75,14 +77,12 @@ def _file_lock():
     lock = _lock_path()
     lock.parent.mkdir(parents=True, exist_ok=True)
     try:
-        try:
-            lock.mkdir(exist_ok=False)
-        except FileExistsError:
+        if not make_lock_dir(lock):
             if time.time() - lock.stat().st_mtime > _LOCK_STALE_SECONDS:
                 pass                       # stale -> take over
             else:
                 raise SecretsError(
-                    "secrets file is locked by another process") from None
+                    "secrets file is locked by another process")
         yield
     finally:
         shutil.rmtree(lock, ignore_errors=True)
