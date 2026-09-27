@@ -6,6 +6,8 @@ picklable and free of parser objects.
 """
 from __future__ import annotations
 
+import json
+import zlib
 from dataclasses import dataclass, field
 
 
@@ -67,3 +69,36 @@ class FileFacts:
     # `local` = the exported name, `module` = the source specifier ('' for a
     # local export), `attr` = the original name, '*' for a star re-export.
     exports: list[ImportBinding] = field(default_factory=list)
+
+
+# --- stored form ---------------------------------------------------------------
+# An update re-resolves a few files against the rest of the unit without
+# parsing the rest again: each file's facts are stored with the graph. JSON,
+# not pickle -- a graph file must never be able to run code when it is read.
+
+def _binding(b: ImportBinding) -> list:
+    return [b.scope, b.local, b.module, b.level, b.attr]
+
+
+def encode_facts(f: FileFacts) -> bytes:
+    return zlib.compress(json.dumps([
+        f.path, f.lang, f.degraded,
+        [[d.qname, d.name, d.kind, d.parent, d.spans, d.signature, d.doc1, d.decorators, d.exported,
+          d.bases, d.returns] for d in f.definitions],
+        [_binding(b) for b in f.imports],
+        [[c.caller, c.line, c.callee, c.receiver, c.klass] for c in f.calls],
+        [[h.scope, h.target, h.type_expr, h.source, h.origin] for h in f.hints],
+        [_binding(b) for b in f.exports],
+    ], separators=(",", ":"), ensure_ascii=False).encode("utf-8"), 1)
+
+
+def decode_facts(blob: bytes) -> FileFacts:
+    path, lang, degraded, defs, imports, calls, hints, exports = json.loads(zlib.decompress(blob))
+    return FileFacts(
+        path=path, lang=lang, degraded=degraded,
+        definitions=[Definition(q, n, k, p, [tuple(s) for s in spans], sig, doc, dec, exp, bases, ret)
+                     for q, n, k, p, spans, sig, doc, dec, exp, bases, ret in defs],
+        imports=[ImportBinding(*b) for b in imports],
+        calls=[CallSite(*c) for c in calls],
+        hints=[TypeHint(*h) for h in hints],
+        exports=[ImportBinding(*b) for b in exports])

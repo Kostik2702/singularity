@@ -19,18 +19,24 @@ from __future__ import annotations
 import json
 import posixpath
 import re
-from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import Any
 
-from .model import CallSite, Definition, FileFacts, ImportBinding
+from .model import CallSite, FileFacts, ImportBinding
 from .resolve_py import EXTERNAL, UNKNOWN, Edge, Unresolved
 from .stoplist import TS_GLOBALS, TS_STOPLIST
+from .tables import MemorySource, Tables
 
 _MAX_HOPS = 8
 _CODE_EXT = (".ts", ".tsx", ".d.ts", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts")
 _JS_TO_TS = {".js": (".ts", ".tsx"), ".jsx": (".tsx",), ".mjs": (".mts", ".ts"), ".cjs": (".cts", ".ts")}
 _INDEX = ("index.ts", "index.tsx", "index.d.ts", "index.js", "index.jsx", "index.mjs")
-_TYPELIKE = ("class", "interface", "type", "enum")
+_TYPELIKE = ("class", "interface", "type", "enum")      # containers: a definition in one is not local
+# Never the target of a guess: a type is not called, a getter or setter is not
+# called as `x.name()`. The package check `_guess` adds depends on the CALLER's
+# imports -- the caller's own recorded reads.
+NEVER_GUESSED = ("interface", "type", "enum", "getter", "setter")
 
 
 @dataclass
@@ -124,39 +130,41 @@ def _module_scope(path: str) -> str:
 
 
 class TsResolver:
-    def __init__(self, facts: dict[str, FileFacts], test_paths: set[str] | frozenset[str] = frozenset(),
+    """As PyResolver: `facts` + `test_paths` in memory, or `source` reading the
+    stored graph; the tables fill one file at a time (see `tables`)."""
+
+    def __init__(self, facts: dict[str, FileFacts] | None = None,
+                 test_paths: set[str] | frozenset[str] = frozenset(),
                  packages: list[Package] | None = None,
-                 aliases: list[tuple[str, list[str]]] | None = None):
-        self.facts, self.test_paths = facts, test_paths
+                 aliases: list[tuple[str, list[str]]] | None = None, source: Any = None):
+        self.source = source if source is not None else MemorySource(facts or {}, test_paths, _TYPELIKE)
         self.packages, self.aliases = packages or [], aliases or []
-        self.defs: dict[str, Definition] = {}
-        self.def_file: dict[str, str] = {}
-        self.members: dict[str, dict[str, str]] = defaultdict(dict)
-        self.by_name: dict[str, list[str]] = defaultdict(list)
-        self.bindings: dict[str, dict[str, ImportBinding]] = defaultdict(dict)
-        self.exports: dict[str, list[ImportBinding]] = defaultdict(list)
-        self.hints: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
-        for path, f in facts.items():
-            for d in f.definitions:
-                self.defs[d.qname] = d
-                self.def_file[d.qname] = path
-                self.members[d.parent or _module_scope(path)].setdefault(d.name, d.qname)
-                self.by_name[d.name].append(d.qname)
-            for b in f.imports:
-                if b.local:
-                    self.bindings[b.scope].setdefault(b.local, b)
-            self.exports[path] = list(f.exports)
-            for h in f.hints:
-                self.hints[h.scope][h.target].append(h)
+        self.t = Tables(self.source, self._index)
+        self.facts, self.defs, self.def_file = self.t.files, self.t.defs, self.t.def_file
+        self.members, self.bindings, self.hints = self.t.members, self.t.bindings, self.t.hints
+        self.exports = self.t.exports
+        self.file_deps: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
+        # Same memo tables and reasons as PyResolver (`this.cur = this.cur.next`
+        # written k times: ~k**5 type_of calls at k=8); all but `_hits_cache`
+        # are cleared per resolved file.
         self._mod_cache: dict[tuple[str, str], str | None] = {}
         self._reach_cache: dict[str, set[str | None]] = {}
-        # Same memo tables and reason as PyResolver: `this.cur = this.cur.next`
-        # written k times recurses through every hint at every hop (~k**5
-        # type_of calls at k=8). Depth stays in the key; output unchanged.
         self._type_cache: dict[tuple, tuple[str | None, str | None, str | None]] = {}
         self._chain_cache: dict[tuple[str, str], tuple[str, ...]] = {}
-        self._local_cache: dict[str, bool] = {}
-        self._hits_cache: dict[tuple[str, bool], list[str]] = {}
+        self._hits_cache: dict[tuple[str, bool], str | None] = {}
+
+    def _index(self, path: str, f: FileFacts) -> None:
+        t = self.t
+        for d in f.definitions:
+            t.defs_d[d.qname] = d
+            t.def_file_d[d.qname] = path
+            t.members_d[d.parent or _module_scope(path)].setdefault(d.name, d.qname)
+        for b in f.imports:
+            if b.local:
+                t.bindings_d[b.scope].setdefault(b.local, b)
+        t.exports_d[path] = list(f.exports)
+        for h in f.hints:
+            t.hints_d[h.scope][h.target].append(h)
 
     # --- modules ---------------------------------------------------------------
 
@@ -513,20 +521,6 @@ class TsResolver:
             self._reach_cache[path] = reach
         return self._reach_cache[path]
 
-    def _is_local(self, qname: str) -> bool:
-        hit = self._local_cache.get(qname)
-        if hit is not None:
-            return hit
-        local = False
-        q = self.defs[qname].parent
-        while q and q in self.defs:
-            if self.defs[q].kind not in _TYPELIKE:
-                local = True
-                break
-            q = self.defs[q].parent
-        self._local_cache[qname] = local
-        return local
-
     def _guess(self, name: str, caller_path: str) -> tuple[str | None, str | None, bool]:
         """The weakest tier. Hardened after two out-of-sample audits found it
         right 9 times in 14: never a type, getter or setter; never a test's
@@ -534,41 +528,49 @@ class TsResolver:
         caller's file neither belongs to nor imports from."""
         if name in TS_STOPLIST or name in TS_GLOBALS:
             return None, None, False
-        from_test = caller_path in self.test_paths
-        hits = self._hits_cache.get((name, from_test))
-        if hits is None:
-            hits = self._hits_cache[(name, from_test)] = [
-                q for q in self.by_name.get(name, [])
-                if not self._is_local(q) and (from_test or self.def_file[q] not in self.test_paths)
-                and self.defs[q].kind not in ("interface", "type", "enum", "getter", "setter")]
-        if len(hits) != 1:
+        from_test = self.source.is_test(caller_path)
+        self.t.looked_up(name)
+        key = (name, from_test)
+        if key not in self._hits_cache:
+            self._hits_cache[key] = self.source.guess(name, from_test, NEVER_GUESSED)
+        hit = self._hits_cache[key]
+        if hit is None:
             return None, None, False
-        if self.packages and self._package_of(self.def_file[hits[0]]) not in self._reachable_packages(caller_path):
+        if self.packages and self._package_of(hit.split("::", 1)[0]) not in self._reachable_packages(caller_path):
             return None, None, False
-        return hits[0], "name-unique", False
+        return hit, "name-unique", False
 
-    def resolve(self) -> tuple[list[Edge], list[Unresolved]]:
+    def resolve(self, targets: Iterable[str] | None = None) -> tuple[list[Edge], list[Unresolved]]:
+        """Edges and unresolved sites of `targets` (default: every file), and
+        in `file_deps` what each one's resolution read."""
         edges: list[Edge] = []
         unresolved: list[Unresolved] = []
-        for path, f in self.facts.items():
-            self._type_cache.clear()       # its keys carry the file: bounded memory, little lost
-            seen: set[str] = set()
-            for b in f.imports:
-                dst = self.module_path(path, b.module)
-                if dst and dst != path and dst not in seen:
-                    seen.add(dst)
-                    edges.append(Edge(_module_scope(path), _module_scope(dst), "IMPORTS", "import", None, path, 0))
-            for d in f.definitions:
-                if d.kind != "class":
-                    continue
-                for base in d.bases:
-                    kind, target = self.type_of_type(base, d.parent or _module_scope(path), path)
-                    if kind == "instance" and target and target != d.qname:
-                        edges.append(Edge(d.qname, target, "INHERITS", "import", None, path, d.spans[0][0]))
-            for c in f.calls:
-                target, tier, external = self.resolve_call(c, path)
-                if target:
-                    edges.append(Edge(c.caller, target, "CALLS", tier or "import", c.callee, path, c.line))
-                elif not external:
-                    unresolved.append(Unresolved(c.caller, c.callee, c.receiver, path, c.line))
+        for path in (self.source.paths() if targets is None else targets):
+            f = self.source.facts(path)
+            self.t.begin(path)
+            for cache in (self._type_cache, self._chain_cache, self._mod_cache, self._reach_cache):
+                cache.clear()
+            self._resolve_file(path, f, edges, unresolved)
+            self.file_deps[path] = (frozenset(self.t.deps), frozenset(self.t.names))
         return edges, unresolved
+
+    def _resolve_file(self, path: str, f: FileFacts, edges: list[Edge], unresolved: list[Unresolved]) -> None:
+        seen: set[str] = set()
+        for b in f.imports:
+            dst = self.module_path(path, b.module)
+            if dst and dst != path and dst not in seen:
+                seen.add(dst)
+                edges.append(Edge(_module_scope(path), _module_scope(dst), "IMPORTS", "import", None, path, 0))
+        for d in f.definitions:
+            if d.kind != "class":
+                continue
+            for base in d.bases:
+                kind, target = self.type_of_type(base, d.parent or _module_scope(path), path)
+                if kind == "instance" and target and target != d.qname:
+                    edges.append(Edge(d.qname, target, "INHERITS", "import", None, path, d.spans[0][0]))
+        for c in f.calls:
+            target, tier, external = self.resolve_call(c, path)
+            if target:
+                edges.append(Edge(c.caller, target, "CALLS", tier or "import", c.callee, path, c.line))
+            elif not external:
+                unresolved.append(Unresolved(c.caller, c.callee, c.receiver, path, c.line))

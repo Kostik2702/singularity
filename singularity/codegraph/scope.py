@@ -24,6 +24,7 @@ import fnmatch
 import hashlib
 import os
 import re
+import stat
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -176,6 +177,68 @@ def _walk_plain(root: Path, skip: frozenset[str], vendored: re.Pattern[str] | No
     return files, nested
 
 
+def _is_link(e: os.DirEntry) -> bool:
+    """A symlink or (Windows) junction / other reparse point: its target can
+    be anywhere, an ancestor included."""
+    if e.is_symlink():
+        return True
+    attrs = getattr(e.stat(follow_symlinks=False), "st_file_attributes", 0)
+    return bool(attrs & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
+
+
+def walk_stat(root: Path, skip: frozenset[str], vendored: re.Pattern[str] | None
+              ) -> tuple[dict[str, tuple[int, int]], list[str]]:
+    """`_walk_plain` with each file's (size, mtime_ns) taken from the directory
+    listing itself: on Windows a scandir entry carries both, where a stat per
+    file costs a system call (B6: the refresh of a unit outside git walks the
+    whole tree on every query). Same prunes, same nested repositories, same
+    refusal of an unreadable subtree."""
+    files: dict[str, tuple[int, int]] = {}
+    nested: list[str] = []
+    failures: list[str] = []
+    seen: set[str] = set()
+    # The real path of a plain directory is its parent's plus its name; only a
+    # link or junction needs `realpath` -- which was half the walk's time.
+    stack = [(str(root), "", os.path.realpath(root))]
+    while stack:
+        here, rel, real = stack.pop()
+        try:
+            entries = sorted(os.scandir(here), key=lambda e: e.name)
+        except OSError as exc:
+            failures.append(str(getattr(exc, "filename", "") or exc))
+            continue
+        # A repository is recognised from its own listing (a `.git` among its
+        # entries), not by a stat of `<dir>/.git` for every directory walked;
+        # like `_walk_plain`, every path that reaches one names it.
+        if rel and any(e.name == ".git" for e in entries):
+            nested.append(rel.rstrip("/"))
+            continue
+        if real in seen:                                  # a link back to an ancestor, or walked already
+            continue
+        seen.add(real)
+        # Children are visited in name order, depth first -- `_walk_plain`'s
+        # order -- so when two paths reach one directory (a junction to a
+        # sibling) the same one is kept, and the graph and its refresh agree.
+        children = []
+        for e in entries:
+            try:
+                if e.is_dir():
+                    if _pruned(e.name, skip, vendored):
+                        continue
+                    child = (os.path.realpath(e.path) if _is_link(e)
+                             else os.path.join(real, e.name))
+                    children.append((e.path, f"{rel}{e.name}/", child))
+                elif e.is_file():
+                    st = e.stat()
+                    files[rel + e.name] = (st.st_size, st.st_mtime_ns)
+            except OSError as exc:
+                failures.append(str(getattr(exc, "filename", "") or e.path))
+        stack.extend(reversed(children))
+    if failures:
+        raise IncompleteScan(f"unreadable under {root}: {', '.join(sorted(failures)[:5])}")
+    return files, nested
+
+
 def _collect(root: Path, key: str, cfg: Config) -> list[Unit]:
     skip, vendored = _skip_dirs(cfg), _vendored(cfg)
     if _is_git_root(root):
@@ -242,9 +305,10 @@ def _wanted(path: str, skip: frozenset[str], vendored: re.Pattern[str] | None,
 _MANIFEST = re.compile(r"^(package\.json|tsconfig[\w.-]*\.json)$")
 
 
-def list_manifests(unit: Unit, cfg: Config) -> list[str]:
+def list_manifests(unit: Unit, cfg: Config, include_gitignore: bool = False) -> list[str]:
     """`package.json` and `tsconfig*.json` files the TypeScript resolver reads
-    to map `@scope/pkg` specifiers and path aliases onto files of this unit.
+    to map `@scope/pkg` specifiers and path aliases onto files of this unit
+    (and, asked for, the `.gitignore` files that shape its universe).
     Same prunes as code files: a node_modules manifest is not ours."""
     skip, vendored = _skip_dirs(cfg), _vendored(cfg)
     if unit.is_git:
@@ -254,7 +318,8 @@ def list_manifests(unit: Unit, cfg: Config) -> list[str]:
     out = []
     for path in sorted(set(candidates)):
         parts = path.split("/")
-        if not _MANIFEST.match(parts[-1]) or any(_pruned(p, skip, vendored) for p in parts[:-1]):
+        if not (_MANIFEST.match(parts[-1]) or (include_gitignore and parts[-1] == ".gitignore")) or any(
+                _pruned(p, skip, vendored) for p in parts[:-1]):
             continue
         if any(path.startswith(n + "/") for n in unit.nested):
             continue

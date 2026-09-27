@@ -123,3 +123,24 @@ def test_a_repository_attached_by_junction_is_a_unit(tmp_path, project):
     units = _units(_cfg(tmp_path))
     assert units["Engine"].is_git
     assert [f.path for f in scope.list_files(units["Engine"], _cfg(tmp_path))] == ["e.py"]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="junctions are a Windows construct")
+def test_the_listing_walk_sees_what_the_plain_walk_sees_through_a_junction_loop(tmp_path, project):
+    """`walk_stat` (the refresh of a unit outside git, B6) takes each stat from
+    the directory listing and calls realpath only on links. Same files, same
+    nested repositories, same stats as `_walk_plain` + a stat per file -- and a
+    junction back to an ancestor is walked once, not forever."""
+    scratch = project / "scratch"
+    subprocess.run(["cmd", "/c", "mklink", "/J", str(scratch / "tools" / "loop"), str(scratch)],
+                   check=True, capture_output=True)
+    subprocess.run(["cmd", "/c", "mklink", "/J", str(scratch / "alias"), str(scratch / "tools")],
+                   check=True, capture_output=True)
+    cfg = _cfg(tmp_path)
+    skip, vendored = scope._skip_dirs(cfg), scope._vendored(cfg)
+    listed, nested = scope.walk_stat(scratch, skip, vendored)
+    plain, plain_nested = scope._walk_plain(scratch, skip, vendored)
+    assert set(listed) == set(plain) and sorted(nested) == sorted(plain_nested)
+    for rel, (size, mtime) in listed.items():
+        st = (scratch / rel).stat()
+        assert (size, mtime) == (st.st_size, st.st_mtime_ns)

@@ -30,8 +30,16 @@ from ..platform import proc
 
 # 2: index on unresolved(src) -- `callees` scanned the table whole, 1.8 ms on
 # 25k rows and seconds on the millions of a 100k-file unit.
-SCHEMA_VERSION = 2
+# 3: what an in-place update needs (P3): each file's facts, what its
+# resolution read (`deps`: paths, misses included; `lookups`: unique-name
+# lookups), the snapshot's dirty set, the stale set, `nodes.local`.
+SCHEMA_VERSION = 3
 _LOCK_WAIT_SECONDS = 5.0
+# A writer that finds another writer busy polls instead of sleeping in
+# SQLite's busy handler: 16 contending callers took 601-1784 ms with the
+# handler and 75-81 ms polling (council measurement, CODE-GRAPH D1).
+_WRITE_POLL_SECONDS = 0.01
+_WRITE_WAIT_SECONDS = 30.0
 
 DDL = """
 CREATE TABLE meta(k TEXT PRIMARY KEY, v TEXT NOT NULL);
@@ -42,13 +50,24 @@ CREATE TABLE files(
 CREATE TABLE nodes(
     id INTEGER PRIMARY KEY, qname TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
     kind TEXT NOT NULL, file_id INTEGER NOT NULL, parent TEXT, spans TEXT NOT NULL,
-    signature TEXT NOT NULL, doc1 TEXT, decorators TEXT NOT NULL, exported INTEGER NOT NULL);
+    signature TEXT NOT NULL, doc1 TEXT, decorators TEXT NOT NULL, exported INTEGER NOT NULL,
+    local INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE facts(file_id INTEGER PRIMARY KEY, blob BLOB NOT NULL);
+CREATE TABLE dep_paths(id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE);
+CREATE TABLE deps(file_id INTEGER NOT NULL, path_id INTEGER NOT NULL);
+CREATE TABLE lookups(file_id INTEGER NOT NULL, name TEXT NOT NULL);
+CREATE TABLE dirty(path TEXT PRIMARY KEY);
+CREATE TABLE stale(path TEXT PRIMARY KEY, reason TEXT NOT NULL);
 CREATE TABLE edges(
     src TEXT NOT NULL, dst TEXT NOT NULL, kind TEXT NOT NULL, tier TEXT NOT NULL,
     callee TEXT, file_id INTEGER NOT NULL, line INTEGER NOT NULL);
 CREATE TABLE unresolved(
     src TEXT NOT NULL, name TEXT NOT NULL, receiver TEXT,
     file_id INTEGER NOT NULL, line INTEGER NOT NULL);
+"""
+# Built after the bulk insert of a generation: filling indexed tables row by
+# row cost the proxy build ~30 s of its write phase.
+INDEXES = """
 CREATE INDEX nodes_name ON nodes(name);
 CREATE INDEX nodes_file ON nodes(file_id);
 CREATE INDEX edges_src ON edges(src, kind);
@@ -57,7 +76,22 @@ CREATE INDEX edges_site ON edges(file_id, line);
 CREATE INDEX unresolved_name ON unresolved(name);
 CREATE INDEX unresolved_src ON unresolved(src);
 CREATE INDEX unresolved_site ON unresolved(file_id, line);
+CREATE INDEX deps_path ON deps(path_id);
+CREATE INDEX deps_file ON deps(file_id);
+CREATE INDEX lookups_name ON lookups(name);
+CREATE INDEX lookups_file ON lookups(file_id);
 """
+
+
+# "Racy git": a file modified this close to the moment its content was read
+# can be modified again within the same clock tick at the same size, and its
+# stat would then vouch for content the graph does not hold. Such a stat is
+# recorded as 0, so the next comparison hashes the file (see fresh).
+RACY_NS = 2_000_000_000
+
+
+def recorded_mtime(mtime_ns: int, read_done_ns: int) -> int:
+    return 0 if read_done_ns - mtime_ns < RACY_NS else mtime_ns
 
 
 class GraphLocked(RuntimeError):
@@ -128,7 +162,9 @@ def _owner_is_dead(lock: Path) -> bool:
 
 def write_generation(cfg: Config, unit_key: str, *, meta: dict[str, Any],
                      files: list[dict[str, Any]], nodes: list[dict[str, Any]],
-                     edges: list[tuple], unresolved: list[tuple]) -> dict[str, Any]:
+                     edges: list[tuple], unresolved: list[tuple],
+                     facts: list[tuple] = (), deps: list[tuple] = (), lookups: list[tuple] = (),
+                     dirty: list[str] = ()) -> dict[str, Any]:
     """Write a complete new generation, then point CURRENT at it."""
     base = unit_dir(cfg, unit_key)
     gen = f"gen_{time.time_ns()}_{os.getpid()}"
@@ -145,14 +181,16 @@ def write_generation(cfg: Config, unit_key: str, *, meta: dict[str, Any],
             con.executemany(
                 "INSERT INTO files(id, path, lang, size, mtime_ns, content_hash, parse_status, is_test)"
                 " VALUES (:id, :path, :lang, :size, :mtime_ns, :content_hash, :parse_status, :is_test)", files)
-            con.executemany(
-                "INSERT INTO nodes(qname, name, kind, file_id, parent, spans, signature, doc1, decorators, exported)"
-                " VALUES (:qname, :name, :kind, :file_id, :parent, :spans, :signature, :doc1, :decorators, :exported)",
-                nodes)
+            insert_nodes(con, nodes)
             con.executemany("INSERT INTO edges(src, dst, kind, tier, callee, file_id, line)"
                             " VALUES (?, ?, ?, ?, ?, ?, ?)", edges)
             con.executemany("INSERT INTO unresolved(src, name, receiver, file_id, line)"
                             " VALUES (?, ?, ?, ?, ?)", unresolved)
+            con.executemany("INSERT INTO facts(file_id, blob) VALUES (?, ?)", facts)
+            insert_deps(con, deps)
+            con.executemany("INSERT INTO lookups(file_id, name) VALUES (?, ?)", lookups)
+            con.executemany("INSERT INTO dirty(path) VALUES (?)", [(p,) for p in dirty])
+        con.executescript(INDEXES)
         con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     finally:
         con.close()
@@ -195,6 +233,65 @@ def collect_garbage(base: Path, keep: str) -> list[str]:
         if d.exists():
             pending.append(d.name)
     return pending
+
+
+def insert_nodes(con: sqlite3.Connection, nodes: list[dict[str, Any]]) -> None:
+    con.executemany(
+        "INSERT INTO nodes(qname, name, kind, file_id, parent, spans, signature, doc1, decorators, exported,"
+        " local) VALUES (:qname, :name, :kind, :file_id, :parent, :spans, :signature, :doc1, :decorators,"
+        " :exported, :local)", nodes)
+
+
+def insert_deps(con: sqlite3.Connection, deps: list[tuple[int, str]]) -> None:
+    """(file_id, path) rows. A path is stored once in `dep_paths`: most of
+    them are module probes that missed (695k distinct paths, 2.6M rows on
+    the 44k-file proxy), and a text column with its index held them twice."""
+    if not deps:
+        return
+    wanted = sorted({p for _, p in deps})
+    if con.execute("SELECT 1 FROM dep_paths LIMIT 1").fetchone() is None:     # a build: number them here
+        ids = {p: i for i, p in enumerate(wanted, 1)}
+        con.executemany("INSERT INTO dep_paths(id, path) VALUES (?, ?)", [(i, p) for p, i in ids.items()])
+    else:                                                                      # an update: a few, looked up
+        con.executemany("INSERT OR IGNORE INTO dep_paths(path) VALUES (?)", [(p,) for p in wanted])
+        ids = {}
+        for i in range(0, len(wanted), 500):
+            chunk = wanted[i:i + 500]
+            ids.update(con.execute(f"SELECT path, id FROM dep_paths WHERE path IN "
+                                   f"({','.join('?' * len(chunk))})", chunk).fetchall())
+    con.executemany("INSERT INTO deps(file_id, path_id) VALUES (?, ?)", [(f, ids[p]) for f, p in deps])
+
+
+@contextmanager
+def write_transaction(db: Path, wait: float = _WRITE_WAIT_SECONDS) -> Iterator[sqlite3.Connection]:
+    """The in-place writer of an update: `BEGIN IMMEDIATE`, polled. A caller
+    that finds another writer at work waits for it without holding anything,
+    then gets the lock and sees that writer's result -- so it re-checks what
+    is left to do inside the transaction, usually nothing. Commits on a clean
+    exit; any exception, a kill included, leaves the database as it was.
+    GraphLocked after `wait` seconds."""
+    con = sqlite3.connect(db, timeout=0, isolation_level=None)
+    con.row_factory = sqlite3.Row
+    deadline = time.monotonic() + wait
+    try:
+        while True:
+            try:
+                con.execute("BEGIN IMMEDIATE")
+                break
+            except sqlite3.OperationalError as exc:
+                if "locked" not in str(exc) and "busy" not in str(exc):
+                    raise
+                if time.monotonic() >= deadline:
+                    raise GraphLocked(f"another update of {db} held the write lock for {wait:.0f}s") from None
+                time.sleep(_WRITE_POLL_SECONDS)
+        try:
+            yield con
+        except BaseException:
+            con.execute("ROLLBACK")
+            raise
+        con.execute("COMMIT")
+    finally:
+        con.close()
 
 
 def connect_ro(db: Path) -> sqlite3.Connection:

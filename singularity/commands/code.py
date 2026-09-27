@@ -57,9 +57,19 @@ def cmd_code(cfg, args) -> int:
     try:
         if action == "build":
             return _build(cfg, args)
-        g = query.open_graph(cfg, _where(cfg, args))
+        from ..codegraph import update
+        card = query.locate(cfg, _where(cfg, args))
+        if action == "update":
+            return _update(cfg, args, card, update)
+        # Refresh before the answer (CODE-GRAPH P3): the tree is compared with
+        # the graph and small changes are written in first. --no-refresh skips
+        # the comparison but still reports what the graph knows to be stale.
+        fr = None if args.no_refresh else update.refresh(cfg, card["key"])
+        g = query.open_card(cfg, card)
         try:
-            return _answer(g, args)
+            if fr is None:
+                fr = update.known_stale(g.con)
+            return _answer(g, args, fr)
         finally:
             g.con.close()
     except query.Ambiguous as exc:
@@ -103,29 +113,69 @@ def _build(cfg, args) -> int:
     return 0
 
 
-def _answer(g, args) -> int:
+def _update(cfg, args, card, update) -> int:
+    try:
+        result = update.update_unit(cfg, card["key"])
+    except ImportError as exc:       # the parser wheels are not in this interpreter
+        print(f"[mb] cannot update here: {exc}. Install the parser into {sys.executable}:\n"
+              "  python -m pip install --require-hashes -r requirements-graph.txt", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, default=str))
+    elif result["mode"] == "update":
+        print(f"{card['key']}: {len(result['updated'])} changed files, {result['resolved']} files "
+              f"resolved again, {len(result['stale'])} stale")
+    else:
+        print(f"{card['key']}: {result['mode']} ({result.get('why')})")
+    return 0
+
+
+def _freshness_note(fr) -> str | None:
+    """One line on stderr for the text answers; JSON carries it in the envelope."""
+    parts = []
+    if fr.updated:
+        parts.append(f"updated {len(fr.updated)} changed file(s) first")
+    if fr.stale_all:
+        parts.append(f"the graph may be stale: {fr.stale_all}")
+    elif fr.stale_files:
+        shown = ", ".join(fr.stale_files[:5]) + (" …" if len(fr.stale_files) > 5 else "")
+        parts.append(f"{len(fr.stale_files)} stale file(s), answers there may be off: {shown}")
+    if fr.background:
+        parts.append("a background `mb code update` is catching up")
+    if fr.note and (fr.stale_files or fr.stale_all or not fr.checked):
+        parts.append(fr.note)
+    return "[mb] " + "; ".join(parts) if parts else None
+
+
+def _answer(g, args, fr) -> int:
     from ..codegraph import query
+
+    def env(action, data):
+        return query.envelope(action, g, data, {**fr.as_json(), "all_stale": fr.stale_files})
+
+    note = _freshness_note(fr)
+    if note and not args.json:
+        print(note, file=sys.stderr)
     action = args.code_action
     if action == "schema":
         data = query.schema(g)
-        _emit(args, query.envelope(action, g, data),
-              "\n".join(f"{k}: {v}" for k, v in data.items() if k != "meta"))
+        _emit(args, env(action, data), "\n".join(f"{k}: {v}" for k, v in data.items() if k != "meta"))
         return 0
     if action == "outline":
         items = query.outline(g.con, args.target)
-        _emit(args, query.envelope(action, g, {"file": args.target, "symbols": items}),
+        _emit(args, env(action, {"file": args.target, "symbols": items}),
               "\n".join(f"{n['spans'][0][0]:>5}  {n['kind']:<9} {n['qname'].split('::', 1)[1]}"
                         for n in items))
         return 0
     if action == "find":
         data = query.find(g.con, args.target, args.limit, args.offset)
-        _emit(args, query.envelope(action, g, data),
+        _emit(args, env(action, data),
               "\n".join(_fmt_page(data["matches"], lambda n: f"  {n['kind']:<9} {n['qname']}")))
         return 0
     symbol = query.resolve_symbol(g.con, args.target)
     if action == "snippet":
         node = query.snippet(g, symbol)
-        _emit(args, query.envelope(action, g, {"symbol": node}),
+        _emit(args, env(action, {"symbol": node}),
               "\n\n".join(f"# {node['file']}:{a}-{b}\n{code}"
                           for (a, b), code in zip(node["spans"], node["code"], strict=True)))
         return 0
@@ -138,7 +188,7 @@ def _answer(g, args) -> int:
             text.append(f"unresolved call sites with the same name ({cand['total']}) — "
                         "possible callers the resolver could not place:")
             text += _fmt_page(cand, lambda c: f"  {c['file']}:{c['line']}  {c['caller']}  (receiver: {c['receiver']})")
-        _emit(args, query.envelope(action, g, data), "\n".join(text))
+        _emit(args, env(action, data), "\n".join(text))
         return 0
     if action == "callees":
         data = query.callees(g.con, symbol, args.limit, args.offset)
@@ -148,11 +198,11 @@ def _answer(g, args) -> int:
             text.append(f"unresolved ({len(data['unresolved_calls'])}):")
             text += [f"  {u['line']:>5}  {u['receiver'] + '.' if u['receiver'] else ''}{u['name']}"
                      for u in data["unresolved_calls"]]
-        _emit(args, query.envelope(action, g, data), "\n".join(text))
+        _emit(args, env(action, data), "\n".join(text))
         return 0
     if action == "trace":
         data = query.trace(g.con, symbol, args.direction, args.depth, args.limit)
-        _emit(args, query.envelope(action, g, data),
+        _emit(args, env(action, data),
               "\n".join([f"{args.direction} of {symbol} (depth ≤{data['depth']}):"]
                         + _fmt_page(data["reached"], lambda r: f"  {'  ' * (r['depth'] - 1)}{r['symbol']}")))
         return 0

@@ -1,0 +1,179 @@
+{
+ "what": "CODE-GRAPH P3 budgets B3-B7 on the 44,294-file proxy (tools/code_graph_bench.py fresh / build), shipped code, schema 3, resolver 5",
+ "date": "2026-09-27",
+ "machine": "Windows 11, i5-13600K (20 logical CPUs), Python 3.10.6 (.venv), Defender real-time scanning on",
+ "B3_unchanged_tree": {
+  "budget": "e2e p95 <= 500 ms, overhead over bare git <= 50 ms",
+  "end_to_end_mb_callers_ms_sorted_20": [
+   351,
+   354,
+   355,
+   356,
+   358,
+   358,
+   359,
+   360,
+   361,
+   362,
+   363,
+   365,
+   365,
+   365,
+   366,
+   369,
+   370,
+   377,
+   381,
+   385
+  ],
+  "bare_git_status_ms_sorted_10": [
+   157,
+   158,
+   159,
+   159,
+   160,
+   160,
+   161,
+   162,
+   163,
+   171
+  ],
+  "no_refresh_e2e_ms_sorted_10": [
+   207,
+   208,
+   209,
+   209,
+   210,
+   210,
+   212,
+   213,
+   218,
+   220
+  ],
+  "in_process": {
+   "git_status": {
+    "n": 20,
+    "p50_ms": 162.97,
+    "p95_ms": 175.82,
+    "max_ms": 217.0
+   },
+   "refresh": {
+    "n": 20,
+    "p50_ms": 168.21,
+    "p95_ms": 182.13,
+    "max_ms": 206.7
+   },
+   "overhead_p50_ms": 5.2,
+   "budget_overhead_ms": 50
+  },
+  "verdict": "PASS: e2e p50 362 / p95 381 ms; in-process overhead over git status 5 ms"
+ },
+ "B4_real_edits_applied_by_the_query": {
+  "budget": "<= 200 edits in <= 2 s",
+  "runs": {
+   "1": {
+    "edit_ms": 362,
+    "updated": 1,
+    "stale": 0,
+    "revert_ms": 387,
+    "revert_updated": 1,
+    "revert_stale": 0,
+    "within_2s": true
+   },
+   "10": {
+    "edit_ms": 1225,
+    "updated": 10,
+    "stale": 0,
+    "revert_ms": 1107,
+    "revert_updated": 10,
+    "revert_stale": 0,
+    "within_2s": true
+   },
+   "100": {
+    "edit_ms": 3642,
+    "updated": 100,
+    "stale": 0,
+    "revert_ms": 3692,
+    "revert_updated": 100,
+    "revert_stale": 0,
+    "within_2s": false
+   },
+   "200": {
+    "edit_ms": 14422,
+    "updated": 200,
+    "stale": 0,
+    "revert_ms": 13822,
+    "revert_updated": 200,
+    "revert_stale": 0,
+    "within_2s": false
+   }
+  },
+  "verdict": "FAIL above ~10-20 files: 1 edit 0.36 s, 10 edits 1.2 s, 100 edits 3.6 s, 200 edits 14 s",
+  "where_the_time_goes": "~40 ms per changed file at 100: first read of a freshly written file (Defender scan, ~5-18 ms), extraction, re-resolution of the file and its dependents in DB mode, deletes and inserts on a 900 MB database, the commit"
+ },
+ "B5_16_callers_x_100_edits": {
+  "callers": 16,
+  "edits": 100,
+  "wall_ms": 6004,
+  "per_caller": {
+   "n": 16,
+   "p50_ms": 5611.06,
+   "p95_ms": 5704.17,
+   "max_ms": 5712.3
+  },
+  "writers": 1,
+  "errors": 0,
+  "stale_answers": 0,
+  "error_tail": [],
+  "budget": "<= 2 s, 0 stale answers, 0 errors",
+  "verdict": "correctness PASS (1 writer, 0 errors, 0 stale answers); time FAIL (6.0 s wall, = one 100-edit update)"
+ },
+ "B6_walk_outside_git": {
+  "budget": "100k files <= 1.2 s",
+  "walk_and_compare_ms_45790_files_sorted_7": [
+   259,
+   293,
+   303,
+   584,
+   585,
+   587,
+   605
+  ],
+  "linear_to_100k_s": [
+   0.57,
+   1.32
+  ],
+  "verdict": "EDGE: 0.26-0.6 s on 45.8k, bimodal; 0.6-1.3 s linear to 100k",
+  "how": "scope.walk_stat: stats from the directory listing, realpath only for links, repositories recognised from their own listing (was 4.7 s with a stat per file)"
+ },
+ "B7_full_build": {
+  "budget_seconds": 600,
+  "run": {
+   "files": 44294,
+   "nodes": 580917,
+   "edges": {
+    "CALLS": 511064,
+    "IMPORTS": 68684,
+    "INHERITS": 26212
+   },
+   "unresolved": 730304,
+   "deps": 2607337,
+   "lookups": 134484,
+   "workers": 16,
+   "timings": {
+    "scan": 1.87,
+    "extract": 40.03,
+    "resolve": 47.66,
+    "write": 38.6
+   },
+   "wall_seconds": 129.1,
+   "peak_rss_mb": 4534,
+   "resolve_cpu_over_wall": 0.89
+  },
+  "db_mb": 912,
+  "linear_to_100k_seconds": 291,
+  "verdict": "PASS for this proxy and linearly to 100k (~290 s); P3 bookkeeping (deps 2.6M rows, facts, lookups) took it from 91 s to ~126 s",
+  "memory_note": "peak RSS with workers 4.5 GB at 44k files, ~10 GB linear to 100k: open risk"
+ },
+ "resolver_equivalence": "full-build output on the saved proxy facts byte-identical before and after every P3 change (sha256 py f9063b062d59a06c, ts 84dcb31082cb0eeb)"
+}

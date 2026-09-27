@@ -21,11 +21,13 @@ candidates, an invented one is believed.
 from __future__ import annotations
 
 import builtins
-from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Any
 
-from .model import CallSite, Definition, FileFacts, ImportBinding
+from .model import CallSite, FileFacts, ImportBinding
 from .stoplist import PY_STOPLIST
+from .tables import MemorySource, Tables
 
 TIER_CONF = {"scope": 3, "import": 3, "self": 3, "class-attr": 3,
              "local-type": 2, "annotation": 2, "attr-type": 2, "name-unique": 1}
@@ -60,38 +62,50 @@ def _module_of(path: str) -> str:
     return f"{path}::<module>"
 
 
+CONTAINERS = ("class",)      # a definition inside anything else lives in a function
+
+
+NEVER_GUESSED: tuple[str, ...] = ()   # every kind of Python definition can be called by name
+
+
 class PyResolver:
-    def __init__(self, facts: dict[str, FileFacts], test_paths: set[str] | frozenset[str] = frozenset()):
-        self.facts = facts
-        self.test_paths = test_paths
-        self.defs: dict[str, Definition] = {}
-        self.members: dict[str, dict[str, str]] = defaultdict(dict)   # scope -> name -> qname
-        self.by_name: dict[str, list[str]] = defaultdict(list)
-        self.bindings: dict[str, dict[str, ImportBinding]] = defaultdict(dict)  # scope -> local -> binding
-        self.hints: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
-        self.def_file: dict[str, str] = {}
-        for path, f in facts.items():
-            for d in f.definitions:
-                self.defs[d.qname] = d
-                self.def_file[d.qname] = path
-                self.members[d.parent or _module_of(path)][d.name] = d.qname
-                self.by_name[d.name].append(d.qname)
-            for b in f.imports:
-                self.bindings[b.scope].setdefault(b.local, b)
-            for h in f.hints:
-                self.hints[h.scope][h.target].append(h)
+    """`facts` + `test_paths` for a whole unit in memory (the full build and
+    the tests), or `source` for an update that reads the stored graph. Either
+    way the tables fill one file at a time (see `tables`)."""
+
+    def __init__(self, facts: dict[str, FileFacts] | None = None,
+                 test_paths: set[str] | frozenset[str] = frozenset(), source: Any = None):
+        self.source = source if source is not None else MemorySource(facts or {}, test_paths, CONTAINERS)
+        self.t = Tables(self.source, self._index)
+        self.facts, self.defs, self.def_file = self.t.files, self.t.defs, self.t.def_file
+        self.members, self.bindings, self.hints = self.t.members, self.t.bindings, self.t.hints
+        # file -> (paths its resolution read, names it looked up); filled by `resolve`
+        self.file_deps: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
+        # Memo tables. `type_of` recurses through every hint of a name, and
+        # `s = s.replace(...)` written k times in one function makes that
+        # k**_MAX_HOPS calls: 310M calls for 1.3M receivers on the 100k proxy,
+        # 220 of 300 profiled seconds. Depth stays in the key, so a result cut
+        # short by the hop limit is never reused where the limit would not
+        # have cut it. All but `_guess_cache` are cleared per resolved file
+        # (see `tables`: a hit must be this file's own, recorded read), which
+        # also makes every file's answer independent of the order files are
+        # resolved in -- an update resolves a different subset, in a
+        # different order, and must answer as the full build did.
         self._mro_cache: dict[str, tuple[list[str], bool]] = {}
-        # Memo tables for pure lookups over the tables above (nothing below
-        # writes to them once built). `type_of` recurses through every hint
-        # of a name, and `x = x.parent` written k times in one function makes
-        # that k**_MAX_HOPS calls: 310M calls for 1.3M receivers on the 100k
-        # proxy, 220 of 300 profiled seconds. Depth stays in the key, so a
-        # result cut short by the hop limit is never reused where the limit
-        # would not have cut it -- the output is the uncached one, exactly.
         self._type_cache: dict[tuple, tuple[str | None, str | None, str | None]] = {}
         self._chain_cache: dict[tuple[str, str], tuple[str, ...]] = {}
-        self._local_cache: dict[str, bool] = {}
         self._guess_cache: dict[tuple[str, bool], tuple[str | None, str | None, bool]] = {}
+
+    def _index(self, path: str, f: FileFacts) -> None:
+        t = self.t
+        for d in f.definitions:
+            t.defs_d[d.qname] = d
+            t.def_file_d[d.qname] = path
+            t.members_d[d.parent or _module_of(path)][d.name] = d.qname
+        for b in f.imports:
+            t.bindings_d[b.scope].setdefault(b.local, b)
+        for h in f.hints:
+            t.hints_d[h.scope][h.target].append(h)
 
     # --- modules ---------------------------------------------------------------
 
@@ -149,6 +163,11 @@ class PyResolver:
         return self.module_path(from_path, b.module, b.level)
 
     def symbol_in(self, path: str, name: str, hops: int = 0) -> tuple[str | None, str | None]:
+        # Two modules that `import *` each other recursed without end here (the
+        # P3 oracle found it; a full build crashed on the same code). Bounded
+        # like every other hop -- and like resolve_ts.symbol_in always was.
+        if hops > _MAX_HOPS:
+            return UNKNOWN
         q = self.members[_module_of(path)].get(name)
         if q:
             return ("symbol", q)
@@ -330,61 +349,56 @@ class PyResolver:
             return None, None, True
         return self._guess(c.callee, path)
 
-    def _is_local(self, qname: str) -> bool:
-        """Defined inside a function (at any depth): unreachable by name from
-        anywhere else, so never a candidate for a guess."""
-        hit = self._local_cache.get(qname)
-        if hit is not None:
-            return hit
-        local = False
-        q = self.defs[qname].parent
-        while q and q in self.defs:
-            if self.defs[q].kind != "class":
-                local = True
-                break
-            q = self.defs[q].parent
-        self._local_cache[qname] = local
-        return local
-
     def _guess(self, name: str, caller_path: str) -> tuple[str | None, str | None, bool]:
+        """Exactly one definition carries the name, and it is neither local to
+        a function (unreachable by name from anywhere else) nor a test's
+        definition reached from production code."""
         if name in PY_STOPLIST or name in _BUILTINS:
             return None, None, False
-        from_test = caller_path in self.test_paths
+        from_test = self.source.is_test(caller_path)
+        self.t.looked_up(name)
         key = (name, from_test)
-        hit = self._guess_cache.get(key)
-        if hit is not None:
-            return hit
-        hits = [q for q in self.by_name.get(name, [])
-                if not self._is_local(q) and (from_test or self.def_file[q] not in self.test_paths)]
-        self._guess_cache[key] = (hits[0], "name-unique", False) if len(hits) == 1 else (None, None, False)
+        if key not in self._guess_cache:
+            q = self.source.guess(name, from_test, NEVER_GUESSED)
+            self._guess_cache[key] = (q, "name-unique", False) if q else (None, None, False)
         return self._guess_cache[key]
 
     # --- everything ---------------------------------------------------------
 
-    def resolve(self) -> tuple[list[Edge], list[Unresolved]]:
+    def resolve(self, targets: Iterable[str] | None = None) -> tuple[list[Edge], list[Unresolved]]:
+        """Edges and unresolved sites of `targets` (default: every file), and
+        in `file_deps` what each one's resolution read."""
         edges: list[Edge] = []
         unresolved: list[Unresolved] = []
-        for path, f in self.facts.items():
-            self._type_cache.clear()       # its keys carry the file: bounded memory, little lost
-            seen_imports: set[str] = set()
-            for b in f.imports:
-                dst_path = self.imported_module(path, b)
-                if dst_path and dst_path != path and dst_path not in seen_imports:
-                    seen_imports.add(dst_path)
-                    edges.append(Edge(_module_of(path), _module_of(dst_path), "IMPORTS", "import", None, path, 0))
-            for d in f.definitions:
-                if d.kind != "class":
-                    continue
-                scope = d.parent or _module_of(path)
-                for base in d.bases:
-                    kind, target, tier = self.type_of(base, scope, path, None)
-                    if kind == "class" and target and target != d.qname:
-                        edges.append(Edge(d.qname, target, "INHERITS", tier or "scope", None,
-                                          path, d.spans[0][0]))
-            for c in f.calls:
-                target, tier, external = self.resolve_call(c, path)
-                if target:
-                    edges.append(Edge(c.caller, target, "CALLS", tier, c.callee, path, c.line))
-                elif not external:
-                    unresolved.append(Unresolved(c.caller, c.callee, c.receiver, path, c.line))
+        for path in (self.source.paths() if targets is None else targets):
+            f = self.source.facts(path)
+            self.t.begin(path)
+            self._type_cache.clear()
+            self._chain_cache.clear()
+            self._mro_cache.clear()
+            self._resolve_file(path, f, edges, unresolved)
+            self.file_deps[path] = (frozenset(self.t.deps), frozenset(self.t.names))
         return edges, unresolved
+
+    def _resolve_file(self, path: str, f: FileFacts, edges: list[Edge], unresolved: list[Unresolved]) -> None:
+        seen_imports: set[str] = set()
+        for b in f.imports:
+            dst_path = self.imported_module(path, b)
+            if dst_path and dst_path != path and dst_path not in seen_imports:
+                seen_imports.add(dst_path)
+                edges.append(Edge(_module_of(path), _module_of(dst_path), "IMPORTS", "import", None, path, 0))
+        for d in f.definitions:
+            if d.kind != "class":
+                continue
+            scope = d.parent or _module_of(path)
+            for base in d.bases:
+                kind, target, tier = self.type_of(base, scope, path, None)
+                if kind == "class" and target and target != d.qname:
+                    edges.append(Edge(d.qname, target, "INHERITS", tier or "scope", None,
+                                      path, d.spans[0][0]))
+        for c in f.calls:
+            target, tier, external = self.resolve_call(c, path)
+            if target:
+                edges.append(Edge(c.caller, target, "CALLS", tier, c.callee, path, c.line))
+            elif not external:
+                unresolved.append(Unresolved(c.caller, c.callee, c.receiver, path, c.line))

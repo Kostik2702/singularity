@@ -149,6 +149,15 @@ def test_imports_and_inheritance_are_edges_too():
     assert not any(src.endswith("_Parser") for src, _ in inherits)          # base is the stdlib's
 
 
+def test_two_modules_that_import_star_from_each_other_do_not_recurse_forever():
+    """Found by the P3 oracle: `symbol_in` followed star imports without the
+    hop limit every other hop has, and a full build died of RecursionError."""
+    files = {"pkg/__init__.py": "", "pkg/a.py": "from pkg.b import *\n\ndef f():\n    return nowhere()\n",
+             "pkg/b.py": "from pkg.a import *\n\ndef g():\n    return nowhere()\n"}
+    edges, unresolved = PyResolver({p: extract(p, s.encode()) for p, s in files.items()}).resolve()
+    assert [u.name for u in unresolved] == ["nowhere", "nowhere"]
+
+
 def test_a_name_reassigned_from_itself_does_not_explode_the_type_walk():
     """`s = s.replace(...)` written k times gives `s` k hints that each lead
     back to `s`: the walk was k**6 calls deep (310M calls, 220 s on the 100k

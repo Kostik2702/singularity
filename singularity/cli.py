@@ -31,7 +31,7 @@ mb reflect [--days N] [--json]   # privacy-safe adoption telemetry (offline tran
 mb usage [--session ID] [--list [--days N]] [--turns] [--top N] [--json]
                                  # per-step token cost + what each step added to the context
 mb llm start|stop|status|list|logs|code|setup
-mb code status|build [--all]|outline <file>|snippet|callers|callees|trace <symbol>|find <text>|schema
+mb code status|build [--all]|update|outline <file>|snippet|callers|callees|trace <symbol>|find <text>|schema
                                  # the structural code graph (off until code_graph_enabled)
 mb init            # write ~/.singularity.json pointer + folder tree
 mb uninstall       # remove hooks/scheduler jobs/daemon (vault untouched)
@@ -117,11 +117,14 @@ def _build_parser() -> argparse.ArgumentParser:
         cgv.add_argument("--limit", type=int, default=50)
         cgv.add_argument("--offset", type=int, default=0)
         cgv.add_argument("--no-refresh", action="store_true",
-                         help="answer from the last build without checking for changes "
-                              "(the only mode until refresh-before-query lands)")
+                         help="answer from the graph as last written, without comparing it with the "
+                              "tree first (known stale files are still named)")
         cgv.add_argument("--json", action="store_true")
-    for cgv in (cgb, *[cgsub.choices[v] for v in ("outline", "snippet", "callers", "callees",
-                                                     "trace", "find", "schema")]):
+    cgu = cgsub.add_parser("update", help="bring the graph up to date with the tree, however much "
+                                          "changed (what a query leaves to the background)")
+    cgu.add_argument("--json", action="store_true")
+    for cgv in (cgb, cgu, *[cgsub.choices[v] for v in ("outline", "snippet", "callers", "callees",
+                                                          "trace", "find", "schema")]):
         cgv.add_argument("--project", help="a registered project id instead of the current directory")
     cgb.add_argument("--json", action="store_true")
 

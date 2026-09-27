@@ -77,7 +77,10 @@ def locate(cfg: Config, where: Path) -> dict[str, Any]:
 
 
 def open_graph(cfg: Config, where: Path) -> OpenGraph:
-    card = locate(cfg, where)
+    return open_card(cfg, locate(cfg, where))
+
+
+def open_card(cfg: Config, card: dict[str, Any]) -> OpenGraph:
     db = store.current_db(cfg, card["key"])
     if db is None:
         raise GraphNotBuilt(f"the graph of {card['key']!r} has no current generation; rebuild it")
@@ -92,18 +95,38 @@ def page(items: list[Any], total: int, offset: int, limit: int) -> dict[str, Any
             "truncation_reason": "limit" if has_more else None}
 
 
-def envelope(command: str, g: OpenGraph | None, data: dict[str, Any]) -> dict[str, Any]:
+def envelope(command: str, g: OpenGraph | None, data: dict[str, Any],
+             freshness: dict[str, Any] | None = None) -> dict[str, Any]:
+    """`freshness`: what the answer can say about its own currency (see
+    update.Freshness) -- whether the tree was compared, what was updated for
+    it, which files are known to be stale. Every item of `data` whose file is
+    stale carries `"stale": true` (UNMET l: never stale data without saying so)."""
     graph = None
     if g is not None:
         graph = {"unit": g.key, "root": str(g.root), "indexed_head": g.meta.get("indexed_head"),
                  "built_at": g.meta.get("built_at"), "versions": g.meta.get("versions"),
                  "schema_version": g.meta.get("schema_version")}
-    return {"schema_version": ENVELOPE_SCHEMA, "command": command, "graph": graph,
-            # Pre-query refresh arrives in P3. Until then an answer reflects the
-            # last build, and says so instead of implying it is current.
-            "freshness": {"checked": False, "stale_files": None,
-                          "note": "answers reflect the last build; refresh-before-query is not implemented yet"},
-            **data}
+    freshness = freshness or {"checked": False, "stale_files": [], "stale_count": 0, "stale_all": None,
+                              "note": "freshness unknown"}
+    if freshness.get("stale_count"):
+        mark_stale(data, set(freshness.get("all_stale") or freshness["stale_files"]))
+    shown = {k: v for k, v in freshness.items() if k != "all_stale"}
+    return {"schema_version": ENVELOPE_SCHEMA, "command": command, "graph": graph, "freshness": shown, **data}
+
+
+def mark_stale(obj: Any, stale: set[str]) -> None:
+    """Flag every item that comes from a stale file: by its `file`, or by the
+    path part of the qname it names (a `trace` step has no `file`)."""
+    if isinstance(obj, dict):
+        named = [obj.get("file")] + [str(obj[k]).split("::", 1)[0] for k in ("symbol", "qname", "caller")
+                                     if isinstance(obj.get(k), str) and "::" in obj[k]]
+        if any(p in stale for p in named if p):
+            obj["stale"] = True
+        for v in obj.values():
+            mark_stale(v, stale)
+    elif isinstance(obj, list):
+        for v in obj:
+            mark_stale(v, stale)
 
 
 def _node(row: sqlite3.Row) -> dict[str, Any]:

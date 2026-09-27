@@ -63,7 +63,9 @@ def test_callers_carry_tiers_candidates_and_an_honest_envelope(repo, capsys):
     data = json.loads(out)
     assert code == 0
     assert data["schema_version"] == 1 and data["graph"]["unit"] == "svc"
-    assert data["freshness"]["checked"] is False                # P2 does not refresh, and says so
+    assert data["freshness"]["checked"] is True and data["freshness"]["stale_count"] == 0
+    _, out, _ = _run(cfg, capsys, "callers", "app/core.py::helper", "--json", "--no-refresh")
+    assert json.loads(out)["freshness"]["checked"] is False     # not compared, and says so
     callers = {(c["caller"], c["tier"]) for c in data["callers"]["items"]}
     assert ("app/core.py::run", "scope") in callers and ("app/other.py::use", "import") in callers
     # `x.run()` on an untyped x with two `run`s defined: not an edge, but a
@@ -89,12 +91,19 @@ def test_a_shared_name_is_refused_with_the_candidates(repo, capsys):
 
 
 def test_a_snippet_of_an_edited_file_is_refused_not_mis_cut(repo, capsys):
+    """Without the refresh the stored spans point at the old lines: refused.
+    With it (the default) the file is updated first and cut right."""
     cfg, root = repo
     code, out, _ = _run(cfg, capsys, "snippet", "app/core.py::run")
     assert code == 0 and "return helper()" in out
     (root / "app" / "core.py").write_text("# moved\n" + SRC["app/core.py"], encoding="utf-8")
-    code, _, err = _run(cfg, capsys, "snippet", "app/core.py::run")
+    code, _, err = _run(cfg, capsys, "snippet", "app/core.py::run", "--no-refresh")
     assert code == 2 and "changed since the graph was built" in err
+    code, out, err = _run(cfg, capsys, "snippet", "app/core.py::run", "--json")
+    node = json.loads(out)["symbol"]
+    assert code == 0 and node["spans"][0][0] == 6 and "return helper()" in node["code"][0]
+    assert "updated 1 changed file" not in err                  # --json: the note is in the envelope
+    assert json.loads(out)["freshness"]["updated"] == ["app/core.py"]
 
 
 def test_trace_outline_find_and_schema_answer(repo, capsys):
