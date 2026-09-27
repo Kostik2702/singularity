@@ -250,42 +250,14 @@ class Project:
 
 
 def dump(cfg, key: str) -> dict[str, list]:
-    from singularity.codegraph import store
-    con = store.connect_ro(store.current_db(cfg, key))
-    try:
-        path = {r[0]: r[1] for r in con.execute("SELECT id, path FROM files")}
-        stale = {r[0] for r in con.execute("SELECT path FROM stale")}
-
-        def rows(sql: str) -> list[tuple]:
-            return sorted(tuple(map(str, (path[r[0]], *r[1:]))) for r in con.execute(sql)
-                          if path[r[0]] not in stale)
-        return {
-            "files": sorted((r[0], r[1], r[2], r[3], str(r[4])) for r in con.execute(
-                "SELECT path, lang, content_hash, parse_status, is_test FROM files")),
-            "nodes": rows("SELECT file_id, qname, name, kind, parent, spans, signature, doc1, decorators,"
-                          " exported, local, bases FROM nodes"),
-            "name_refs": sorted(tuple(map(str, r)) for r in con.execute("SELECT lang, name, files FROM name_refs")),
-            "edges": rows("SELECT file_id, src, dst, kind, tier, callee, line FROM edges"),
-            "unresolved": rows("SELECT file_id, src, name, receiver, line FROM unresolved"),
-            "deps": rows("SELECT d.file_id, p.path FROM deps d JOIN dep_paths p ON p.id = d.path_id"),
-            "lookups": rows("SELECT file_id, name FROM lookups"),
-        }
-    finally:
-        con.close()
-
-
-def _diff(a: dict[str, list], b: dict[str, list]) -> dict[str, dict]:
-    out = {}
-    for k in a:
-        if a[k] != b[k]:
-            sa, sb = set(a[k]), set(b[k])
-            out[k] = {"update_only": sorted(sa - sb)[:5], "build_only": sorted(sb - sa)[:5],
-                      "counts": [len(a[k]), len(b[k])]}
-    return out
+    """The unit's current graph as compared tables (singularity.codegraph.compare
+    owns what "equal" means; the nightly check uses the same definition)."""
+    from singularity.codegraph import compare, store
+    return compare.dump(store.current_db(cfg, key))
 
 
 def run_sequence(seed: int, steps: int, git: bool, base: Path) -> dict:
-    from singularity.codegraph import build, scope, update
+    from singularity.codegraph import build, compare, scope, store, update
     from singularity.config import Config
     rng = random.Random(seed)
     work = base / f"s{seed}"
@@ -311,7 +283,7 @@ def run_sequence(seed: int, steps: int, git: bool, base: Path) -> dict:
             entry["rebuilt"] = True
         (u2,) = scope.discover_units(full)
         build.build_unit(full, u2, workers=1)
-        diff = _diff(dump(inc, unit.key), dump(full, u2.key))
+        diff = compare.diff_graphs(store.current_db(inc, unit.key), store.current_db(full, u2.key))
         entry["equal"] = not diff
         if diff:
             entry["diff"] = diff

@@ -29,7 +29,7 @@ def test_nightly_json_shape(wired, capsys):
     data = json.loads(capsys.readouterr().out.strip())
     # W11 added the ingest-cycle steps; ingest_index legitimately reports
     # "skipped" on a vault with no sources, so the status assertion allows it.
-    assert set(data["steps"]) == {"index", "ingest_index", "code_index", "digest",
+    assert set(data["steps"]) == {"index", "ingest_index", "code_index", "code_graph", "digest",
                                   "curator", "gaps", "contradictions", "sources",
                                   "config", "usage", "sessions", "markers", "ingest_log", "trend"}
     assert all(s.get("status") in ("ok", "skipped") for s in data["steps"].values())
@@ -38,6 +38,8 @@ def test_nightly_json_shape(wired, capsys):
     # never an error (a corpus nobody switched on is not a failure)
     assert data["steps"]["code_index"]["status"] == "skipped"
     assert "code_repos_dir" in data["steps"]["code_index"]["reason"]
+    # CODE-GRAPH P6: the graph is off by default, and off is a skip with its reason
+    assert data["steps"]["code_graph"] == {"status": "skipped", "reason": "code_graph_enabled=false"}
 
 
 def test_nightly_human_output(wired, capsys):

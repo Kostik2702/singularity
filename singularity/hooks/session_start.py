@@ -7,6 +7,9 @@ Emits hookSpecificOutput.additionalContext with:
   - project brain (T06): project resolved from the hook event's cwd (falling
     back to process cwd, then "general"), budgeted brain-note excerpt from
     .mb/context.json
+  - code graph (CODE-GRAPH P6): one line naming the built unit the cwd is in,
+    its size, age and stale files, read from the sidecar `graph-last.json`
+    only — never the graph database, never the parser
   - active tasks (learnings/active/*)
   - latest changelog entry heading
   - doctor warnings from the last cached run (.mb/doctor-last.json)
@@ -71,6 +74,24 @@ def _stamp_nag(state_path, key: str) -> None:
     tmp.replace(state_path)
 
 
+def _code_graph_line(entry: dict, now: float) -> str:
+    """`Code graph: <unit> — N files, built 3h ago[, K stale file(s)] — <verbs>`.
+    Older than STALE_CACHE_HOURS since it was last written means nightly has
+    stopped rebuilding it, and the line says so rather than vouching for it."""
+    built, updated = entry.get("built_at") or 0, entry.get("updated_at") or 0
+    what = "updated" if updated > built else "built"
+    age_h = (now - max(built, updated)) / 3600
+    parts = [f"{entry.get('files', '?')} files", f"{what} {age_h:.0f}h ago"]
+    if age_h > STALE_CACHE_HOURS:
+        parts[-1] += " (stale: nightly has not rebuilt it)"
+    if entry.get("stale_all"):
+        parts.append(f"may be stale throughout: {str(entry['stale_all'])[:80]}")
+    elif entry.get("stale_count"):
+        parts.append(f"{entry['stale_count']} stale file(s)")
+    return (f"Code graph: {entry.get('key')} — {', '.join(parts)} — for structure ask it before "
+            "grep: `mb code callers|callees|impact|deadcode|arch` (skill mb-code)")
+
+
 def build_context(event_cwd: str | None = None) -> str:
     from singularity.config import read_config_tolerant, resolve_vault
 
@@ -129,6 +150,19 @@ def build_context(event_cwd: str | None = None) -> str:
         if brain:
             lines.append(brain)
     except Exception:  # noqa: BLE001 — a broken brain note must never break the session
+        pass
+
+    # CODE-GRAPH P6: one line when the session opens inside a built unit. From
+    # the sidecar only — never the graph: even a read-only open of its WAL
+    # database creates files (see codegraph/sidecar).
+    try:
+        if light_cfg.get("code_graph_enabled") is True:
+            from singularity.codegraph import sidecar
+
+            entry = sidecar.entry_for(sidecar.graph_dir(vault), event_cwd or os.getcwd())
+            if entry:
+                lines.append(_code_graph_line(entry, time.time()))
+    except Exception:  # noqa: BLE001 — a broken sidecar must never break the session
         pass
 
     # pending compaction plans (resume offers) — one-shot files, see compaction-plan skill
