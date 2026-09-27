@@ -202,7 +202,8 @@ def _whole_graph(g, args, env) -> int:
     data = analysis.deadcode(g.con, g.root, g.meta, args.limit, args.offset, args.unknown)
     text = [f"{data['dead']['total']} dead, {data['unknown']['total']} unknown of {data['candidates']} "
             f"uncalled definitions ({data['entry_points']} entry points declared)"]
-    text += _fmt_page(data["dead"], lambda d: f"  {d['file']}:{d['line']}  {d['kind']:<8} {d['qname'].split('::', 1)[1]}")
+    text += _fmt_page(data["dead"], lambda d: f"  {d['file']}:{d['line']}  {d['kind']:<8} {d['qname'].split('::', 1)[1]}"
+                      + (f"  (imported, unused, by {', '.join(d['imported_by'])})" if d.get("imported_by") else ""))
     text.append("unknown, by reason: " + ", ".join(f"{k} {n}" for k, n in data["unknown"]["by_reason"].items()))
     if args.unknown:
         text += _fmt_page(data["unknown"]["items"],

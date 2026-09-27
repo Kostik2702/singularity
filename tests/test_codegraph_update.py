@@ -319,3 +319,16 @@ def test_a_unit_outside_git_with_a_gitignore_is_not_rebuilt_on_every_query(tmp_p
     assert fr.checked and fr.stale_all is None and not fr.updated
     (root / "vendor" / "lib" / "package.json").write_text(json.dumps({"name": "v2"}), encoding="utf-8")
     assert update.refresh(cfg, unit.key).stale_all is None
+
+
+def test_a_linked_worktree_inside_the_unit_is_neither_a_unit_nor_a_change(tmp_path):
+    """Found live: agents work in `git worktree`s created inside the repository
+    (`.claude/worktrees/agent-*`). Each looked like a nested repository that
+    had just appeared, and every query asked for a rebuild. A worktree is the
+    same repository again: not a unit, not files of this one."""
+    cfg, unit, root = _unit(tmp_path)
+    _git(root, "worktree", "add", "-q", str(root / ".claude" / "worktrees" / "agent-x"))
+    fr = update.refresh(cfg, unit.key)
+    assert fr.checked and fr.stale_all is None and not fr.updated
+    assert [u.key for u in scope.discover_units(cfg)] == [unit.key]
+    assert not any(e.path.startswith(".claude/") for e in scope.list_files(unit, cfg))

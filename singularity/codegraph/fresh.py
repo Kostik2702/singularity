@@ -286,7 +286,7 @@ def detect(cfg: Config, meta: dict[str, Any], con: sqlite3.Connection,
     det.head = state.head
     det.dirty = {p for p in state.listed if wanted(p) or watchable(p)}
     for d in state.dirs:                   # `? inner/`: a repository inside an untracked tree
-        if d not in nested and (root / d / ".git").exists() and not any(
+        if d not in nested and (root / d / ".git").exists() and not scope.is_linked_worktree(root / d) and not any(
                 scope._pruned(part, skip, vendored) for part in d.split("/")):
             return Detection(rebuild=f"a repository appeared at {d}")
     if any(not (root / n / ".git").exists() for n in nested):

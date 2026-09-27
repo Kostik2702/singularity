@@ -207,3 +207,17 @@ def test_arch_names_its_communities_and_says_when_it_is_behind(repo):
     view = analysis.arch_view(g.con, g.meta)
     g.con.close()
     assert view["computed"]["updates_since"] == 1 and "in-place update" in view["computed"]["note"]
+
+
+def test_a_dead_function_imported_without_use_names_the_import(repo):
+    """Found by the P4 audit: `from x import f` with f never called leaves f
+    dead -- but deleting f alone breaks that import, so the answer names it."""
+    cfg, unit, root = repo
+    (root / "app" / "user.py").write_text("from app.core import never_called\n\n\ndef other():\n    return 1\n",
+                                          encoding="utf-8")
+    _update(cfg, unit)
+    g = _graph(cfg, root)
+    data = analysis.deadcode(g.con, root, g.meta)
+    g.con.close()
+    item = next(d for d in data["dead"]["items"] if d["qname"] == "app/core.py::never_called")
+    assert item["imported_by"] == ["app/user.py"]

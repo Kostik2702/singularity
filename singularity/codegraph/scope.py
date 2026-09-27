@@ -87,6 +87,23 @@ def _is_git_root(path: Path) -> bool:
     return (path / ".git").exists()
 
 
+def is_linked_worktree(path: Path) -> bool:
+    """A `git worktree` checkout: its `.git` is a FILE pointing into another
+    repository's `.git/worktrees/` (a submodule's points into `.git/modules/`).
+    It is the same repository again -- neither a unit nor part of one. Agents
+    and tools create them inside the repository they work on (Claude Code:
+    `.claude/worktrees/agent-*`), and taking one for a nested repository made
+    every refresh demand a rebuild while it existed."""
+    marker = path / ".git"
+    if not marker.is_file():
+        return False
+    try:
+        head = marker.read_text(encoding="utf-8", errors="replace")[:4096]
+    except OSError:
+        return False
+    return head.startswith("gitdir:") and "/worktrees/" in head.replace("\\", "/")
+
+
 def _git(root: Path, *args: str) -> str:
     try:
         done = subprocess.run(["git", "--no-optional-locks", "-C", str(root), *args],
@@ -111,6 +128,8 @@ def _git_entries(root: Path) -> tuple[list[str], list[str]]:
         if not path:
             continue
         if path.endswith("/"):
+            if is_linked_worktree(root / path):
+                continue
             if _is_git_root(root / path):
                 nested.append(path.rstrip("/"))
             else:
@@ -133,6 +152,8 @@ def _walk_untracked(root: Path, rel_dir: str) -> tuple[list[str], list[str]]:
         here = Path(dirpath)
         keep = []
         for d in dirnames:
+            if is_linked_worktree(here / d):
+                continue
             if _is_git_root(here / d):
                 nested.append((here / d).relative_to(root).as_posix())
             else:
@@ -163,7 +184,7 @@ def _walk_plain(root: Path, skip: frozenset[str], vendored: re.Pattern[str] | No
         here = Path(dirpath)
         keep = []
         for d in sorted(dirnames):
-            if _pruned(d, skip, vendored):
+            if _pruned(d, skip, vendored) or is_linked_worktree(here / d):
                 continue
             if _is_git_root(here / d):
                 nested.append((here / d).relative_to(root).as_posix())
@@ -211,7 +232,8 @@ def walk_stat(root: Path, skip: frozenset[str], vendored: re.Pattern[str] | None
         # entries), not by a stat of `<dir>/.git` for every directory walked;
         # like `_walk_plain`, every path that reaches one names it.
         if rel and any(e.name == ".git" for e in entries):
-            nested.append(rel.rstrip("/"))
+            if not is_linked_worktree(Path(here)):
+                nested.append(rel.rstrip("/"))
             continue
         if real in seen:                                  # a link back to an ancestor, or walked already
             continue

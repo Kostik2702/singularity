@@ -174,16 +174,43 @@ def deadcode(con, root: Path, meta: dict[str, Any], limit: int = 50, offset: int
             dead.append(item)
     dead.sort(key=lambda d: (d["file"], d["line"]))
     unknown.sort(key=lambda d: (d["file"], d["line"]))
+    shown = dead[offset:offset + limit]
+    _mark_unused_imports(con, shown)
     out: dict[str, Any] = {
-        "dead": page(dead[offset:offset + limit], len(dead), offset, limit),
+        "dead": page(shown, len(dead), offset, limit),
         "unknown": {"total": len(unknown), "by_reason": dict(reasons.most_common())},
         "entry_points": len(entries), "candidates": len(rows),
         "note": "`dead`: nothing calls, inherits, names or registers it and nothing outside the graph is "
-                "declared to run it. A candidate, not a verdict -- reflection, string-built names and code "
-                "outside this unit are invisible to a static graph."}
+                "declared to run it. `imported_by` lists files that import it without using it: remove "
+                "those imports with it. A candidate, not a verdict -- reflection, string-built names, code "
+                "in other file types (a Python block inside a Markdown skill) and code outside this unit "
+                "are invisible to a static graph."}
     if show_unknown:
         out["unknown"]["items"] = page(unknown[offset:offset + limit], len(unknown), offset, limit)
     return out
+
+
+def _mark_unused_imports(con, items: list[dict[str, Any]]) -> None:
+    """An import is not a use -- a function imported and never called is still
+    dead -- but deleting it alone breaks the import (the P4 audit found two
+    such). Name the importing files on each dead item. Only for the page
+    shown: it reads the importers' stored facts."""
+    from .model import decode_facts
+    for item in items:
+        path, _, rest = item["qname"].partition("::")
+        if "." in rest:                              # a method: imported through its class, not by name
+            continue
+        importers = [r[0] for r in con.execute(
+            "SELECT DISTINCT f.id FROM edges e JOIN files f ON f.id = e.file_id"
+            " WHERE e.kind = 'IMPORTS' AND e.dst = ?", (f"{path}::<module>",))]
+        found = []
+        for fid in importers:
+            row = con.execute("SELECT f.path, x.blob FROM facts x JOIN files f ON f.id = x.file_id"
+                              " WHERE x.file_id = ?", (fid,)).fetchone()
+            if row and any(b.attr == rest for b in decode_facts(row[1]).imports):
+                found.append(row[0])
+        if found:
+            item["imported_by"] = sorted(found)
 
 
 # --- arch -------------------------------------------------------------------------

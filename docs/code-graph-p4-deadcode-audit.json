@@ -1,0 +1,201 @@
+{
+ "what": "CODE-GRAPH P4 acceptance: manual check of 30 deadcode candidates, false-positive share published",
+ "date": "2026-09-27",
+ "method": "simple random sample (seed 27) of the 120 dead candidates over 8 application repositories; an independent validator agent that did not write the detector read every definition and searched each repository for the name in every file type (case-sensitive whole word, rg -uu), with a negative and a positive control",
+ "pool": 120,
+ "summary": {
+  "dead": 28,
+  "used": 1,
+  "unclear": 1
+ },
+ "false_positive_share": {
+  "strict": 0.033,
+  "counting_unclear_as_false": 0.067
+ },
+ "findings_acted_on": [
+  "USED case: the call lives in a Python block inside a Markdown skill -- another file type, outside the graph; stated in the deadcode note",
+  "two DEAD functions were imported by name and never called: the answer now lists imported_by, so the import goes with the function"
+ ],
+ "items": [
+  {
+   "repo": "CapCutAPI",
+   "qname": "vectcut-skill/skill/scripts/vectcut_client.py::VectCutClient.get_text_intro_types",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. Only hits: the def (vectcut_client.py:618) and its own URL string '/get_text_intro_types' (line 620); capcut_server.py:1247 is an unrelated Flask route function of the same name; api_reference.md:255,422 document the HTTP endpoint, not the client method. VectCutClient itself is used (vectcut_client.py:678,704) but never calls this method; no getattr/CLI dispatch in the file. Public client API of a skill library with no in-repo consumer."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "oss.py::upload_mp4_to_oss",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. 1 hit = the def (oss.py:23). Only importer of module oss is save_draft_impl.py:5 'from oss import upload_to_oss' (a different function). No getattr/globals dispatch in the repo."
+  },
+  {
+   "repo": "Book Writer Project",
+   "qname": "plugin/book-context-manager/scripts/feedback_logger.py::log_event",
+   "verdict": "USED",
+   "evidence": "plugin/book-context-manager/skills/compare-and-accept/SKILL.md:76-77 (Step 7, executable bash block the agent runs): 'from feedback_logger import log_event' / 'log_event(Path('{project}'), json.loads(open('/tmp/accept_event.json').read()))'. The use lives in a Markdown skill, outside the Python/TS/JS files the detector scans. Other hits are docs only (DEEP_REVIEW_REPORT.md:248, IMPLEMENTATION_GUIDE.md:907)."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "example.py::test_image04",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. example.py is a manual scenario script: not collected by pytest (no pytest config in pyproject.toml; default python_files is test_*.py / *_test.py, example.py does not match); README.md:179 only says 'More examples can be found in example.py'. Hits: def example.py:957 and a commented-out call '# test_image04()' at example.py:2354 in the __main__ block. Not decorated."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "example.py::test_image05",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. example.py is a manual scenario script: not collected by pytest (no pytest config in pyproject.toml; default python_files is test_*.py / *_test.py, example.py does not match); README.md:179 only says 'More examples can be found in example.py'. 1 hit = the def example.py:977; not even a commented call. Not decorated."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "draft_profiles.py::get_template_dir",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. 1 hit = the def draft_profiles.py:99 ('return get_draft_profile(name).template_dir'). No module-attribute access and no star import anywhere; tests/test_draft_profiles.py does not reference it."
+  },
+  {
+   "repo": "talking-head-saas",
+   "qname": "services/media-worker/src/gpu/runtime.wiring.test.ts::setGauge",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. Object-literal stub 'setGauge(): void {},' in a fake cast 'as unknown as MetricsSink'. MetricsSink (packages/shared/src/messaging/metrics.ts:55-62) has increment/gauge/observe and no setGauge, so no production code can call it; all 4 repo hits are identical stubs in test files (orchestrator keepawake/metrics.test.ts:32, runtime.wiring.test.ts:418, plan.stage.test.ts:293,316). Side note: the stub is misnamed (interface method is 'gauge')."
+  },
+  {
+   "repo": "talking-head-saas",
+   "qname": "services/gpu-agent/src/engine/lifecycle.test.ts::FakeChild.say",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. 1 hit in the whole repo = the def lifecycle.test.ts:149 'say(text: string): void { this.#out?.(text); }'. FakeChild implements EngineChild, which has no 'say'; no computed-key access."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "example.py::test_image01",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. example.py is a manual scenario script: not collected by pytest (no pytest config in pyproject.toml; default python_files is test_*.py / *_test.py, example.py does not match); README.md:179 only says 'More examples can be found in example.py'. Hits: def example.py:846 and commented-out '# test_image01()' at example.py:2351."
+  },
+  {
+   "repo": "Book Writer Project",
+   "qname": "plugin/book-context-manager/scripts/state_tracker.py::StateTracker.find_conflicts",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. Hits: def state_tracker.py:67 plus docs only (DEEP_REVIEW_REPORT.md:315 review note, IMPLEMENTATION_GUIDE.md:466 method list). StateTracker consumers (consistency_engine.py:243-244,641-642; auto_context_analyzer.py:60-63; trace_engine.py:107-108; expand-scene-beat SKILL.md:82-92) use only _state, get_state and update_state. Docs-only mention = dead for behaviour."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "pyJianYingDraft/script_file.py::Script_file.replace_material_by_name",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. 1 hit = the def pyJianYingDraft/script_file.py:696 (vendored library public method). No caller, no getattr dispatch on Script_file (all repo getattr calls are enum lookups)."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "example.py::test_audio04",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. example.py is a manual scenario script: not collected by pytest (no pytest config in pyproject.toml; default python_files is test_*.py / *_test.py, example.py does not match); README.md:179 only says 'More examples can be found in example.py'. Hits: def example.py:1206 and commented-out '# test_audio04()' at example.py:2350."
+  },
+  {
+   "repo": "Book Writer Project",
+   "qname": "plugin/book-context-manager/scripts/summarizer.py::update_chapter_summaries",
+   "verdict": "UNCLEAR",
+   "evidence": "No executable caller anywhere: code hits are only the def summarizer.py:55 and a runtime warning string in auto_context_analyzer.py:97-99 ('...persists it via summarizer.update_scene_summaries/update_chapter_summaries.'). BUT the shipped runtime subagent prompt plugin/book-context-manager/agents/auto-context-analyzer.md:37-38,47 instructs the calling skill to 'persist it via summarizer.update_scene_summaries / update_chapter_summaries' - an LLM-mediated invocation path. The skill it points to (expand-scene-beat, SKILL.md:97-102) does not actually call it, and no chapters.json exists anywhere in the repo (no artifact evidence of a run). Decider: owner policy on whether prose instructions in shipped agent prompts count as consumers, or a session transcript showing an agent calling it. Statically: dead."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "example.py::test_video_track02",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. example.py is a manual scenario script: not collected by pytest (no pytest config in pyproject.toml; default python_files is test_*.py / *_test.py, example.py does not match); README.md:179 only says 'More examples can be found in example.py'. Hits: def example.py:1737 and commented-out '# test_video_track02()' at example.py:2359."
+  },
+  {
+   "repo": "Book Writer Project",
+   "qname": "plugin/book-context-manager/scripts/state_tracker.py::StateTracker.get_last_state",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. Hits: def state_tracker.py:60 plus DEEP_REVIEW_REPORT.md:310 (review note) only. No consumer calls it (consumers listed under find_conflicts). Docs-only = dead for behaviour."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "example.py::test_keyframe",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. example.py is a manual scenario script: not collected by pytest (no pytest config in pyproject.toml; default python_files is test_*.py / *_test.py, example.py does not match); README.md:179 only says 'More examples can be found in example.py'. Hits: def example.py:1867 and commented-out '# test_keyframe()' at example.py:2362."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "downloader.py::download_image",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. Never called: the 'func' entries of download_tasks in save_draft_impl.py:119,142,158 are all download_file. CAVEAT - contradicts the detector's stated claim 'no identifier mention': save_draft_impl.py:9 'from downloader import download_audio, download_file, download_image, download_video' imports it (unused import). Deleting the def alone raises ImportError when save_draft_impl is imported; deletion is behaviour-neutral only together with removing it from that import."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "example.py::test_text_03",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. example.py is a manual scenario script: not collected by pytest (no pytest config in pyproject.toml; default python_files is test_*.py / *_test.py, example.py does not match); README.md:179 only says 'More examples can be found in example.py'. 1 hit = the def example.py:749; no call, not even commented."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "example.py::test_text_02",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. example.py is a manual scenario script: not collected by pytest (no pytest config in pyproject.toml; default python_files is test_*.py / *_test.py, example.py does not match); README.md:179 only says 'More examples can be found in example.py'. 1 hit = the def example.py:627; no call, not even commented."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "pyJianYingDraft/audio_segment.py::Audio_segment.add_fade",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. 1 hit = the def pyJianYingDraft/audio_segment.py:189 (vendored library). It is the only setter of segment.fade besides __init__ (None), so the fade branch at script_file.py:388-389 is unreachable too, but nothing calls add_fade."
+  },
+  {
+   "repo": "ComfyUI-ZIT-HiresPhoto",
+   "qname": "core/nag.py::is_comfyui_nag_available",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. 1 hit = the def core/nag.py:24. tests/test_nag.py:10 imports only fallback_nag, apply_nag; __init__.py:20 __all__ lists only NODE_CLASS_MAPPINGS/NODE_DISPLAY_NAME_MAPPINGS; apply_nag does not call it; no workflow JSON references it."
+  },
+  {
+   "repo": "Book Writer Project",
+   "qname": "plugin/book-context-manager/scripts/keyword_indexer.py::KeywordIndexer.remove",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. All 14 'remove' hits are prose, JS DOM calls (ta.remove(), classList.remove) in dashboard.py/dashboard.html, and two defs (keyword_indexer.py:102, semantic_indexer.py:81 - a different class). No '.remove(' call on a KeywordIndexer instance; its only runtime user auto_context_analyzer.py:77-79 calls index_doc."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "vectcut-skill/skill/scripts/vectcut_client.py::VectCutClient.get_audio_effect_types",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. Only hits: def vectcut_client.py:610 and its own URL string (612); capcut_server.py:1085 is the unrelated Flask route function of the same name; SKILL.md:118 and api_reference.md:414 list the HTTP endpoint, not the client method. No in-repo consumer."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "save_task_cache.py::increment_task_field",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. Never called. CAVEAT - contradicts the detector's 'no identifier mention' claim: save_draft_impl.py:8 imports it ('from save_task_cache import ... increment_task_field ...') but only update_task_field is used (e.g. save_draft_impl.py:96-97). Deleting the def alone breaks that import; behaviour-neutral only together with removing the import name."
+  },
+  {
+   "repo": "voice-text-recognition",
+   "qname": "src/domain/model/TranscriptSegment.ts::TranscriptSegment.mergedWith",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. 1 hit = the def src/domain/model/TranscriptSegment.ts:68. Positive control in the same repo and run style: withText found in TranscriptSanitizer.ts. DocumentStructurer.mergeShortParagraphs is unrelated."
+  },
+  {
+   "repo": "talking-head-saas",
+   "qname": "services/media-worker/src/infrastructure/comfyui/mock.adapter.ts::MockComfyAdapter.setSpeedUp",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. 1 hit = the def mock.adapter.ts:144. #speedUp is set via constructor init (mock.adapter.ts:96, e.g. new MockComfyAdapter({ speedUp: 2_000 }) in mock.adapter.test.ts:11). The e2e 'comfy.plan({ speedUp })' goes over HTTP to COMFY_MOCK_URL/__plan (tests/e2e/_harness.ts:285), not to this method. Positive control: setOutputRenderer found in mock.adapter.test.ts."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "vectcut-skill/skill/scripts/vectcut_client.py::VectCutClient.get_outro_animation_types",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. Only hits: def vectcut_client.py:598, own URL string (600), unrelated Flask route function capcut_server.py:933, endpoint listings SKILL.md:115 / api_reference.md:398. No in-repo consumer of the client method."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "example.py::test_video_01",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. example.py is a manual scenario script: not collected by pytest (no pytest config in pyproject.toml; default python_files is test_*.py / *_test.py, example.py does not match); README.md:179 only says 'More examples can be found in example.py'. 1 hit = the def example.py:2042; no call, not even commented."
+  },
+  {
+   "repo": "CapCutAPI",
+   "qname": "example.py::test_subtitle_02",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. example.py is a manual scenario script: not collected by pytest (no pytest config in pyproject.toml; default python_files is test_*.py / *_test.py, example.py does not match); README.md:179 only says 'More examples can be found in example.py'. Hits: def example.py:2014 and commented-out '# test_subtitle_02()' at example.py:2365 (the active call there is test_subtitle_01)."
+  },
+  {
+   "repo": "talking-head-saas",
+   "qname": "services/analysis-worker/src/stages/plan/plan.stage.test.ts::setGauge",
+   "verdict": "DEAD",
+   "evidence": "Case-sensitive whole-word rg -uu over the whole repo (all file types; excluded only node_modules, venv*, .git, __pycache__, *.pyc, *.zip, *.plugin, *.tsbuildinfo); control: the same search found the definition line itself. Same stub as runtime.wiring's: plan.stage.test.ts:293 'setGauge(): void {},' in a fake cast 'as unknown as MetricsSink'; MetricsSink (metrics.ts:55-62) has no setGauge, so createPlanStage cannot call it. Note: the qname is ambiguous - an identical stub with the same qname sits at plan.stage.test.ts:316."
+  }
+ ]
+}
