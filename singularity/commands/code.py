@@ -51,6 +51,8 @@ def cmd_code(cfg, args) -> int:
         lines += [f"  {u['key']}: {u['root']}" for u in units] or ["  no graph built yet (`mb code build`)"]
         _emit(args, payload, "\n".join(lines))
         return 0
+    if action == "audit":
+        return _audit(cfg, args)
     if not cfg.data.get("code_graph_enabled"):
         print(_OFF, file=sys.stderr)
         return 2
@@ -113,6 +115,60 @@ def _build(cfg, args) -> int:
     if args.json:
         print(json.dumps({"built": results}, ensure_ascii=False))
     return 0
+
+
+_AUDIT_SHOWN = 50          # findings printed per unit; --json lists them all
+
+
+def _audit(cfg, args) -> int:
+    """Every built graph, or --project's. Exit 1 when a secret-shaped value
+    is stored in one, 2 when there was nothing to audit or a graph could not
+    be read -- never 0 for a graph nobody looked at. Runs with the graph
+    switched off too: a graph left on disk still holds what it holds."""
+    import sqlite3
+
+    from ..codegraph import audit, query, store
+    from ..codegraph.scope import GraphError
+
+    try:
+        cards = [query.locate(cfg, _where(cfg, args))] if args.project else store.built_units(cfg)
+    except (GraphError, KeyError) as exc:
+        print(f"[mb] {exc}", file=sys.stderr)
+        return 2
+    if not cards:
+        print("[mb] no code graph is built: nothing to audit", file=sys.stderr)
+        return 2
+    results = []
+    for card in cards:
+        db = store.current_db(cfg, card["key"])
+        try:
+            if db is None:
+                raise GraphError("no current generation; rebuild it")
+            results.append({"unit": card["key"], "root": card["root"], **audit.audit_db(db)})
+        except (GraphError, sqlite3.DatabaseError) as exc:
+            results.append({"unit": card["key"], "root": card["root"], "error": str(exc)})
+    total = sum(r.get("count", 0) for r in results)
+    failed = any("error" in r for r in results)
+    if args.json:
+        print(json.dumps({"findings": total, "units": results}, ensure_ascii=False))
+    else:
+        lines = []
+        for r in results:
+            if "error" in r:
+                lines.append(f"{r['unit']}: not audited: {r['error']}")
+                continue
+            lines.append(f"{r['unit']}: {r['count']} secret-shaped value(s) in {r['files']} files, "
+                         f"{r['nodes']} nodes ({r['seconds']}s)"
+                         + ("" if r["recorded"] else "; the count was not recorded, another writer held the graph"))
+            for f in r["findings"][:_AUDIT_SHOWN]:
+                lines.append(f"  {f['kind']:<18} {f['field']:<22} {f['qname']}\n      {f['excerpt']}")
+            if r["count"] > _AUDIT_SHOWN:
+                lines.append(f"  … {r['count'] - _AUDIT_SHOWN} more; --json lists all of them")
+        if total:
+            lines.append(f"{total} in total. Values are masked here; the source still holds them. The audit "
+                         "knows shapes, not intent: a test's fake key is reported like a real one.")
+        print("\n".join(lines))
+    return 1 if total else (2 if failed else 0)
 
 
 def _update(cfg, args, card, update) -> int:

@@ -31,7 +31,7 @@ mb reflect [--days N] [--json]   # privacy-safe adoption telemetry (offline tran
 mb usage [--session ID] [--list [--days N]] [--turns] [--top N] [--json]
                                  # per-step token cost + what each step added to the context
 mb llm start|stop|status|list|logs|code|setup
-mb code status|build [--all]|update|outline <file>|snippet|callers|callees|trace <symbol>|find <text>|schema|impact|arch|deadcode
+mb code status|build [--all]|update|outline <file>|snippet|callers|callees|trace <symbol>|find <text>|schema|impact|arch|deadcode|audit
                                  # the structural code graph (off until code_graph_enabled)
 mb init            # write ~/.singularity.json pointer + folder tree
 mb uninstall       # remove hooks/scheduler jobs/daemon (vault untouched)
@@ -132,6 +132,9 @@ def _build_parser() -> argparse.ArgumentParser:
     cgd = cgsub.add_parser("deadcode", help="definitions nothing calls, inherits, names or registers")
     cgd.add_argument("--unknown", action="store_true",
                      help="also list the candidates kept as unknown, each with its reason")
+    cgau = cgsub.add_parser("audit", help="secret-shaped values stored in the graphs, redacted "
+                                          "(every built graph, or --project's); exit 1 if any")
+    cgau.add_argument("--json", action="store_true")
     for cgv in (cgi, cga, cgd):
         if cgv is not cga:
             cgv.add_argument("--limit", type=int, default=100 if cgv is cgi else 50)
@@ -139,7 +142,7 @@ def _build_parser() -> argparse.ArgumentParser:
         cgv.add_argument("--no-refresh", action="store_true",
                          help="answer from the graph as last written, without comparing it with the tree first")
         cgv.add_argument("--json", action="store_true")
-    for cgv in (cgb, cgu, cgi, cga, cgd, *[cgsub.choices[v] for v in ("outline", "snippet", "callers", "callees",
+    for cgv in (cgb, cgu, cgi, cga, cgd, cgau, *[cgsub.choices[v] for v in ("outline", "snippet", "callers", "callees",
                                                                       "trace", "find", "schema")]):
         cgv.add_argument("--project", help="a registered project id instead of the current directory")
     cgb.add_argument("--json", action="store_true")
