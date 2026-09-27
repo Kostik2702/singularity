@@ -41,6 +41,17 @@ def cmd_search(cfg, args) -> int:
               file=sys.stderr)
         return 2
 
+    graph = getattr(args, "graph", False)
+    if graph and not (args.with_code or args.code_only):
+        print("[mb] --graph describes code hits: add --with-code or --code-only",
+              file=sys.stderr)
+        return 2
+    if graph and not cfg.data.get("code_graph_enabled"):
+        print("[mb] --graph: the code graph is off — "
+              "`mb config set code_graph_enabled true`, then `mb code build`",
+              file=sys.stderr)
+        return 2
+
     payload = {
         "cmd": "search",
         "query": args.query,
@@ -63,10 +74,18 @@ def cmd_search(cfg, args) -> int:
         "max_per_file": args.max_per_file,
         "format": "json" if args.json else "compact",
     }
+    if graph:
+        # The enrichment needs each hit's fields, which only the JSON answer
+        # carries; the text lines are then rendered here (`_compact_line`).
+        payload["format"] = "json"
     resp = client.search(cfg, payload)
     if "error" in resp:
         print(f"[mb] error: {resp['error']}", file=sys.stderr)
         return 1
+    if graph:
+        # CLI-side and read-only (CODE-GRAPH D1): the daemon never opens a graph.
+        from ..codegraph import enrich
+        enrich.enrich(cfg, resp.get("results") or [])
 
     # Sessions are a SEPARATE store queried separately — the same escalation
     # shape as --with-sources and --with-code, and the reason `mb search` with
@@ -87,17 +106,59 @@ def cmd_search(cfg, args) -> int:
     if args.json:
         print(json.dumps(resp, ensure_ascii=False, indent=1))
     else:
-        lines = resp.get("lines", [])
+        hits = resp.get("results", []) if graph else None
+        lines = [_compact_line(h) for h in hits] if graph else resp.get("lines", [])
         if not lines:
             print("(no results)")
         for idx, line in enumerate(lines, 1):
             print(f"{idx}. {line}")
+            if graph and "graph" in hits[idx - 1]:
+                print(f"   {_graph_line(hits[idx - 1]['graph'])}")
         for hit in session_hits:
             body = " ".join(hit["body"].split())[:150]
             print(f"[session {hit['day']} {hit['role']}@{hit['project']}] {body}")
         cold = " COLD" if resp.get("cold") else ""
         print(f"-- {resp.get('time_ms', '?')}ms{cold}")
     return 0
+
+
+def _compact_line(item: dict) -> str:
+    """`SearchEngine._compact_line`, for the one path that renders the text
+    lines here instead of in the daemon (`--graph` asks for JSON). A copy, not
+    an import: the engine module imports numpy, which `mb search --graph`
+    must not (import floor). tests/test_search_graph.py holds the two equal,
+    and holds `--graph` text minus its graph lines to the baseline bytes."""
+    meta = item["meta"]
+    loc = meta.get("file", "?")
+    if meta.get("line"):
+        loc = f"{loc}:{meta['line']}"
+    tag = meta.get("type") or meta.get("kind") or item["source"]
+    if meta.get("project"):
+        tag = f"{tag}@{meta['project']}"
+    head = meta.get("title", "")
+    if meta.get("section"):
+        head = f"{head}/{meta['section']}"
+    elif meta.get("name"):
+        head = meta["name"]
+    return f"{loc} | {item['score']:.2f} | [{tag}] | {head} | {meta.get('content', '')}"
+
+
+def _graph_line(g) -> str:
+    """One line under a code hit: what the graph knows about it, or why it
+    knows nothing. Never a zero count for a symbol it does not have."""
+    if isinstance(g, str):
+        return f"graph: {g}"
+    if g.get("unavailable"):
+        return f"graph: {g['unit']}: unavailable ({g['unavailable']})"
+    if g["qname"] is None:
+        text = f"graph: {g['unit']}:{g['file']}: {g['note']}"
+    else:
+        text = (f"graph: {g['qname']} ({g['kind']}, {g['unit']}) callers {g['callers']}"
+                f" + {g['unresolved_candidates']} unresolved same-name call site(s),"
+                f" callees {g['callees']} + {g['unresolved_calls']} unresolved call(s)")
+    if g.get("stale"):
+        text += f" [stale: {g['stale_reason']}]"
+    return text
 
 def _ingest_read_input(args) -> tuple[str, str, str]:
     """(text, origin_kind, origin_ref).

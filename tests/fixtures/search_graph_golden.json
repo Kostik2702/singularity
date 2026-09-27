@@ -1,0 +1,489 @@
+{
+ "written_by": "dec1d60 (before --graph)",
+ "cases": [
+  {
+   "argv": [
+    "search",
+    "retry backoff",
+    "--top",
+    "10"
+   ],
+   "exit": 0,
+   "payload": {
+    "cmd": "search",
+    "query": "retry backoff",
+    "top_k": 10,
+    "hybrid": null,
+    "memory_only": false,
+    "code_only": false,
+    "include_code": false,
+    "repos": null,
+    "include_sources": false,
+    "filter_type": null,
+    "filter_tags": null,
+    "filter_wikilinks": null,
+    "filter_project": null,
+    "path_prefix": null,
+    "full_content": false,
+    "explain": false,
+    "max_per_file": 2,
+    "format": "compact"
+   },
+   "response": {
+    "lines": [
+     "howto/n.md | 0.82 | [howto] | Note/Section | a note about retry and backoff in the vault a note about retry and backoff in the vault a note about retry and backoff in the vault"
+    ]
+   },
+   "stdout": "1. howto/n.md | 0.82 | [howto] | Note/Section | a note about retry and backoff in the vault a note about retry and backoff in the vault a note about retry and backoff in the vault\n-- ?ms\n",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "search",
+    "retry backoff",
+    "--top",
+    "10",
+    "--json"
+   ],
+   "exit": 0,
+   "payload": {
+    "cmd": "search",
+    "query": "retry backoff",
+    "top_k": 10,
+    "hybrid": null,
+    "memory_only": false,
+    "code_only": false,
+    "include_code": false,
+    "repos": null,
+    "include_sources": false,
+    "filter_type": null,
+    "filter_tags": null,
+    "filter_wikilinks": null,
+    "filter_project": null,
+    "path_prefix": null,
+    "full_content": false,
+    "explain": false,
+    "max_per_file": 2,
+    "format": "json"
+   },
+   "response": {
+    "results": [
+     {
+      "meta": {
+       "file": "howto/n.md",
+       "title": "Note",
+       "section": "Section",
+       "content": "a note about retry and backoff in the vault a note about retry and backoff in the vault a note about retry and backoff in the vault",
+       "type": "howto",
+       "chunk_index": 0,
+       "line_start": 3,
+       "line_end": 4,
+       "chunk_id": "howto/n.md#1.0"
+      },
+      "score": 0.8165,
+      "source": "memory"
+     }
+    ]
+   },
+   "stdout": "{\n \"results\": [\n  {\n   \"meta\": {\n    \"file\": \"howto/n.md\",\n    \"title\": \"Note\",\n    \"section\": \"Section\",\n    \"content\": \"a note about retry and backoff in the vault a note about retry and backoff in the vault a note about retry and backoff in the vault\",\n    \"type\": \"howto\",\n    \"chunk_index\": 0,\n    \"line_start\": 3,\n    \"line_end\": 4,\n    \"chunk_id\": \"howto/n.md#1.0\"\n   },\n   \"score\": 0.8165,\n   \"source\": \"memory\"\n  }\n ]\n}\n",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "search",
+    "retry backoff",
+    "--top",
+    "10",
+    "--with-code"
+   ],
+   "exit": 0,
+   "payload": {
+    "cmd": "search",
+    "query": "retry backoff",
+    "top_k": 10,
+    "hybrid": null,
+    "memory_only": false,
+    "code_only": false,
+    "include_code": true,
+    "repos": null,
+    "include_sources": false,
+    "filter_type": null,
+    "filter_tags": null,
+    "filter_wikilinks": null,
+    "filter_project": null,
+    "path_prefix": null,
+    "full_content": false,
+    "explain": false,
+    "max_per_file": 2,
+    "format": "compact"
+   },
+   "response": {
+    "lines": [
+     "howto/n.md | 0.82 | [howto] | Note/Section | a note about retry and backoff in the vault a note about retry and backoff in the vault a note about retry and backoff in the vault",
+     "svc/gen/built.py | 1.00 | [function] | generated_retry | def generated_retry():\n    \"\"\"Generated retry backoff stub.\"\"\"\n    return 0",
+     "plain/tool.py | 1.00 | [function] | retry_tool | def retry_tool():\n    \"\"\"Retry tool with backoff.\"\"\"\n    return 2",
+     "svc/app/other.py | 1.00 | [function] | guess | def guess(x):\n    \"\"\"Retry whatever x is, with backoff.\"\"\"\n    return x.run()",
+     "svc/app/core.py | 0.82 | [function] | helper | def helper():\n    \"\"\"Retry helper with backoff.\"\"\"\n    return 1",
+     "svc/app/core.py | 0.50 | [class] | Worker | class Worker:\n    \"\"\"Runs the retry worker.\"\"\"",
+     "svc/app/other.py | 0.41 | [function] | use | def use():\n    \"\"\"Invoice with the retry helper.\"\"\"\n    return helper()",
+     "svc/app/settings.py | 0.82 | [lines] | lines_1 | RETRY_BACKOFF_SECONDS = 3\nRETRY_ATTEMPTS_BEFORE_GIVING_UP = 5"
+    ]
+   },
+   "stdout": "1. howto/n.md | 0.82 | [howto] | Note/Section | a note about retry and backoff in the vault a note about retry and backoff in the vault a note about retry and backoff in the vault\n2. svc/gen/built.py | 1.00 | [function] | generated_retry | def generated_retry():\n    \"\"\"Generated retry backoff stub.\"\"\"\n    return 0\n3. plain/tool.py | 1.00 | [function] | retry_tool | def retry_tool():\n    \"\"\"Retry tool with backoff.\"\"\"\n    return 2\n4. svc/app/other.py | 1.00 | [function] | guess | def guess(x):\n    \"\"\"Retry whatever x is, with backoff.\"\"\"\n    return x.run()\n5. svc/app/core.py | 0.82 | [function] | helper | def helper():\n    \"\"\"Retry helper with backoff.\"\"\"\n    return 1\n6. svc/app/core.py | 0.50 | [class] | Worker | class Worker:\n    \"\"\"Runs the retry worker.\"\"\"\n7. svc/app/other.py | 0.41 | [function] | use | def use():\n    \"\"\"Invoice with the retry helper.\"\"\"\n    return helper()\n8. svc/app/settings.py | 0.82 | [lines] | lines_1 | RETRY_BACKOFF_SECONDS = 3\nRETRY_ATTEMPTS_BEFORE_GIVING_UP = 5\n-- ?ms\n",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "search",
+    "retry backoff",
+    "--top",
+    "10",
+    "--with-code",
+    "--json"
+   ],
+   "exit": 0,
+   "payload": {
+    "cmd": "search",
+    "query": "retry backoff",
+    "top_k": 10,
+    "hybrid": null,
+    "memory_only": false,
+    "code_only": false,
+    "include_code": true,
+    "repos": null,
+    "include_sources": false,
+    "filter_type": null,
+    "filter_tags": null,
+    "filter_wikilinks": null,
+    "filter_project": null,
+    "path_prefix": null,
+    "full_content": false,
+    "explain": false,
+    "max_per_file": 2,
+    "format": "json"
+   },
+   "response": {
+    "results": [
+     {
+      "meta": {
+       "file": "howto/n.md",
+       "title": "Note",
+       "section": "Section",
+       "content": "a note about retry and backoff in the vault a note about retry and backoff in the vault a note about retry and backoff in the vault",
+       "type": "howto",
+       "chunk_index": 0,
+       "line_start": 3,
+       "line_end": 4,
+       "chunk_id": "howto/n.md#1.0"
+      },
+      "score": 0.8165,
+      "source": "memory"
+     },
+     {
+      "meta": {
+       "file": "svc/gen/built.py",
+       "kind": "function",
+       "name": "generated_retry",
+       "content": "def generated_retry():\n    \"\"\"Generated retry backoff stub.\"\"\"\n    return 0",
+       "line_start": 1,
+       "line_end": 3,
+       "repo": "svc",
+       "description": "Generated retry backoff stub.",
+       "chunk_id": "svc/gen/built.py#0"
+      },
+      "score": 1.0,
+      "source": "code"
+     },
+     {
+      "meta": {
+       "file": "plain/tool.py",
+       "kind": "function",
+       "name": "retry_tool",
+       "content": "def retry_tool():\n    \"\"\"Retry tool with backoff.\"\"\"\n    return 2",
+       "line_start": 1,
+       "line_end": 3,
+       "repo": "plain",
+       "description": "Retry tool with backoff.",
+       "chunk_id": "plain/tool.py#0"
+      },
+      "score": 1.0,
+      "source": "code"
+     },
+     {
+      "meta": {
+       "file": "svc/app/other.py",
+       "kind": "function",
+       "name": "guess",
+       "content": "def guess(x):\n    \"\"\"Retry whatever x is, with backoff.\"\"\"\n    return x.run()",
+       "line_start": 9,
+       "line_end": 11,
+       "repo": "svc",
+       "description": "Retry whatever x is, with backoff.",
+       "chunk_id": "svc/app/other.py#1"
+      },
+      "score": 1.0,
+      "source": "code"
+     },
+     {
+      "meta": {
+       "file": "svc/app/core.py",
+       "kind": "function",
+       "name": "helper",
+       "content": "def helper():\n    \"\"\"Retry helper with backoff.\"\"\"\n    return 1",
+       "line_start": 1,
+       "line_end": 5,
+       "repo": "svc",
+       "description": "Retry helper with backoff.",
+       "chunk_id": "svc/app/core.py#0"
+      },
+      "score": 0.8165,
+      "source": "code"
+     },
+     {
+      "meta": {
+       "file": "svc/app/core.py",
+       "kind": "class",
+       "name": "Worker",
+       "content": "class Worker:\n    \"\"\"Runs the retry worker.\"\"\"",
+       "line_start": 6,
+       "line_end": 8,
+       "repo": "svc",
+       "description": "Runs the retry worker.",
+       "chunk_id": "svc/app/core.py#1"
+      },
+      "score": 0.5,
+      "source": "code"
+     },
+     {
+      "meta": {
+       "file": "svc/app/other.py",
+       "kind": "function",
+       "name": "use",
+       "content": "def use():\n    \"\"\"Invoice with the retry helper.\"\"\"\n    return helper()",
+       "line_start": 4,
+       "line_end": 8,
+       "repo": "svc",
+       "description": "Invoice with the retry helper.",
+       "chunk_id": "svc/app/other.py#0"
+      },
+      "score": 0.4082,
+      "source": "code"
+     },
+     {
+      "meta": {
+       "file": "svc/app/settings.py",
+       "kind": "lines",
+       "name": "lines_1",
+       "content": "RETRY_BACKOFF_SECONDS = 3\nRETRY_ATTEMPTS_BEFORE_GIVING_UP = 5",
+       "line_start": 1,
+       "line_end": 2,
+       "repo": "svc"
+      },
+      "score": 0.8165,
+      "source": "code"
+     }
+    ]
+   },
+   "stdout": "{\n \"results\": [\n  {\n   \"meta\": {\n    \"file\": \"howto/n.md\",\n    \"title\": \"Note\",\n    \"section\": \"Section\",\n    \"content\": \"a note about retry and backoff in the vault a note about retry and backoff in the vault a note about retry and backoff in the vault\",\n    \"type\": \"howto\",\n    \"chunk_index\": 0,\n    \"line_start\": 3,\n    \"line_end\": 4,\n    \"chunk_id\": \"howto/n.md#1.0\"\n   },\n   \"score\": 0.8165,\n   \"source\": \"memory\"\n  },\n  {\n   \"meta\": {\n    \"file\": \"svc/gen/built.py\",\n    \"kind\": \"function\",\n    \"name\": \"generated_retry\",\n    \"content\": \"def generated_retry():\\n    \\\"\\\"\\\"Generated retry backoff stub.\\\"\\\"\\\"\\n    return 0\",\n    \"line_start\": 1,\n    \"line_end\": 3,\n    \"repo\": \"svc\",\n    \"description\": \"Generated retry backoff stub.\",\n    \"chunk_id\": \"svc/gen/built.py#0\"\n   },\n   \"score\": 1.0,\n   \"source\": \"code\"\n  },\n  {\n   \"meta\": {\n    \"file\": \"plain/tool.py\",\n    \"kind\": \"function\",\n    \"name\": \"retry_tool\",\n    \"content\": \"def retry_tool():\\n    \\\"\\\"\\\"Retry tool with backoff.\\\"\\\"\\\"\\n    return 2\",\n    \"line_start\": 1,\n    \"line_end\": 3,\n    \"repo\": \"plain\",\n    \"description\": \"Retry tool with backoff.\",\n    \"chunk_id\": \"plain/tool.py#0\"\n   },\n   \"score\": 1.0,\n   \"source\": \"code\"\n  },\n  {\n   \"meta\": {\n    \"file\": \"svc/app/other.py\",\n    \"kind\": \"function\",\n    \"name\": \"guess\",\n    \"content\": \"def guess(x):\\n    \\\"\\\"\\\"Retry whatever x is, with backoff.\\\"\\\"\\\"\\n    return x.run()\",\n    \"line_start\": 9,\n    \"line_end\": 11,\n    \"repo\": \"svc\",\n    \"description\": \"Retry whatever x is, with backoff.\",\n    \"chunk_id\": \"svc/app/other.py#1\"\n   },\n   \"score\": 1.0,\n   \"source\": \"code\"\n  },\n  {\n   \"meta\": {\n    \"file\": \"svc/app/core.py\",\n    \"kind\": \"function\",\n    \"name\": \"helper\",\n    \"content\": \"def helper():\\n    \\\"\\\"\\\"Retry helper with backoff.\\\"\\\"\\\"\\n    return 1\",\n    \"line_start\": 1,\n    \"line_end\": 5,\n    \"repo\": \"svc\",\n    \"description\": \"Retry helper with backoff.\",\n    \"chunk_id\": \"svc/app/core.py#0\"\n   },\n   \"score\": 0.8165,\n   \"source\": \"code\"\n  },\n  {\n   \"meta\": {\n    \"file\": \"svc/app/core.py\",\n    \"kind\": \"class\",\n    \"name\": \"Worker\",\n    \"content\": \"class Worker:\\n    \\\"\\\"\\\"Runs the retry worker.\\\"\\\"\\\"\",\n    \"line_start\": 6,\n    \"line_end\": 8,\n    \"repo\": \"svc\",\n    \"description\": \"Runs the retry worker.\",\n    \"chunk_id\": \"svc/app/core.py#1\"\n   },\n   \"score\": 0.5,\n   \"source\": \"code\"\n  },\n  {\n   \"meta\": {\n    \"file\": \"svc/app/other.py\",\n    \"kind\": \"function\",\n    \"name\": \"use\",\n    \"content\": \"def use():\\n    \\\"\\\"\\\"Invoice with the retry helper.\\\"\\\"\\\"\\n    return helper()\",\n    \"line_start\": 4,\n    \"line_end\": 8,\n    \"repo\": \"svc\",\n    \"description\": \"Invoice with the retry helper.\",\n    \"chunk_id\": \"svc/app/other.py#0\"\n   },\n   \"score\": 0.4082,\n   \"source\": \"code\"\n  },\n  {\n   \"meta\": {\n    \"file\": \"svc/app/settings.py\",\n    \"kind\": \"lines\",\n    \"name\": \"lines_1\",\n    \"content\": \"RETRY_BACKOFF_SECONDS = 3\\nRETRY_ATTEMPTS_BEFORE_GIVING_UP = 5\",\n    \"line_start\": 1,\n    \"line_end\": 2,\n    \"repo\": \"svc\"\n   },\n   \"score\": 0.8165,\n   \"source\": \"code\"\n  }\n ]\n}\n",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "search",
+    "retry worker",
+    "--top",
+    "6",
+    "--code-only",
+    "--max-per-file",
+    "0"
+   ],
+   "exit": 0,
+   "payload": {
+    "cmd": "search",
+    "query": "retry worker",
+    "top_k": 6,
+    "hybrid": null,
+    "memory_only": false,
+    "code_only": true,
+    "include_code": false,
+    "repos": null,
+    "include_sources": false,
+    "filter_type": null,
+    "filter_tags": null,
+    "filter_wikilinks": null,
+    "filter_project": null,
+    "path_prefix": null,
+    "full_content": false,
+    "explain": false,
+    "max_per_file": 0,
+    "format": "compact"
+   },
+   "response": {
+    "lines": [
+     "svc/app/core.py | 1.00 | [class] | Worker | class Worker:\n    \"\"\"Runs the retry worker.\"\"\"",
+     "svc/app/core.py | 0.82 | [method] | run |     @staticmethod\n    def run(x):\n        \"\"\"Run one retry of the worker.\"\"\"\n        return helper()",
+     "svc/app/core.py | 0.82 | [function] | main | def main():\n    \"\"\"Retry entry point of the worker.\"\"\"\n    Worker.run(1)\n    return helper()",
+     "svc/gen/built.py | 0.50 | [function] | generated_retry | def generated_retry():\n    \"\"\"Generated retry backoff stub.\"\"\"\n    return 0",
+     "plain/tool.py | 0.50 | [function] | retry_tool | def retry_tool():\n    \"\"\"Retry tool with backoff.\"\"\"\n    return 2",
+     "svc/app/other.py | 0.50 | [function] | guess | def guess(x):\n    \"\"\"Retry whatever x is, with backoff.\"\"\"\n    return x.run()"
+    ]
+   },
+   "stdout": "1. svc/app/core.py | 1.00 | [class] | Worker | class Worker:\n    \"\"\"Runs the retry worker.\"\"\"\n2. svc/app/core.py | 0.82 | [method] | run |     @staticmethod\n    def run(x):\n        \"\"\"Run one retry of the worker.\"\"\"\n        return helper()\n3. svc/app/core.py | 0.82 | [function] | main | def main():\n    \"\"\"Retry entry point of the worker.\"\"\"\n    Worker.run(1)\n    return helper()\n4. svc/gen/built.py | 0.50 | [function] | generated_retry | def generated_retry():\n    \"\"\"Generated retry backoff stub.\"\"\"\n    return 0\n5. plain/tool.py | 0.50 | [function] | retry_tool | def retry_tool():\n    \"\"\"Retry tool with backoff.\"\"\"\n    return 2\n6. svc/app/other.py | 0.50 | [function] | guess | def guess(x):\n    \"\"\"Retry whatever x is, with backoff.\"\"\"\n    return x.run()\n-- ?ms\n",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "search",
+    "retry worker",
+    "--top",
+    "6",
+    "--code-only",
+    "--max-per-file",
+    "0",
+    "--explain",
+    "--json"
+   ],
+   "exit": 0,
+   "payload": {
+    "cmd": "search",
+    "query": "retry worker",
+    "top_k": 6,
+    "hybrid": null,
+    "memory_only": false,
+    "code_only": true,
+    "include_code": false,
+    "repos": null,
+    "include_sources": false,
+    "filter_type": null,
+    "filter_tags": null,
+    "filter_wikilinks": null,
+    "filter_project": null,
+    "path_prefix": null,
+    "full_content": false,
+    "explain": true,
+    "max_per_file": 0,
+    "format": "json"
+   },
+   "response": {
+    "results": [
+     {
+      "meta": {
+       "file": "svc/app/core.py",
+       "kind": "class",
+       "name": "Worker",
+       "content": "class Worker:\n    \"\"\"Runs the retry worker.\"\"\"",
+       "line_start": 6,
+       "line_end": 8,
+       "repo": "svc",
+       "description": "Runs the retry worker.",
+       "chunk_id": "svc/app/core.py#1"
+      },
+      "score": 1.0,
+      "source": "code",
+      "explain": {
+       "semantic": 1.0,
+       "fused": 0.03279
+      }
+     },
+     {
+      "meta": {
+       "file": "svc/app/core.py",
+       "kind": "method",
+       "name": "run",
+       "content": "    @staticmethod\n    def run(x):\n        \"\"\"Run one retry of the worker.\"\"\"\n        return helper()",
+       "line_start": 9,
+       "line_end": 14,
+       "repo": "svc",
+       "description": "Run one retry of the worker.",
+       "chunk_id": "svc/app/core.py#2"
+      },
+      "score": 0.8165,
+      "source": "code",
+      "explain": {
+       "semantic": 0.8165,
+       "fused": 0.032
+      }
+     },
+     {
+      "meta": {
+       "file": "svc/app/core.py",
+       "kind": "function",
+       "name": "main",
+       "content": "def main():\n    \"\"\"Retry entry point of the worker.\"\"\"\n    Worker.run(1)\n    return helper()",
+       "line_start": 15,
+       "line_end": 18,
+       "repo": "svc",
+       "description": "Retry entry point of the worker.",
+       "chunk_id": "svc/app/core.py#3"
+      },
+      "score": 0.8165,
+      "source": "code",
+      "explain": {
+       "semantic": 0.8165,
+       "fused": 0.032
+      }
+     },
+     {
+      "meta": {
+       "file": "svc/gen/built.py",
+       "kind": "function",
+       "name": "generated_retry",
+       "content": "def generated_retry():\n    \"\"\"Generated retry backoff stub.\"\"\"\n    return 0",
+       "line_start": 1,
+       "line_end": 3,
+       "repo": "svc",
+       "description": "Generated retry backoff stub.",
+       "chunk_id": "svc/gen/built.py#0"
+      },
+      "score": 0.5,
+      "source": "code",
+      "explain": {
+       "semantic": 0.5,
+       "fused": 0.03078
+      }
+     },
+     {
+      "meta": {
+       "file": "plain/tool.py",
+       "kind": "function",
+       "name": "retry_tool",
+       "content": "def retry_tool():\n    \"\"\"Retry tool with backoff.\"\"\"\n    return 2",
+       "line_start": 1,
+       "line_end": 3,
+       "repo": "plain",
+       "description": "Retry tool with backoff.",
+       "chunk_id": "plain/tool.py#0"
+      },
+      "score": 0.5,
+      "source": "code",
+      "explain": {
+       "semantic": 0.5,
+       "fused": 0.03078
+      }
+     },
+     {
+      "meta": {
+       "file": "svc/app/other.py",
+       "kind": "function",
+       "name": "guess",
+       "content": "def guess(x):\n    \"\"\"Retry whatever x is, with backoff.\"\"\"\n    return x.run()",
+       "line_start": 9,
+       "line_end": 11,
+       "repo": "svc",
+       "description": "Retry whatever x is, with backoff.",
+       "chunk_id": "svc/app/other.py#1"
+      },
+      "score": 0.5,
+      "source": "code",
+      "explain": {
+       "semantic": 0.5,
+       "fused": 0.03009
+      }
+     }
+    ]
+   },
+   "stdout": "{\n \"results\": [\n  {\n   \"meta\": {\n    \"file\": \"svc/app/core.py\",\n    \"kind\": \"class\",\n    \"name\": \"Worker\",\n    \"content\": \"class Worker:\\n    \\\"\\\"\\\"Runs the retry worker.\\\"\\\"\\\"\",\n    \"line_start\": 6,\n    \"line_end\": 8,\n    \"repo\": \"svc\",\n    \"description\": \"Runs the retry worker.\",\n    \"chunk_id\": \"svc/app/core.py#1\"\n   },\n   \"score\": 1.0,\n   \"source\": \"code\",\n   \"explain\": {\n    \"semantic\": 1.0,\n    \"fused\": 0.03279\n   }\n  },\n  {\n   \"meta\": {\n    \"file\": \"svc/app/core.py\",\n    \"kind\": \"method\",\n    \"name\": \"run\",\n    \"content\": \"    @staticmethod\\n    def run(x):\\n        \\\"\\\"\\\"Run one retry of the worker.\\\"\\\"\\\"\\n        return helper()\",\n    \"line_start\": 9,\n    \"line_end\": 14,\n    \"repo\": \"svc\",\n    \"description\": \"Run one retry of the worker.\",\n    \"chunk_id\": \"svc/app/core.py#2\"\n   },\n   \"score\": 0.8165,\n   \"source\": \"code\",\n   \"explain\": {\n    \"semantic\": 0.8165,\n    \"fused\": 0.032\n   }\n  },\n  {\n   \"meta\": {\n    \"file\": \"svc/app/core.py\",\n    \"kind\": \"function\",\n    \"name\": \"main\",\n    \"content\": \"def main():\\n    \\\"\\\"\\\"Retry entry point of the worker.\\\"\\\"\\\"\\n    Worker.run(1)\\n    return helper()\",\n    \"line_start\": 15,\n    \"line_end\": 18,\n    \"repo\": \"svc\",\n    \"description\": \"Retry entry point of the worker.\",\n    \"chunk_id\": \"svc/app/core.py#3\"\n   },\n   \"score\": 0.8165,\n   \"source\": \"code\",\n   \"explain\": {\n    \"semantic\": 0.8165,\n    \"fused\": 0.032\n   }\n  },\n  {\n   \"meta\": {\n    \"file\": \"svc/gen/built.py\",\n    \"kind\": \"function\",\n    \"name\": \"generated_retry\",\n    \"content\": \"def generated_retry():\\n    \\\"\\\"\\\"Generated retry backoff stub.\\\"\\\"\\\"\\n    return 0\",\n    \"line_start\": 1,\n    \"line_end\": 3,\n    \"repo\": \"svc\",\n    \"description\": \"Generated retry backoff stub.\",\n    \"chunk_id\": \"svc/gen/built.py#0\"\n   },\n   \"score\": 0.5,\n   \"source\": \"code\",\n   \"explain\": {\n    \"semantic\": 0.5,\n    \"fused\": 0.03078\n   }\n  },\n  {\n   \"meta\": {\n    \"file\": \"plain/tool.py\",\n    \"kind\": \"function\",\n    \"name\": \"retry_tool\",\n    \"content\": \"def retry_tool():\\n    \\\"\\\"\\\"Retry tool with backoff.\\\"\\\"\\\"\\n    return 2\",\n    \"line_start\": 1,\n    \"line_end\": 3,\n    \"repo\": \"plain\",\n    \"description\": \"Retry tool with backoff.\",\n    \"chunk_id\": \"plain/tool.py#0\"\n   },\n   \"score\": 0.5,\n   \"source\": \"code\",\n   \"explain\": {\n    \"semantic\": 0.5,\n    \"fused\": 0.03078\n   }\n  },\n  {\n   \"meta\": {\n    \"file\": \"svc/app/other.py\",\n    \"kind\": \"function\",\n    \"name\": \"guess\",\n    \"content\": \"def guess(x):\\n    \\\"\\\"\\\"Retry whatever x is, with backoff.\\\"\\\"\\\"\\n    return x.run()\",\n    \"line_start\": 9,\n    \"line_end\": 11,\n    \"repo\": \"svc\",\n    \"description\": \"Retry whatever x is, with backoff.\",\n    \"chunk_id\": \"svc/app/other.py#1\"\n   },\n   \"score\": 0.5,\n   \"source\": \"code\",\n   \"explain\": {\n    \"semantic\": 0.5,\n    \"fused\": 0.03009\n   }\n  }\n ]\n}\n",
+   "stderr": ""
+  }
+ ]
+}

@@ -76,6 +76,10 @@ def _build_parser() -> argparse.ArgumentParser:
                         "never in the default result set (CODE-INDEX D2)")
     s.add_argument("--repos", help="comma-separated repository names to keep, "
                                    "e.g. --repos api,web (code corpus only)")
+    s.add_argument("--graph", action="store_true",
+                   help="with --with-code/--code-only: add what the code graph knows "
+                        "about each code hit — its definition, callers, callees — read "
+                        "as last written, never refreshed (CODE-GRAPH D1)")
     s.add_argument("--with-sources", action="store_true", dest="with_sources",
                    help="also search ingested raw sources (.mb/sources_index/) — "
                         "escalation when the wiki has no answer")
