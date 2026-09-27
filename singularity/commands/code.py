@@ -211,6 +211,66 @@ def _whole_graph(g, args, env) -> int:
     return 0
 
 
+def _schema_text(data: dict[str, Any]) -> str:
+    from ..codegraph import store
+    text = [f"{k}: {v}" for k, v in data.items() if k not in ("meta", "views", "views_version")]
+    have = data["views_version"]
+    text.append(f"views of `mb code sql` (v{store.VIEWS_VERSION}"
+                + ("" if have == store.VIEWS_VERSION else f"; this graph has {have}: rebuild it to query them")
+                + "):")
+    for name, view in data["views"].items():
+        text.append(f"  {name}: {view['row']}")
+        width = max(len(c) for c in view["columns"])
+        text += [f"    {c:<{width}}  {meaning}" for c, meaning in view["columns"].items()]
+    return "\n".join(text)
+
+
+def _sql(g, args, env) -> int:
+    """`mb code sql`. The SQL comes from --sql-file or stdin, never from the
+    command line, where the shell has its say on quotes and `*` first."""
+    from ..codegraph import sql
+    data = sql.run(g.con, _sql_text(args), limit=args.limit, budget=args.timeout)
+    _emit(args, env("sql", data), "\n".join(_table(data["columns"], data["rows"])))
+    return 0
+
+
+def _sql_text(args) -> str:
+    from ..codegraph.sql import SqlRefused
+    try:
+        if args.sql_file:
+            return Path(args.sql_file).read_text(encoding="utf-8-sig")
+        if sys.stdin is None or sys.stdin.isatty():
+            raise SqlRefused("no SQL: pass --sql-file FILE, or pipe it in (`mb code sql < query.sql`)")
+        raw = getattr(sys.stdin, "buffer", None)
+        # strict: a byte that is not UTF-8 would otherwise change a literal silently
+        return raw.read().decode("utf-8-sig") if raw is not None else sys.stdin.read()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise SqlRefused(f"cannot read the SQL: {exc}") from None
+
+
+def _table(columns: list[str], rows: dict[str, Any]) -> list[str]:
+    """An aligned text table: a column of numbers right-aligned, NULL spelled
+    out, line breaks inside a value folded (--json has every value exact), and
+    a cut answer says it was cut."""
+    def show(v: Any) -> str:
+        return "NULL" if v is None else " ".join(str(v).splitlines())
+
+    cells = [[show(v) for v in row] for row in rows["items"]]
+    widths = [max([len(c)] + [len(r[i]) for r in cells]) for i, c in enumerate(columns)]
+    numeric = [bool(cells) and all(isinstance(row[i], (int, float)) or row[i] is None for row in rows["items"])
+               for i in range(len(columns))]
+
+    def line(values: list[str]) -> str:
+        return "  ".join(v.rjust(w) if num else v.ljust(w)
+                         for v, w, num in zip(values, widths, numeric, strict=True)).rstrip()
+
+    out = [line(columns), line(["-" * w for w in widths]), *(line(r) for r in cells)]
+    n = len(cells)
+    out.append(f"… more rows past --limit {rows['limit']}: raise it, or narrow the query" if rows["has_more"]
+               else f"({n} row{'' if n == 1 else 's'})")
+    return out
+
+
 def _answer(g, args, fr) -> int:
     from ..codegraph import query
 
@@ -223,8 +283,10 @@ def _answer(g, args, fr) -> int:
     action = args.code_action
     if action == "schema":
         data = query.schema(g)
-        _emit(args, env(action, data), "\n".join(f"{k}: {v}" for k, v in data.items() if k != "meta"))
+        _emit(args, env(action, data), _schema_text(data))
         return 0
+    if action == "sql":
+        return _sql(g, args, env)
     if action == "outline":
         items = query.outline(g.con, args.target)
         _emit(args, env(action, {"file": args.target, "symbols": items}),

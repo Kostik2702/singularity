@@ -36,7 +36,8 @@ from ..platform import proc
 # 4: what P4 reads -- per-language counts of files naming each name (`deadcode`
 # must not call a function handed over as a value dead), file communities with
 # stable labels (`arch`), `nodes.bases`.
-SCHEMA_VERSION = 4
+# 5: the `v1_*` views `mb code sql` reads (P5), and `views_version` in meta.
+SCHEMA_VERSION = 5
 _LOCK_WAIT_SECONDS = 5.0
 # A writer that finds another writer busy polls instead of sleeping in
 # SQLite's busy handler: 16 contending callers took 601-1784 ms with the
@@ -89,6 +90,81 @@ CREATE INDEX lookups_name ON lookups(name);
 CREATE INDEX lookups_file ON lookups(file_id);
 CREATE INDEX communities_by ON communities(community);
 """
+
+# What `mb code sql` reads (CODE-GRAPH D1, P5): plain views over the tables,
+# created with every generation. Plain -- joins, never UNION ALL, which SQLite
+# materialises on every step of a recursive query (x320 on a trace, council
+# measurement) -- so a WHERE on a view still reaches the tables' indexes, and
+# an in-place update, which writes the tables, needs no view refreshed. Joins
+# are resolved to paths and qnames and no internal id leaves a view, so the
+# tables may change under the views without breaking a query written for them.
+#
+# The prefix is the contract's version. The views live in the generation, so
+# any change to them is a new SCHEMA_VERSION; a change to what an existing
+# column is called or holds is also a new prefix and VIEWS_VERSION, because a
+# query written for v1 must fail loudly rather than read other semantics. A
+# graph whose `views_version` is not this engine's is refused (codegraph.sql).
+VIEWS_VERSION = 1
+# name -> (what one row is, ((column, meaning), ...), the SELECT). The column
+# list is also the view's declared column list, so this text cannot name a
+# column the view does not have.
+VIEWS: dict[str, tuple[str, tuple[tuple[str, str], ...], str]] = {
+    "v1_files": (
+        "one row per file of the graph",
+        (("path", "relative to the unit root, '/'-separated; the file column of every other view"),
+         ("lang", "python | ts (TypeScript and JavaScript)"),
+         ("size", "bytes, as last read"),
+         ("is_test", "1 for a test file, else 0"),
+         ("parse_status", "ok | partial (the parser recovered from a syntax error; definitions may be missing)")),
+        "SELECT path, lang, size, is_test, parse_status FROM files"),
+    "v1_symbols": (
+        "one row per definition; same-named definitions of one scope are one row with several spans",
+        (("qname", "<path>::<Outer>.<inner>, the identity v1_edges and v1_unresolved refer to"),
+         ("name", "the short name"),
+         ("kind", "function | method | class; in TypeScript also interface | type | enum"),
+         ("file", "the defining file (v1_files.path)"),
+         ("parent", "qname of the enclosing definition; NULL at module level"),
+         ("line", "first line of the first span"),
+         ("end_line", "last line of the last span"),
+         ("spans", "JSON [[first, last], ...]; several for a merged redefinition"),
+         ("exported", "1 if visible outside its module: exported in TypeScript, top level and not _private in Python"),
+         ("local", "1 if defined inside a function, so unreachable by name from elsewhere"),
+         ("signature", "the definition up to its body, whitespace folded to single spaces"),
+         ("doc", "first line of the docstring or /** */ comment; NULL if none"),
+         ("decorators", "JSON list of the decorators as written"),
+         ("bases", "JSON list of a class's base expressions as written")),
+        "SELECT n.qname, n.name, n.kind, f.path, n.parent, json_extract(n.spans, '$[0][0]'),"
+        " json_extract(n.spans, '$[#-1][1]'), n.spans, n.exported, n.local, n.signature, n.doc1,"
+        " n.decorators, n.bases FROM nodes n JOIN files f ON f.id = n.file_id"),
+    "v1_edges": (
+        "one row per resolved relation; a call the resolver could not place is in v1_unresolved, never here",
+        (("src", "qname of the caller, importer or subclass; <path>::<module> for module level"),
+         ("dst", "qname of the callee, imported module or base class"),
+         ("kind", "CALLS | IMPORTS | INHERITS"),
+         ("tier", "how dst was found, strongest first: scope, import, self (also this), class-attr, "
+                  "local-type, annotation, attr-type, name-unique (the name's only definition: the weak tier)"),
+         ("callee", "for CALLS, the name as written at the call site"),
+         ("file", "file of the call site or statement"),
+         ("line", "line of it; 0 for IMPORTS")),
+        "SELECT e.src, e.dst, e.kind, e.tier, e.callee, f.path, e.line FROM edges e JOIN files f ON f.id = e.file_id"),
+    "v1_unresolved": (
+        "one row per call site the resolver could not place: possible callers of every definition of that name",
+        (("caller", "qname of the calling definition"),
+         ("name", "the called name"),
+         ("receiver", "obj of obj.name(...) as written; NULL for a bare call"),
+         ("file", "file of the call site"),
+         ("line", "line of the call site")),
+        "SELECT u.src, u.name, u.receiver, f.path, u.line FROM unresolved u JOIN files f ON f.id = u.file_id"),
+    "v1_communities": (
+        "one row per file placed in a community by the full build (see `mb code arch`)",
+        (("file", "the file (v1_files.path)"),
+         ("community", "the community's number, kept from one build to the next"),
+         ("label", "a readable name for the community; NULL if it has none")),
+        "SELECT f.path, c.community, l.label FROM communities c JOIN files f ON f.id = c.file_id"
+        " LEFT JOIN community_labels l ON l.community = c.community"),
+}
+VIEW_DDL = "".join(f"CREATE VIEW {name}({', '.join(c for c, _ in cols)}) AS {select};\n"
+                   for name, (_, cols, select) in VIEWS.items())
 
 
 # "Racy git": a file modified this close to the moment its content was read
@@ -183,10 +259,11 @@ def write_generation(cfg: Config, unit_key: str, *, meta: dict[str, Any],
     con = sqlite3.connect(db)
     try:
         con.execute("PRAGMA journal_mode=WAL")
-        con.executescript(DDL)
+        con.executescript(DDL + VIEW_DDL)
         with con:
             con.executemany("INSERT INTO meta(k, v) VALUES (?, ?)",
-                            [(k, json.dumps(v)) for k, v in {**meta, "schema_version": SCHEMA_VERSION}.items()])
+                            [(k, json.dumps(v)) for k, v in {**meta, "schema_version": SCHEMA_VERSION,
+                                                             "views_version": VIEWS_VERSION}.items()])
             con.executemany(
                 "INSERT INTO files(id, path, lang, size, mtime_ns, content_hash, parse_status, is_test)"
                 " VALUES (:id, :path, :lang, :size, :mtime_ns, :content_hash, :parse_status, :is_test)", files)
