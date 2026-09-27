@@ -37,6 +37,8 @@ of truth could drift from the first.
 | `mb search <q> --with-code` | memory + code (code is NOT in the default results) |
 | `mb search <q> --code-only` | code only |
 | `mb search <q> --repos api,web` | filter by repository (applies to code only) |
+| `mb search <q> --with-code --graph` | each code hit also says what the code graph knows: its definition, callers, callees, unplaced call sites — read-only, never refreshed; "outside graph universe" for a file no graph holds (CODE-GRAPH P7) |
+| `mb search <q> --with-code --graph-boost` | re-ranks code hits by their symbol's callers in the code graph; off by default, at most 3 places, the same hits (CODE-GRAPH P7; turning it on is the owner's call, numbers in `docs/search-eval-code-v2.json`) |
 | `mb nightly` | the `code_index` step catches the corpus up |
 | `mb stats` / `mb status` | a code line, once the corpus is configured |
 | `mb doctor` | the `K1-code-index` block: WARN/SKIP/PASS, **never FAIL** |
@@ -47,6 +49,7 @@ of truth could drift from the first.
 | `code_repos_dir` | `null` | the directory holding the repositories; `null` = corpus off |
 | `code_index_max_age_days` | `7` | past this `mb doctor` WARNs about staleness |
 | `code_skip_dirs` | `[]` | extra directory names cut at any depth |
+| `code_chunk_schema` | `"v1"` | `"v1"`: the regex chunker below; `"v2"`: definition boundaries from the code graph's tree-sitter extractors (§4, "Chunker v2") |
 
 **A repository outside the root** is attached by a link, without moving it:
 
@@ -101,7 +104,14 @@ them in a skip list.
 `out` `target` `.next` `.nuxt` `.svelte-kit` `.turbo` `.parcel-cache` `.cache`
 `.gradle` `.terraform` · `coverage` `htmlcov` `storybook-static`
 `__snapshots__` `__tests__` · `Pods` `DerivedData` `.idea` `.vscode` `.mb` ·
-`_static`
+`_static` · `__MACOSX` (macOS zip debris: `._<name>` resource-fork twins that
+carry the source file's extension — 22 of them were live chunks on 2026-09-26)
+
+Owner-specific exclusions do **not** belong in this list. A repository name
+the engine should not carry (a former employer's code, a one-off unpacked
+virtualenv like `venv-capcut`) goes in the machine-local `code_skip_dirs`:
+commit `6628a90` removed such a name from `SKIP_REPOS` on purpose, and the
+repository quietly re-entered the index because nothing replaced it in config.
 
 This is **the most effective filter in the whole feature** and the only one that
 cuts before entering a subdirectory. Hence `_scan_corpus` moving from `rglob` to
@@ -206,6 +216,18 @@ hard failure on the first file that does not parse, in exchange for maybe 20%
 better boundaries. Regex degrades into fixed-size windows instead of failing —
 exactly the behaviour needed on a root full of unfinished drafts.
 
+> **Reversed for the code graph, 2026-09-26 (decision CODE-GRAPH D1).** The
+> "hard failure on the first file that does not parse" describes the stdlib
+> `ast` module, not tree-sitter: tree-sitter recovers with ERROR nodes. On a
+> 100k-file proxy it failed hard on 0 files (119 parsed partially), and on a
+> deliberately broken file it still recovered 5 definitions where `ast`
+> recovered 0. What survives of the refusal is the version treadmill, and it is
+> answered by hash-pinned wheels and a doctor check in both interpreters.
+> Regex fallback remains only for a grammar that fails to LOAD. The chunker
+> itself stays on regex (schema 1) until a chunker v2 is measured against the
+> code retrieval set in `tests/fixtures/search_eval.json` — the graph and the
+> chunker are separate reversals.
+
 | Constant | Value | What for |
 |---|---|---|
 | `MAX_BODY_LINES` | 60 | truncation of a symbol's body |
@@ -250,6 +272,32 @@ Two conscious departures from the letter of the spec:
 not become a chunk — a chunk starts at the first symbol boundary. A file with no
 boundaries at all (a config object, a bare script) goes entirely into fallback
 windows.
+
+### Chunker v2 (CODE-GRAPH P7) — opt-in, `code_chunk_schema: "v2"`
+
+`singularity/search/code_chunking_v2.py`. The refusal above was reopened by
+decision CODE-GRAPH D1: tree-sitter RECOVERS from a broken file (0 hard failures
+and 119 partial parses on 100k files), and the version treadmill is closed by
+pins. v2 chunks at definition boundaries using the code graph's extractors (one
+chunk per module-level or class-level definition, `qname` in the metadata),
+keeps the preamble v1 drops, cuts long definitions into overlapping windows and
+merges fragments under 30 characters into a neighbour, so no text is lost.
+
+- **Chosen by config, never by the parser being installed.** v1 stays the default
+  and stays byte-identical (a golden test pins it).
+- **Pins, not the loaded wheels.** The index is stamped with the grammar versions
+  pinned in `requirements-graph.txt`. A writer whose loaded grammars differ, or
+  cannot load them, refuses (`GrammarPinRefused`, a WARN, exit 2 from
+  `mb index --code`) and leaves the code `CURRENT` untouched — no silent fall back
+  to v1. A pin change rebuilds the code corpus, and only it: memory's `CURRENT` is
+  byte-identical across a v1 -> v2 -> v1 round trip.
+- **The gate, measured on an isolated copy** (`docs/search-eval-code-v2.json`, 20
+  code cases, fusion on): R@5 .55 -> .75, R@10 .55 -> .80, MRR .442 -> .508, two
+  cases worse by a rank or three, six better. Cost: +48% chunks, +40% build time.
+- **Before switching it on:** v2 indexes text v1 never did (preambles), and the
+  D5 layer-3 count rose from 24 to 38 secret-shaped markers on the owner's root
+  (test fixtures of `redact`, integration harnesses, one module-level literal).
+  That is the owner's review, not a default.
 
 ## 5. Numbers on a real codebase (C06)
 

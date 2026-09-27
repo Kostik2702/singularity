@@ -31,6 +31,8 @@ mb reflect [--days N] [--json]   # privacy-safe adoption telemetry (offline tran
 mb usage [--session ID] [--list [--days N]] [--turns] [--top N] [--json]
                                  # per-step token cost + what each step added to the context
 mb llm start|stop|status|list|logs|code|setup
+mb code status|build [--all]|update|outline <file>|snippet|callers|callees|trace <symbol>|find <text>|schema|impact|arch|deadcode|sql|audit
+                                 # the structural code graph (off until code_graph_enabled)
 mb init            # write ~/.singularity.json pointer + folder tree
 mb uninstall       # remove hooks/scheduler jobs/daemon (vault untouched)
 """
@@ -74,6 +76,13 @@ def _build_parser() -> argparse.ArgumentParser:
                         "never in the default result set (CODE-INDEX D2)")
     s.add_argument("--repos", help="comma-separated repository names to keep, "
                                    "e.g. --repos api,web (code corpus only)")
+    s.add_argument("--graph", action="store_true",
+                   help="with --with-code/--code-only: add what the code graph knows "
+                        "about each code hit — its definition, callers, callees — read "
+                        "as last written, never refreshed (CODE-GRAPH D1)")
+    s.add_argument("--graph-boost", action="store_true", dest="graph_boost",
+                   help="re-rank code hits by how many callers the code graph knows "
+                        "for their symbol (read-only; off by default, CODE-GRAPH P7)")
     s.add_argument("--with-sources", action="store_true", dest="with_sources",
                    help="also search ingested raw sources (.mb/sources_index/) — "
                         "escalation when the wiki has no answer")
@@ -96,6 +105,65 @@ def _build_parser() -> argparse.ArgumentParser:
     sesst.add_argument("--json", action="store_true")
     sessub.add_parser("index", help="index sessions written since the last run")
     sessub.add_parser("purge", help="delete the store; transcripts and vault untouched")
+
+    cg = sub.add_parser("code", help="the structural code graph: callers, callees, trace, outline")
+    cgsub = cg.add_subparsers(dest="code_action", required=True)
+    cgsub.add_parser("status", help="which repositories have a graph").add_argument("--json", action="store_true")
+    cgb = cgsub.add_parser("build", help="parse and resolve this repository (or --all) into its graph")
+    cgb.add_argument("--all", action="store_true", help="every unit under code_repos_dir and the extra roots")
+    for verb, target_help in (("outline", "file, relative to the repository"),
+                              ("snippet", "symbol: qname, Class.method or a unique name"),
+                              ("callers", "symbol"), ("callees", "symbol"), ("trace", "symbol"),
+                              ("find", "substring of a name or qname"), ("schema", None)):
+        cgv = cgsub.add_parser(verb, help=f"{verb} ({target_help})" if target_help else verb)
+        if target_help:
+            cgv.add_argument("target")
+        if verb == "trace":
+            cgv.add_argument("--direction", choices=["callers", "callees"], default="callers")
+            cgv.add_argument("--depth", type=int, default=3)
+        cgv.add_argument("--limit", type=int, default=50)
+        cgv.add_argument("--offset", type=int, default=0)
+        cgv.add_argument("--no-refresh", action="store_true",
+                         help="answer from the graph as last written, without comparing it with the "
+                              "tree first (known stale files are still named)")
+        cgv.add_argument("--json", action="store_true")
+    cgu = cgsub.add_parser("update", help="bring the graph up to date with the tree, however much "
+                                          "changed (what a query leaves to the background)")
+    cgu.add_argument("--json", action="store_true")
+    cgi = cgsub.add_parser("impact", help="what the change touches: changed symbols, their callers, the tests")
+    cgi.add_argument("--base", help="compare with the merge-base of this ref and HEAD (default: HEAD, "
+                                    "the uncommitted change)")
+    cgi.add_argument("--depth", type=int, default=3)
+    cga = cgsub.add_parser("arch", help="file communities, their coupling, the hotspots")
+    cga.add_argument("--top", type=int, default=10)
+    cgd = cgsub.add_parser("deadcode", help="definitions nothing calls, inherits, names or registers")
+    cgd.add_argument("--unknown", action="store_true",
+                     help="also list the candidates kept as unknown, each with its reason")
+    cgau = cgsub.add_parser("audit", help="secret-shaped values stored in the graphs, redacted "
+                                          "(every built graph, or --project's); exit 1 if any")
+    cgau.add_argument("--json", action="store_true")
+    for cgv in (cgi, cga, cgd):
+        if cgv is not cga:
+            cgv.add_argument("--limit", type=int, default=100 if cgv is cgi else 50)
+            cgv.add_argument("--offset", type=int, default=0)
+        cgv.add_argument("--no-refresh", action="store_true",
+                         help="answer from the graph as last written, without comparing it with the tree first")
+        cgv.add_argument("--json", action="store_true")
+    for cgv in (cgb, cgu, cgi, cga, cgd, cgau, *[cgsub.choices[v] for v in ("outline", "snippet", "callers", "callees",
+                                                                      "trace", "find", "schema")]):
+        cgv.add_argument("--project", help="a registered project id instead of the current directory")
+    cgb.add_argument("--json", action="store_true")
+    # No positional: the SQL never passes through argv, where the shell would
+    # have its say on quotes and `*` first (decision CODE-GRAPH D1).
+    cgs = cgsub.add_parser("sql", help="one read-only SELECT over the v1_* views (`mb code schema` lists "
+                                       "them); the SQL comes from --sql-file or stdin")
+    cgs.add_argument("--sql-file", help="read the SQL from this file (default: stdin)")
+    cgs.add_argument("--limit", type=int, default=100, help="rows at most; a cut answer says so")
+    cgs.add_argument("--timeout", type=float, default=5.0, help="seconds the query may run before it is stopped")
+    cgs.add_argument("--no-refresh", action="store_true",
+                     help="answer from the graph as last written, without comparing it with the tree first")
+    cgs.add_argument("--json", action="store_true")
+    cgs.add_argument("--project", help="a registered project id instead of the current directory")
 
     d = sub.add_parser("daemon", help="daemon control")
     d.add_argument("action",
@@ -552,6 +620,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "sessions":
         from .commands.memory import cmd_sessions
         return cmd_sessions(cfg, args)
+    if args.command == "code":
+        from .commands.code import cmd_code
+        return cmd_code(cfg, args)
     if args.command == "journey":
         from .knowledge import journey as journey_mod
         data = journey_mod.collect(cfg, days=args.days, project=args.project)

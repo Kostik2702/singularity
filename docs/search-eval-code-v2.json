@@ -1,0 +1,2541 @@
+{
+ "about": "Chunker v2 (definition boundaries) against v1 (regex) on the code eval set, same session, same frozen input, same model; plus the graph boost on the served fusion mode. CODE-GRAPH P7.",
+ "taken_at": "2026-09-27T13:07:53",
+ "gate": {
+  "rule": "v2 is not worse than v1 when, in both fusion modes (on and off), every _overall metric -- recall@1, recall@5, recall@10 and MRR -- of v2 is at least v1's minus the weight of ONE case (1/n). Per-class numbers are reported, not gated: with 6-8 cases a class, one case moves a class metric by 12-17 points.",
+  "not_worse": true,
+  "checks": [
+   {
+    "mode": "fusion_on",
+    "metric": "recall@1",
+    "v1": 0.35,
+    "v2": 0.35,
+    "floor": 0.3,
+    "pass": true
+   },
+   {
+    "mode": "fusion_on",
+    "metric": "recall@5",
+    "v1": 0.55,
+    "v2": 0.75,
+    "floor": 0.5,
+    "pass": true
+   },
+   {
+    "mode": "fusion_on",
+    "metric": "recall@10",
+    "v1": 0.55,
+    "v2": 0.8,
+    "floor": 0.5,
+    "pass": true
+   },
+   {
+    "mode": "fusion_on",
+    "metric": "mrr",
+    "v1": 0.4417,
+    "v2": 0.5079,
+    "floor": 0.3917,
+    "pass": true
+   },
+   {
+    "mode": "fusion_off",
+    "metric": "recall@1",
+    "v1": 0.3,
+    "v2": 0.4,
+    "floor": 0.25,
+    "pass": true
+   },
+   {
+    "mode": "fusion_off",
+    "metric": "recall@5",
+    "v1": 0.45,
+    "v2": 0.6,
+    "floor": 0.4,
+    "pass": true
+   },
+   {
+    "mode": "fusion_off",
+    "metric": "recall@10",
+    "v1": 0.5,
+    "v2": 0.65,
+    "floor": 0.45,
+    "pass": true
+   },
+   {
+    "mode": "fusion_off",
+    "metric": "mrr",
+    "v1": 0.3597,
+    "v2": 0.4646,
+    "floor": 0.3097,
+    "pass": true
+   }
+  ]
+ },
+ "isolation": {
+  "snapshot": {
+   "source": "E:\\Project",
+   "files": 1471,
+   "digest": "5f8f8c88b545cfc5707a4a2fe3e01503d28e803911df758a91a6f01a12edd5c7",
+   "extra_skip": [
+    "worktrees"
+   ],
+   "excluded": [
+    "renpy-novel/renpy-8.5.2-sdk"
+   ],
+   "live_index_files": 1463
+  },
+  "live": {
+   "vault": "E:\\obsidian\\memory brain",
+   "before": {
+    "memory_CURRENT": "9f2743724792d8139e2dabf05db872e3262d36892db30981a99a943c35aea12c",
+    "code_CURRENT": "24c73c15d20a9aaab2a7eca16e715dcd9b8ffafb947cbd425b8fd8b7461b57c6"
+   },
+   "after": {
+    "memory_CURRENT": "9f2743724792d8139e2dabf05db872e3262d36892db30981a99a943c35aea12c",
+    "code_CURRENT": "24c73c15d20a9aaab2a7eca16e715dcd9b8ffafb947cbd425b8fd8b7461b57c6"
+   },
+   "untouched": true
+  },
+  "memory_copy": {
+   "v1": {
+    "before": {
+     "copied": true,
+     "generation": "gen_1790501170017_9544_000011",
+     "digest": "7cffc04ef63ad4eee29e6853db83cd0d7252f12efec5d6c0c49c2e889a8217d8"
+    },
+    "after": "7cffc04ef63ad4eee29e6853db83cd0d7252f12efec5d6c0c49c2e889a8217d8"
+   },
+   "v2": {
+    "before": {
+     "copied": true,
+     "generation": "gen_1790501170017_9544_000011",
+     "digest": "7cffc04ef63ad4eee29e6853db83cd0d7252f12efec5d6c0c49c2e889a8217d8"
+    },
+    "after": "7cffc04ef63ad4eee29e6853db83cd0d7252f12efec5d6c0c49c2e889a8217d8"
+   }
+  },
+  "graph": {
+   "units": 25,
+   "seconds": 11.7,
+   "digest": "9cb5eb9016eac665aa9ef43c9a5d28f0aeb4d2b03eba500acd310bf4a54adde6"
+  }
+ },
+ "builds": {
+  "v1": {
+   "seconds": 248.6,
+   "files": 1471,
+   "chunks": 11323,
+   "size_mb": 17.4,
+   "chunk_schema": 1,
+   "grammar_pins": null,
+   "file_meta_digest": "efaf560438aba83187e1381c00546e1b10b9f87d713605255dd4c7139e24a725"
+  },
+  "v2": {
+   "seconds": 354.0,
+   "files": 1471,
+   "chunks": 16726,
+   "size_mb": 25.7,
+   "chunk_schema": 2,
+   "grammar_pins": {
+    "tree-sitter": "0.26.0",
+    "tree-sitter-python": "0.25.0",
+    "tree-sitter-typescript": "0.23.2",
+    "tree-sitter-javascript": "0.25.0"
+   },
+   "file_meta_digest": "efaf560438aba83187e1381c00546e1b10b9f87d713605255dd4c7139e24a725"
+  }
+ },
+ "privacy_audit": {
+  "v1": {
+   "chunks": 11323,
+   "files": 1471,
+   "fallback_share": 0.018,
+   "secret_marker_total": 24,
+   "by_kind": {
+    "function": 7019,
+    "method": 1325,
+    "interface": 1099,
+    "const": 983,
+    "class": 687,
+    "lines": 208,
+    "enum": 2
+   },
+   "markers": {
+    "aws_access_key": 1,
+    "pem_private_key": 3,
+    "password_literal": 7,
+    "secret_literal": 3,
+    "openai_key": 8,
+    "github_token": 2
+   }
+  },
+  "v2": {
+   "chunks": 16726,
+   "files": 1471,
+   "fallback_share": 0.233,
+   "secret_marker_total": 38,
+   "by_kind": {
+    "function": 7710,
+    "lines": 3900,
+    "method": 2504,
+    "interface": 1168,
+    "class": 885,
+    "type": 450,
+    "getter": 107,
+    "enum": 2
+   },
+   "markers": {
+    "aws_access_key": 3,
+    "pem_private_key": 3,
+    "password_literal": 9,
+    "secret_literal": 5,
+    "token_literal": 4,
+    "bearer_token": 1,
+    "openai_key": 10,
+    "github_token": 3
+   }
+  }
+ },
+ "runs": {
+  "v1": {
+   "fusion_off": {
+    "hybrid": false,
+    "corpus": "code",
+    "elapsed_s": 0.51,
+    "metrics": {
+     "identifier": {
+      "n": 6,
+      "recall@1": 0.5,
+      "recall@5": 0.6667,
+      "recall@10": 0.6667,
+      "mrr": 0.5417,
+      "misses": 2
+     },
+     "_overall": {
+      "n": 20,
+      "recall@1": 0.3,
+      "recall@5": 0.45,
+      "recall@10": 0.5,
+      "mrr": 0.3597,
+      "misses": 10
+     },
+     "natural": {
+      "n": 8,
+      "recall@1": 0.125,
+      "recall@5": 0.375,
+      "recall@10": 0.5,
+      "mrr": 0.2431,
+      "misses": 4
+     },
+     "crosslingual": {
+      "n": 6,
+      "recall@1": 0.3333,
+      "recall@5": 0.3333,
+      "recall@10": 0.3333,
+      "mrr": 0.3333,
+      "misses": 4
+     }
+    },
+    "cases": [
+     {
+      "id": "c-id-01",
+      "class": "identifier",
+      "query": "reciprocal rank fusion",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/lexical.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/lexical.py",
+       "Singularity/singularity/search/engine.py",
+       "Singularity/singularity/knowledge/curator.py"
+      ]
+     },
+     {
+      "id": "c-id-02",
+      "class": "identifier",
+      "query": "BM25 okapi idf k1 b",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/search/lexical.py"
+      ],
+      "got": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/sampling.py",
+       "renpy-novel/game/BalanceFracture/_gen_gui.py",
+       "talking-head-saas/tools/arch/fixtures/erasable/enum-violation.ts"
+      ]
+     },
+     {
+      "id": "c-id-03",
+      "class": "identifier",
+      "query": "atomic_write_json",
+      "rank": 4,
+      "expect": [
+       "Singularity/singularity/config.py"
+      ],
+      "got": [
+       "Singularity/singularity/scout/_contract.py",
+       "Singularity/singularity/skills/mb-llm-delegate/delegate.py",
+       "Singularity/singularity/knowledge/digest.py"
+      ]
+     },
+     {
+      "id": "c-id-04",
+      "class": "identifier",
+      "query": "code_fingerprint is_stale",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/code_version.py"
+      ],
+      "got": [
+       "Singularity/tests/test_code_version.py",
+       "renpy-novel/_tools/unrpyc/decompiler/atldecompiler.py",
+       "talking-head-saas/services/gpu-agent/src/server.ts"
+      ]
+     },
+     {
+      "id": "c-id-05",
+      "class": "identifier",
+      "query": "retry_with_backoff",
+      "rank": 1,
+      "expect": [
+       "Singularity/tests/fixtures/code/sample_service.py"
+      ],
+      "got": [
+       "Singularity/tests/fixtures/code/sample_service.py",
+       "talking-head-saas/services/api-gateway/src/jobs/retry-shape.ts",
+       "talking-head-saas/services/orchestrator/src/watchdog/decide.ts"
+      ]
+     },
+     {
+      "id": "c-id-06",
+      "class": "identifier",
+      "query": "resumeFromFirstUnfinished",
+      "rank": 1,
+      "expect": [
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts"
+      ],
+      "got": [
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts",
+       "talking-head-saas/services/orchestrator/src/db/sources.ts",
+       "talking-head-saas/packages/contracts/src/registries.ts"
+      ]
+     },
+     {
+      "id": "c-nat-01",
+      "class": "natural",
+      "query": "warm search daemon speaking newline delimited JSON over TCP",
+      "rank": 2,
+      "expect": [
+       "Singularity/singularity/search/daemon.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/client.py",
+       "Singularity/singularity/search/daemon.py",
+       "Singularity/tests/test_search_graph.py"
+      ]
+     },
+     {
+      "id": "c-nat-02",
+      "class": "natural",
+      "query": "incremental index update by mtime and size diff",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/indexer.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/indexer.py",
+       "Singularity/singularity/knowledge/journey.py",
+       "Singularity/tests/test_sources_index.py"
+      ]
+     },
+     {
+      "id": "c-nat-03",
+      "class": "natural",
+      "query": "inject memory context into every session start",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/hooks/session_start.py"
+      ],
+      "got": [
+       "Singularity/tests/fixtures/code/sample_service.py",
+       "talking-head-saas/services/api-gateway/src/events/sse-session.ts",
+       "Book Writer Project/plugin/book-context-manager/scripts/context_assembler.py"
+      ]
+     },
+     {
+      "id": "c-nat-04",
+      "class": "natural",
+      "query": "block the end of a session until insights are captured",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/hooks/stop_capture.py"
+      ],
+      "got": [
+       "talking-head-saas/packages/shared/src/stage-executor/context.ts",
+       "talking-head-saas/packages/shared/src/bootstrap/shutdown.ts",
+       "talking-head-saas/packages/shared/src/stage-executor/executor.ts"
+      ]
+     },
+     {
+      "id": "c-nat-05",
+      "class": "natural",
+      "query": "report broken wikilinks and orphan notes",
+      "rank": 3,
+      "expect": [
+       "Singularity/singularity/knowledge/curator.py"
+      ],
+      "got": [
+       "Singularity/tests/test_gaps.py",
+       "Singularity/singularity/knowledge/gaps.py",
+       "Singularity/singularity/knowledge/curator.py"
+      ]
+     },
+     {
+      "id": "c-nat-06",
+      "class": "natural",
+      "query": "propose merging a learning into an existing reference note",
+      "rank": 9,
+      "expect": [
+       "Singularity/singularity/knowledge/digest.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/nightly.py",
+       "Singularity/tests/test_digest.py",
+       "studio-orchestration/tests/test_cost.py"
+      ]
+     },
+     {
+      "id": "c-nat-07",
+      "class": "natural",
+      "query": "limit how many unfinished jobs one user may hold before creating another",
+      "rank": null,
+      "expect": [
+       "talking-head-saas/services/api-gateway/src/jobs/quota.ts"
+      ],
+      "got": [
+       "Singularity/singularity/codegraph/store.py",
+       "talking-head-saas/apps/web/src/features/create-job/limits.ts",
+       "talking-head-saas/apps/web/src/features/timeline/timeline.ts"
+      ]
+     },
+     {
+      "id": "c-nat-08",
+      "class": "natural",
+      "query": "posterior mean of reference latents pulls the denoised estimate toward them",
+      "rank": null,
+      "expect": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/ref_mean.py"
+      ],
+      "got": [
+       "talking-head-saas/services/orchestrator/src/progress/sparse-write.ts",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/tests/test_sampling.py",
+       "talking-head-saas/services/orchestrator/src/metrics.ts"
+      ]
+     },
+     {
+      "id": "c-xl-01",
+      "class": "crosslingual",
+      "query": "маскирование секретов перед записью в заметку",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/redact.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/redact.py",
+       "Singularity/tests/test_redact.py",
+       "talking-head-saas/packages/shared/src/logger/logger.ts"
+      ]
+     },
+     {
+      "id": "c-xl-02",
+      "class": "crosslingual",
+      "query": "разбить переросшую заметку на индекс и дочерние",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/notesplit.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/notesplit.py",
+       "Singularity/singularity/knowledge/journey.py",
+       "Singularity/singularity/commands/memory.py"
+      ]
+     },
+     {
+      "id": "c-xl-03",
+      "class": "crosslingual",
+      "query": "определение проекта по самому глубокому совпадению пути",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/projects.py"
+      ],
+      "got": [
+       "talking-head-saas/apps/web/src/pages/job-details/stages.ts",
+       "talking-head-saas/services/analysis-worker/src/infrastructure/llm/repair.ts",
+       "talking-head-saas/services/analysis-worker/src/stages/analyze/analyze.stage.ts"
+      ]
+     },
+     {
+      "id": "c-xl-04",
+      "class": "crosslingual",
+      "query": "восстановление конфига из бэкапа с контрольной суммой",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/backup.py"
+      ],
+      "got": [
+       "talking-head-saas/services/orchestrator/src/db/sources.ts",
+       "talking-head-saas/tests/chaos/_chaos.ts",
+       "talking-head-saas/tests/e2e/_docker.ts"
+      ]
+     },
+     {
+      "id": "c-xl-05",
+      "class": "crosslingual",
+      "query": "страж записи в vault перед вызовом инструмента",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/hooks/vault_guard.py",
+       "Singularity/singularity/machine/vault_guard.py"
+      ],
+      "got": [
+       "Singularity/singularity/telemetry/reflect.py",
+       "talking-head-saas/services/orchestrator/src/keepawake/lease.ts",
+       "talking-head-saas/services/api-gateway/src/artifacts/artifacts.controller.ts"
+      ]
+     },
+     {
+      "id": "c-xl-06",
+      "class": "crosslingual",
+      "query": "аналитическое семейство расписаний сигм для flow matching",
+      "rank": null,
+      "expect": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/schedules.py"
+      ],
+      "got": [
+       "ComfyUI-ZIT-HiresPhoto/tests/test_sampler_integration.py",
+       "ComfyUI-ZIT-HiresPhoto/core/schedule.py",
+       "Singularity/tests/test_wiki_loop_integration.py"
+      ]
+     }
+    ]
+   },
+   "fusion_on": {
+    "hybrid": true,
+    "corpus": "code",
+    "elapsed_s": 1.12,
+    "metrics": {
+     "identifier": {
+      "n": 6,
+      "recall@1": 0.5,
+      "recall@5": 0.8333,
+      "recall@10": 0.8333,
+      "mrr": 0.6389,
+      "misses": 1
+     },
+     "_overall": {
+      "n": 20,
+      "recall@1": 0.35,
+      "recall@5": 0.55,
+      "recall@10": 0.55,
+      "mrr": 0.4417,
+      "misses": 9
+     },
+     "natural": {
+      "n": 8,
+      "recall@1": 0.375,
+      "recall@5": 0.5,
+      "recall@10": 0.5,
+      "mrr": 0.4375,
+      "misses": 4
+     },
+     "crosslingual": {
+      "n": 6,
+      "recall@1": 0.1667,
+      "recall@5": 0.3333,
+      "recall@10": 0.3333,
+      "mrr": 0.25,
+      "misses": 4
+     }
+    },
+    "cases": [
+     {
+      "id": "c-id-01",
+      "class": "identifier",
+      "query": "reciprocal rank fusion",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/lexical.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/lexical.py",
+       "Singularity/singularity/search/engine.py",
+       "Singularity/tests/test_search_hybrid.py"
+      ]
+     },
+     {
+      "id": "c-id-02",
+      "class": "identifier",
+      "query": "BM25 okapi idf k1 b",
+      "rank": 3,
+      "expect": [
+       "Singularity/singularity/search/lexical.py"
+      ],
+      "got": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/tests/test_variety.py",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/sampling.py",
+       "Singularity/singularity/search/lexical.py"
+      ]
+     },
+     {
+      "id": "c-id-03",
+      "class": "identifier",
+      "query": "atomic_write_json",
+      "rank": 2,
+      "expect": [
+       "Singularity/singularity/config.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/digest.py",
+       "Singularity/singularity/config.py",
+       "Singularity/singularity/knowledge/sources.py"
+      ]
+     },
+     {
+      "id": "c-id-04",
+      "class": "identifier",
+      "query": "code_fingerprint is_stale",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/code_version.py"
+      ],
+      "got": [
+       "Singularity/tests/test_code_version.py",
+       "renpy-novel/_tools/unrpyc/decompiler/atldecompiler.py",
+       "Singularity/singularity/search/daemon.py"
+      ]
+     },
+     {
+      "id": "c-id-05",
+      "class": "identifier",
+      "query": "retry_with_backoff",
+      "rank": 1,
+      "expect": [
+       "Singularity/tests/fixtures/code/sample_service.py"
+      ],
+      "got": [
+       "Singularity/tests/fixtures/code/sample_service.py",
+       "Singularity/tests/test_code_chunking.py",
+       "talking-head-saas/services/api-gateway/src/jobs/retry-shape.ts"
+      ]
+     },
+     {
+      "id": "c-id-06",
+      "class": "identifier",
+      "query": "resumeFromFirstUnfinished",
+      "rank": 1,
+      "expect": [
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts"
+      ],
+      "got": [
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts",
+       "talking-head-saas/services/orchestrator/src/db/sources.ts",
+       "talking-head-saas/packages/contracts/src/registries.ts"
+      ]
+     },
+     {
+      "id": "c-nat-01",
+      "class": "natural",
+      "query": "warm search daemon speaking newline delimited JSON over TCP",
+      "rank": 2,
+      "expect": [
+       "Singularity/singularity/search/daemon.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/client.py",
+       "Singularity/singularity/search/daemon.py",
+       "Singularity/tests/test_search_graph.py"
+      ]
+     },
+     {
+      "id": "c-nat-02",
+      "class": "natural",
+      "query": "incremental index update by mtime and size diff",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/indexer.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/indexer.py",
+       "Singularity/tests/test_indexer.py",
+       "krea-lora-trainer/tools/classify_v4_gaps.py"
+      ]
+     },
+     {
+      "id": "c-nat-03",
+      "class": "natural",
+      "query": "inject memory context into every session start",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/hooks/session_start.py"
+      ],
+      "got": [
+       "Book Writer Project/plugin/book-context-manager/scripts/context_assembler.py",
+       "talking-head-saas/apps/web/src/app/runtime-context.tsx",
+       "Singularity/singularity/telemetry/tokens.py"
+      ]
+     },
+     {
+      "id": "c-nat-04",
+      "class": "natural",
+      "query": "block the end of a session until insights are captured",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/hooks/stop_capture.py"
+      ],
+      "got": [
+       "talking-head-saas/packages/shared/src/stage-executor/context.ts",
+       "Singularity/tests/test_tokens.py",
+       "talking-head-saas/packages/shared/src/bootstrap/shutdown.ts"
+      ]
+     },
+     {
+      "id": "c-nat-05",
+      "class": "natural",
+      "query": "report broken wikilinks and orphan notes",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/curator.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/curator.py",
+       "Singularity/tests/test_gaps.py",
+       "Singularity/singularity/knowledge/gaps.py"
+      ]
+     },
+     {
+      "id": "c-nat-06",
+      "class": "natural",
+      "query": "propose merging a learning into an existing reference note",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/digest.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/digest.py",
+       "Singularity/tests/test_routing.py",
+       "Singularity/singularity/knowledge/nightly.py"
+      ]
+     },
+     {
+      "id": "c-nat-07",
+      "class": "natural",
+      "query": "limit how many unfinished jobs one user may hold before creating another",
+      "rank": null,
+      "expect": [
+       "talking-head-saas/services/api-gateway/src/jobs/quota.ts"
+      ],
+      "got": [
+       "Singularity/singularity/codegraph/store.py",
+       "Singularity/singularity/machine/status.py",
+       "talking-head-saas/apps/web/src/features/create-job/limits.ts"
+      ]
+     },
+     {
+      "id": "c-nat-08",
+      "class": "natural",
+      "query": "posterior mean of reference latents pulls the denoised estimate toward them",
+      "rank": null,
+      "expect": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/ref_mean.py"
+      ],
+      "got": [
+       "krea-lora-trainer/tools/body_metrics.py",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/tests/test_sampling.py",
+       "talking-head-saas/services/orchestrator/src/progress/sparse-write.ts"
+      ]
+     },
+     {
+      "id": "c-xl-01",
+      "class": "crosslingual",
+      "query": "маскирование секретов перед записью в заметку",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/redact.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/redact.py",
+       "talking-head-saas/tests/load/_gc.ts",
+       "Singularity/tests/test_redact.py"
+      ]
+     },
+     {
+      "id": "c-xl-02",
+      "class": "crosslingual",
+      "query": "разбить переросшую заметку на индекс и дочерние",
+      "rank": 2,
+      "expect": [
+       "Singularity/singularity/knowledge/notesplit.py"
+      ],
+      "got": [
+       "talking-head-saas/packages/contracts/src/enums/index.ts",
+       "Singularity/singularity/knowledge/notesplit.py",
+       "talking-head-saas/services/file-service/src/db/artifacts.repository.ts"
+      ]
+     },
+     {
+      "id": "c-xl-03",
+      "class": "crosslingual",
+      "query": "определение проекта по самому глубокому совпадению пути",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/projects.py"
+      ],
+      "got": [
+       "talking-head-saas/apps/web/src/pages/job-details/stages.ts",
+       "Book Writer Project/plugin_addition/scripts/device_registry.py",
+       "talking-head-saas/services/analysis-worker/src/infrastructure/llm/repair.ts"
+      ]
+     },
+     {
+      "id": "c-xl-04",
+      "class": "crosslingual",
+      "query": "восстановление конфига из бэкапа с контрольной суммой",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/backup.py"
+      ],
+      "got": [
+       "talking-head-saas/packages/shared/src/stage-executor/poison.ts",
+       "talking-head-saas/tests/chaos/_chaos.ts",
+       "talking-head-saas/tests/e2e/_harness.ts"
+      ]
+     },
+     {
+      "id": "c-xl-05",
+      "class": "crosslingual",
+      "query": "страж записи в vault перед вызовом инструмента",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/hooks/vault_guard.py",
+       "Singularity/singularity/machine/vault_guard.py"
+      ],
+      "got": [
+       "talking-head-saas/services/orchestrator/src/keepawake/lease.ts",
+       "Singularity/singularity/telemetry/reflect.py",
+       "talking-head-saas/apps/web/src/features/job-actions/allowed-actions.ts"
+      ]
+     },
+     {
+      "id": "c-xl-06",
+      "class": "crosslingual",
+      "query": "аналитическое семейство расписаний сигм для flow matching",
+      "rank": null,
+      "expect": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/schedules.py"
+      ],
+      "got": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/sampling.py",
+       "Krea2 Nodes/research/models/m2_sigma_nudge.py",
+       "ComfyUI-ZIT-HiresPhoto/core/schedule.py"
+      ]
+     }
+    ]
+   },
+   "fusion_on_boost": {
+    "hybrid": true,
+    "corpus": "code",
+    "elapsed_s": 1.31,
+    "metrics": {
+     "identifier": {
+      "n": 6,
+      "recall@1": 0.6667,
+      "recall@5": 0.8333,
+      "recall@10": 0.8333,
+      "mrr": 0.7222,
+      "misses": 1
+     },
+     "_overall": {
+      "n": 20,
+      "recall@1": 0.4,
+      "recall@5": 0.55,
+      "recall@10": 0.55,
+      "mrr": 0.4667,
+      "misses": 9
+     },
+     "natural": {
+      "n": 8,
+      "recall@1": 0.375,
+      "recall@5": 0.5,
+      "recall@10": 0.5,
+      "mrr": 0.4375,
+      "misses": 4
+     },
+     "crosslingual": {
+      "n": 6,
+      "recall@1": 0.1667,
+      "recall@5": 0.3333,
+      "recall@10": 0.3333,
+      "mrr": 0.25,
+      "misses": 4
+     }
+    },
+    "cases": [
+     {
+      "id": "c-id-01",
+      "class": "identifier",
+      "query": "reciprocal rank fusion",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/lexical.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/lexical.py",
+       "Singularity/singularity/search/engine.py",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/composition.py"
+      ]
+     },
+     {
+      "id": "c-id-02",
+      "class": "identifier",
+      "query": "BM25 okapi idf k1 b",
+      "rank": 3,
+      "expect": [
+       "Singularity/singularity/search/lexical.py"
+      ],
+      "got": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/tests/test_variety.py",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/sampling.py",
+       "Singularity/singularity/search/lexical.py"
+      ]
+     },
+     {
+      "id": "c-id-03",
+      "class": "identifier",
+      "query": "atomic_write_json",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/config.py"
+      ],
+      "got": [
+       "Singularity/singularity/config.py",
+       "Singularity/singularity/knowledge/digest.py",
+       "Singularity/singularity/knowledge/sources.py"
+      ]
+     },
+     {
+      "id": "c-id-04",
+      "class": "identifier",
+      "query": "code_fingerprint is_stale",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/code_version.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/daemon.py",
+       "Singularity/tests/test_code_version.py",
+       "renpy-novel/_tools/unrpyc/decompiler/atldecompiler.py"
+      ]
+     },
+     {
+      "id": "c-id-05",
+      "class": "identifier",
+      "query": "retry_with_backoff",
+      "rank": 1,
+      "expect": [
+       "Singularity/tests/fixtures/code/sample_service.py"
+      ],
+      "got": [
+       "Singularity/tests/fixtures/code/sample_service.py",
+       "talking-head-saas/services/api-gateway/src/jobs/retry-shape.ts",
+       "Singularity/tests/test_code_chunking.py"
+      ]
+     },
+     {
+      "id": "c-id-06",
+      "class": "identifier",
+      "query": "resumeFromFirstUnfinished",
+      "rank": 1,
+      "expect": [
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts"
+      ],
+      "got": [
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts",
+       "talking-head-saas/services/orchestrator/src/db/sources.ts",
+       "talking-head-saas/packages/contracts/src/registries.ts"
+      ]
+     },
+     {
+      "id": "c-nat-01",
+      "class": "natural",
+      "query": "warm search daemon speaking newline delimited JSON over TCP",
+      "rank": 2,
+      "expect": [
+       "Singularity/singularity/search/daemon.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/client.py",
+       "Singularity/singularity/search/daemon.py",
+       "Singularity/tests/test_search_graph.py"
+      ]
+     },
+     {
+      "id": "c-nat-02",
+      "class": "natural",
+      "query": "incremental index update by mtime and size diff",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/indexer.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/indexer.py",
+       "Singularity/tests/test_indexer.py",
+       "Singularity/singularity/knowledge/nightly.py"
+      ]
+     },
+     {
+      "id": "c-nat-03",
+      "class": "natural",
+      "query": "inject memory context into every session start",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/hooks/session_start.py"
+      ],
+      "got": [
+       "Book Writer Project/plugin/book-context-manager/scripts/context_assembler.py",
+       "talking-head-saas/apps/web/src/app/runtime-context.tsx",
+       "Singularity/singularity/telemetry/tokens.py"
+      ]
+     },
+     {
+      "id": "c-nat-04",
+      "class": "natural",
+      "query": "block the end of a session until insights are captured",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/hooks/stop_capture.py"
+      ],
+      "got": [
+       "talking-head-saas/packages/shared/src/stage-executor/context.ts",
+       "Singularity/install/client_registration.py",
+       "Singularity/tests/test_tokens.py"
+      ]
+     },
+     {
+      "id": "c-nat-05",
+      "class": "natural",
+      "query": "report broken wikilinks and orphan notes",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/curator.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/curator.py",
+       "Singularity/tests/test_gaps.py",
+       "Singularity/singularity/knowledge/gaps.py"
+      ]
+     },
+     {
+      "id": "c-nat-06",
+      "class": "natural",
+      "query": "propose merging a learning into an existing reference note",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/digest.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/digest.py",
+       "Singularity/tests/test_routing.py",
+       "Singularity/singularity/knowledge/nightly.py"
+      ]
+     },
+     {
+      "id": "c-nat-07",
+      "class": "natural",
+      "query": "limit how many unfinished jobs one user may hold before creating another",
+      "rank": null,
+      "expect": [
+       "talking-head-saas/services/api-gateway/src/jobs/quota.ts"
+      ],
+      "got": [
+       "Singularity/singularity/codegraph/store.py",
+       "Singularity/singularity/machine/status.py",
+       "talking-head-saas/apps/web/src/features/create-job/limits.ts"
+      ]
+     },
+     {
+      "id": "c-nat-08",
+      "class": "natural",
+      "query": "posterior mean of reference latents pulls the denoised estimate toward them",
+      "rank": null,
+      "expect": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/ref_mean.py"
+      ],
+      "got": [
+       "krea-lora-trainer/tools/body_metrics.py",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/tests/test_sampling.py",
+       "talking-head-saas/services/orchestrator/src/progress/sparse-write.ts"
+      ]
+     },
+     {
+      "id": "c-xl-01",
+      "class": "crosslingual",
+      "query": "маскирование секретов перед записью в заметку",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/redact.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/redact.py",
+       "talking-head-saas/tests/load/_gc.ts",
+       "Singularity/tests/test_redact.py"
+      ]
+     },
+     {
+      "id": "c-xl-02",
+      "class": "crosslingual",
+      "query": "разбить переросшую заметку на индекс и дочерние",
+      "rank": 2,
+      "expect": [
+       "Singularity/singularity/knowledge/notesplit.py"
+      ],
+      "got": [
+       "talking-head-saas/packages/contracts/src/enums/index.ts",
+       "Singularity/singularity/knowledge/notesplit.py",
+       "talking-head-saas/services/file-service/src/db/artifacts.repository.ts"
+      ]
+     },
+     {
+      "id": "c-xl-03",
+      "class": "crosslingual",
+      "query": "определение проекта по самому глубокому совпадению пути",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/projects.py"
+      ],
+      "got": [
+       "Book Writer Project/plugin_addition/scripts/device_registry.py",
+       "talking-head-saas/apps/web/src/pages/job-details/stages.ts",
+       "talking-head-saas/services/analysis-worker/src/infrastructure/llm/repair.ts"
+      ]
+     },
+     {
+      "id": "c-xl-04",
+      "class": "crosslingual",
+      "query": "восстановление конфига из бэкапа с контрольной суммой",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/backup.py"
+      ],
+      "got": [
+       "talking-head-saas/packages/shared/src/stage-executor/poison.ts",
+       "talking-head-saas/tests/chaos/_chaos.ts",
+       "talking-head-saas/tests/e2e/_harness.ts"
+      ]
+     },
+     {
+      "id": "c-xl-05",
+      "class": "crosslingual",
+      "query": "страж записи в vault перед вызовом инструмента",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/hooks/vault_guard.py",
+       "Singularity/singularity/machine/vault_guard.py"
+      ],
+      "got": [
+       "Singularity/singularity/telemetry/reflect.py",
+       "talking-head-saas/services/orchestrator/src/keepawake/lease.ts",
+       "talking-head-saas/apps/web/src/features/job-actions/allowed-actions.ts"
+      ]
+     },
+     {
+      "id": "c-xl-06",
+      "class": "crosslingual",
+      "query": "аналитическое семейство расписаний сигм для flow matching",
+      "rank": null,
+      "expect": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/schedules.py"
+      ],
+      "got": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/sampling.py",
+       "ComfyUI-ZIT-HiresPhoto/core/schedule.py",
+       "Krea2 Nodes/research/models/m2_sigma_nudge.py"
+      ]
+     }
+    ]
+   }
+  },
+  "v2": {
+   "fusion_off": {
+    "hybrid": false,
+    "corpus": "code",
+    "elapsed_s": 0.46,
+    "metrics": {
+     "identifier": {
+      "n": 6,
+      "recall@1": 0.5,
+      "recall@5": 0.6667,
+      "recall@10": 0.6667,
+      "mrr": 0.5417,
+      "misses": 2
+     },
+     "_overall": {
+      "n": 20,
+      "recall@1": 0.4,
+      "recall@5": 0.6,
+      "recall@10": 0.65,
+      "mrr": 0.4646,
+      "misses": 7
+     },
+     "natural": {
+      "n": 8,
+      "recall@1": 0.375,
+      "recall@5": 0.625,
+      "recall@10": 0.75,
+      "mrr": 0.4635,
+      "misses": 2
+     },
+     "crosslingual": {
+      "n": 6,
+      "recall@1": 0.3333,
+      "recall@5": 0.5,
+      "recall@10": 0.5,
+      "mrr": 0.3889,
+      "misses": 3
+     }
+    },
+    "cases": [
+     {
+      "id": "c-id-01",
+      "class": "identifier",
+      "query": "reciprocal rank fusion",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/lexical.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/lexical.py",
+       "Singularity/tests/test_search_hybrid.py",
+       "Singularity/singularity/search/engine.py"
+      ]
+     },
+     {
+      "id": "c-id-02",
+      "class": "identifier",
+      "query": "BM25 okapi idf k1 b",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/search/lexical.py"
+      ],
+      "got": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/sampling.py",
+       "renpy-novel/game/BalanceFracture/_gen_gui.py",
+       "talking-head-saas/tools/arch/fixtures/erasable/enum-violation.ts"
+      ]
+     },
+     {
+      "id": "c-id-03",
+      "class": "identifier",
+      "query": "atomic_write_json",
+      "rank": 4,
+      "expect": [
+       "Singularity/singularity/config.py"
+      ],
+      "got": [
+       "Singularity/singularity/scout/_contract.py",
+       "Singularity/singularity/skills/mb-llm-delegate/delegate.py",
+       "Singularity/singularity/knowledge/digest.py"
+      ]
+     },
+     {
+      "id": "c-id-04",
+      "class": "identifier",
+      "query": "code_fingerprint is_stale",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/code_version.py"
+      ],
+      "got": [
+       "Singularity/tests/test_code_version.py",
+       "talking-head-saas/apps/web/src/__arch__/lint-fixture/src/ops-identifier.fixture.tsx",
+       "ComfyUI-dlss-enhancer/tests/test_runtime.py"
+      ]
+     },
+     {
+      "id": "c-id-05",
+      "class": "identifier",
+      "query": "retry_with_backoff",
+      "rank": 1,
+      "expect": [
+       "Singularity/tests/fixtures/code/sample_service.py"
+      ],
+      "got": [
+       "Singularity/tests/fixtures/code/sample_service.py",
+       "talking-head-saas/apps/web/src/features/job-actions/retry-consent.ts",
+       "talking-head-saas/services/orchestrator/src/watchdog/decide.ts"
+      ]
+     },
+     {
+      "id": "c-id-06",
+      "class": "identifier",
+      "query": "resumeFromFirstUnfinished",
+      "rank": 1,
+      "expect": [
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts"
+      ],
+      "got": [
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts",
+       "talking-head-saas/services/orchestrator/src/__it__/stand.ts",
+       "talking-head-saas/apps/web/src/i18n/en.ts"
+      ]
+     },
+     {
+      "id": "c-nat-01",
+      "class": "natural",
+      "query": "warm search daemon speaking newline delimited JSON over TCP",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/daemon.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/daemon.py",
+       "Singularity/singularity/search/client.py",
+       "talking-head-saas/services/api-gateway/src/health/probes.ts"
+      ]
+     },
+     {
+      "id": "c-nat-02",
+      "class": "natural",
+      "query": "incremental index update by mtime and size diff",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/indexer.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/indexer.py",
+       "Singularity/singularity/knowledge/journey.py",
+       "Singularity/tests/test_sources_index.py"
+      ]
+     },
+     {
+      "id": "c-nat-03",
+      "class": "natural",
+      "query": "inject memory context into every session start",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/hooks/session_start.py"
+      ],
+      "got": [
+       "Singularity/singularity/hooks/session_start.py",
+       "Singularity/singularity/hooks/gemini_session_start.py",
+       "Singularity/tests/fixtures/code/sample_service.py"
+      ]
+     },
+     {
+      "id": "c-nat-04",
+      "class": "natural",
+      "query": "block the end of a session until insights are captured",
+      "rank": 4,
+      "expect": [
+       "Singularity/singularity/hooks/stop_capture.py"
+      ],
+      "got": [
+       "talking-head-saas/services/api-gateway/src/identity/session-sweeper.ts",
+       "talking-head-saas/services/api-gateway/src/events/sse-session.ts",
+       "talking-head-saas/apps/web/src/auth/session.ts"
+      ]
+     },
+     {
+      "id": "c-nat-05",
+      "class": "natural",
+      "query": "report broken wikilinks and orphan notes",
+      "rank": 3,
+      "expect": [
+       "Singularity/singularity/knowledge/curator.py"
+      ],
+      "got": [
+       "Singularity/tests/test_gaps.py",
+       "Singularity/singularity/knowledge/gaps.py",
+       "Singularity/singularity/knowledge/curator.py"
+      ]
+     },
+     {
+      "id": "c-nat-06",
+      "class": "natural",
+      "query": "propose merging a learning into an existing reference note",
+      "rank": 8,
+      "expect": [
+       "Singularity/singularity/knowledge/digest.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/ingest_plan.py",
+       "Singularity/singularity/knowledge/nightly.py",
+       "Singularity/tests/test_digest.py"
+      ]
+     },
+     {
+      "id": "c-nat-07",
+      "class": "natural",
+      "query": "limit how many unfinished jobs one user may hold before creating another",
+      "rank": null,
+      "expect": [
+       "talking-head-saas/services/api-gateway/src/jobs/quota.ts"
+      ],
+      "got": [
+       "Singularity/singularity/codegraph/store.py",
+       "talking-head-saas/services/assembly-worker/src/stages/assemble/shots.ts",
+       "talking-head-saas/packages/persistence/src/storage/job-owner-storage.ts"
+      ]
+     },
+     {
+      "id": "c-nat-08",
+      "class": "natural",
+      "query": "posterior mean of reference latents pulls the denoised estimate toward them",
+      "rank": null,
+      "expect": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/ref_mean.py"
+      ],
+      "got": [
+       "talking-head-saas/services/orchestrator/src/progress/sparse-write.ts",
+       "talking-head-saas/services/orchestrator/src/metrics.ts",
+       "Krea2 Nodes/research/face_identity_rig/rig.py"
+      ]
+     },
+     {
+      "id": "c-xl-01",
+      "class": "crosslingual",
+      "query": "маскирование секретов перед записью в заметку",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/redact.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/redact.py",
+       "Book Writer Project/plugin_addition/scripts/devices_lib.py",
+       "Singularity/tests/test_redact.py"
+      ]
+     },
+     {
+      "id": "c-xl-02",
+      "class": "crosslingual",
+      "query": "разбить переросшую заметку на индекс и дочерние",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/notesplit.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/notesplit.py",
+       "Singularity/singularity/knowledge/journey.py",
+       "Singularity/singularity/commands/memory.py"
+      ]
+     },
+     {
+      "id": "c-xl-03",
+      "class": "crosslingual",
+      "query": "определение проекта по самому глубокому совпадению пути",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/projects.py"
+      ],
+      "got": [
+       "Book Writer Project/plugin_addition/devices/_build.py",
+       "talking-head-saas/apps/web/src/pages/job-details/stages.ts",
+       "talking-head-saas/services/analysis-worker/src/infrastructure/llm/repair.ts"
+      ]
+     },
+     {
+      "id": "c-xl-04",
+      "class": "crosslingual",
+      "query": "восстановление конфига из бэкапа с контрольной суммой",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/backup.py"
+      ],
+      "got": [
+       "talking-head-saas/packages/persistence/src/repositories/artifacts.ts",
+       "talking-head-saas/services/orchestrator/src/db/sources.ts",
+       "talking-head-saas/services/orchestrator/src/recovery/decide.ts"
+      ]
+     },
+     {
+      "id": "c-xl-05",
+      "class": "crosslingual",
+      "query": "страж записи в vault перед вызовом инструмента",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/hooks/vault_guard.py",
+       "Singularity/singularity/machine/vault_guard.py"
+      ],
+      "got": [
+       "talking-head-saas/services/orchestrator/src/saga/job-saga.ts",
+       "Singularity/singularity/machine/hooks_state.py",
+       "talking-head-saas/services/orchestrator/src/state/redis-state.ts"
+      ]
+     },
+     {
+      "id": "c-xl-06",
+      "class": "crosslingual",
+      "query": "аналитическое семейство расписаний сигм для flow matching",
+      "rank": 3,
+      "expect": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/schedules.py"
+      ],
+      "got": [
+       "ComfyUI-ZIT-HiresPhoto/core/schedule.py",
+       "ComfyUI-ZIT-HiresPhoto/tests/test_sampler_integration.py",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/schedules.py"
+      ]
+     }
+    ]
+   },
+   "fusion_on": {
+    "hybrid": true,
+    "corpus": "code",
+    "elapsed_s": 1.53,
+    "metrics": {
+     "identifier": {
+      "n": 6,
+      "recall@1": 0.5,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "mrr": 0.6722,
+      "misses": 0
+     },
+     "_overall": {
+      "n": 20,
+      "recall@1": 0.35,
+      "recall@5": 0.75,
+      "recall@10": 0.8,
+      "mrr": 0.5079,
+      "misses": 4
+     },
+     "natural": {
+      "n": 8,
+      "recall@1": 0.375,
+      "recall@5": 0.75,
+      "recall@10": 0.875,
+      "mrr": 0.5156,
+      "misses": 1
+     },
+     "crosslingual": {
+      "n": 6,
+      "recall@1": 0.1667,
+      "recall@5": 0.5,
+      "recall@10": 0.5,
+      "mrr": 0.3333,
+      "misses": 3
+     }
+    },
+    "cases": [
+     {
+      "id": "c-id-01",
+      "class": "identifier",
+      "query": "reciprocal rank fusion",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/lexical.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/lexical.py",
+       "Singularity/singularity/search/engine.py",
+       "Singularity/tests/test_search_hybrid.py"
+      ]
+     },
+     {
+      "id": "c-id-02",
+      "class": "identifier",
+      "query": "BM25 okapi idf k1 b",
+      "rank": 3,
+      "expect": [
+       "Singularity/singularity/search/lexical.py"
+      ],
+      "got": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/tests/test_variety.py",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/sampling.py",
+       "Singularity/singularity/search/lexical.py"
+      ]
+     },
+     {
+      "id": "c-id-03",
+      "class": "identifier",
+      "query": "atomic_write_json",
+      "rank": 2,
+      "expect": [
+       "Singularity/singularity/config.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/digest.py",
+       "Singularity/singularity/config.py",
+       "Singularity/singularity/telemetry/reflect.py"
+      ]
+     },
+     {
+      "id": "c-id-04",
+      "class": "identifier",
+      "query": "code_fingerprint is_stale",
+      "rank": 5,
+      "expect": [
+       "Singularity/singularity/machine/code_version.py"
+      ],
+      "got": [
+       "Singularity/tests/test_code_version.py",
+       "talking-head-saas/apps/web/src/__arch__/lint-fixture/src/ops-identifier.fixture.tsx",
+       "ComfyUI-dlss-enhancer/tests/test_runtime.py"
+      ]
+     },
+     {
+      "id": "c-id-05",
+      "class": "identifier",
+      "query": "retry_with_backoff",
+      "rank": 1,
+      "expect": [
+       "Singularity/tests/fixtures/code/sample_service.py"
+      ],
+      "got": [
+       "Singularity/tests/fixtures/code/sample_service.py",
+       "Singularity/tests/test_code_chunking.py",
+       "talking-head-saas/apps/web/src/features/job-actions/retry-consent.ts"
+      ]
+     },
+     {
+      "id": "c-id-06",
+      "class": "identifier",
+      "query": "resumeFromFirstUnfinished",
+      "rank": 1,
+      "expect": [
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts"
+      ],
+      "got": [
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts",
+       "talking-head-saas/services/orchestrator/src/__it__/stand.ts",
+       "talking-head-saas/apps/web/src/i18n/en.ts"
+      ]
+     },
+     {
+      "id": "c-nat-01",
+      "class": "natural",
+      "query": "warm search daemon speaking newline delimited JSON over TCP",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/daemon.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/daemon.py",
+       "Singularity/singularity/search/client.py",
+       "Singularity/singularity/search/engine.py"
+      ]
+     },
+     {
+      "id": "c-nat-02",
+      "class": "natural",
+      "query": "incremental index update by mtime and size diff",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/indexer.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/indexer.py",
+       "Singularity/tests/test_indexer.py",
+       "Singularity/singularity/codegraph/fresh.py"
+      ]
+     },
+     {
+      "id": "c-nat-03",
+      "class": "natural",
+      "query": "inject memory context into every session start",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/hooks/session_start.py"
+      ],
+      "got": [
+       "Singularity/singularity/hooks/session_start.py",
+       "Singularity/singularity/hooks/gemini_session_start.py",
+       "Book Writer Project/plugin/book-context-manager/scripts/context_assembler.py"
+      ]
+     },
+     {
+      "id": "c-nat-04",
+      "class": "natural",
+      "query": "block the end of a session until insights are captured",
+      "rank": 8,
+      "expect": [
+       "Singularity/singularity/hooks/stop_capture.py"
+      ],
+      "got": [
+       "talking-head-saas/services/api-gateway/src/identity/session-sweeper.ts",
+       "Singularity/tests/test_tokens.py",
+       "talking-head-saas/services/api-gateway/src/events/sse-session.ts"
+      ]
+     },
+     {
+      "id": "c-nat-05",
+      "class": "natural",
+      "query": "report broken wikilinks and orphan notes",
+      "rank": 2,
+      "expect": [
+       "Singularity/singularity/knowledge/curator.py"
+      ],
+      "got": [
+       "Singularity/tests/test_gaps.py",
+       "Singularity/singularity/knowledge/curator.py",
+       "Singularity/singularity/knowledge/gaps.py"
+      ]
+     },
+     {
+      "id": "c-nat-06",
+      "class": "natural",
+      "query": "propose merging a learning into an existing reference note",
+      "rank": 4,
+      "expect": [
+       "Singularity/singularity/knowledge/digest.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/ingest_plan.py",
+       "Singularity/singularity/knowledge/notesplit.py",
+       "Singularity/singularity/cli.py"
+      ]
+     },
+     {
+      "id": "c-nat-07",
+      "class": "natural",
+      "query": "limit how many unfinished jobs one user may hold before creating another",
+      "rank": null,
+      "expect": [
+       "talking-head-saas/services/api-gateway/src/jobs/quota.ts"
+      ],
+      "got": [
+       "Singularity/singularity/codegraph/store.py",
+       "voice-text-recognition/src/infrastructure/support/InMemoryProgressPublisher.ts",
+       "talking-head-saas/services/assembly-worker/src/stages/assemble/shots.ts"
+      ]
+     },
+     {
+      "id": "c-nat-08",
+      "class": "natural",
+      "query": "posterior mean of reference latents pulls the denoised estimate toward them",
+      "rank": 4,
+      "expect": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/ref_mean.py"
+      ],
+      "got": [
+       "krea-lora-trainer/tools/body_metrics.py",
+       "Krea2 Nodes/research/face_identity_rig/rig.py",
+       "talking-head-saas/services/orchestrator/src/progress/sparse-write.ts"
+      ]
+     },
+     {
+      "id": "c-xl-01",
+      "class": "crosslingual",
+      "query": "маскирование секретов перед записью в заметку",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/redact.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/redact.py",
+       "talking-head-saas/services/gpu-agent/src/engine/lifecycle.ts",
+       "Book Writer Project/plugin_addition/scripts/devices_lib.py"
+      ]
+     },
+     {
+      "id": "c-xl-02",
+      "class": "crosslingual",
+      "query": "разбить переросшую заметку на индекс и дочерние",
+      "rank": 2,
+      "expect": [
+       "Singularity/singularity/knowledge/notesplit.py"
+      ],
+      "got": [
+       "talking-head-saas/packages/persistence/src/schema/jobs.ts",
+       "Singularity/singularity/knowledge/notesplit.py",
+       "talking-head-saas/services/gpu-agent/src/lipsync/cli-runner.ts"
+      ]
+     },
+     {
+      "id": "c-xl-03",
+      "class": "crosslingual",
+      "query": "определение проекта по самому глубокому совпадению пути",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/projects.py"
+      ],
+      "got": [
+       "Book Writer Project/plugin_addition/devices/_build.py",
+       "Book Writer Project/plugin_addition/scripts/device_registry.py",
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts"
+      ]
+     },
+     {
+      "id": "c-xl-04",
+      "class": "crosslingual",
+      "query": "восстановление конфига из бэкапа с контрольной суммой",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/backup.py"
+      ],
+      "got": [
+       "talking-head-saas/tests/chaos/_chaos.ts",
+       "talking-head-saas/packages/persistence/src/repositories/artifacts.ts",
+       "talking-head-saas/packages/shared/src/file-storage/kit.ts"
+      ]
+     },
+     {
+      "id": "c-xl-05",
+      "class": "crosslingual",
+      "query": "страж записи в vault перед вызовом инструмента",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/hooks/vault_guard.py",
+       "Singularity/singularity/machine/vault_guard.py"
+      ],
+      "got": [
+       "talking-head-saas/services/orchestrator/src/saga/job-saga.ts",
+       "talking-head-saas/apps/web/src/features/job-actions/allowed-actions.ts",
+       "Singularity/singularity/machine/hooks_state.py"
+      ]
+     },
+     {
+      "id": "c-xl-06",
+      "class": "crosslingual",
+      "query": "аналитическое семейство расписаний сигм для flow matching",
+      "rank": 2,
+      "expect": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/schedules.py"
+      ],
+      "got": [
+       "ComfyUI-ZIT-HiresPhoto/core/schedule.py",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/schedules.py",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/ref_mean.py"
+      ]
+     }
+    ]
+   },
+   "fusion_on_boost": {
+    "hybrid": true,
+    "corpus": "code",
+    "elapsed_s": 1.46,
+    "metrics": {
+     "identifier": {
+      "n": 6,
+      "recall@1": 0.6667,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "mrr": 0.7778,
+      "misses": 0
+     },
+     "_overall": {
+      "n": 20,
+      "recall@1": 0.4,
+      "recall@5": 0.75,
+      "recall@10": 0.8,
+      "mrr": 0.5396,
+      "misses": 4
+     },
+     "natural": {
+      "n": 8,
+      "recall@1": 0.375,
+      "recall@5": 0.75,
+      "recall@10": 0.875,
+      "mrr": 0.5156,
+      "misses": 1
+     },
+     "crosslingual": {
+      "n": 6,
+      "recall@1": 0.1667,
+      "recall@5": 0.5,
+      "recall@10": 0.5,
+      "mrr": 0.3333,
+      "misses": 3
+     }
+    },
+    "cases": [
+     {
+      "id": "c-id-01",
+      "class": "identifier",
+      "query": "reciprocal rank fusion",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/lexical.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/lexical.py",
+       "Singularity/singularity/search/engine.py",
+       "Singularity/tests/test_search_hybrid.py"
+      ]
+     },
+     {
+      "id": "c-id-02",
+      "class": "identifier",
+      "query": "BM25 okapi idf k1 b",
+      "rank": 3,
+      "expect": [
+       "Singularity/singularity/search/lexical.py"
+      ],
+      "got": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/tests/test_variety.py",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/sampling.py",
+       "Singularity/singularity/search/lexical.py"
+      ]
+     },
+     {
+      "id": "c-id-03",
+      "class": "identifier",
+      "query": "atomic_write_json",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/config.py"
+      ],
+      "got": [
+       "Singularity/singularity/config.py",
+       "Singularity/singularity/knowledge/digest.py",
+       "Singularity/singularity/knowledge/sources.py"
+      ]
+     },
+     {
+      "id": "c-id-04",
+      "class": "identifier",
+      "query": "code_fingerprint is_stale",
+      "rank": 3,
+      "expect": [
+       "Singularity/singularity/machine/code_version.py"
+      ],
+      "got": [
+       "Singularity/tests/test_code_version.py",
+       "talking-head-saas/apps/web/src/__arch__/lint-fixture/src/ops-identifier.fixture.tsx",
+       "Singularity/singularity/machine/code_version.py"
+      ]
+     },
+     {
+      "id": "c-id-05",
+      "class": "identifier",
+      "query": "retry_with_backoff",
+      "rank": 1,
+      "expect": [
+       "Singularity/tests/fixtures/code/sample_service.py"
+      ],
+      "got": [
+       "Singularity/tests/fixtures/code/sample_service.py",
+       "Singularity/tests/test_code_chunking.py",
+       "talking-head-saas/apps/web/src/features/job-actions/retry-consent.ts"
+      ]
+     },
+     {
+      "id": "c-id-06",
+      "class": "identifier",
+      "query": "resumeFromFirstUnfinished",
+      "rank": 1,
+      "expect": [
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts"
+      ],
+      "got": [
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts",
+       "talking-head-saas/services/orchestrator/src/__it__/stand.ts",
+       "talking-head-saas/apps/web/src/i18n/en.ts"
+      ]
+     },
+     {
+      "id": "c-nat-01",
+      "class": "natural",
+      "query": "warm search daemon speaking newline delimited JSON over TCP",
+      "rank": 2,
+      "expect": [
+       "Singularity/singularity/search/daemon.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/client.py",
+       "Singularity/singularity/search/daemon.py",
+       "Singularity/singularity/search/engine.py"
+      ]
+     },
+     {
+      "id": "c-nat-02",
+      "class": "natural",
+      "query": "incremental index update by mtime and size diff",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/search/indexer.py"
+      ],
+      "got": [
+       "Singularity/singularity/search/indexer.py",
+       "Singularity/tests/test_indexer.py",
+       "Singularity/singularity/codegraph/fresh.py"
+      ]
+     },
+     {
+      "id": "c-nat-03",
+      "class": "natural",
+      "query": "inject memory context into every session start",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/hooks/session_start.py"
+      ],
+      "got": [
+       "Singularity/singularity/hooks/session_start.py",
+       "Singularity/singularity/hooks/gemini_session_start.py",
+       "Book Writer Project/plugin/book-context-manager/scripts/context_assembler.py"
+      ]
+     },
+     {
+      "id": "c-nat-04",
+      "class": "natural",
+      "query": "block the end of a session until insights are captured",
+      "rank": 8,
+      "expect": [
+       "Singularity/singularity/hooks/stop_capture.py"
+      ],
+      "got": [
+       "talking-head-saas/services/api-gateway/src/identity/session-sweeper.ts",
+       "Singularity/install/client_registration.py",
+       "Singularity/tests/test_tokens.py"
+      ]
+     },
+     {
+      "id": "c-nat-05",
+      "class": "natural",
+      "query": "report broken wikilinks and orphan notes",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/curator.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/curator.py",
+       "Singularity/tests/test_gaps.py",
+       "Singularity/singularity/knowledge/gaps.py"
+      ]
+     },
+     {
+      "id": "c-nat-06",
+      "class": "natural",
+      "query": "propose merging a learning into an existing reference note",
+      "rank": 4,
+      "expect": [
+       "Singularity/singularity/knowledge/digest.py"
+      ],
+      "got": [
+       "Singularity/singularity/cli.py",
+       "Singularity/singularity/knowledge/ingest_plan.py",
+       "Singularity/singularity/knowledge/notesplit.py"
+      ]
+     },
+     {
+      "id": "c-nat-07",
+      "class": "natural",
+      "query": "limit how many unfinished jobs one user may hold before creating another",
+      "rank": null,
+      "expect": [
+       "talking-head-saas/services/api-gateway/src/jobs/quota.ts"
+      ],
+      "got": [
+       "Singularity/singularity/codegraph/store.py",
+       "voice-text-recognition/src/infrastructure/support/InMemoryProgressPublisher.ts",
+       "talking-head-saas/services/assembly-worker/src/stages/assemble/shots.ts"
+      ]
+     },
+     {
+      "id": "c-nat-08",
+      "class": "natural",
+      "query": "posterior mean of reference latents pulls the denoised estimate toward them",
+      "rank": 4,
+      "expect": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/ref_mean.py"
+      ],
+      "got": [
+       "krea-lora-trainer/tools/body_metrics.py",
+       "Krea2 Nodes/research/face_identity_rig/rig.py",
+       "talking-head-saas/services/orchestrator/src/progress/sparse-write.ts"
+      ]
+     },
+     {
+      "id": "c-xl-01",
+      "class": "crosslingual",
+      "query": "маскирование секретов перед записью в заметку",
+      "rank": 1,
+      "expect": [
+       "Singularity/singularity/knowledge/redact.py"
+      ],
+      "got": [
+       "Singularity/singularity/knowledge/redact.py",
+       "talking-head-saas/services/gpu-agent/src/engine/lifecycle.ts",
+       "Book Writer Project/plugin_addition/scripts/devices_lib.py"
+      ]
+     },
+     {
+      "id": "c-xl-02",
+      "class": "crosslingual",
+      "query": "разбить переросшую заметку на индекс и дочерние",
+      "rank": 2,
+      "expect": [
+       "Singularity/singularity/knowledge/notesplit.py"
+      ],
+      "got": [
+       "talking-head-saas/packages/persistence/src/schema/jobs.ts",
+       "Singularity/singularity/knowledge/notesplit.py",
+       "talking-head-saas/services/gpu-agent/src/lipsync/cli-runner.ts"
+      ]
+     },
+     {
+      "id": "c-xl-03",
+      "class": "crosslingual",
+      "query": "определение проекта по самому глубокому совпадению пути",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/projects.py"
+      ],
+      "got": [
+       "Book Writer Project/plugin_addition/scripts/device_registry.py",
+       "Book Writer Project/plugin_addition/devices/_build.py",
+       "talking-head-saas/packages/domain/src/job/commands/retry.ts"
+      ]
+     },
+     {
+      "id": "c-xl-04",
+      "class": "crosslingual",
+      "query": "восстановление конфига из бэкапа с контрольной суммой",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/machine/backup.py"
+      ],
+      "got": [
+       "talking-head-saas/tests/chaos/_chaos.ts",
+       "talking-head-saas/packages/persistence/src/repositories/artifacts.ts",
+       "talking-head-saas/packages/shared/src/file-storage/kit.ts"
+      ]
+     },
+     {
+      "id": "c-xl-05",
+      "class": "crosslingual",
+      "query": "страж записи в vault перед вызовом инструмента",
+      "rank": null,
+      "expect": [
+       "Singularity/singularity/hooks/vault_guard.py",
+       "Singularity/singularity/machine/vault_guard.py"
+      ],
+      "got": [
+       "talking-head-saas/services/orchestrator/src/saga/job-saga.ts",
+       "talking-head-saas/apps/web/src/features/job-actions/allowed-actions.ts",
+       "Singularity/singularity/machine/hooks_state.py"
+      ]
+     },
+     {
+      "id": "c-xl-06",
+      "class": "crosslingual",
+      "query": "аналитическое семейство расписаний сигм для flow matching",
+      "rank": 2,
+      "expect": [
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/schedules.py"
+      ],
+      "got": [
+       "ComfyUI-ZIT-HiresPhoto/core/schedule.py",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/schedules.py",
+       "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/ref_mean.py"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "p0_record": {
+  "fusion_off": {
+   "identifier": {
+    "n": 6,
+    "recall@1": 0.5,
+    "recall@5": 0.6667,
+    "recall@10": 0.6667,
+    "mrr": 0.5417,
+    "misses": 2
+   },
+   "_overall": {
+    "n": 20,
+    "recall@1": 0.3,
+    "recall@5": 0.45,
+    "recall@10": 0.5,
+    "mrr": 0.3597,
+    "misses": 10
+   },
+   "natural": {
+    "n": 8,
+    "recall@1": 0.125,
+    "recall@5": 0.375,
+    "recall@10": 0.5,
+    "mrr": 0.2431,
+    "misses": 4
+   },
+   "crosslingual": {
+    "n": 6,
+    "recall@1": 0.3333,
+    "recall@5": 0.3333,
+    "recall@10": 0.3333,
+    "mrr": 0.3333,
+    "misses": 4
+   }
+  },
+  "fusion_on": {
+   "identifier": {
+    "n": 6,
+    "recall@1": 0.5,
+    "recall@5": 0.8333,
+    "recall@10": 0.8333,
+    "mrr": 0.6389,
+    "misses": 1
+   },
+   "_overall": {
+    "n": 20,
+    "recall@1": 0.35,
+    "recall@5": 0.55,
+    "recall@10": 0.55,
+    "mrr": 0.4417,
+    "misses": 9
+   },
+   "natural": {
+    "n": 8,
+    "recall@1": 0.375,
+    "recall@5": 0.5,
+    "recall@10": 0.5,
+    "mrr": 0.4375,
+    "misses": 4
+   },
+   "crosslingual": {
+    "n": 6,
+    "recall@1": 0.1667,
+    "recall@5": 0.3333,
+    "recall@10": 0.3333,
+    "mrr": 0.25,
+    "misses": 4
+   }
+  }
+ },
+ "control_queries_boost": {
+  "about": "The ten control questions of tools/code_index_baseline.py (memory-type questions, so code hits compete with notes), `--with-code` vs `--with-code --graph-boost`, answered in-process by the real `cmd_search` from the same isolated copy.",
+  "commands": [
+   "python tools/code_index_baseline.py capture --boost --scratch <copy> --schema v1|v2 --out <x>",
+   "python tools/code_index_baseline.py compare-boost <x>"
+  ],
+  "top_k": 5,
+  "schemas": {
+   "v1": {
+    "rows": [
+     {
+      "id": "Q01",
+      "same_hits": true,
+      "code_hits": 3,
+      "moved": 3,
+      "top1_changed": true,
+      "code_mean_rank": [
+       2.67,
+       2.33
+      ],
+      "note_mean_rank": [
+       3.5,
+       4.0
+      ]
+     },
+     {
+      "id": "Q02",
+      "same_hits": true,
+      "code_hits": 3,
+      "moved": 3,
+      "top1_changed": false,
+      "code_mean_rank": [
+       2.67,
+       2.33
+      ],
+      "note_mean_rank": [
+       3.5,
+       4.0
+      ]
+     },
+     {
+      "id": "Q03",
+      "same_hits": true,
+      "code_hits": 3,
+      "moved": 0,
+      "top1_changed": false,
+      "code_mean_rank": [
+       4.0,
+       4.0
+      ],
+      "note_mean_rank": [
+       1.5,
+       1.5
+      ]
+     },
+     {
+      "id": "Q04",
+      "same_hits": true,
+      "code_hits": 3,
+      "moved": 3,
+      "top1_changed": false,
+      "code_mean_rank": [
+       2.67,
+       2.33
+      ],
+      "note_mean_rank": [
+       3.5,
+       4.0
+      ]
+     },
+     {
+      "id": "Q05",
+      "same_hits": true,
+      "code_hits": 2,
+      "moved": 2,
+      "top1_changed": false,
+      "code_mean_rank": [
+       2.5,
+       2.0
+      ],
+      "note_mean_rank": [
+       3.33,
+       3.67
+      ]
+     },
+     {
+      "id": "Q06",
+      "same_hits": true,
+      "code_hits": 2,
+      "moved": 0,
+      "top1_changed": false,
+      "code_mean_rank": [
+       2.0,
+       2.0
+      ],
+      "note_mean_rank": [
+       3.67,
+       3.67
+      ]
+     },
+     {
+      "id": "Q07",
+      "same_hits": true,
+      "code_hits": 3,
+      "moved": 0,
+      "top1_changed": false,
+      "code_mean_rank": [
+       3.0,
+       3.0
+      ],
+      "note_mean_rank": [
+       3.0,
+       3.0
+      ]
+     },
+     {
+      "id": "Q08",
+      "same_hits": true,
+      "code_hits": 1,
+      "moved": 2,
+      "top1_changed": false,
+      "code_mean_rank": [
+       4.0,
+       3.0
+      ],
+      "note_mean_rank": [
+       2.75,
+       3.0
+      ]
+     },
+     {
+      "id": "Q09",
+      "same_hits": true,
+      "code_hits": 1,
+      "moved": 0,
+      "top1_changed": false,
+      "code_mean_rank": [
+       1.0,
+       1.0
+      ],
+      "note_mean_rank": [
+       3.5,
+       3.5
+      ]
+     },
+     {
+      "id": "Q10",
+      "same_hits": true,
+      "code_hits": 3,
+      "moved": 2,
+      "top1_changed": false,
+      "code_mean_rank": [
+       2.67,
+       2.67
+      ],
+      "note_mean_rank": [
+       3.5,
+       3.5
+      ]
+     }
+    ],
+    "totals": {
+     "code_hits": 24,
+     "positions_moved": 15,
+     "top1_changed": 1,
+     "hit_set_changed": 0,
+     "slots": 50,
+     "notes_displaced_by_with_code": 20
+    }
+   },
+   "v2": {
+    "rows": [
+     {
+      "id": "Q01",
+      "same_hits": true,
+      "code_hits": 3,
+      "moved": 4,
+      "top1_changed": false,
+      "code_mean_rank": [
+       3.67,
+       3.33
+      ],
+      "note_mean_rank": [
+       2.0,
+       2.5
+      ]
+     },
+     {
+      "id": "Q02",
+      "same_hits": true,
+      "code_hits": 3,
+      "moved": 3,
+      "top1_changed": false,
+      "code_mean_rank": [
+       2.67,
+       2.33
+      ],
+      "note_mean_rank": [
+       3.5,
+       4.0
+      ]
+     },
+     {
+      "id": "Q03",
+      "same_hits": true,
+      "code_hits": 3,
+      "moved": 0,
+      "top1_changed": false,
+      "code_mean_rank": [
+       4.0,
+       4.0
+      ],
+      "note_mean_rank": [
+       1.5,
+       1.5
+      ]
+     },
+     {
+      "id": "Q04",
+      "same_hits": true,
+      "code_hits": 4,
+      "moved": 3,
+      "top1_changed": false,
+      "code_mean_rank": [
+       3.25,
+       3.25
+      ],
+      "note_mean_rank": [
+       2.0,
+       2.0
+      ]
+     },
+     {
+      "id": "Q05",
+      "same_hits": true,
+      "code_hits": 2,
+      "moved": 2,
+      "top1_changed": true,
+      "code_mean_rank": [
+       3.0,
+       2.5
+      ],
+      "note_mean_rank": [
+       3.0,
+       3.33
+      ]
+     },
+     {
+      "id": "Q06",
+      "same_hits": true,
+      "code_hits": 2,
+      "moved": 0,
+      "top1_changed": false,
+      "code_mean_rank": [
+       2.5,
+       2.5
+      ],
+      "note_mean_rank": [
+       3.33,
+       3.33
+      ]
+     },
+     {
+      "id": "Q07",
+      "same_hits": true,
+      "code_hits": 3,
+      "moved": 0,
+      "top1_changed": false,
+      "code_mean_rank": [
+       3.0,
+       3.0
+      ],
+      "note_mean_rank": [
+       3.0,
+       3.0
+      ]
+     },
+     {
+      "id": "Q08",
+      "same_hits": true,
+      "code_hits": 1,
+      "moved": 2,
+      "top1_changed": false,
+      "code_mean_rank": [
+       4.0,
+       3.0
+      ],
+      "note_mean_rank": [
+       2.75,
+       3.0
+      ]
+     },
+     {
+      "id": "Q09",
+      "same_hits": true,
+      "code_hits": 2,
+      "moved": 0,
+      "top1_changed": false,
+      "code_mean_rank": [
+       1.5,
+       1.5
+      ],
+      "note_mean_rank": [
+       4.0,
+       4.0
+      ]
+     },
+     {
+      "id": "Q10",
+      "same_hits": true,
+      "code_hits": 3,
+      "moved": 4,
+      "top1_changed": true,
+      "code_mean_rank": [
+       2.33,
+       2.0
+      ],
+      "note_mean_rank": [
+       4.0,
+       4.5
+      ]
+     }
+    ],
+    "totals": {
+     "code_hits": 26,
+     "positions_moved": 18,
+     "top1_changed": 2,
+     "hit_set_changed": 0,
+     "slots": 50,
+     "notes_displaced_by_with_code": 22
+    }
+   }
+  }
+ }
+}

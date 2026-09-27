@@ -8,18 +8,22 @@ both `mb doctor --fix` and the installer use so the two registration paths
     indexer.update()'s writer lock (the same lock the watcher already goes
     through); the other steps only ever read
 the committed generation or touch their own snapshot files, so they need no
-lock. Every step is independently guarded (one failing step never aborts the
-chain) and every persisted file is a tmp+replace atomic write.
+lock. The code-graph step does write, but only through `mb code` child
+processes, each under its unit's own build lock. Every step is independently
+guarded (one failing step never aborts the chain) and every persisted file is
+a tmp+replace atomic write.
 """
 from __future__ import annotations
 
 import json
+import sys
 import time
 from datetime import datetime
 from typing import Any
 
 from ..config import Config, atomic_write_json
 
+CODE_GRAPH_LOG_NAME = "nightly.jsonl"                     # under cfg.code_graph_dir (machine-local)
 DIGEST_SNAPSHOT_NAME = "digest-last.json"
 CURATOR_SNAPSHOT_NAME = "curator-last.json"
 CONFIG_SNAPSHOT_NAME = "config-last.json"
@@ -170,6 +174,74 @@ def _step_code_index(cfg: Config) -> dict[str, Any]:
     return {"status": "ok", "stats": stats}
 
 
+def _step_code_graph(cfg: Config, now: str) -> dict[str, Any]:
+    """Rebuild every built code graph from scratch, and say where the graph
+    the day's updates maintained differed from the rebuild (CODE-GRAPH D1).
+
+    The rebuild runs in a child process (`mb code build`, see
+    codegraph.compare): outside the daemon, which never opens a graph, and
+    outside this process, which never imports the parser -- a 100k-file build
+    peaks at ~5 GB and gives it back when the child exits. A difference means
+    the incremental path diverged from a full build (UNMET j): a WARN with the
+    tables, counts and first examples, in the step result and in
+    `<code_graph_dir>/nightly.jsonl`; not an error, because the rebuild has
+    already replaced the graph that diverged."""
+    if not cfg.get("code_graph_enabled"):
+        return {"status": "skipped", "reason": "code_graph_enabled=false"}
+    from ..codegraph import compare, store, versions
+
+    if not versions.parser_available():
+        return {"status": "skipped", "reason": f"the parser is not installed in {sys.executable}"}
+    cards = store.built_units(cfg)
+    if not cards:
+        return {"status": "skipped", "reason": "no code graph built on this machine"}
+    units = {c["key"]: _guard(lambda c=c: compare.rebuild_and_compare(cfg, c)) for c in cards}
+    log_path = cfg.code_graph_dir / CODE_GRAPH_LOG_NAME
+    _append_log(log_path, {"ts": now, "units": units},
+                cutoff=time.time() - float(cfg.get("nightly_trend_retention_days")) * 86400)
+    counts = {s: sum(1 for u in units.values() if u.get("status") == s)
+              for s in ("equal", "differs", "skipped", "error")}
+    result: dict[str, Any] = {"units": units, "counts": counts, "log": str(log_path)}
+    if counts["error"]:
+        failed = [f"{k}: {u.get('error')}" for k, u in units.items() if u.get("status") == "error"]
+        return {"status": "error", "error": "; ".join(failed), **result}
+    if counts["differs"]:
+        diverged = ", ".join(f"{k} ({_diff_brief(u['diff'])})" for k, u in units.items()
+                             if u.get("status") == "differs")
+        moved = any(u.get("tree_changed_during_check") for u in units.values())
+        reason = (f"the incrementally updated graph differs from a full build: {diverged}"
+                  + ("; files changed during the check, so part of it may be those edits" if moved else "")
+                  + f" -- details in {log_path}")
+        return {"status": "warn", "reason": reason, **result}
+    return {"status": "ok", **result}
+
+
+def _diff_brief(diff: dict[str, dict]) -> str:
+    """`edges 3/1, nodes 1/0`: per table, rows only the updated graph holds /
+    rows only the full build holds."""
+    return ", ".join(f"{table} {d['differing'][0]}/{d['differing'][1]}" for table, d in diff.items())
+
+
+def _append_log(path, row: dict[str, Any], cutoff: float) -> None:
+    """One JSON row per run, rows older than `cutoff` dropped on every write."""
+    kept: list[str] = []
+    if path.exists():
+        try:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                try:
+                    if datetime.fromisoformat(json.loads(line)["ts"]).timestamp() >= cutoff:
+                        kept.append(line)
+                except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                    continue
+        except OSError:
+            kept = []
+    kept.append(json.dumps(row, ensure_ascii=False, default=str))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
 def _step_gaps(cfg: Config, now: str) -> dict[str, Any]:
     from . import gaps
 
@@ -302,6 +374,7 @@ def run(cfg: Config) -> dict[str, Any]:
     steps["index"] = _guard(lambda: _step_index(cfg))
     steps["ingest_index"] = _guard(lambda: _step_ingest_index(cfg))
     steps["code_index"] = _guard(lambda: _step_code_index(cfg))
+    steps["code_graph"] = _guard(lambda: _step_code_graph(cfg, now))
     steps["digest"] = _guard(lambda: _step_digest(cfg, now))
     steps["curator"] = _guard(lambda: _step_curator(cfg, now))
     steps["gaps"] = _guard(lambda: _step_gaps(cfg, now))

@@ -14,3 +14,11 @@ Pillow>=10
 scipy>=1.10
 # lint gate: `ruff check .` must stay at zero (tests/test_lint_gate.py)
 ruff>=0.6
+# graph extra (CODE-GRAPH): the code graph's tests parse real code, so CI needs
+# the parser. Exact pins, same as pyproject's `graph` extra.
+tree-sitter==0.26.0
+tree-sitter-python==0.25.0
+tree-sitter-typescript==0.23.2
+tree-sitter-javascript==0.25.0
+# ...and `mb code arch`'s Louvain, which the build runs (P4)
+networkx==3.4.2

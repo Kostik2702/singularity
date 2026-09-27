@@ -389,7 +389,7 @@
       "class": "natural",
       "query": "утверждение об отсутствии чего-то требует контрольной проверки",
       "expect": [
-        "learnings/archive/singularity-ui/rules/Rule - утверждение об отсутствии требует контроля.md"
+        "rules/Rule - утверждение об отсутствии требует контроля.md"
       ],
       "why": "negative-claim rule"
     },
@@ -533,7 +533,7 @@
       "class": "crosslingual",
       "query": "у покрытой тестами функции должен быть реальный потребитель",
       "expect": [
-        "learnings/archive/singularity-ui/rules/Rule - у покрытой тестами функции должен быть потребитель в композиционном корне.md"
+        "rules/Rule - у покрытой тестами функции должен быть потребитель в композиционном корне.md"
       ],
       "why": "RU query -> mixed-language rule"
     },
@@ -621,9 +621,9 @@
   ],
   "code_about": "Same idea for the CODE corpus (`--code-only`). Kept in the same file so a change to the fixture format cannot drift between the two, but scored separately: code and memory are different corpora with different query shapes, and averaging them would hide which one a change helped.",
   "code_quota": {
-    "identifier": 5,
-    "natural": 6,
-    "crosslingual": 5
+    "identifier": 6,
+    "natural": 8,
+    "crosslingual": 6
   },
   "code_cases": [
     {
@@ -631,7 +631,7 @@
       "class": "identifier",
       "query": "reciprocal rank fusion",
       "expect": [
-        "singularity/singularity/search/lexical.py"
+        "Singularity/singularity/search/lexical.py"
       ],
       "why": "the RRF implementation, named by its own term"
     },
@@ -640,7 +640,7 @@
       "class": "identifier",
       "query": "BM25 okapi idf k1 b",
       "expect": [
-        "singularity/singularity/search/lexical.py"
+        "Singularity/singularity/search/lexical.py"
       ],
       "why": "scoring constants live with the scorer"
     },
@@ -649,7 +649,7 @@
       "class": "identifier",
       "query": "atomic_write_json",
       "expect": [
-        "singularity/singularity/config.py"
+        "Singularity/singularity/config.py"
       ],
       "why": "a bare symbol name — the case a text embedding is worst at"
     },
@@ -658,7 +658,7 @@
       "class": "identifier",
       "query": "code_fingerprint is_stale",
       "expect": [
-        "singularity/singularity/machine/code_version.py"
+        "Singularity/singularity/machine/code_version.py"
       ],
       "why": "two symbols, one module"
     },
@@ -667,16 +667,25 @@
       "class": "identifier",
       "query": "retry_with_backoff",
       "expect": [
-        "singularity/tests/fixtures/code/sample_service.py"
+        "Singularity/tests/fixtures/code/sample_service.py"
       ],
       "why": "exact function name"
+    },
+    {
+      "id": "c-id-06",
+      "class": "identifier",
+      "query": "resumeFromFirstUnfinished",
+      "expect": [
+        "talking-head-saas/packages/domain/src/job/commands/retry.ts"
+      ],
+      "why": "a camelCase TS symbol: the first case outside this engine's own Python (CODE-GRAPH P0)"
     },
     {
       "id": "c-nat-01",
       "class": "natural",
       "query": "warm search daemon speaking newline delimited JSON over TCP",
       "expect": [
-        "singularity/singularity/search/daemon.py"
+        "Singularity/singularity/search/daemon.py"
       ],
       "why": "the daemon, described"
     },
@@ -685,7 +694,7 @@
       "class": "natural",
       "query": "incremental index update by mtime and size diff",
       "expect": [
-        "singularity/singularity/search/indexer.py"
+        "Singularity/singularity/search/indexer.py"
       ],
       "why": "the writer"
     },
@@ -694,7 +703,7 @@
       "class": "natural",
       "query": "inject memory context into every session start",
       "expect": [
-        "singularity/singularity/hooks/session_start.py"
+        "Singularity/singularity/hooks/session_start.py"
       ],
       "why": "the hook"
     },
@@ -703,7 +712,7 @@
       "class": "natural",
       "query": "block the end of a session until insights are captured",
       "expect": [
-        "singularity/singularity/hooks/stop_capture.py"
+        "Singularity/singularity/hooks/stop_capture.py"
       ],
       "why": "the capture gate"
     },
@@ -712,7 +721,7 @@
       "class": "natural",
       "query": "report broken wikilinks and orphan notes",
       "expect": [
-        "singularity/singularity/knowledge/curator.py"
+        "Singularity/singularity/knowledge/curator.py"
       ],
       "why": "curator mechanics"
     },
@@ -721,16 +730,34 @@
       "class": "natural",
       "query": "propose merging a learning into an existing reference note",
       "expect": [
-        "singularity/singularity/knowledge/digest.py"
+        "Singularity/singularity/knowledge/digest.py"
       ],
       "why": "digest planner"
+    },
+    {
+      "id": "c-nat-07",
+      "class": "natural",
+      "query": "limit how many unfinished jobs one user may hold before creating another",
+      "expect": [
+        "talking-head-saas/services/api-gateway/src/jobs/quota.ts"
+      ],
+      "why": "a NestJS guard; the reasoning lives in a RU comment block, the code is EN"
+    },
+    {
+      "id": "c-nat-08",
+      "class": "natural",
+      "query": "posterior mean of reference latents pulls the denoised estimate toward them",
+      "expect": [
+        "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/ref_mean.py"
+      ],
+      "why": "the idea is stated only in the MODULE docstring, which the v1 chunker never chunks — a case that separates chunker versions"
     },
     {
       "id": "c-xl-01",
       "class": "crosslingual",
       "query": "маскирование секретов перед записью в заметку",
       "expect": [
-        "singularity/singularity/knowledge/redact.py"
+        "Singularity/singularity/knowledge/redact.py"
       ],
       "why": "RU query -> EN code"
     },
@@ -739,7 +766,7 @@
       "class": "crosslingual",
       "query": "разбить переросшую заметку на индекс и дочерние",
       "expect": [
-        "singularity/singularity/knowledge/notesplit.py"
+        "Singularity/singularity/knowledge/notesplit.py"
       ],
       "why": "RU query -> EN code"
     },
@@ -748,7 +775,7 @@
       "class": "crosslingual",
       "query": "определение проекта по самому глубокому совпадению пути",
       "expect": [
-        "singularity/singularity/machine/projects.py"
+        "Singularity/singularity/machine/projects.py"
       ],
       "why": "RU query -> EN code"
     },
@@ -757,7 +784,7 @@
       "class": "crosslingual",
       "query": "восстановление конфига из бэкапа с контрольной суммой",
       "expect": [
-        "singularity/singularity/machine/backup.py"
+        "Singularity/singularity/machine/backup.py"
       ],
       "why": "RU query -> EN code"
     },
@@ -766,10 +793,19 @@
       "class": "crosslingual",
       "query": "страж записи в vault перед вызовом инструмента",
       "expect": [
-        "singularity/singularity/hooks/vault_guard.py",
-        "singularity/singularity/machine/vault_guard.py"
+        "Singularity/singularity/hooks/vault_guard.py",
+        "Singularity/singularity/machine/vault_guard.py"
       ],
       "why": "RU query -> EN code; the hook adapter and its core both answer"
+    },
+    {
+      "id": "c-xl-06",
+      "class": "crosslingual",
+      "query": "аналитическое семейство расписаний сигм для flow matching",
+      "expect": [
+        "Krea2 Nodes/ComfyUI-KreaPhoton/kreaphoton/schedules.py"
+      ],
+      "why": "RU query -> EN code outside this engine: a ComfyUI node pack"
     }
   ]
 }

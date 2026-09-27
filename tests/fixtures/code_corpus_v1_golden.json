@@ -1,0 +1,374 @@
+{
+ "meta_keys": [
+  "chunk_count",
+  "chunk_schema",
+  "chunks",
+  "excluded",
+  "file_meta",
+  "indexed_at",
+  "model"
+ ],
+ "chunk_schema": 1,
+ "chunks": [
+  {
+   "file": "demo/sample_config.js",
+   "kind": "lines",
+   "name": "lines_1",
+   "content": "module.exports = {\n  server: {\n    host: \"127.0.0.1\",\n    port: 8080,\n    keepAliveTimeout: 5000,\n  },\n  logging: {\n    level: \"info\",\n    destination: \"stdout\",\n    rotate: true,\n  },\n  features: {\n    retries: true,\n    tracing: false,\n    experimentalCache: false,\n  },\n  limits: {\n    maxBodyBytes: 1048576,\n    maxConnections: 512,\n  },\n};",
+   "line_start": 1,
+   "line_end": 21,
+   "text": "demo/sample_config.js — lines lines_1 | module.exports = { server: { host: \"127.0.0.1\", port: 8080, keepAliveTimeout: 5000, }, logging: { level: \"info\", destination: \"stdout\", rotate: true, }, features: { retries: true, tracing: false, experimentalCache: false, }, limits: { maxBodyBytes: 1",
+   "repo": "demo"
+  },
+  {
+   "file": "demo/sample_service.py",
+   "kind": "function",
+   "name": "retry_with_backoff",
+   "content": "def retry_with_backoff(attempts, base=0.5):\n    \"\"\"Retry a call with exponential backoff.\n\n    Returns the callable's result or re-raises the last error.\n    \"\"\"\n    for i in range(attempts):\n        try:\n            return i\n        except ValueError:\n            time.sleep(base * 2 ** i)\n    raise RuntimeError(\"exhausted\")",
+   "line_start": 12,
+   "line_end": 24,
+   "text": "demo/sample_service.py — function retry_with_backoff: Backoff helper kept out of the class on purpose: it is reused by the CLI path too. Retry a call with exponential backoff. Returns the callable's result or re-raises the last error. | def retry_with_backoff(attempts, base=0.5): \"\"\"Retry a call with exponential backoff. Returns the callable's result or re-raises the last error. \"\"\" for i in range(attempts): try: return i except ValueError: time.sleep(base * 2 ** i) raise RuntimeErr",
+   "repo": "demo",
+   "description": "Backoff helper kept out of the class on purpose: it is reused by the CLI path too. Retry a call with exponential backoff. Returns the callable's result or re-raises the last error.",
+   "chunk_id": "demo/sample_service.py#0"
+  },
+  {
+   "file": "demo/sample_service.py",
+   "kind": "function",
+   "name": "fetch_all",
+   "content": "async def fetch_all(urls):\n    # gathers everything, no concurrency cap on purpose\n    return list(urls)",
+   "line_start": 25,
+   "line_end": 29,
+   "text": "demo/sample_service.py — function fetch_all | async def fetch_all(urls): # gathers everything, no concurrency cap on purpose return list(urls)",
+   "repo": "demo",
+   "chunk_id": "demo/sample_service.py#1"
+  },
+  {
+   "file": "demo/sample_service.py",
+   "kind": "class",
+   "name": "SessionStore",
+   "content": "class SessionStore:\n    \"\"\"Keeps sessions in memory for the lifetime of the process.\"\"\"\n\n    LIMIT = 100",
+   "line_start": 30,
+   "line_end": 34,
+   "text": "demo/sample_service.py — class SessionStore: Keeps sessions in memory for the lifetime of the process. | class SessionStore: \"\"\"Keeps sessions in memory for the lifetime of the process.\"\"\" LIMIT = 100",
+   "repo": "demo",
+   "description": "Keeps sessions in memory for the lifetime of the process.",
+   "chunk_id": "demo/sample_service.py#2"
+  },
+  {
+   "file": "demo/sample_service.py",
+   "kind": "method",
+   "name": "size",
+   "content": "    @property\n    def size(self):\n        \"\"\"Number of live sessions.\"\"\"\n        return len(self._items)",
+   "line_start": 35,
+   "line_end": 39,
+   "text": "demo/sample_service.py — method size: Number of live sessions. | @property def size(self): \"\"\"Number of live sessions.\"\"\" return len(self._items)",
+   "repo": "demo",
+   "description": "Number of live sessions.",
+   "chunk_id": "demo/sample_service.py#3"
+  },
+  {
+   "file": "demo/sample_service.py",
+   "kind": "method",
+   "name": "key_for",
+   "content": "    @staticmethod\n    def key_for(user_id, tenant):\n        # composite key: tenant first so prefix scans work\n        return f\"{tenant}:{user_id}\"",
+   "line_start": 40,
+   "line_end": 44,
+   "text": "demo/sample_service.py — method key_for | @staticmethod def key_for(user_id, tenant): # composite key: tenant first so prefix scans work return f\"{tenant}:{user_id}\"",
+   "repo": "demo",
+   "chunk_id": "demo/sample_service.py#4"
+  },
+  {
+   "file": "demo/sample_service.py",
+   "kind": "method",
+   "name": "evict_expired",
+   "content": "    async def evict_expired(self, now):\n        '''Drop everything older than the TTL.'''\n        return now",
+   "line_start": 45,
+   "line_end": 47,
+   "text": "demo/sample_service.py — method evict_expired: Drop everything older than the TTL. | async def evict_expired(self, now): '''Drop everything older than the TTL.''' return now",
+   "repo": "demo",
+   "description": "Drop everything older than the TTL.",
+   "chunk_id": "demo/sample_service.py#5"
+  },
+  {
+   "file": "demo/sample_widget.ts",
+   "kind": "interface",
+   "name": "WidgetProps",
+   "content": "export interface WidgetProps {\n  id: string;\n  label: string;\n}",
+   "line_start": 6,
+   "line_end": 10,
+   "text": "demo/sample_widget.ts — interface WidgetProps: Public shape of a widget as the API returns it. | export interface WidgetProps { id: string; label: string; }",
+   "repo": "demo",
+   "description": "Public shape of a widget as the API returns it.",
+   "chunk_id": "demo/sample_widget.ts#0"
+  },
+  {
+   "file": "demo/sample_widget.ts",
+   "kind": "class",
+   "name": "WidgetView",
+   "content": "export class WidgetView {\n  constructor(private props: WidgetProps) {}\n\n  render(): string {\n    return this.props.label;\n  }\n}",
+   "line_start": 12,
+   "line_end": 19,
+   "text": "demo/sample_widget.ts — class WidgetView: Renders one widget; the only stateful component in this file. | export class WidgetView { constructor(private props: WidgetProps) {} render(): string { return this.props.label; } }",
+   "repo": "demo",
+   "description": "Renders one widget; the only stateful component in this file.",
+   "chunk_id": "demo/sample_widget.ts#1"
+  },
+  {
+   "file": "demo/sample_widget.ts",
+   "kind": "const",
+   "name": "DEFAULT_WIDGET",
+   "content": "export const DEFAULT_WIDGET: WidgetProps = {\n  id: \"none\",\n  label: \"\",\n};",
+   "line_start": 20,
+   "line_end": 24,
+   "text": "demo/sample_widget.ts — const DEFAULT_WIDGET | export const DEFAULT_WIDGET: WidgetProps = { id: \"none\", label: \"\", };",
+   "repo": "demo",
+   "chunk_id": "demo/sample_widget.ts#2"
+  },
+  {
+   "file": "demo/sample_widget.ts",
+   "kind": "const",
+   "name": "loadWidget",
+   "content": "export const loadWidget = async (id: string): Promise<WidgetProps> => {\n  const res = await thing(id);\n  return res;\n};",
+   "line_start": 26,
+   "line_end": 30,
+   "text": "demo/sample_widget.ts — const loadWidget: Fetches a widget and retries once on a 5xx. | export const loadWidget = async (id: string): Promise<WidgetProps> => { const res = await thing(id); return res; };",
+   "repo": "demo",
+   "description": "Fetches a widget and retries once on a 5xx.",
+   "chunk_id": "demo/sample_widget.ts#3"
+  },
+  {
+   "file": "demo/sample_widget.ts",
+   "kind": "enum",
+   "name": "WidgetState",
+   "content": "export enum WidgetState {\n  Idle,\n  Busy,\n}",
+   "line_start": 31,
+   "line_end": 35,
+   "text": "demo/sample_widget.ts — enum WidgetState | export enum WidgetState { Idle, Busy, }",
+   "repo": "demo",
+   "chunk_id": "demo/sample_widget.ts#4"
+  },
+  {
+   "file": "demo/sample_widget.ts",
+   "kind": "function",
+   "name": "internalHelper",
+   "content": "function internalHelper(a: number): number {\n  return a + 1;\n}",
+   "line_start": 36,
+   "line_end": 38,
+   "text": "demo/sample_widget.ts — function internalHelper | function internalHelper(a: number): number { return a + 1; }",
+   "repo": "demo",
+   "chunk_id": "demo/sample_widget.ts#5"
+  }
+ ],
+ "search": {
+  "retry with exponential backoff": {
+   "results": [
+    {
+     "meta": {
+      "file": "demo/sample_service.py",
+      "kind": "function",
+      "name": "retry_with_backoff",
+      "content": "def retry_with_backoff(attempts, base=0.5):\n    \"\"\"Retry a call with exponential backoff.\n\n    Returns the callable's result or re-raises the last err...",
+      "line_start": 12,
+      "line_end": 24,
+      "repo": "demo",
+      "description": "Backoff helper kept out of the class on purpose: it is reused by the CLI path too. Retry a call with exponential backoff. Returns the callable's result or re-raises the last error.",
+      "chunk_id": "demo/sample_service.py#0"
+     },
+     "score": 0.8642,
+     "source": "code"
+    },
+    {
+     "meta": {
+      "file": "demo/sample_widget.ts",
+      "kind": "class",
+      "name": "WidgetView",
+      "content": "export class WidgetView {\n  constructor(private props: WidgetProps) {}\n\n  render(): string {\n    return this.props.label;\n  }\n}",
+      "line_start": 12,
+      "line_end": 19,
+      "repo": "demo",
+      "description": "Renders one widget; the only stateful component in this file.",
+      "chunk_id": "demo/sample_widget.ts#1"
+     },
+     "score": 0.8328,
+     "source": "code"
+    },
+    {
+     "meta": {
+      "file": "demo/sample_service.py",
+      "kind": "method",
+      "name": "size",
+      "content": "    @property\n    def size(self):\n        \"\"\"Number of live sessions.\"\"\"\n        return len(self._items)",
+      "line_start": 35,
+      "line_end": 39,
+      "repo": "demo",
+      "description": "Number of live sessions.",
+      "chunk_id": "demo/sample_service.py#3"
+     },
+     "score": 0.8156,
+     "source": "code"
+    },
+    {
+     "meta": {
+      "file": "demo/sample_widget.ts",
+      "kind": "enum",
+      "name": "WidgetState",
+      "content": "export enum WidgetState {\n  Idle,\n  Busy,\n}",
+      "line_start": 31,
+      "line_end": 35,
+      "repo": "demo",
+      "chunk_id": "demo/sample_widget.ts#4"
+     },
+     "score": 0.8082,
+     "source": "code"
+    }
+   ]
+  },
+  "SessionStore": {
+   "results": [
+    {
+     "meta": {
+      "file": "demo/sample_service.py",
+      "kind": "class",
+      "name": "SessionStore",
+      "content": "class SessionStore:\n    \"\"\"Keeps sessions in memory for the lifetime of the process.\"\"\"\n\n    LIMIT = 100",
+      "line_start": 30,
+      "line_end": 34,
+      "repo": "demo",
+      "description": "Keeps sessions in memory for the lifetime of the process.",
+      "chunk_id": "demo/sample_service.py#2"
+     },
+     "score": 0.8305,
+     "source": "code"
+    },
+    {
+     "meta": {
+      "file": "demo/sample_service.py",
+      "kind": "function",
+      "name": "retry_with_backoff",
+      "content": "def retry_with_backoff(attempts, base=0.5):\n    \"\"\"Retry a call with exponential backoff.\n\n    Returns the callable's result or re-raises the last err...",
+      "line_start": 12,
+      "line_end": 24,
+      "repo": "demo",
+      "description": "Backoff helper kept out of the class on purpose: it is reused by the CLI path too. Retry a call with exponential backoff. Returns the callable's result or re-raises the last error.",
+      "chunk_id": "demo/sample_service.py#0"
+     },
+     "score": 0.9299,
+     "source": "code"
+    },
+    {
+     "meta": {
+      "file": "demo/sample_widget.ts",
+      "kind": "const",
+      "name": "loadWidget",
+      "content": "export const loadWidget = async (id: string): Promise<WidgetProps> => {\n  const res = await thing(id);\n  return res;\n};",
+      "line_start": 26,
+      "line_end": 30,
+      "repo": "demo",
+      "description": "Fetches a widget and retries once on a 5xx.",
+      "chunk_id": "demo/sample_widget.ts#3"
+     },
+     "score": 0.8808,
+     "source": "code"
+    }
+   ]
+  },
+  "render one widget": {
+   "results": [
+    {
+     "meta": {
+      "file": "demo/sample_widget.ts",
+      "kind": "const",
+      "name": "loadWidget",
+      "content": "export const loadWidget = async (id: string): Promise<WidgetProps> => {\n  const res = await thing(id);\n  return res;\n};",
+      "line_start": 26,
+      "line_end": 30,
+      "repo": "demo",
+      "description": "Fetches a widget and retries once on a 5xx.",
+      "chunk_id": "demo/sample_widget.ts#3"
+     },
+     "score": 0.8744,
+     "source": "code"
+    },
+    {
+     "meta": {
+      "file": "demo/sample_widget.ts",
+      "kind": "class",
+      "name": "WidgetView",
+      "content": "export class WidgetView {\n  constructor(private props: WidgetProps) {}\n\n  render(): string {\n    return this.props.label;\n  }\n}",
+      "line_start": 12,
+      "line_end": 19,
+      "repo": "demo",
+      "description": "Renders one widget; the only stateful component in this file.",
+      "chunk_id": "demo/sample_widget.ts#1"
+     },
+     "score": 0.7488,
+     "source": "code"
+    },
+    {
+     "meta": {
+      "file": "demo/sample_service.py",
+      "kind": "function",
+      "name": "retry_with_backoff",
+      "content": "def retry_with_backoff(attempts, base=0.5):\n    \"\"\"Retry a call with exponential backoff.\n\n    Returns the callable's result or re-raises the last err...",
+      "line_start": 12,
+      "line_end": 24,
+      "repo": "demo",
+      "description": "Backoff helper kept out of the class on purpose: it is reused by the CLI path too. Retry a call with exponential backoff. Returns the callable's result or re-raises the last error.",
+      "chunk_id": "demo/sample_service.py#0"
+     },
+     "score": 0.8737,
+     "source": "code"
+    }
+   ]
+  },
+  "evict expired sessions": {
+   "results": [
+    {
+     "meta": {
+      "file": "demo/sample_service.py",
+      "kind": "method",
+      "name": "size",
+      "content": "    @property\n    def size(self):\n        \"\"\"Number of live sessions.\"\"\"\n        return len(self._items)",
+      "line_start": 35,
+      "line_end": 39,
+      "repo": "demo",
+      "description": "Number of live sessions.",
+      "chunk_id": "demo/sample_service.py#3"
+     },
+     "score": 0.719,
+     "source": "code"
+    },
+    {
+     "meta": {
+      "file": "demo/sample_service.py",
+      "kind": "class",
+      "name": "SessionStore",
+      "content": "class SessionStore:\n    \"\"\"Keeps sessions in memory for the lifetime of the process.\"\"\"\n\n    LIMIT = 100",
+      "line_start": 30,
+      "line_end": 34,
+      "repo": "demo",
+      "description": "Keeps sessions in memory for the lifetime of the process.",
+      "chunk_id": "demo/sample_service.py#2"
+     },
+     "score": 0.6254,
+     "source": "code"
+    },
+    {
+     "meta": {
+      "file": "demo/sample_widget.ts",
+      "kind": "const",
+      "name": "DEFAULT_WIDGET",
+      "content": "export const DEFAULT_WIDGET: WidgetProps = {\n  id: \"none\",\n  label: \"\",\n};",
+      "line_start": 20,
+      "line_end": 24,
+      "repo": "demo",
+      "chunk_id": "demo/sample_widget.ts#2"
+     },
+     "score": 0.8184,
+     "source": "code"
+    }
+   ]
+  }
+ }
+}

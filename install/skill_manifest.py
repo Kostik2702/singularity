@@ -39,6 +39,7 @@ _ALL_CLIENTS = ["claude", "codex", "gemini", "grok"]
 # workflow) and nothing else.
 SKILL_MANIFEST: dict[str, dict[str, Any]] = {
     "mb-search":             {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
+    "mb-code":               {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
     "mb-memory":              {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
     "mb-llm-delegate":        {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},
     "mb-onboard":             {"clients": _ALL_CLIENTS, "tools": ["Bash"], "reason": None},

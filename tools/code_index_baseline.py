@@ -16,6 +16,12 @@ Usage:
     python tools/code_index_baseline.py capture --both --out /tmp/pair.json
     python tools/code_index_baseline.py render docs/code-index-baseline.json
     python tools/code_index_baseline.py compare /tmp/pair.json
+    python tools/code_index_baseline.py capture --boost --scratch <copy> --schema v2 --out x.json
+    python tools/code_index_baseline.py compare-boost x.json
+
+`--boost` (CODE-GRAPH P7) adds a `--with-code --graph-boost` variant;
+`compare-boost` shows what the boost moved. `--scratch` answers from the
+isolated copy `tools/search_eval.py chunker` prepares, never the live index.
 """
 from __future__ import annotations
 
@@ -24,6 +30,7 @@ import json
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -91,14 +98,52 @@ def _hit(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _run_variant(with_code: bool) -> list[dict[str, Any]]:
+def _in_process(scratch: Path, schema: str) -> Callable[[list[str]], dict[str, Any]]:
+    """`mb <args>` answered in this process from an isolated copy prepared by
+    `tools/search_eval.py chunker` -- the REAL `cmd_search` (so `--graph-boost`
+    runs its real code), with only the transport to the daemon replaced by an
+    engine over the copy. Nothing reaches the live daemon or the live index."""
+    import contextlib
+    import io
+
+    sys.path.insert(0, str(REPO))
+    from singularity import cli
+    from singularity.search import client
+    from singularity.search.engine import SearchEngine
+    from tools.search_eval import load_isolated
+
+    _, cfgs = load_isolated(scratch)
+    cfg = cfgs[schema]
+    engine = SearchEngine(cfg)
+
+    def run(args: list[str]) -> dict[str, Any]:
+        parsed = cli._build_parser().parse_args(args)
+        out, live = io.StringIO(), client.search
+        client.search = lambda _cfg, payload: engine.search(payload)
+        try:
+            with contextlib.redirect_stdout(out):
+                code = cli.cmd_search(cfg, parsed)
+        finally:
+            client.search = live
+        if code != 0:
+            raise RuntimeError(f"mb {' '.join(args)} -> exit {code}")
+        return json.loads(out.getvalue())
+
+    return run
+
+
+def _run_variant(with_code: bool, boost: bool = False,
+                 mb: Callable[[list[str]], dict[str, Any]] | None = None
+                 ) -> list[dict[str, Any]]:
     rows = []
     for spec in QUERIES:
         args = ["search", spec["query"], "--top", str(TOP_K), "--json"]
         if with_code:
             args.append("--with-code")
+        if boost:
+            args.append("--graph-boost")
         t0 = time.perf_counter()
-        resp = _mb(args)
+        resp = (mb or _mb)(args)
         wall_ms = round((time.perf_counter() - t0) * 1000, 1)
         rows.append({
             **spec,
@@ -119,19 +164,23 @@ def _stats() -> dict[str, Any]:
 
 
 def cmd_capture(args: argparse.Namespace) -> int:
+    mb = _in_process(Path(args.scratch), args.schema) if args.scratch else None
     payload: dict[str, Any] = {
         "taken_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "top_k": TOP_K,
         "note": args.note or "",
-        "stats": _stats(),
+        "stats": ({"isolated_copy": str(args.scratch), "code_chunk_schema": args.schema}
+                  if mb else _stats()),
         "variants": {},
     }
-    # warm the daemon first so the recorded timings are the warm path, which is
-    # the only one a user experiences twice
-    _mb(["search", "warmup", "--top", "1", "--json"])
-    payload["variants"]["baseline"] = _run_variant(with_code=False)
-    if args.both:
-        payload["variants"]["with_code"] = _run_variant(with_code=True)
+    # warm the daemon (or the in-process model) first so the recorded timings
+    # are the warm path, which is the only one a user experiences twice
+    (mb or _mb)(["search", "warmup", "--top", "1", "--json"])
+    payload["variants"]["baseline"] = _run_variant(with_code=False, mb=mb)
+    if args.both or args.boost:
+        payload["variants"]["with_code"] = _run_variant(with_code=True, mb=mb)
+    if args.boost:
+        payload["variants"]["with_code_boost"] = _run_variant(with_code=True, boost=True, mb=mb)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=1),
@@ -262,6 +311,70 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def boost_rows(base: list[dict[str, Any]], boosted: list[dict[str, Any]]
+               ) -> list[dict[str, Any]]:
+    """Per query: what `--graph-boost` did to the `--with-code` top-k.
+
+    The boost only reorders the hits the engine returned, so "displaced" is
+    structurally 0 and the question is where things MOVED: whether top-1
+    changed, how many positions changed, and where code and notes sit on
+    average before and after. A hit set that differs is reported as an error,
+    not averaged over -- it would mean the boost added or dropped a hit."""
+    after = {r["id"]: r for r in boosted}
+    out = []
+    for row in base:
+        b_ids = [h["chunk_id"] for h in row["top"]]
+        a_top = after[row["id"]]["top"]
+        a_ids = [h["chunk_id"] for h in a_top]
+
+        def mean_rank(top: list[dict[str, Any]], source: str) -> float | None:
+            ranks = [i for i, h in enumerate(top, 1) if (h["source"] == "code") == (source == "code")]
+            return round(sum(ranks) / len(ranks), 2) if ranks else None
+
+        out.append({
+            "id": row["id"],
+            "same_hits": sorted(b_ids) == sorted(a_ids),
+            "code_hits": sum(1 for h in row["top"] if h["source"] == "code"),
+            "moved": sum(1 for x, y in zip(b_ids, a_ids, strict=False) if x != y),
+            "top1_changed": bool(b_ids and a_ids and b_ids[0] != a_ids[0]),
+            "code_mean_rank": (mean_rank(row["top"], "code"), mean_rank(a_top, "code")),
+            "note_mean_rank": (mean_rank(row["top"], "memory"), mean_rank(a_top, "memory")),
+        })
+    return out
+
+
+def cmd_compare_boost(args: argparse.Namespace) -> int:
+    """Same-session diff: what `--graph-boost` does to the `--with-code` top-k.
+    The owner signs the boost into a default -- or not -- from this table."""
+    data = json.loads(Path(args.src).read_text(encoding="utf-8"))
+    refusal = _reject_a_foreign_query_set(data, args.src)
+    if refusal:
+        print(refusal, file=sys.stderr)
+        return 2
+    variants = data["variants"]
+    if "with_code" not in variants or "with_code_boost" not in variants:
+        print("capture was taken without --boost; nothing to compare", file=sys.stderr)
+        return 2
+    rows = boost_rows(variants["with_code"], variants["with_code_boost"])
+    print("| Q | code hits | positions moved | top-1 changed | code mean rank | note mean rank |")
+    print("|---|---|---|---|---|---|")
+    for r in rows:
+        code_a, code_b = r["code_mean_rank"]
+        note_a, note_b = r["note_mean_rank"]
+        print(f"| {r['id']} | {r['code_hits']} | {r['moved']} | "
+              f"{'yes' if r['top1_changed'] else 'no'} | {code_a} -> {code_b} | {note_a} -> {note_b} |")
+    n = len(rows)
+    print(f"| **total** | **{sum(r['code_hits'] for r in rows)}** / {n * TOP_K} | "
+          f"**{sum(r['moved'] for r in rows)}** / {n * TOP_K} | "
+          f"**{sum(r['top1_changed'] for r in rows)}** / {n} | | |")
+    broken = [r["id"] for r in rows if not r["same_hits"]]
+    if broken:
+        print(f"the boost changed the hit SET on {', '.join(broken)} -- it may only reorder",
+              file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -271,8 +384,18 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--out", default="docs/code-index-baseline.json")
     c.add_argument("--both", action="store_true",
                    help="also run every query with --with-code (C06 evidence)")
+    c.add_argument("--boost", action="store_true",
+                   help="also run --with-code --graph-boost (implies --both; CODE-GRAPH P7)")
+    c.add_argument("--scratch", help="answer in-process from an isolated copy prepared by "
+                                     "`tools/search_eval.py chunker`, never the live index")
+    c.add_argument("--schema", choices=("v1", "v2"), default="v1",
+                   help="which of the copy's code corpora to search (with --scratch)")
     c.add_argument("--note", help="free-text provenance line stored in the JSON")
     c.set_defaults(func=cmd_capture)
+
+    cb = sub.add_parser("compare-boost", help="--with-code vs --with-code --graph-boost")
+    cb.add_argument("src")
+    cb.set_defaults(func=cmd_compare_boost)
 
     r = sub.add_parser("render", help="markdown tables for the baseline variant")
     r.add_argument("src", nargs="?", default="docs/code-index-baseline.json")

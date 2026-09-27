@@ -9,3 +9,6 @@ dist/
 *.log
 .superpowers/
 .claude/settings.local.json
+# `git worktree`s agents create for isolated work (Claude Code); the code graph
+# already skips them as linked worktrees, git status should too
+.claude/worktrees/

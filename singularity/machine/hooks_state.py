@@ -124,6 +124,19 @@ THINK_FIRST_FRAGMENT = """## Name the fork before working, not after
   while there is still someone to ask."""
 
 
+MEASURED_AXIS_FRAGMENT = """## Measure the axis you were ASKED about
+- The person says the result is wrong a SECOND time while your instruments say
+  it works: stop producing instruments. They are answering a different question.
+  Name the axis you measured, name the axis they asked about, and go measure
+  theirs.
+- Before reporting "X works", ask whether X is the word THEY used for the goal or
+  the word you used for your work. If the second, report your work and say plainly
+  that it proves nothing about their goal.
+- Green tools plus an unhappy person is almost never "they misunderstood" — it is
+  two different axes under one word. The thing that breaks the deadlock is looking
+  at the artefact itself (open the file, render the frame), not another log."""
+
+
 def _read_json_tolerant(path: Path) -> tuple[dict[str, Any], str | None]:
     """(data, error). Missing file -> ({}, None). Malformed/non-object -> ({}, reason)."""
     if not path.exists():

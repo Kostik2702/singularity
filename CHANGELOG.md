@@ -10,6 +10,98 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.18.0 — a code graph that knows when it is stale
+
+`mb code` answers the structural questions a semantic search cannot: who calls
+this, what does this change reach, what is never called, how does the code fall
+apart into parts. It is the engine's own: tree-sitter extractors for Python,
+TypeScript and JavaScript, import-aware resolvers, one SQLite graph per unit in
+transactional generations, no server and no MCP (decision CODE-GRAPH D1). It is
+off until `code_graph_enabled` is set, and `mb search` does not depend on it.
+
+## Yardsticks first, and they had to be able to fail
+
+P0 built the instruments before any graph code: 58 hand-labelled call sites in
+three real units, pinned by hash, scored against the owner's gate (precision
+>= 0.90, recall >= 0.65, false edges <= 0.10). Both naive resolvers fail it
+(name-first 0.56, name-unique 0.74) -- its first draft let name-unique through
+at 0.96, and eight external calls that share a name with exactly one
+first-party definition closed that. The same audit found the code retrieval set
+had been measuring nothing on Windows: a junction spelled paths differently
+from the ranking, and 12 of 16 cases scored a miss while verification stayed
+green. The shipped resolvers score 1.00 precision, 0.95 recall and no false
+edge on all 58 (in-sample: they were designed against it; out-of-sample audits
+found the misses in the one tier that guesses, a unique name, which was
+hardened and is named as a guess in every answer).
+
+## The graph refreshes before every query, and equals a full build
+
+Each `mb code` verb first compares the tree with the graph (git status, diff
+and the dirty set of the last snapshot) and writes small changes in place.
+That update is exact because the resolvers RECORD what they read -- every
+other-file entry, every module-path probe (misses too), every unique-name
+lookup -- and an update re-resolves exactly those readers. A random-edit oracle
+compares it with a full build: 200 sequences, 2410 edits, 0 differences; its
+two planted violations went red. Tuning the full build found an exponential
+walk in the Python resolver (`s = s.replace(...)` written k times gave k**6
+calls, 310 million on the proxy): a depth-keyed memo took the 44k-file proxy from 459 s to 91 s with
+byte-identical output.
+
+## What it answers
+
+* `outline`, `snippet`, `callers`, `callees`, `trace`, `find`, `schema`, one
+  JSON envelope with an explicit `freshness`;
+* `impact`: changed and deleted or renamed symbols (the base revision is parsed
+  in memory), callers to `--depth`, touched tests, calls to names that no
+  longer exist, and the coverage of the answer;
+* `deadcode`: `dead` only when nothing mentions the name at all -- no call, no
+  identifier, no string spelling it, no decorator, no entry point, no export;
+  everything uncertain is `unknown` with its reason. An independent audit of
+  30 random candidates: 3.3% false;
+* `arch`: file-level Louvain at build time with community numbers stable
+  across builds;
+* `sql`: one read-only SELECT over versioned `v1_*` views. SQLite's read-only
+  mode is not a sandbox -- ATTACH and VACUUM INTO create files from a `mode=ro`
+  connection with `query_only` on -- so an allowlist authorizer is the guard,
+  and a CTE named like a view cannot borrow the view's permission.
+
+## It lives with the rest of the engine
+
+A mandatory secret audit runs on every build over the node columns AND the
+stored facts (a key anywhere in a file lands in its identifier-shaped strings);
+`mb code audit` exits 1 on a finding. `doctor K2` warns on staleness, version
+drift, integrity, orphaned generations and findings. Hooks read a
+`graph-last.json` sidecar through the standard library only: SessionStart
+names the graph of the current directory at p95 88.9 ms. Nightly rebuilds every
+graph in a child process and diffs it against the incrementally maintained one.
+Backups never copy a graph. The `mb-code` skill says which verb answers which
+question and what the answer does not know.
+
+## Search gains the graph without changing
+
+`mb search --with-code --graph` adds, under each code hit, the definition it
+falls in, its callers and callees, and whether the graph can vouch for that
+version of the file; without the flag the output is byte-identical to the
+previous release (40 of 40 live outputs). Chunker v2 (`code_chunk_schema`,
+chunks cut at the graph's definitions, grammars pinned) and `--graph-boost`
+both passed their gates and both stay off: v2 indexes 14 more secret-shaped
+markers that need a look before anyone switches it on.
+
+## Also in this release
+
+* An agent's `description:` says when to dispatch it, not which words to
+  match -- the translated trigger lists were the routing defect of v0.17.0 one
+  file further out.
+* Two rules are grafted where they act: "measure the axis you were asked
+  about" (SessionStart and the subagent preamble) and the second half of "a
+  claim of absence requires a control".
+* The harness scratch directory and `.claude/settings.local.json` are ignored
+  by the repository itself, not only by files outside it.
+* Planning walks an interactive process by its imperative verbs before
+  decomposing it.
+
+---
+
 # v0.17.0 — one language for the engine, none for its behaviour
 
 The repository spoke two languages inside single files: a docstring in one, the

@@ -53,6 +53,9 @@ ALLOWED: dict[str, str] = {
     "tests/fixtures/grok/README.md":
         "the row documents a UTF-8 BOM leaking into the model context; the "
         "mis-decoded bytes ARE the observed artefact, not prose",
+    "tests/test_codegraph_sql.py":
+        "`mb code sql` reads its SQL from a pipe as UTF-8 whatever the console's "
+        "code page; the query text in another script is the data that proves it",
     "tests/test_routing.py":
         "one request written six ways, asserting the pushed text is identical "
         "for all of them - the invariant that the router stopped being a "
@@ -111,11 +114,24 @@ ALLOWED.update({
         "the re-record taken after the questions were re-worded. Same category "
         "as the others: what the vault returned, note paths and section names "
         "included",
+    "docs/code-index-baseline-2026-09-26.json":
+        "the CODE-GRAPH P0 re-record on a corpus three times larger (the D2 gate "
+        "for graph enrichment). Recorded output: the note paths and section "
+        "names the vault returned",
     "docs/code-index-baseline.md":
         "its prose is English; the Q01-Q10 blocks are the queries as issued and "
         "the rows as returned, naming real notes in the vault. Rewriting them "
         "would turn a measurement into a fiction, and a re-record would put them "
         "straight back",
+    "docs/search-eval-code-v2.json":
+        "the CODE-GRAPH P7 chunker gate: the same 20 code cases as the P0 record, "
+        "run six times (v1/v2 x fusion off/on/boost), so the RU crosslingual "
+        "queries appear once per run as issued. Recorded output, not prose",
+    "docs/code-graph-p1b-audit.json":
+        "the CODE-GRAPH P1b out-of-sample audit: call sites sampled from another "
+        "repository and quoted verbatim, two of them receivers carrying that "
+        "repository's own assertion messages. Evidence of what the resolver was "
+        "judged on; rewriting a quote would falsify the sample",
 })
 
 #: Outstanding work, not exceptions. Each line is a file the translation has not
@@ -241,15 +257,26 @@ def test_the_detector_actually_catches_a_foreign_letter():
 BUDGET: dict[str, int] = {
     "docs/code-index-baseline.json": 1011,
     "docs/code-index-baseline-2026-08-08.json": 1145,
+    "docs/code-index-baseline-2026-09-26.json": 1345,
     "docs/code-index-baseline.md": 700,
+    # CODE-GRAPH P1b audit record: two quoted assertion messages of the audited repo.
+    "docs/code-graph-p1b-audit.json": 64,
     "docs/search-eval-baseline.json": 12738,
-    "docs/search-eval-code-baseline.json": 424,
+    # 424 -> 502 (CODE-GRAPH P0): re-recorded on 20 code cases, one of them a new
+    # RU query against a ComfyUI node pack, and on the corrected `Singularity/`
+    # spelling, which turned 12 recorded misses back into real result lists.
+    "docs/search-eval-code-baseline.json": 502,
+    # CODE-GRAPH P7: the P0 code cases x 6 recorded runs instead of 2 (3 x 502).
+    "docs/search-eval-code-v2.json": 1506,
     "docs/v0.5.0-baseline.json": 1908,
     "golden-registry/files/letter-glitch-wall/reference-implementation-index.html": 10,
     "singularity/machine/rules_delivery.py": 11,
     "tests/fixtures/grok/README.md": 2,
-    "tests/fixtures/search_eval.json": 3347,
+    # 3347 -> 3386 (CODE-GRAPH P0): one crosslingual code case, c-xl-06, a RU query
+    # whose target is outside this engine; the set had none before.
+    "tests/fixtures/search_eval.json": 3386,
     "tests/test_chunking.py": 203,
+    "tests/test_codegraph_sql.py": 14,
     "tests/test_context_map.py": 29,
     "tests/test_contradictions.py": 87,
     "tests/test_gaps.py": 26,

@@ -49,12 +49,36 @@ DELIVERIES: list[tuple[str, str, Path, str]] = [
     ("check a found inconsistency against the recorded decision", "SessionStart",
      ENGINE / "singularity" / "machine" / "hooks_state.py",
      "look for a RECORDED decision"),
+    # 2026-08-21, vibe24 T-166: the transport of a migration was built and reported as
+    # "the new flow works", with four green loops behind it. The owner answered "old
+    # flow" five times running. Both were right and the word meant two things: the
+    # logs proved an envelope reached the end of new rails and said nothing about
+    # there being ONE stage at the end of them. What broke the deadlock was a frame
+    # strip of the finished reel, not a sixth log.
+    ("measure the axis you were asked about", "SessionStart",
+     ENGINE / "singularity" / "machine" / "hooks_state.py",
+     "MEASURED_AXIS_FRAGMENT"),
+    ("measure the axis you were asked about", "SessionStart",
+     ENGINE / "singularity" / "hooks" / "session_start.py",
+     "MEASURED_AXIS_FRAGMENT"),
 
     # --- every subagent: preamble sections 1-2 are the mandatory minimum -----
     ("a claim of absence requires a control", "preamble §2", PREAMBLE,
      "is not evidence by itself"),
+    # The SAME rule, second mechanism, same line — and its own marker, because the
+    # first one goes on matching after the second half is deleted. `accounted` is a
+    # set, so this costs the inventory nothing and buys the half a check.
+    # 2026-08-18, vibe24 V24-BUS-009: a complete, correct query returned 70 entries
+    # under 70 keys, and that was read as "reuse is broken". It was 14 tenants with
+    # one job each; reuse needs two jobs in a tenant, so the phenomenon had no
+    # opportunity to occur. The old GATE passes on this — the code under test
+    # existed and deleting it would have changed the numbers.
+    ("a claim of absence requires a control", "preamble §2", PREAMBLE,
+     "had no opportunity to exhibit it"),
     ("check a found inconsistency against the recorded decision", "preamble §2", PREAMBLE,
      "look for a recorded decision"),
+    ("measure the axis you were asked about", "preamble §2", PREAMBLE,
+     "Measure the axis you were ASKED about"),
     ("reality anchor - evidence over confidence", "preamble §2", PREAMBLE,
      "Reality anchor"),
     ("an invariant is proven by trying to break it", "preamble §2", PREAMBLE,

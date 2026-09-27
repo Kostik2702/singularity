@@ -599,6 +599,201 @@ def code_index_block(rep: Report, cfg: Config, fix: bool, heavy: bool) -> None:
     _guard(rep, "K1", k1)
 
 
+# Block K2 thresholds, each with the measurement behind it.
+# Files tree-sitter parsed with recovered errors: 0.12% on the council's 100k-file
+# proxy, 0.18% (78 of 44,294) on the current one, none in this machine's other nine
+# units. A grammar that stops fitting the code -- new syntax, a file type handed the
+# wrong grammar -- shows as a jump in that share, never as a failure, because
+# tree-sitter recovers. 2% is ten times the measured share. Under ten such files it is
+# one or two broken files in a small unit, not a grammar.
+_GRAPH_DEGRADED_SHARE = 0.02
+_GRAPH_DEGRADED_MIN_FILES = 10
+# PRAGMA quick_check reads the whole file: 1.2-2.0 s on the 984 MB proxy graph with the
+# file in the OS cache, under 0.6 s for every other unit here. The budget bounds doctor
+# on a cold or slow disk; a check cut off by it is said in the detail, not called damage.
+_GRAPH_QUICK_CHECK_SECONDS = 10.0
+# 22 KB per indexed file (984 MB / 44,294 files on the proxy, 24 KB on this engine), so
+# the plan's largest unit, 100k files, is about 2.2 GB. A store over 5 GB holds more than
+# twice that: generations nobody collected, or a scope that took in a vendored tree.
+_GRAPH_DISK_WARN_BYTES = 5 * 1024 ** 3
+
+
+def _dir_bytes(path: Path) -> int:
+    total = 0
+    for p in path.rglob("*"):
+        try:
+            if p.is_file():
+                total += p.stat().st_size
+        except OSError:
+            pass
+    return total
+
+
+def _quick_check(con, budget: float) -> str | None:
+    """PRAGMA quick_check's first line ('ok' when intact), or None when it
+    ran past `budget` seconds and was interrupted."""
+    import sqlite3
+
+    deadline = time.monotonic() + budget
+    con.set_progress_handler(lambda: 1 if time.monotonic() > deadline else 0, 10_000)
+    try:
+        row = con.execute("PRAGMA quick_check").fetchone()
+    except sqlite3.OperationalError as exc:
+        if "interrupt" in str(exc):
+            return None
+        raise
+    finally:
+        con.set_progress_handler(None, 0)
+    return str(row[0]) if row else "no answer"
+
+
+_K2_FIX = {
+    "damaged": "the graph is derived: delete the unit's directory under code_graph/ and "
+               "`mb code build` it again",
+    "rebuild": "`mb code build` from inside the repository",
+    "stale": "`mb code update` from inside the repository",
+    "degraded": "`mb code schema` shows parse_status; compare requirements-graph.txt pins with the code",
+    "audit": "`mb code audit` lists them, masked; remove the value from the source, then `mb code build`",
+    "unaudited": "`mb code audit` (a build audits too)",
+    "orphans": "the unit's next `mb code build` removes them; if they stay, close what holds them "
+               "open (another `mb code`, a database browser)",
+    "disk": "`mb stats` shows each graph's size; delete the ones you no longer need under code_graph/",
+    "parser": "python -m pip install --require-hashes -r requirements-graph.txt",
+    "build": "`mb code build --all`",
+}
+
+
+def _code_graph_unit(cfg: Config, card: dict, parser_ok: bool) -> tuple[list[tuple[str, str]], list[str], int]:
+    """([(problem, fix key)], [notes], files) of one built unit."""
+    from .codegraph import audit, store, versions
+
+    problems: list[tuple[str, str]] = []
+    notes: list[str] = []
+    db = store.current_db(cfg, card["key"])
+    if db is None:
+        return [("no current generation: CURRENT is missing or names one that is gone", "rebuild")], notes, 0
+    con = store.connect_ro(db)
+    try:
+        qc = _quick_check(con, _GRAPH_QUICK_CHECK_SECONDS)
+        if qc is None:
+            notes.append(f"{card['key']}: quick_check stopped after {_GRAPH_QUICK_CHECK_SECONDS:.0f}s, not finished")
+        elif qc != "ok":
+            problems.append((f"quick_check: {qc}", "damaged"))
+        meta = store.read_meta(con)
+        if meta.get("schema_version") != store.SCHEMA_VERSION:
+            # the tables below differ between schemas: nothing more is read from this graph
+            problems.append((f"schema {meta.get('schema_version')}, this engine writes {store.SCHEMA_VERSION}",
+                             "rebuild"))
+            return problems, notes, int(meta.get("files") or 0)
+        mismatch = versions.version_mismatch(meta) if parser_ok else {}
+        if mismatch:
+            problems.append(("written by other parser/resolver versions ("
+                             + ", ".join(f"{k} {a}->{b}" for k, (a, b) in sorted(mismatch.items()))
+                             + "): changed files are not written in", "rebuild"))
+        stale = con.execute("SELECT count(*) FROM stale").fetchone()[0]
+        if meta.get("stale_all"):
+            problems.append((f"stale as a whole: {meta['stale_all']}", "stale"))
+        elif stale:
+            problems.append((f"{stale} stale file(s) waiting to be resolved again", "stale"))
+        status = dict(con.execute("SELECT parse_status, count(*) FROM files GROUP BY parse_status").fetchall())
+        files, partial = sum(status.values()), status.get("partial", 0)
+        if partial >= _GRAPH_DEGRADED_MIN_FILES and partial / files > _GRAPH_DEGRADED_SHARE:
+            problems.append((f"{partial} of {files} files parsed with errors ({partial / files:.1%}, "
+                             f"over {_GRAPH_DEGRADED_SHARE:.0%})", "degraded"))
+        rec = audit.recorded(meta)
+        if rec is None:
+            problems.append(("never audited for secrets", "unaudited"))
+        else:
+            if rec["findings"]:
+                kinds = ", ".join(f"{k} {n}" for k, n in (rec.get("by_kind") or {}).items())
+                problems.append((f"{rec['findings']} secret-shaped value(s) stored ({kinds})", "audit"))
+            since = int(meta.get("seq") or 0) - int(rec.get("at_seq") or 0)
+            if since:
+                notes.append(f"{card['key']}: {since} in-place update(s) since the last audit")
+        return problems, notes, files
+    finally:
+        con.close()
+
+
+def code_graph_block(rep: Report, cfg: Config) -> None:
+    """Block K2 — the structural code graph (CODE-GRAPH D1, P6).
+
+    WARN only, never FAIL, by decision. Like the code corpus of K1 the graph
+    is derived state: delete `code_graph/` and `mb code build --all` makes it
+    again, so nothing found here can justify failing `mb doctor` -- and a
+    graph this check cannot read is a WARN on that graph, not a crash.
+
+    The secret audit is not re-run here: it takes ~25 s on a 44k-file graph.
+    Every full build and every `mb code audit` records its count in the
+    graph's meta; that is what is read, with the in-place updates written
+    since. A graph never audited is a WARN: the audit is mandatory (D1)."""
+    import sys
+
+    def k2():
+        from .codegraph import store, versions
+
+        cards = store.built_units(cfg)
+        if not cfg.data.get("code_graph_enabled"):
+            rep.add("K2-code-graph", "SKIP", "code graph off (code_graph_enabled is false)"
+                    + (f"; {len(cards)} graph(s) still on disk under {cfg.code_graph_dir}" if cards else ""))
+            return
+        root = cfg.code_graph_dir
+        problems: dict[str, list[tuple[str, str]]] = {}
+        notes: list[str] = []
+        parser_ok = versions.parser_available()
+        if not parser_ok:
+            problems[sys.executable] = [("the parser is not installed here: queries answer without "
+                                         "writing changed files in", "parser")]
+        files = 0
+        for card in cards:
+            try:
+                found, said, n = _code_graph_unit(cfg, card, parser_ok)
+            except Exception as exc:  # noqa: BLE001 — an unreadable graph is a WARN on it, never a FAIL
+                found, said, n = [(f"could not be read: {exc}", "damaged")], [], 0
+            files += n
+            notes += said
+            if found:
+                problems.setdefault(card["key"], []).extend(found)
+        names = {store.unit_dir(cfg, c["key"]).name: c["key"] for c in cards}
+        for d in sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []:
+            lock = d / ".build.lock"
+            if lock.exists() and not store._owner_is_dead(lock):
+                notes.append(f"{names.get(d.name, d.name)}: a build is running")
+                continue
+            try:
+                current = (d / "CURRENT").read_text(encoding="utf-8").strip()
+            except OSError:
+                current = None
+            left = [g for g in d.glob("gen_*") if g.is_dir() and g.name != current]
+            if left:
+                size = sum(_dir_bytes(g) for g in left)
+                problems.setdefault(names.get(d.name, d.name), []).append(
+                    (f"{len(left)} old generation(s), {size / 1e6:.0f} MB, not collected", "orphans"))
+        disk = _dir_bytes(root) if root.is_dir() else 0
+        if disk > _GRAPH_DISK_WARN_BYTES:
+            problems.setdefault(str(root), []).append(
+                (f"{disk / 1e9:.1f} GB, over {_GRAPH_DISK_WARN_BYTES / 1024 ** 3:.0f} GB", "disk"))
+        if not cards and not problems:
+            rep.add("K2-code-graph", "WARN", "code graph on but no graph built — `mb code` has nothing to answer from",
+                    fix=_K2_FIX["build"])
+            return
+        head = f"{len(cards)} graph(s), {files} files, {disk / 1e6:.0f} MB"
+        tail = ("; " + "; ".join(notes)) if notes else ""
+        if problems:
+            detail = " | ".join(f"{unit}: {', '.join(p for p, _ in found)}" for unit, found in problems.items())
+            fixes = dict.fromkeys(fix for found in problems.values() for _, fix in found)
+            rep.add("K2-code-graph", "WARN", f"{head} — {detail}{tail}",
+                    fix=" | ".join(_K2_FIX[f] for f in fixes))
+            return
+        rep.add("K2-code-graph", "PASS", f"{head}: current, intact, audited clean{tail}")
+
+    # Not `_guard`: its crash status is FAIL, and this block is WARN only.
+    try:
+        k2()
+    except Exception as exc:  # noqa: BLE001 — doctor checks are guarded by design
+        rep.add("K2-code-graph", "WARN", f"check crashed: {exc}")
+
+
 def run(cfg: Config, fix: bool = False, heavy: bool = False,
         as_json: bool = False) -> int:
     rep = Report(quiet=as_json)
@@ -1285,6 +1480,9 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
 
     # ---- Block K: CODE-INDEX corpus (C05) -----------------------------
     _guard(rep, "K-code-index", lambda: code_index_block(rep, cfg, fix, heavy))
+
+    # ---- Block K2: CODE-GRAPH, the structural graph (P6) ----------------
+    _guard(rep, "K2-code-graph", lambda: code_graph_block(rep, cfg))
 
     # ---- summary -------------------------------------------------------
     counts = rep.counts()

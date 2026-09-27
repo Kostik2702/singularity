@@ -35,6 +35,7 @@ from tools.search_eval import (  # noqa: E402
     load_fixture,
     ranked_files,
     score_cases,
+    verify_targets,
 )
 
 FIXTURE_PATH = REPO / "tests" / "fixtures" / "search_eval.json"
@@ -197,6 +198,27 @@ def test_code_fixture_meets_its_quota_and_is_well_formed():
         for rel in case["expect"]:
             assert not Path(rel).is_absolute()
             assert ".." not in Path(rel).parts
+
+
+def test_a_target_whose_case_drifted_is_reported_missing(tmp_path):
+    """Ranking compares paths byte for byte, so an expectation spelled
+    `singularity/...` never matches a result `Singularity/...`. On a
+    case-insensitive filesystem the file still "exists", and the set then
+    scores every such case a miss while verification stays green -- exactly
+    what happened after the repositories root started reaching this engine
+    through a junction named `Singularity`: 12 of 16 code cases turned into
+    misses and nothing failed. Verification must compare the ON-DISK spelling."""
+    (tmp_path / "Repo" / "pkg").mkdir(parents=True)
+    (tmp_path / "Repo" / "pkg" / "mod.py").write_text("x = 1\n", encoding="utf-8")
+    cases = [
+        {"id": "ok", "expect": ["Repo/pkg/mod.py"]},
+        {"id": "drifted", "expect": ["repo/pkg/mod.py"]},
+        {"id": "absent", "expect": ["Repo/pkg/gone.py"]},
+    ]
+    missing = verify_targets(cases, tmp_path)
+    assert "ok -> Repo/pkg/mod.py" not in " ".join(missing)
+    assert any(m.startswith("drifted") for m in missing)
+    assert any(m.startswith("absent") for m in missing)
 
 
 def test_the_two_sets_do_not_share_case_ids():

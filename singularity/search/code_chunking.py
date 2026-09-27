@@ -89,6 +89,11 @@ SKIP_DIRS = (
     # for "cosine similarity" — a jQuery-era utility library, indexed only
     # because it happened to sit inside a documentation folder.
     "_static",
+    # What a macOS archiver leaves in every zip: `._<name>` resource-fork twins
+    # of each file. They carry the source file's extension, so they matched
+    # `*.py`; on 2026-09-26 the live index held 22 chunks of them. Not
+    # owner-specific — every unzipped macOS archive has this directory.
+    "__MACOSX",
 )
 
 # Matched against the whole corpus-relative path, case-insensitively.
