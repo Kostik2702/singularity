@@ -5,8 +5,10 @@ and must not import tree-sitter to do it (import-floor guard).
 from __future__ import annotations
 
 import importlib.util
-from importlib.metadata import PackageNotFoundError, version
 from typing import Any
+
+# importlib.metadata is imported where it is used: ~16 ms at import time, paid
+# by every `mb code` and `mb search --graph` that never compares versions.
 
 # Bumped on any change that can move an edge: a graph built by resolver N is
 # never extended by resolver N+1 (UNMET o). 2: name-unique skips test files and
@@ -25,6 +27,7 @@ _MODULES = ("tree_sitter", "tree_sitter_python", "tree_sitter_typescript", "tree
 def parser_versions() -> dict[str, str]:
     """Recorded in every graph. A writer whose versions differ is not allowed
     to mix its output into this graph (UNMET o) -- see `version_mismatch`."""
+    from importlib.metadata import PackageNotFoundError, version
     out = {}
     for pkg in PARSER_PACKAGES:
         try:

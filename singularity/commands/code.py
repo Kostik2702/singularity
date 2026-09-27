@@ -110,8 +110,11 @@ def _build(cfg, args) -> int:
         results.append(s)
         if not args.json:
             pending = f", {len(s['gc_pending'])} old generation(s) still held open" if s["gc_pending"] else ""
+            findings = (s.get("audit") or {}).get("findings") or 0
+            secrets = f", {findings} secret-shaped value(s) stored — see `mb code audit`" if findings else ""
             print(f"{s['unit']}: {s['files']} files, {s['nodes']} nodes, "
-                  f"{sum(s['edges'].values())} edges, {s['unresolved']} unresolved, {s['seconds']}s{pending}")
+                  f"{sum(s['edges'].values())} edges, {s['unresolved']} unresolved, {s['seconds']}s"
+                  f"{pending}{secrets}")
     if args.json:
         print(json.dumps({"built": results}, ensure_ascii=False))
     return 0
