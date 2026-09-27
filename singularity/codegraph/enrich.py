@@ -22,7 +22,9 @@ Read-only and cheap by construction:
   or the graph recorded no mtime (a racy stat, see store.RACY_NS), the file on
   disk arbitrates: if the index's stat is the disk's and the graph's content
   hash is the disk's, both hold the disk's version. Otherwise the hit's graph
-  data is marked stale -- two versions are never silently mixed.
+  data is marked stale -- two versions are never silently mixed -- and its
+  definition is found by name (`definition_named`): the index's line numbers
+  address the other version.
 
 Honesty (UNMET h): a hit whose file is in no built graph, or not among its
 unit's files, says OUTSIDE; "0 callers" would claim a fact the graph does not
@@ -186,6 +188,27 @@ def definition_for(con: sqlite3.Connection, file_id: int, line_start: Any, line_
     return None
 
 
+def definition_named(con: sqlite3.Connection, file_id: int, qname: Any, name: Any) -> _Span | None:
+    """The definition a hit names, wherever it now stands: for a file the code
+    index and the graph hold in different versions, whose index line numbers
+    address the other version -- laid over this one they land on whatever
+    definition moved there. The chunk's qname by its local part (chunker v2;
+    its path is corpus-relative, the graph's unit-relative), else its name when
+    exactly one definition in the file bears it; otherwise none. Picking one
+    of two `run`s would be the silent mix this module refuses."""
+    rows = [(q, n, k, spans[0])
+            for q, n, k, raw in con.execute("SELECT qname, name, kind, spans FROM nodes WHERE file_id = ?",
+                                            (file_id,))
+            for spans in [json.loads(raw)] if spans]
+    local = qname.split("::", 1)[1] if isinstance(qname, str) and "::" in qname else None
+    for match in ([r for r in rows if local and r[0].split("::", 1)[-1] == local],
+                  [r for r in rows if name and r[1] == name]):
+        if len(match) == 1:
+            q, n, k, (a, b) = match[0]
+            return _Span(q, n, k, a, b)
+    return None
+
+
 @dataclass
 class _Unit:
     key: str
@@ -296,15 +319,18 @@ class _Session:
             if rel in unit.stale:
                 reasons.append("the graph marks this file stale")
             differ = self.versions_differ(index_rel, disk, row)
+            a, b = meta.get("line_start"), meta.get("line_end")
             if differ:
                 reasons.append(differ)
-            a, b = meta.get("line_start"), meta.get("line_end")
-            found = definition_for(con, row["id"], a, b, meta.get("name"))
+                found = definition_named(con, row["id"], meta.get("qname"), meta.get("name"))
+                missing = f"the graph's version of the file has no single definition named {meta.get('name')!r}"
+            else:
+                found = definition_for(con, row["id"], a, b, meta.get("name"))
+                missing = f"no definition covers lines {a}-{b} (module-level code)"
             out: dict[str, Any] = {"unit": unit.key, "file": rel}
             if found is None:
                 out.update(qname=None, kind=None, callers=None, unresolved_candidates=None,
-                           callees=None, unresolved_calls=None,
-                           note=f"no definition covers lines {a}-{b} (module-level code)")
+                           callees=None, unresolved_calls=None, note=missing)
             else:
                 # counts only (limit 0), with `mb code callers`'s own meaning of
                 # a candidate; `unresolved_calls` is the callee side of the same

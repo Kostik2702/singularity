@@ -353,6 +353,52 @@ def test_a_file_the_index_and_the_graph_hold_in_different_versions_is_stale(own_
     assert hits[("svc/app/other.py", "use")]["graph"]["stale"] is False
 
 
+PADDING = 5                                          # lines the index's version is moved past the graph's
+
+
+def test_a_stale_hit_names_its_own_definition_never_the_one_its_old_lines_land_on(own_world, capsys):
+    """Found live: the index's line numbers address its version of the file;
+    laid over the graph's version they landed on another definition, and a
+    `why_not_here` hit was described as `refresh`, stale-marked but misnamed.
+    Here the index is moved PADDING lines past the graph. Planted: the line
+    lookup kept for a file whose versions differ -- `helper`'s hit is
+    described as `Worker`, red."""
+    cfg = own_world
+    core = cfg.code_repos_dir / "svc" / "app" / "core.py"
+    core.write_text("# pad\n" * PADDING + SVC["app/core.py"], encoding="utf-8")
+    indexer_mod.update(cfg, corpus="code")
+    hits = {k: v["graph"] for k, v in _graph_search(cfg, capsys).items() if k[0] == "svc/app/core.py"}
+    assert {name for _, name in hits} >= {"helper", "run", "main"}
+    for (_, name), graph in hits.items():
+        assert graph["stale"] is True, name
+        assert graph["qname"] is None or graph["qname"].rsplit(".", 1)[-1].split("::")[-1] == name, (name, graph)
+    assert hits[("svc/app/core.py", "run")]["qname"] == "app/core.py::Worker.run"
+    assert hits[("svc/app/core.py", "main")]["qname"] == "app/core.py::main"
+
+
+def test_a_name_is_matched_only_when_it_is_unambiguous():
+    """`definition_named` on its own: chunker v2's qname by its local part
+    (its path is corpus-relative), else a name borne by exactly one
+    definition; two `run`s and no qname give nothing. Planted: the first of
+    several same-name rows returned -- red."""
+    import sqlite3
+
+    from singularity.codegraph.enrich import definition_named
+    con = sqlite3.connect(":memory:")
+    con.execute("CREATE TABLE nodes(file_id, qname, name, kind, spans)")
+    con.executemany("INSERT INTO nodes VALUES (1, ?, ?, ?, ?)", [
+        ("a.py::A.run", "run", "method", "[[2, 4]]"),
+        ("a.py::B.run", "run", "method", "[[7, 9]]"),
+        ("a.py::main", "main", "function", "[[11, 12]]"),
+    ])
+    assert definition_named(con, 1, None, "run") is None
+    assert definition_named(con, 1, "svc/a.py::B.run", "run").qname == "a.py::B.run"
+    assert (definition_named(con, 1, None, "main").qname, definition_named(con, 1, None, "main").start) == \
+        ("a.py::main", 11)
+    assert definition_named(con, 1, None, "gone") is None
+    assert definition_named(con, 2, None, "main") is None
+
+
 def test_what_the_graph_itself_knows_is_stale_is_said(own_world, capsys):
     """`update.known_stale`: the stale set, then the whole-graph flag.
     Planted: the stale-set check dropped -- red."""
