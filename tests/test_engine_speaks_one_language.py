@@ -53,6 +53,9 @@ ALLOWED: dict[str, str] = {
     "tests/fixtures/grok/README.md":
         "the row documents a UTF-8 BOM leaking into the model context; the "
         "mis-decoded bytes ARE the observed artefact, not prose",
+    "tests/test_codegraph_sql.py":
+        "`mb code sql` reads its SQL from a pipe as UTF-8 whatever the console's "
+        "code page; the query text in another script is the data that proves it",
     "tests/test_routing.py":
         "one request written six ways, asserting the pushed text is identical "
         "for all of them - the invariant that the router stopped being a "
