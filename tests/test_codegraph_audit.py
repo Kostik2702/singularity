@@ -118,7 +118,7 @@ def test_a_key_in_a_signature_default_and_in_doc1_fails_the_audit(planted, capsy
 def test_a_clean_graph_passes_and_the_count_is_kept_in_meta(tmp_path, capsys):
     _repo(tmp_path, "svc", CLEAN)
     cfg = _cfg(tmp_path)
-    assert _build(cfg)["svc"]["audit"] == {"findings": 0, "by_kind": {}, "recorded": True}
+    assert _build(cfg)["svc"]["audit"] == {"findings": 0, "by_kind": {}, "allowed": 0, "recorded": True}
     code, out, _ = _run(cfg, capsys, "audit")
     assert code == 0 and "svc: 0 secret-shaped value(s)" in out
     con = store.connect_ro(_db(cfg, "svc"))
@@ -246,6 +246,71 @@ def test_the_audit_command_keeps_its_count_for_doctor(planted, capsys):
     assert meta.get("seq", 0) == 0                    # a record is not a change to the graph
 
 
+# --- findings the owner accepted (code_graph_audit_allow) --------------------------------
+
+def _accepting(cfg: Config, *fingerprints: str) -> Config:
+    return Config(vault=cfg.vault, data={**cfg.data, "code_graph_audit_allow": list(fingerprints)})
+
+
+def _fp(report: dict, qname: str, fld: str) -> str:
+    (fp,) = {f["fingerprint"] for f in report["findings"] if (f["qname"], f["field"]) == (qname, fld)}
+    return fp
+
+
+def test_an_accepted_finding_is_counted_apart_and_nothing_else_is(planted, capsys):
+    """One finding accepted, by its fingerprint: the other key in the SAME
+    file is still a finding. Planted: acceptance by file (qname's path) -- the
+    AWS key in fetch's docstring vanished too, red."""
+    cfg, _, report = planted
+    fp = _fp(report, "pkg/client.py::connect", "nodes.signature")
+    code, out, _ = _run(_accepting(cfg, fp), capsys, "audit", "--json")
+    (unit,) = json.loads(out)["units"]
+    accepted = [f for f in report["findings"] if f["fingerprint"] == fp]
+    assert code == 1 and unit["allowed"] == len(accepted) > 0
+    assert unit["count"] == report["count"] - len(accepted)
+    assert ("pkg/client.py::fetch", "nodes.doc1", "aws-access-key") in _where(unit)
+    assert all(f["fingerprint"] != fp for f in unit["findings"])
+
+
+def test_the_text_output_names_each_finding_s_fingerprint(planted, capsys):
+    cfg, _, report = planted
+    _, out, _ = _run(cfg, capsys, "audit")
+    assert f"[{_fp(report, 'pkg/client.py::connect', 'nodes.signature')}]" in out
+
+
+def test_a_changed_text_is_a_new_finding_even_where_one_was_accepted(tmp_path, capsys):
+    """A real key put where an accepted fake one stood must be reported.
+    Planted: the fingerprint of qname and field only -- the new key stayed
+    accepted, red."""
+    root = _repo(tmp_path, "svc", PLANTED)
+    cfg = _cfg(tmp_path)
+    _build(cfg)
+    fp = _fp(audit.audit_db(_db(cfg, "svc"), keep=False), "pkg/client.py::connect", "nodes.signature")
+    other = "gh" + "p_" + "Q1w2E3r4T5" * 4
+    (root / "pkg" / "client.py").write_text(PLANTED["pkg/client.py"].replace(GITHUB, other), encoding="utf-8")
+    cfg = _accepting(cfg, fp)
+    _build(cfg)
+    report = audit.audit_db(_db(cfg, "svc"), keep=False, allowed=[fp])
+    assert report["allowed"] == 0
+    assert ("pkg/client.py::connect", "nodes.signature", "github-token") in _where(report)
+
+
+def test_every_finding_accepted_passes_and_doctor_reads_it_as_clean(planted, capsys):
+    """What doctor K2 reads is the recorded count, which no longer holds the
+    accepted findings; the build's own audit applies the list too."""
+    cfg, _, report = planted
+    cfg = _accepting(cfg, *{f["fingerprint"] for f in report["findings"]})
+    assert _build(cfg)["svc"]["audit"]["findings"] == 0
+    code, out, _ = _run(cfg, capsys, "audit")
+    assert code == 0 and f"{report['count']} more accepted by code_graph_audit_allow" in out
+    con = store.connect_ro(_db(cfg, "svc"))
+    try:
+        rec = audit.recorded(store.read_meta(con))
+    finally:
+        con.close()
+    assert (rec["findings"], rec["allowed"]) == (0, report["count"])
+
+
 # --- batching and the clean-text cache equal a text-by-text scan -------------------------
 
 def _reference(items):
@@ -253,7 +318,8 @@ def _reference(items):
     out = []
     for qname, fld, text in items:
         kinds, masked = audit._check(text) if text else ([], "")
-        out += [audit.Finding(qname, fld, k, audit._excerpt(masked)) for k in dict.fromkeys(kinds)]
+        out += [audit.Finding(qname, fld, k, audit._excerpt(masked), audit.fingerprint(qname, fld, text))
+                for k in dict.fromkeys(kinds)]
     return _bag(out)
 
 

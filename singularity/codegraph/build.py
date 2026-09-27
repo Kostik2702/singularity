@@ -206,7 +206,8 @@ def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None,
         # The secret audit is part of every full build (CODE-GRAPH D1): it reads what was
         # just written and keeps the count in meta for doctor K2 (see audit).
         t = time.perf_counter()
-        audited = audit.audit_db(store.unit_dir(cfg, unit.key) / written["generation"] / "graph.db")
+        audited = audit.audit_db(store.unit_dir(cfg, unit.key) / written["generation"] / "graph.db",
+                                 allowed=cfg.get("code_graph_audit_allow") or ())
         timings["audit"] = time.perf_counter() - t
         # last, so the hooks' sidecar describes the generation as it finally stands
         sidecar.record(store.unit_dir(cfg, unit.key) / written["generation"] / "graph.db")
@@ -216,7 +217,8 @@ def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None,
             "deps": len(deps), "lookups": len(lookups),
             "edges": dict(Counter(e.kind for e in edges)), "call_tiers": dict(tiers),
             "unresolved": len(unresolved_rows), "workers": n_workers,
-            "audit": {"findings": audited["count"], "by_kind": audited["by_kind"], "recorded": audited["recorded"]},
+            "audit": {"findings": audited["count"], "by_kind": audited["by_kind"],
+                      "allowed": audited["allowed"], "recorded": audited["recorded"]},
             "resolve_cpu_over_wall": round(resolve_cpu_over_wall, 2),
             "seconds": round(time.perf_counter() - started, 2),
             "timings": {k: round(v, 2) for k, v in timings.items()}, **written}

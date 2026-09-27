@@ -204,6 +204,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # reach the semantic corpus: a 100k-file work monorepo there would be hours
     # of embedding (D4) and displaced search results (D2).
     "code_graph_extra_roots": [],
+    # Findings of the graph's secret audit the owner has looked at and accepted
+    # (a test's fake key): each a fingerprint of ONE finding -- its definition,
+    # field and exact text -- as `mb code audit` prints it. Changing the text,
+    # moving it or adding a key beside it makes a new finding, reported again.
+    "code_graph_audit_allow": [],
     "connectors": {},
     "skip_dirs": [".obsidian", ".mb", ".git", ".trash", "templates"],
     "skip_path_parts": ["learnings/archive"],
@@ -223,7 +228,9 @@ _PATH_KEYS = {"code_repos_dir", "hf_cache"}
 # secrets routes them through the OS keyring / an explicit opt-in file).
 # `code_graph_extra_roots` names repositories outside the shared root — a work
 # monorepo, typically — and the example exists to be committed and shared.
-_EXAMPLE_REDACTED_KEYS = {"hf_cache", "code_graph_extra_roots"}
+# `code_graph_audit_allow` holds hashes of texts that looked like secrets; a
+# hash of a weak one can be guessed, so it stays on the machine it was made on.
+_EXAMPLE_REDACTED_KEYS = {"hf_cache", "code_graph_extra_roots", "code_graph_audit_allow"}
 _EXAMPLE_HOME_RELATIVE_KEYS = {"code_repos_dir"}
 
 
@@ -432,6 +439,12 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
         errors.append("code_graph_enabled: must be a boolean")
     if "code_chunk_schema" in data and data["code_chunk_schema"] not in ("v1", "v2"):
         errors.append("code_chunk_schema: must be 'v1' or 'v2'")
+    if "code_graph_audit_allow" in data and (
+            not isinstance(data["code_graph_audit_allow"], list)
+            or not all(isinstance(x, str) and re.fullmatch(r"[0-9a-f]{16}", x)
+                       for x in data["code_graph_audit_allow"])):
+        errors.append("code_graph_audit_allow: must be a list of 16-hex fingerprints "
+                      "as `mb code audit` prints them")
     for key in ("skip_dirs", "skip_path_parts", "code_skip_dirs", "code_graph_extra_roots"):
         if key in data and (not isinstance(data[key], list)
                             or not all(isinstance(x, str) for x in data[key])):

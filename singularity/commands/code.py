@@ -147,7 +147,8 @@ def _audit(cfg, args) -> int:
         try:
             if db is None:
                 raise GraphError("no current generation; rebuild it")
-            results.append({"unit": card["key"], "root": card["root"], **audit.audit_db(db)})
+            results.append({"unit": card["key"], "root": card["root"],
+                            **audit.audit_db(db, allowed=cfg.get("code_graph_audit_allow") or ())})
         except (GraphError, sqlite3.DatabaseError) as exc:
             results.append({"unit": card["key"], "root": card["root"], "error": str(exc)})
     total = sum(r.get("count", 0) for r in results)
@@ -162,14 +163,18 @@ def _audit(cfg, args) -> int:
                 continue
             lines.append(f"{r['unit']}: {r['count']} secret-shaped value(s) in {r['files']} files, "
                          f"{r['nodes']} nodes ({r['seconds']}s)"
+                         + (f", {r['allowed']} more accepted by code_graph_audit_allow" if r["allowed"] else "")
                          + ("" if r["recorded"] else "; the count was not recorded, another writer held the graph"))
             for f in r["findings"][:_AUDIT_SHOWN]:
-                lines.append(f"  {f['kind']:<18} {f['field']:<22} {f['qname']}\n      {f['excerpt']}")
+                lines.append(f"  {f['kind']:<18} {f['field']:<22} {f['qname']}  [{f['fingerprint']}]\n"
+                             f"      {f['excerpt']}")
             if r["count"] > _AUDIT_SHOWN:
                 lines.append(f"  … {r['count'] - _AUDIT_SHOWN} more; --json lists all of them")
         if total:
             lines.append(f"{total} in total. Values are masked here; the source still holds them. The audit "
-                         "knows shapes, not intent: a test's fake key is reported like a real one.")
+                         "knows shapes, not intent: a test's fake key is reported like a real one. A finding "
+                         "you have checked is accepted by its [fingerprint] in code_graph_audit_allow; any "
+                         "change to its text brings it back.")
         print("\n".join(lines))
     return 1 if total else (2 if failed else 0)
 

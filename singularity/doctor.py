@@ -707,6 +707,8 @@ def _code_graph_unit(cfg: Config, card: dict, parser_ok: bool) -> tuple[list[tup
             if rec["findings"]:
                 kinds = ", ".join(f"{k} {n}" for k, n in (rec.get("by_kind") or {}).items())
                 problems.append((f"{rec['findings']} secret-shaped value(s) stored ({kinds})", "audit"))
+            if rec.get("allowed"):
+                notes.append(f"{card['key']}: {rec['allowed']} audit finding(s) accepted by code_graph_audit_allow")
             since = int(meta.get("seq") or 0) - int(rec.get("at_seq") or 0)
             if since:
                 notes.append(f"{card['key']}: {since} in-place update(s) since the last audit")
