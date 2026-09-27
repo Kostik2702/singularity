@@ -120,6 +120,11 @@ ALLOWED.update({
         "the rows as returned, naming real notes in the vault. Rewriting them "
         "would turn a measurement into a fiction, and a re-record would put them "
         "straight back",
+    "docs/code-graph-p1b-audit.json":
+        "the CODE-GRAPH P1b out-of-sample audit: call sites sampled from another "
+        "repository and quoted verbatim, two of them receivers carrying that "
+        "repository's own assertion messages. Evidence of what the resolver was "
+        "judged on; rewriting a quote would falsify the sample",
 })
 
 #: Outstanding work, not exceptions. Each line is a file the translation has not
@@ -247,6 +252,8 @@ BUDGET: dict[str, int] = {
     "docs/code-index-baseline-2026-08-08.json": 1145,
     "docs/code-index-baseline-2026-09-26.json": 1345,
     "docs/code-index-baseline.md": 700,
+    # CODE-GRAPH P1b audit record: two quoted assertion messages of the audited repo.
+    "docs/code-graph-p1b-audit.json": 64,
     "docs/search-eval-baseline.json": 12738,
     # 424 -> 502 (CODE-GRAPH P0): re-recorded on 20 code cases, one of them a new
     # RU query against a ComfyUI node pack, and on the corrected `Singularity/`
