@@ -94,6 +94,7 @@ def build_context(event_cwd: str | None = None) -> str:
     )
     from singularity.machine.hooks_state import (
         CAPTURE_HOOKS_FRAGMENT,
+        MEASURED_AXIS_FRAGMENT,
         MEMORY_WRITES_FRAGMENT,
         RULE_POINT_FRAGMENT,
         THINK_FIRST_FRAGMENT,
@@ -104,6 +105,7 @@ def build_context(event_cwd: str | None = None) -> str:
     lines.append(VERIFICATION_FRAGMENT)
     lines.append(RULE_POINT_FRAGMENT)
     lines.append(THINK_FIRST_FRAGMENT)
+    lines.append(MEASURED_AXIS_FRAGMENT)
 
     if not vault.exists():
         lines.append("WARNING: vault path does not exist on this machine.")
