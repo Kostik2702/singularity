@@ -1,0 +1,759 @@
+{
+ "about": "Independent out-of-sample audit of the CODE-GRAPH D3 JVM resolver's output on nextcloud/android 6722740 (clone at E:/yardstick/nextcloud-android), 2026-09-28. The sample (60 edges, 25 unresolved call sites, 30 dead-code claims) was drawn with seed 20260928, stratified by tier. The auditor did not read the resolver source (singularity/) or the yardstick labels (tests/fixtures/code_graph_edges_jvm.json); every verdict was judged from the Java/Kotlin language rules and the clone's source only (declared/inferred static types, imports, smart casts, flavor source sets from app/build.gradle.kts, and a whole-clone text search for dead-code claims including .kt/.java/.kts/.xml/.properties). Qname convention as given by the caller: constructor calls target the class qname, overloads share a qname, a call through a static interface/base type targets the nearest declaration walking up from that type.",
+ "summary": {
+  "edges": {
+   "n": 60,
+   "correct": 59,
+   "wrong": 1,
+   "unclear": 0,
+   "by_tier": {
+    "annotation": {
+     "n": 6,
+     "correct": 6,
+     "wrong": 0,
+     "unclear": 0
+    },
+    "attr-type": {
+     "n": 6,
+     "correct": 6,
+     "wrong": 0,
+     "unclear": 0
+    },
+    "class-attr": {
+     "n": 6,
+     "correct": 6,
+     "wrong": 0,
+     "unclear": 0
+    },
+    "extension": {
+     "n": 6,
+     "correct": 6,
+     "wrong": 0,
+     "unclear": 0
+    },
+    "import": {
+     "n": 7,
+     "correct": 7,
+     "wrong": 0,
+     "unclear": 0
+    },
+    "local-type": {
+     "n": 6,
+     "correct": 6,
+     "wrong": 0,
+     "unclear": 0
+    },
+    "scope": {
+     "n": 7,
+     "correct": 7,
+     "wrong": 0,
+     "unclear": 0
+    },
+    "self": {
+     "n": 10,
+     "correct": 10,
+     "wrong": 0,
+     "unclear": 0
+    },
+    "variant": {
+     "n": 6,
+     "correct": 5,
+     "wrong": 1,
+     "unclear": 0
+    }
+   }
+  },
+  "unresolved": {
+   "n": 25,
+   "external": 21,
+   "missed": 4,
+   "unclear": 0
+  },
+  "dead": {
+   "n": 30,
+   "dead": 28,
+   "used": 2,
+   "unclear": 0
+  }
+ },
+ "edges": [
+  {
+   "id": "e00",
+   "verdict": "correct",
+   "truth": null,
+   "why": "listener is the bind() parameter typed ShareeListAdapterListener (ShareViewHolder.java:65); the interface declares showPermissionsDialog(OCShare) at ShareeListAdapterListener.java:32. Call sits in a lambda inside bind."
+  },
+  {
+   "id": "e01",
+   "verdict": "correct",
+   "truth": null,
+   "why": "OCFile ocFile = document.getFile() (DocumentsStorageProvider.java:230); OCFile declares getFileName() at OCFile.java:447."
+  },
+  {
+   "id": "e02",
+   "verdict": "correct",
+   "truth": null,
+   "why": "cv = new NonEmptyContentValues(...) (ContactOperations.java:462); the private static nested class declares put overloads at ContactOperations.java:600/607/611."
+  },
+  {
+   "id": "e03",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Parameter OCFile file of createContentValuesForFile (FileDataStorageManager.java:887); getLockType() declared at OCFile.java:1029."
+  },
+  {
+   "id": "e04",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Loop variable typed ThumbnailsCacheManager.ThumbnailGenerationTask (TrashbinListAdapter.java:337); getGetMethod() declared in that nested class at ThumbnailsCacheManager.java:474."
+  },
+  {
+   "id": "e05",
+   "verdict": "correct",
+   "truth": null,
+   "why": "holder: ViewHolder is the nested PreviewPdfAdapter.ViewHolder (PreviewPdfAdapter.kt:29), which declares fun bind(bitmap) at :31."
+  },
+  {
+   "id": "e06",
+   "verdict": "correct",
+   "truth": null,
+   "why": "lateinit var activitiesPresenter: ActivitiesPresenter (ActivitiesPresenterTest.kt:52); ActivitiesPresenter declares override fun openActivity at ActivitiesPresenter.kt:57, the nearest declaration for that static type."
+  },
+  {
+   "id": "e07",
+   "verdict": "correct",
+   "truth": null,
+   "why": "lateinit var migrationsDb: MigrationsDb (MigrationsManagerTest.kt:49); fun getAppliedMigrations() at MigrationsDb.kt:26."
+  },
+  {
+   "id": "e08",
+   "verdict": "correct",
+   "truth": null,
+   "why": "private val registry = Registry(...) (TransferManagerImpl.kt:49) with Registry imported from com.nextcloud.client.files (:15); fun complete at Registry.kt:104. Call is in the onError lambda of onStartTransfer."
+  },
+  {
+   "id": "e09",
+   "verdict": "correct",
+   "truth": null,
+   "why": "fragment = FileDetailFragment.newInstance(...); getFileDetailActivitiesFragment() returns FileDetailActivitiesFragment (FileDetailFragment.java:193); setErrorContent declared at FileDetailActivitiesFragment.kt:429."
+  },
+  {
+   "id": "e10",
+   "verdict": "correct",
+   "truth": null,
+   "why": "listOfFilesFragment: OCFileListFragment? (FolderPickerActivity.kt:217); OCFileListFragment extends ExtendedListFragment (OCFileListFragment.java:157) and does not redeclare setEmptyListMessage, so the nearest declaration is ExtendedListFragment.kt:619."
+  },
+  {
+   "id": "e11",
+   "verdict": "correct",
+   "truth": null,
+   "why": "storageManager is SyncOperation.getStorageManager(): FileDataStorageManager (SyncOperation.java:74), SynchronizeFileOperation extends SyncOperation; saveConflict at FileDataStorageManager.java:2055."
+  },
+  {
+   "id": "e12",
+   "verdict": "correct",
+   "truth": null,
+   "why": "object HumanReadableFormatter (HumanReadableFormatter.kt:16) declares formatBytes at :21; the test is in the same package com.nextcloud.utils."
+  },
+  {
+   "id": "e13",
+   "verdict": "correct",
+   "truth": null,
+   "why": "HumanReadableFormatter imported (AudioFileFragment.kt:23); object member formatBytes(Long) at HumanReadableFormatter.kt:21; call is in a let-lambda of getDetailsText."
+  },
+  {
+   "id": "e14",
+   "verdict": "correct",
+   "truth": null,
+   "why": "SslUntrustedCertDialog companion object (SslUntrustedCertDialog.kt:173) declares newInstanceForFullSslError overloads at :189 and :199; the 3-argument call matches :199."
+  },
+  {
+   "id": "e15",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Static call to FileOperationsHelper.getAvailableSpaceOnDevice() declared at FileOperationsHelper.java:1204."
+  },
+  {
+   "id": "e16",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Static call to MainApp.getAccountType(Context) declared at MainApp.java:756."
+  },
+  {
+   "id": "e17",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Constructor call of nested class HiddenName(message) inside sealed class TemplateFilenameState (TemplateFilenameState.kt:13); a constructor call targets the class qname."
+  },
+  {
+   "id": "e18",
+   "verdict": "correct",
+   "truth": null,
+   "why": "str1 is a String; extension fun String?.eTagChanged at StringExtensions.kt:36, explicitly imported (StringExtensionTests.kt:9)."
+  },
+  {
+   "id": "e19",
+   "verdict": "correct",
+   "truth": null,
+   "why": "binding.extension is a TextView (its .text is set at FileActionsBottomSheet.kt:255); extension fun View?.setVisibleIf at ViewExtensions.kt:22, imported at FileActionsBottomSheet.kt:40."
+  },
+  {
+   "id": "e20",
+   "verdict": "correct",
+   "truth": null,
+   "why": "file = getFileByDecryptedRemotePath(path) ?: newOCFile(path), both OCFile; private member extension OCFile.applyShareData in object OCShareToOCFileConverter at OCShareToOCFileConverter.kt:117."
+  },
+  {
+   "id": "e21",
+   "verdict": "correct",
+   "truth": null,
+   "why": "it is a SearchResultEntry (flatMap of SearchResult.entries, UnifiedSearchViewModel.kt:235-236); extension fun SearchResultEntry.toUnifiedSearchEntry at UnifiedSearchEntry.kt:15, same package."
+  },
+  {
+   "id": "e22",
+   "verdict": "correct",
+   "truth": null,
+   "why": "corruptUpload = OCUpload(...) (UploadStorageManagerTest.kt:140); fun OCUpload.toUploadEntity() at UploadEntity.kt:103, imported at the test's line 18."
+  },
+  {
+   "id": "e23",
+   "verdict": "correct",
+   "truth": null,
+   "why": "capability: OCCapability (OCCapabilityJsonToListTests.kt:22); fun OCCapability.forbiddenFilenameCharacters() at OCCapabilityExtensions.kt:42."
+  },
+  {
+   "id": "e24",
+   "verdict": "correct",
+   "truth": null,
+   "why": "new DeviceInfo() with import com.nextcloud.client.device.DeviceInfo (AppModule.java:30); Kotlin class DeviceInfo at DeviceInfo.kt:14 is the only definition."
+  },
+  {
+   "id": "e25",
+   "verdict": "correct",
+   "truth": null,
+   "why": "new OCFile(String) in the same package; constructor at OCFile.java:159; target is the class qname."
+  },
+  {
+   "id": "e26",
+   "verdict": "correct",
+   "truth": null,
+   "why": "TestData imported from com.nextcloud.test.model (IntentExtensionTests.kt:13); data class TestData at TestModels.kt:18."
+  },
+  {
+   "id": "e27",
+   "verdict": "correct",
+   "truth": null,
+   "why": "import com.nextcloud.client.player.util.PlayerUtil.getPlaybackUri (PlaybackResumptionLauncher.kt:15); object PlayerUtil declares getPlaybackUri(fileId: Long) at PlayerUtil.kt:206 (overloads share the qname)."
+  },
+  {
+   "id": "e28",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Test is in package com.owncloud.android.authentication, same as class PassCodeManager(preferences, clock) at PassCodeManager.kt:28."
+  },
+  {
+   "id": "e29",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Same package com.owncloud.android.operations; class SynchronizeFileOperation at SynchronizeFileOperation.kt:36 is the only definition."
+  },
+  {
+   "id": "e30",
+   "verdict": "correct",
+   "truth": null,
+   "why": "UploadFileOperation extends SyncOperation (UploadFileOperation.java:119), whose getStorageManager() returns FileDataStorageManager (SyncOperation.java:74); saveConflict at FileDataStorageManager.java:2055."
+  },
+  {
+   "id": "e31",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Local val fileDataStorageManager = FileDataStorageManager(...) in doWork; saveFile(OCFile) at FileDataStorageManager.java:543."
+  },
+  {
+   "id": "e32",
+   "verdict": "correct",
+   "truth": null,
+   "why": "entry = LogEntry(...); fun toString(tz: TimeZone) at LogEntry.kt:78 (shares the qname with override toString() at :72)."
+  },
+  {
+   "id": "e33",
+   "verdict": "correct",
+   "truth": null,
+   "why": "LogEntry(...).toString() (LoggerImpl.kt:153-158) binds to override fun toString() at LogEntry.kt:72; reported line is the start of the chained expression."
+  },
+  {
+   "id": "e34",
+   "verdict": "correct",
+   "truth": null,
+   "why": "MainApp.getAppComponent() returns AppComponent (MainApp.java:272); AppComponent declares fun inject(fileDownloadHelper: FileDownloadHelper) at AppComponent.kt:61; call is in FileDownloadHelper's init block."
+  },
+  {
+   "id": "e35",
+   "verdict": "correct",
+   "truth": null,
+   "why": "filterFactory: FileMenuFilter.Factory; newInstance(...) returns FileMenuFilter (FileMenuFilter.java:91); getToHide at FileMenuFilter.java:132. Reported line 93 is where the call chain starts."
+  },
+  {
+   "id": "e36",
+   "verdict": "correct",
+   "truth": null,
+   "why": "private top-level composable fun ChatEmptyContent(modifier) at ChatContent.kt:196, same file."
+  },
+  {
+   "id": "e37",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Local function fun intToBoolean(value: Int?) declared inside toOCCapability at CapabilityEntity.kt:171."
+  },
+  {
+   "id": "e38",
+   "verdict": "correct",
+   "truth": null,
+   "why": "private top-level fun TranslationSection(...) at TranslationScreen.kt:151, same file."
+  },
+  {
+   "id": "e39",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Inside Context.showToast(messageId: Int), the bare showToast(getString(...)) uses the implicit Context receiver and binds to Context.showToast(message: String) at ContextExtensions.kt:62; overloads share the qname."
+  },
+  {
+   "id": "e40",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Same local function intToBoolean declared at CapabilityEntity.kt:171 inside toOCCapability."
+  },
+  {
+   "id": "e41",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Local fun col(name) declared inside createExternalLinkFromCursor at ExternalLinksProvider.kt:82."
+  },
+  {
+   "id": "e42",
+   "verdict": "correct",
+   "truth": null,
+   "why": "private fun launchActivitiesActivity() at ActivitiesFragmentIT.kt:44, same class."
+  },
+  {
+   "id": "e43",
+   "verdict": "correct",
+   "truth": null,
+   "why": "private fun hasManageAllFilesActivity(context) in object PermissionUtil at PermissionUtil.kt:93."
+  },
+  {
+   "id": "e44",
+   "verdict": "correct",
+   "truth": null,
+   "why": "private SyncedFolderDisplayItem create(String, boolean) at SyncedFoldersActivityTest.java:149."
+  },
+  {
+   "id": "e45",
+   "verdict": "correct",
+   "truth": null,
+   "why": "class Complete : Base() (RegistryTest.kt:235); resetMocks() is inherited from abstract class Base, declared at RegistryTest.kt:73."
+  },
+  {
+   "id": "e46",
+   "verdict": "correct",
+   "truth": null,
+   "why": "private void convertNotes(List, VCard) at ContactOperations.java:496."
+  },
+  {
+   "id": "e47",
+   "verdict": "correct",
+   "truth": null,
+   "why": "private fun stubPreferences(...) at OCFileListAdapterHelperTest.kt:100."
+  },
+  {
+   "id": "e48",
+   "verdict": "wrong",
+   "truth": "app/src/main/java/com/nextcloud/utils/extensions/ActivityExtensions.kt::isDialogFragmentReady",
+   "why": "isDialogFragmentReady(dialog) passes one argument with implicit receiver SyncedFoldersActivity (a FileActivity, SyncedFoldersActivity.kt:78-79), so only fun AppCompatActivity.isDialogFragmentReady(fragment: Fragment) (ActivityExtensions.kt:22) applies; fun Fragment.isDialogFragmentReady() (FragmentExtensions.kt:29) takes no argument and needs a Fragment receiver. Both are in src/main, so this is not a build-flavor variant at all."
+  },
+  {
+   "id": "e49",
+   "verdict": "correct",
+   "truth": null,
+   "why": "AlbumItemsFragment extends Fragment (AlbumItemsFragment.kt:112-113); the no-arg call inside a receiver-less throttler.run lambda binds to fun Fragment.isDialogFragmentReady() at FragmentExtensions.kt:29. The 'variant' label is a misnomer: the rival ActivityExtensions.kt definition is a different overload in src/main, not a flavor copy."
+  },
+  {
+   "id": "e50",
+   "verdict": "correct",
+   "truth": null,
+   "why": "new SecurityUtils() from src/main (import MainApp.java:89); com.owncloud.android.utils.SecurityUtils is defined once per flavor (generic, gplay, huawei, qa, versionDev per app/build.gradle.kts:155-186); the generic one (implicit no-arg constructor, generic/.../SecurityUtils.java:9) is what the generic build binds."
+  },
+  {
+   "id": "e51",
+   "verdict": "correct",
+   "truth": null,
+   "why": "PushUtils exists in all five flavor source sets; in the qa build the call binds to qa PushUtils.reinitKeys(UserAccountManager) at app/src/qa/java/com/owncloud/android/utils/PushUtils.java:31."
+  },
+  {
+   "id": "e52",
+   "verdict": "correct",
+   "truth": null,
+   "why": "In the qa build the call binds to qa PushUtils.pushRegistrationToServer at app/src/qa/java/com/owncloud/android/utils/PushUtils.java:25."
+  },
+  {
+   "id": "e53",
+   "verdict": "correct",
+   "truth": null,
+   "why": "import com.owncloud.android.utils.PushUtils (UserInfoActivity.java:50); in the generic build this binds to generic PushUtils.pushRegistrationToServer at app/src/generic/java/com/owncloud/android/utils/PushUtils.java:25."
+  },
+  {
+   "id": "e54",
+   "verdict": "correct",
+   "truth": null,
+   "why": "import com.owncloud.android.providers.DocumentsProviderUtils.assertExistsOnServer (DocumentsStorageProviderIT.kt:21); object member at DocumentsProviderUtils.kt:84."
+  },
+  {
+   "id": "e55",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Local fun str(col) declared inside createSyncedFolderFromCursor at SyncedFolderProvider.kt:180."
+  },
+  {
+   "id": "e56",
+   "verdict": "correct",
+   "truth": null,
+   "why": "private void filterLock(List, boolean) at FileMenuFilter.java:240, same class."
+  },
+  {
+   "id": "e57",
+   "verdict": "correct",
+   "truth": null,
+   "why": "Same as e42: private fun launchActivitiesActivity() at ActivitiesFragmentIT.kt:44."
+  },
+  {
+   "id": "e58",
+   "verdict": "correct",
+   "truth": null,
+   "why": "private fun currentPage(): Int at PreviewImageActivity.kt:526; the call is in the hasNext property getter (caller attributed to the class)."
+  },
+  {
+   "id": "e59",
+   "verdict": "correct",
+   "truth": null,
+   "why": "internal fun createInternalLink(user, file, capabilities) at FileDetailSharingFragment.kt:537; call is inside a file?.let lambda of copyInternalLink."
+  }
+ ],
+ "unresolved": [
+  {
+   "id": "u00",
+   "verdict": "external",
+   "truth": null,
+   "why": "binding.swipeContainingList is androidx.swiperefreshlayout.widget.SwipeRefreshLayout (res/layout/fragment_activities.xml:11-12); setOnRefreshListener is androidx."
+  },
+  {
+   "id": "u01",
+   "verdict": "external",
+   "truth": null,
+   "why": "ocCapability.getVersion() returns com.owncloud.android.lib.resources.status.OwnCloudVersion (library, imported AbstractIT.java:52); isNewerOrEqual is library code."
+  },
+  {
+   "id": "u02",
+   "verdict": "external",
+   "truth": null,
+   "why": "resources is Activity.getResources(): android.content.res.Resources; getColor(int, Theme) is Android SDK."
+  },
+  {
+   "id": "u03",
+   "verdict": "external",
+   "truth": null,
+   "why": "upload_files_spinner_behaviour is a platform <Spinner> (res/layout/upload_files_layout.xml:60-63); getSelectedItemPosition is AdapterView."
+  },
+  {
+   "id": "u04",
+   "verdict": "external",
+   "truth": null,
+   "why": "Log_OC is imported from com.owncloud.android.lib.common.utils (ConflictsResolveActivity.kt:38); no first-party Log_OC exists in the clone."
+  },
+  {
+   "id": "u05",
+   "verdict": "external",
+   "truth": null,
+   "why": "label is GovernanceLabel with val id: String (GovernanceLabel.kt:10); isEmpty() is Kotlin stdlib; no first-party isEmpty extension on String."
+  },
+  {
+   "id": "u06",
+   "verdict": "missed",
+   "truth": "app/src/main/java/com/nextcloud/client/jobs/upload/FileUploadWorker.kt::FileUploadWorker.UploadFilesResult.toWorkerResult",
+   "why": "uploadFilesResult is a local val whose when-branches are all UploadFilesResult enum entries (FileUploadWorker.kt:373-377); the private nested enum class UploadFilesResult (inside class FileUploadWorker) declares fun toWorkerResult() at FileUploadWorker.kt:238."
+  },
+  {
+   "id": "u07",
+   "verdict": "external",
+   "truth": null,
+   "why": "menuInflater is Activity.getMenuInflater(): android.view.MenuInflater; inflate is Android SDK."
+  },
+  {
+   "id": "u08",
+   "verdict": "external",
+   "truth": null,
+   "why": "oos is java.io.ObjectOutputStream (InputStreamBinder.java:184); close is JDK."
+  },
+  {
+   "id": "u09",
+   "verdict": "external",
+   "truth": null,
+   "why": "inputStream is java.io.InputStream (openInputStream or FileInputStream, FileExportUtils.kt:124-128); use is kotlin.io."
+  },
+  {
+   "id": "u10",
+   "verdict": "external",
+   "truth": null,
+   "why": "supportFragmentManager.beginTransaction() returns androidx.fragment.app.FragmentTransaction; replace is androidx."
+  },
+  {
+   "id": "u11",
+   "verdict": "external",
+   "truth": null,
+   "why": "checkBoxMargin is a Float from Resources.getDimension (GalleryRowHolder.kt:49); toInt is Kotlin stdlib."
+  },
+  {
+   "id": "u12",
+   "verdict": "external",
+   "truth": null,
+   "why": "Log_OC imported from the library com.owncloud.android.lib.common.utils (NotificationWork.kt:39)."
+  },
+  {
+   "id": "u13",
+   "verdict": "external",
+   "truth": null,
+   "why": "cropper = binding.cropImageView, a com.canhub.cropper.CropImageView (EditImageActivity.kt:21,152; res/layout/activity_edit_image.xml:27-28); third-party library."
+  },
+  {
+   "id": "u14",
+   "verdict": "external",
+   "truth": null,
+   "why": "getMetadataOperationResult is RemoteOperationResult<MetadataResponse> (EncryptionUtils.java:1261, imports :38/:42), both from the external library."
+  },
+  {
+   "id": "u15",
+   "verdict": "external",
+   "truth": null,
+   "why": "mainApp is Mockito MockedStatic<MainApp> (HumanReadableFormatterTest.kt:34); when{...} returns OngoingStubbing and thenReturn is Mockito."
+  },
+  {
+   "id": "u16",
+   "verdict": "external",
+   "truth": null,
+   "why": "dialog is the android.content.DialogInterface lambda parameter of setPositiveButton (MainApp.java:866); dismiss is Android SDK."
+  },
+  {
+   "id": "u17",
+   "verdict": "external",
+   "truth": null,
+   "why": "entity: FileEntity with val path: String? (FileEntity.kt:25; entities: List<FileEntity> at MoveFilesHierarchyTest.kt:47); orEmpty is Kotlin stdlib, no first-party orEmpty exists."
+  },
+  {
+   "id": "u18",
+   "verdict": "external",
+   "truth": null,
+   "why": "Fully qualified androidx.test.platform.app.InstrumentationRegistry.getArguments() (AbstractIT.java:138)."
+  },
+  {
+   "id": "u19",
+   "verdict": "external",
+   "truth": null,
+   "why": "Log_OC imported from the library (RefreshFolderOperation.java:38)."
+  },
+  {
+   "id": "u20",
+   "verdict": "missed",
+   "truth": "app/src/main/java/com/nextcloud/client/logger/LogEntry.kt::LogEntry.toString",
+   "why": "processedEvents is MutableList<Any> (LoggerImpl.kt:34), but the call is guarded by if (event is LogEntry) (LoggerImpl.kt:119), so event is smart-cast to LogEntry and toString() binds to override fun toString() at LogEntry.kt:72 (the same target e33 resolves correctly without a smart cast)."
+  },
+  {
+   "id": "u21",
+   "verdict": "external",
+   "truth": null,
+   "why": "Log_OC imported from the library (ContactsBackupWork.kt:34)."
+  },
+  {
+   "id": "u22",
+   "verdict": "external",
+   "truth": null,
+   "why": "Implicit receiver of File(tempDir, \"folderA\").apply { mkdirs() } is java.io.File; mkdirs is JDK."
+  },
+  {
+   "id": "u23",
+   "verdict": "missed",
+   "truth": "app/src/main/java/com/owncloud/android/ui/adapter/OCFileListAdapter.java::OCFileListAdapter.getCheckedItems",
+   "why": "Java 16 pattern binding instanceof OCFileListAdapter fileListAdapter (OCFileListFragment.java:868) gives fileListAdapter the static type OCFileListAdapter, which declares getCheckedItems() at OCFileListAdapter.java:952."
+  },
+  {
+   "id": "u24",
+   "verdict": "missed",
+   "truth": "app/src/main/java/com/owncloud/android/datamodel/FileDataStorageManager.java::FileDataStorageManager.saveShare",
+   "why": "activity is the onActivity lambda parameter of launchActivity<TestActivity>() (FileDetailSharingFragmentIT.kt:165-166); TestActivity overrides getStorageManager(): FileDataStorageManager (app/src/debug/java/com/nextcloud/test/TestActivity.kt:105, base BaseActivity.java:186); saveShare(OCShare) is at FileDataStorageManager.java:1380."
+  }
+ ],
+ "dead": [
+  {
+   "id": "d00",
+   "verdict": "dead",
+   "why": "differsFrom occurs only at its declaration (AndroidCalendar.java:152); a whole-word search of every text file in the clone finds nothing else."
+  },
+  {
+   "id": "d01",
+   "verdict": "used",
+   "why": "Kotlin synthetic-property assignment isIgnoringPowerSaveMode = true inside UploadFileOperation(...).apply { } (AutoUploadWorker.kt:502) compiles to setIgnoringPowerSaveMode(true); the isIgnoringPowerSaveMode()/setIgnoringPowerSaveMode(boolean) pair forms that property."
+  },
+  {
+   "id": "d02",
+   "verdict": "dead",
+   "why": "Only the declaration at FileOperationsHelper.java:664 in the whole clone; a 2-argument method has no Kotlin property form."
+  },
+  {
+   "id": "d03",
+   "verdict": "dead",
+   "why": "Context.statusBarHeight() appears only at ContextExtensions.kt:43; no call anywhere."
+  },
+  {
+   "id": "d04",
+   "verdict": "dead",
+   "why": "Only the declaration at FileOperationsHelper.java:710."
+  },
+  {
+   "id": "d05",
+   "verdict": "dead",
+   "why": "Only the declaration at PushConfigurationState.java:57; no Kotlin deviceIdentifier = assignment anywhere; Gson (gplay PushUtils, AccountRemovalWork) fills the public fields reflectively, not via setters."
+  },
+  {
+   "id": "d06",
+   "verdict": "dead",
+   "why": "No getDataTransferListeners call and no Kotlin dataTransferListeners property read on UploadFileOperation; the only dataTransferListeners hits are DownloadFileOperation's own private field (DownloadFileOperation.kt:56)."
+  },
+  {
+   "id": "d07",
+   "verdict": "dead",
+   "why": "createSilentNotification appears only at WorkerNotificationManager.kt:98; no call or override."
+  },
+  {
+   "id": "d08",
+   "verdict": "dead",
+   "why": "SvgBitmapTranscoder appears only in its own file; NextcloudGlideModule.kt:31-32 registers SvgOrImageBitmapTranscoder and SvgDrawableTranscoder, not this class."
+  },
+  {
+   "id": "d09",
+   "verdict": "dead",
+   "why": "private method, only at SaveCalendar.java:260."
+  },
+  {
+   "id": "d10",
+   "verdict": "dead",
+   "why": "Only the declaration at UploadFileOperation.java:379; Kotlin uses operation.ocUploadId only as a read (getter, e.g. FileUploadWorker.kt:109), there is no ocUploadId = assignment anywhere."
+  },
+  {
+   "id": "d11",
+   "verdict": "dead",
+   "why": "Only the declaration at FileStorageUtils.java:435."
+  },
+  {
+   "id": "d12",
+   "verdict": "dead",
+   "why": "Only the declaration at FileOperationsHelper.java:696."
+  },
+  {
+   "id": "d13",
+   "verdict": "dead",
+   "why": "Only the declaration at FileOperationsHelper.java:625."
+  },
+  {
+   "id": "d14",
+   "verdict": "dead",
+   "why": "Only the declaration at FileStorageUtils.java:415."
+  },
+  {
+   "id": "d15",
+   "verdict": "dead",
+   "why": "setPaths occurs only at Request.kt:150; 2-argument builder method, no property form."
+  },
+  {
+   "id": "d16",
+   "verdict": "dead",
+   "why": "TextView.makeLinks occurs only at Extensions.kt:51."
+  },
+  {
+   "id": "d17",
+   "verdict": "dead",
+   "why": "Only the declaration at PushConfigurationState.java:65; no Kotlin userPublicKey = assignment; Gson uses fields."
+  },
+  {
+   "id": "d18",
+   "verdict": "dead",
+   "why": "Only the declaration at PushConfigurationState.java:61; no Kotlin deviceIdentifierSignature = assignment; Gson uses fields."
+  },
+  {
+   "id": "d19",
+   "verdict": "used",
+   "why": "Registered by class name in app/src/main/resources/ical4j.properties:3 (net.fortuna.ical4j.timezone.registry=com.nextcloud.utils.ical.AndroidCompatTimeZoneRegistryFactory); ical4j instantiates the configured TimeZoneRegistryFactory reflectively."
+  },
+  {
+   "id": "d20",
+   "verdict": "dead",
+   "why": "isUploadInProgress occurs only at UploadFileOperation.java:1608 (the Kotlin property form has the same name and does not occur either)."
+  },
+  {
+   "id": "d21",
+   "verdict": "dead",
+   "why": "readParcelableCompat occurs only at ParcableExtensions.kt:14."
+  },
+  {
+   "id": "d22",
+   "verdict": "dead",
+   "why": "PlayerView.applyControlsInsets occurs only at PlayerViewExtensions.kt:17."
+  },
+  {
+   "id": "d23",
+   "verdict": "dead",
+   "why": "Nested test class not listed in the enclosing @RunWith(Suite::class) @Suite.SuiteClasses(Enqueue, TransferStatusUpdates) (TransferManagerTest.kt:36-40) and named nowhere else; AndroidJUnitRunner's classpath scan skips inner classes, so its @Test methods only run if invoked explicitly by name."
+  },
+  {
+   "id": "d24",
+   "verdict": "dead",
+   "why": "getCapabilitiesByAccountName occurs only at FileDataStorageManagerExtensions.kt:122."
+  },
+  {
+   "id": "d25",
+   "verdict": "dead",
+   "why": "The whole e2e.v1.decrypted.Sharing class is referenced by no other file; no Kotlin recipient = assignment on it; Gson would use fields, not the setter."
+  },
+  {
+   "id": "d26",
+   "verdict": "dead",
+   "why": "DialogMenuItem appears only in its own file (class and constructor); never instantiated, extended or referenced in code or XML."
+  },
+  {
+   "id": "d27",
+   "verdict": "dead",
+   "why": "isChargingRequired occurs only at UploadFileOperation.java:290 (the Kotlin property form has the same name)."
+  },
+  {
+   "id": "d28",
+   "verdict": "dead",
+   "why": "isWifiRequired occurs only at UploadFileOperation.java:286 (the Kotlin property form has the same name)."
+  },
+  {
+   "id": "d29",
+   "verdict": "dead",
+   "why": "HardcodedStoragePointProvider appears only in its own file; no StoragePointProvider class is referenced outside datastorage/providers, and the datastorage package uses no reflection."
+  }
+ ],
+ "after_audit": {
+  "date": "2026-09-28",
+  "fixed": [
+   "e48 (the one wrong edge): `variant` now means one definition per build-flavor source set; several left in ONE source set are an ambiguity and draw nothing, unless the implicit receiver picks one extension -- matched against the enclosing types AND the supertypes written outside the graph (AppCompatActivity). Test: test_same_named_extensions_are_told_apart_by_the_implicit_receiver, test_several_definitions_in_one_source_set_are_not_variants.",
+   "d01 (used, called dead): Kotlin identifiers carry their Java bean spellings, and `isFoo = true` names setFoo. Test: test_kotlin_chained_calls_sit_on_their_own_line_and_is_properties_name_setters.",
+   "d19 (used, called dead): deadcode reads src/<set>/resources/**/*.properties and META-INF/services for class names a library loads by reflection. Test: test_what_android_starts_is_alive_and_what_nothing_names_is_dead.",
+   "u23 (missed): a Java pattern variable (`o instanceof T name`) is a typed local. Test: test_java_pattern_variables_are_typed_and_chained_calls_sit_on_their_own_line.",
+   "e33/e35 (reported at the chain's first line): a call is now recorded at the line of its name."
+  ],
+  "not_fixed": [
+   "u06 (type from a `when` of enum entries), u20 (Kotlin smart cast), u24 (a lambda parameter typed by a generic): type flow the resolver does not track; a function-wide hint for a smart cast would be wrong outside its `if`."
+  ],
+  "note": "The output after these fixes was NOT re-audited. The yardstick after them: 1.00 / 0.96 / 0.00 (in-sample)."
+ }
+}
