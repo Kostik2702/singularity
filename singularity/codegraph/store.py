@@ -37,7 +37,9 @@ from ..platform import proc
 # must not call a function handed over as a value dead), file communities with
 # stable labels (`arch`), `nodes.bases`.
 # 5: the `v1_*` views `mb code sql` reads (P5), and `views_version` in meta.
-SCHEMA_VERSION = 5
+# 6: `files.package`, a JVM file's package (CODE-GRAPH D3). An update finds the
+# files of a package by it instead of decoding every stored facts blob.
+SCHEMA_VERSION = 6
 _LOCK_WAIT_SECONDS = 5.0
 # A writer that finds another writer busy polls instead of sleeping in
 # SQLite's busy handler: 16 contending callers took 601-1784 ms with the
@@ -50,7 +52,7 @@ CREATE TABLE meta(k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE files(
     id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE, lang TEXT NOT NULL,
     size INTEGER NOT NULL, mtime_ns INTEGER NOT NULL, content_hash TEXT NOT NULL,
-    parse_status TEXT NOT NULL, is_test INTEGER NOT NULL);
+    parse_status TEXT NOT NULL, is_test INTEGER NOT NULL, package TEXT);
 CREATE TABLE nodes(
     id INTEGER PRIMARY KEY, qname TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
     kind TEXT NOT NULL, file_id INTEGER NOT NULL, parent TEXT, spans TEXT NOT NULL,
@@ -89,6 +91,7 @@ CREATE INDEX deps_file ON deps(file_id);
 CREATE INDEX lookups_name ON lookups(name);
 CREATE INDEX lookups_file ON lookups(file_id);
 CREATE INDEX communities_by ON communities(community);
+CREATE INDEX files_package ON files(package);
 """
 
 # What `mb code sql` reads (CODE-GRAPH D1, P5): plain views over the tables,
@@ -112,7 +115,7 @@ VIEWS: dict[str, tuple[str, tuple[tuple[str, str], ...], str]] = {
     "v1_files": (
         "one row per file of the graph",
         (("path", "relative to the unit root, '/'-separated; the file column of every other view"),
-         ("lang", "python | ts (TypeScript and JavaScript)"),
+         ("lang", "python | ts (TypeScript and JavaScript) | jvm (Java and Kotlin)"),
          ("size", "bytes, as last read"),
          ("is_test", "1 for a test file, else 0"),
          ("parse_status", "ok | partial (the parser recovered from a syntax error; definitions may be missing)")),
@@ -121,18 +124,21 @@ VIEWS: dict[str, tuple[str, tuple[tuple[str, str], ...], str]] = {
         "one row per definition; same-named definitions of one scope are one row with several spans",
         (("qname", "<path>::<Outer>.<inner>, the identity v1_edges and v1_unresolved refer to"),
          ("name", "the short name"),
-         ("kind", "function | method | class; in TypeScript also interface | type | enum"),
+         ("kind", "function | method | class; in TypeScript also interface | type | enum; in Java and Kotlin "
+                  "also interface | enum | object (a Kotlin object or companion)"),
          ("file", "the defining file (v1_files.path)"),
          ("parent", "qname of the enclosing definition; NULL at module level"),
          ("line", "first line of the first span"),
          ("end_line", "last line of the last span"),
          ("spans", "JSON [[first, last], ...]; several for a merged redefinition"),
-         ("exported", "1 if visible outside its module: exported in TypeScript, top level and not _private in Python"),
+         ("exported", "1 if visible outside its module: exported in TypeScript, top level and not _private in "
+                      "Python; always 0 in Java and Kotlin"),
          ("local", "1 if defined inside a function, so unreachable by name from elsewhere"),
          ("signature", "the definition up to its body, whitespace folded to single spaces"),
          ("doc", "first line of the docstring or /** */ comment; NULL if none"),
          ("decorators", "JSON list of the decorators as written"),
-         ("bases", "JSON list of a class's base expressions as written")),
+         ("bases", "JSON list of a class's base expressions as written; for a Kotlin extension function, "
+                   "its receiver type")),
         "SELECT n.qname, n.name, n.kind, f.path, n.parent, json_extract(n.spans, '$[0][0]'),"
         " json_extract(n.spans, '$[#-1][1]'), n.spans, n.exported, n.local, n.signature, n.doc1,"
         " n.decorators, n.bases FROM nodes n JOIN files f ON f.id = n.file_id"),
@@ -142,7 +148,9 @@ VIEWS: dict[str, tuple[str, tuple[tuple[str, str], ...], str]] = {
          ("dst", "qname of the callee, imported module or base class"),
          ("kind", "CALLS | IMPORTS | INHERITS"),
          ("tier", "how dst was found, strongest first: scope, import, self (also this), class-attr, "
-                  "local-type, annotation, attr-type, name-unique (the name's only definition: the weak tier)"),
+                  "local-type, annotation, attr-type, extension (a Kotlin extension function), name-unique (the "
+                  "name's only definition: the weak tier), variant (Java/Kotlin: one of several definitions of "
+                  "one name in build-flavor source sets, an edge to each -- a guess)"),
          ("callee", "for CALLS, the name as written at the call site"),
          ("file", "file of the call site or statement"),
          ("line", "line of it; 0 for IMPORTS")),
@@ -265,8 +273,9 @@ def write_generation(cfg: Config, unit_key: str, *, meta: dict[str, Any],
                             [(k, json.dumps(v)) for k, v in {**meta, "schema_version": SCHEMA_VERSION,
                                                              "views_version": VIEWS_VERSION}.items()])
             con.executemany(
-                "INSERT INTO files(id, path, lang, size, mtime_ns, content_hash, parse_status, is_test)"
-                " VALUES (:id, :path, :lang, :size, :mtime_ns, :content_hash, :parse_status, :is_test)", files)
+                "INSERT INTO files(id, path, lang, size, mtime_ns, content_hash, parse_status, is_test, package)"
+                " VALUES (:id, :path, :lang, :size, :mtime_ns, :content_hash, :parse_status, :is_test, :package)",
+                [{"package": None, **f} for f in files])
             insert_nodes(con, nodes)
             con.executemany("INSERT INTO edges(src, dst, kind, tier, callee, file_id, line)"
                             " VALUES (?, ?, ?, ?, ?, ?, ?)", edges)

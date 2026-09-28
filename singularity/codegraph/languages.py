@@ -1,9 +1,11 @@
 """The languages the code graph reads, in one table (CODE-GRAPH D3).
 
 A FAMILY is what resolves together, and what `files.lang` records: `python`;
-`ts` for TypeScript and JavaScript. Every module that used to branch "python,
-or else ts" asks this table instead, so a family is added here plus its own
-extractor and resolver, not in ten places.
+`ts` for TypeScript and JavaScript; `jvm` for Java and Kotlin, which share one
+namespace of fully qualified names and call each other inside one module.
+Every module that used to branch "python, or else ts" asks this table
+instead, so a family is added here plus its own extractor and resolver, not
+in ten places.
 
 Parser-free and import-cheap: the query path reads it. An extractor is named
 by its module and imported only where a file is parsed; a resolver likewise.
@@ -29,6 +31,7 @@ class Family:
     workspace: bool = False                   # the resolver maps package specifiers (package.json, tsconfig)
     exports_leave_unit: bool = False          # an `exported` definition may be imported from outside the unit
     chunk_containers: tuple[str, ...] = ("class",)   # chunker v2: kinds whose members get chunks of their own
+    packages: bool = False                    # names resolve through `files.package`, not the file's path
 
 
 # Order is the order a build resolves the families in and writes their rows:
@@ -41,6 +44,11 @@ FAMILIES: tuple[Family, ...] = (
            containers=("class", "interface", "type", "enum"),
            never_guessed=("interface", "type", "enum", "getter", "setter"),
            resolver="resolve_ts:TsResolver", workspace=True, exports_leave_unit=True),
+    Family("jvm", ((".java", "extract_java"), (".kt", "extract_kotlin")),
+           containers=("class", "interface", "enum", "object"),
+           never_guessed=("class", "interface", "enum", "object"),
+           resolver="resolve_jvm:JvmResolver", packages=True,
+           chunk_containers=("class", "interface", "enum", "object")),
 )
 LANGS: tuple[str, ...] = tuple(f.lang for f in FAMILIES)
 _BY_LANG = {f.lang: f for f in FAMILIES}
@@ -50,6 +58,17 @@ SUFFIXES: frozenset[str] = frozenset(_BY_SUFFIX)
 
 def family(lang: str) -> Family:
     return _BY_LANG[lang]
+
+
+# A resolver that listed a package's files read this pseudo-path (see tables);
+# a file entering or leaving the package changes that answer (see update).
+PACKAGE_DEP = "jvm-package:"
+
+
+def membership(lang: str, package: str | None) -> set[str]:
+    """The pseudo-paths a file's presence answers for: its package's, in a
+    family that resolves through packages; nothing otherwise."""
+    return {PACKAGE_DEP + (package or "")} if family(lang).packages else set()
 
 
 def _suffix(path: str) -> str:

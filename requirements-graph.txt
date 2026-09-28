@@ -17,8 +17,15 @@ networkx==3.4.2 \
     --hash=sha256:df5d4365b724cf81b8c6a7312509d0c22386097011ad1abe274afd5e9d3bbc5f
 tree-sitter==0.26.0 \
     --hash=sha256:f289be0225ba2ace8e87d6c9639b2bc9ff2b5271afb7c5d39282a4a00e248682
+# Java and Kotlin (CODE-GRAPH D3). Both grammars are ABI 14, which the 0.26
+# core accepts (13-15). tree-sitter-kotlin is the tree-sitter-grammars fork,
+# the one published on PyPI.
+tree-sitter-java==0.23.5 \
+    --hash=sha256:1ee45e790f8d31d416bc84a09dac2e2c6bc343e89b8a2e1d550513498eedfde7
 tree-sitter-javascript==0.25.0 \
     --hash=sha256:e5ed840f5bd4a3f0272e441d19429b26eedc257abe5574c8546da6b556865e3c
+tree-sitter-kotlin==1.1.0 \
+    --hash=sha256:d4d3f330f515ba8b91da04a5335eb9ff3ce071c7b7855958912f2560f6e14976
 tree-sitter-python==0.25.0 \
     --hash=sha256:9bcde33f18792de54ee579b00e1b4fe186b7926825444766f849bf7181793a76
 tree-sitter-typescript==0.23.2 \

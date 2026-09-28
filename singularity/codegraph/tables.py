@@ -57,12 +57,20 @@ class MemorySource:
         self._tests = frozenset(test_paths)
         containers = tuple(containers)
         by_name: dict[str, list[Candidate]] = defaultdict(list)
+        by_package: dict[str, list[str]] = defaultdict(list)
         for path, f in facts.items():
             defs = {d.qname: d for d in f.definitions}
             for d in f.definitions:
                 by_name[d.name].append(Candidate(d.qname, d.kind, is_local(defs, d.qname, containers),
                                                  path, path in self._tests))
+            by_package[f.package or ""].append(path)
         self._by_name = {k: tuple(v) for k, v in by_name.items()}
+        self._by_package = {k: tuple(v) for k, v in by_package.items()}
+
+    def package_files(self, package: str) -> tuple[str, ...]:
+        """The files declaring `package` ('' = the default package): the JVM
+        family finds a type through its package, not its file's path."""
+        return self._by_package.get(package, ())
 
     def paths(self) -> list[str]:
         return list(self._facts)

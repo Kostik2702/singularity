@@ -93,6 +93,12 @@ class DbSource:
     def is_test(self, path: str) -> bool:
         return path in self._tests
 
+    def package_files(self, package: str) -> tuple[str, ...]:
+        """tables.MemorySource.package_files over `files.package`."""
+        rows = self._con.execute("SELECT path FROM files WHERE lang = ? AND package IS ?",
+                                 (self._lang, package or None))
+        return tuple(r[0] for r in rows)
+
     def guess(self, name: str, from_test: bool, never: tuple[str, ...]) -> str | None:
         key = (name, from_test)
         if key not in self._guesses:
@@ -254,12 +260,12 @@ def _marks(chunk: list) -> str:
     return ",".join("?" * len(chunk))
 
 
-def _ids(con: sqlite3.Connection, paths) -> dict[str, tuple[int, str, str]]:
-    """{path: (id, lang, content_hash)} of the stored files among `paths`."""
-    out: dict[str, tuple[int, str, str]] = {}
+def _ids(con: sqlite3.Connection, paths) -> dict[str, tuple[int, str, str, str | None]]:
+    """{path: (id, lang, content_hash, package)} of the stored files among `paths`."""
+    out: dict[str, tuple[int, str, str, str | None]] = {}
     for chunk in _chunks(sorted(paths)):
-        out.update({r[0]: (r[1], r[2], r[3]) for r in con.execute(
-            f"SELECT path, id, lang, content_hash FROM files WHERE path IN ({_marks(chunk)})", chunk)})
+        out.update({r[0]: (r[1], r[2], r[3], r[4]) for r in con.execute(
+            f"SELECT path, id, lang, content_hash, package FROM files WHERE path IN ({_marks(chunk)})", chunk)})
     return out
 
 
@@ -394,16 +400,16 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
             con.execute("UPDATE files SET size = ?, mtime_ns = ? WHERE id = ?",
                         (st.st_size, mtime(st), rows[p][0]))
         for p, (st, _lang, facts, digest, _blob) in modified.items():
-            con.execute("UPDATE files SET size = ?, mtime_ns = ?, content_hash = ?, parse_status = ?"
+            con.execute("UPDATE files SET size = ?, mtime_ns = ?, content_hash = ?, parse_status = ?, package = ?"
                         " WHERE id = ?", (st.st_size, mtime(st), digest,
-                                          "partial" if facts.degraded else "ok", rows[p][0]))
+                                          "partial" if facts.degraded else "ok", facts.package, rows[p][0]))
         for p, (st, lang, facts, digest, _blob) in added.items():
             cur = con.execute(
-                "INSERT INTO files(path, lang, size, mtime_ns, content_hash, parse_status, is_test)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO files(path, lang, size, mtime_ns, content_hash, parse_status, is_test, package)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (p, lang, st.st_size, mtime(st), digest, "partial" if facts.degraded else "ok",
-                 int(scope.is_test_path(p))))
-            rows[p] = (cur.lastrowid, lang, digest)
+                 int(scope.is_test_path(p)), facts.package))
+            rows[p] = (cur.lastrowid, lang, digest, facts.package)
         parsed: dict[str, FileFacts] = {}
         for p, (_st, _lang, facts, _digest, blob) in (*modified.items(), *added.items()):
             store.insert_nodes(con, node_rows(facts, rows[p][0]))
@@ -417,8 +423,18 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
             if after[(lang, n)] != was:
                 moved[lang].append(n)
         changed = sorted({*modified, *added, *deleted})
+        # A file entering or leaving a JVM package changes what listing that
+        # package answers: its readers depend on the package's pseudo-path.
+        moved_members: set[str] = set()
+        for p in deleted:
+            moved_members |= languages.membership(rows[p][1], rows[p][3])
+        for _st, lang, facts, _digest, _blob in added.values():
+            moved_members |= languages.membership(lang, facts.package)
+        for p, (_st, lang, facts, _digest, _blob) in modified.items():
+            if facts.package != rows[p][3]:
+                moved_members |= languages.membership(lang, rows[p][3]) | languages.membership(lang, facts.package)
         dependents: set[str] = set()
-        for chunk in _chunks(changed):
+        for chunk in _chunks(changed + sorted(moved_members)):
             dependents |= {r[0] for r in con.execute(
                 "SELECT DISTINCT f.path FROM dep_paths dp JOIN deps d ON d.path_id = dp.id"
                 f" JOIN files f ON f.id = d.file_id WHERE dp.path IN ({_marks(chunk)})", chunk)}

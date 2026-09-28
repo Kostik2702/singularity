@@ -409,3 +409,62 @@ NodeJS Function Event EventTarget
 """
 
 TS_GLOBALS = frozenset(_TS_GLOBAL_NAMES.split())
+
+# Java and Kotlin (CODE-GRAPH D3). Names a JVM file uses without importing
+# them: `java.lang.*` in both languages, and Kotlin's default imports
+# (kotlin.*, kotlin.collections.*, kotlin.text.*, kotlin.io.*, kotlin.ranges.*,
+# kotlin.sequences.*, kotlin.jvm.*). A bare name that is none of the file's own
+# and one of these is the platform's. Hand-curated 2026-09-28 from the
+# java.lang package summary and the Kotlin default-import list.
+_JVM_GLOBAL_NAMES = """
+Object String Integer Long Short Byte Boolean Character Double Float Number Void Math StrictMath
+System Thread Runnable Runtime Process ProcessBuilder Class ClassLoader Enum Record Iterable
+Comparable CharSequence StringBuilder StringBuffer Throwable Exception Error RuntimeException
+IllegalArgumentException IllegalStateException NullPointerException IndexOutOfBoundsException
+ArrayIndexOutOfBoundsException UnsupportedOperationException ClassCastException ArithmeticException
+NumberFormatException SecurityException InterruptedException CloneNotSupportedException
+ReflectiveOperationException ClassNotFoundException NoSuchMethodException NoSuchFieldException
+OutOfMemoryError StackOverflowError AssertionError AutoCloseable Cloneable Override Deprecated
+SuppressWarnings FunctionalInterface SafeVarargs ThreadLocal InheritableThreadLocal
+Any Unit Nothing Int Char Array IntArray LongArray ByteArray CharArray BooleanArray DoubleArray
+FloatArray ShortArray List MutableList Set MutableSet Map MutableMap Collection MutableCollection
+Sequence Pair Triple Lazy Result Regex Annotation Suppress JvmStatic JvmField JvmName JvmOverloads
+JvmSuppressWildcards Volatile Synchronized Transient Throws UninitializedPropertyAccessException
+NoSuchElementException ConcurrentModificationException KotlinNullPointerException ArrayList HashMap
+HashSet LinkedHashMap LinkedHashSet
+println print readLine readln listOf listOfNotNull mutableListOf arrayListOf setOf mutableSetOf
+hashSetOf linkedSetOf sortedSetOf mapOf mutableMapOf hashMapOf linkedMapOf sortedMapOf emptyList
+emptySet emptyMap emptyArray emptySequence arrayOf arrayOfNulls intArrayOf longArrayOf
+byteArrayOf charArrayOf booleanArrayOf doubleArrayOf floatArrayOf shortArrayOf sequenceOf
+generateSequence buildList buildSet buildMap buildString lazy lazyOf require requireNotNull check
+checkNotNull error TODO repeat run let apply also with takeIf takeUnless use synchronized maxOf
+minOf to runCatching assert enumValues enumValueOf
+"""
+
+JVM_GLOBALS = frozenset(_JVM_GLOBAL_NAMES.split())
+
+# Members every JVM receiver has without its class declaring them: the
+# methods of java.lang.Object / kotlin.Any, and the Kotlin standard library's
+# extensions on Any, String, collections and sequences. A first-party class
+# that "lacks" one of these inherits it from the platform: the call is not
+# first-party, and not unresolved either.
+_JVM_ANY_MEMBER_NAMES = """
+equals hashCode toString getClass clone finalize notify notifyAll wait
+let apply also run takeIf takeUnless use to also runCatching
+forEach forEachIndexed map mapNotNull mapIndexed mapTo flatMap filter filterNot filterNotNull
+filterIsInstance first firstOrNull last lastOrNull single singleOrNull find findLast any all none
+count sum sumOf average maxOrNull minOrNull maxByOrNull minByOrNull sorted sortedBy
+sortedByDescending sortedWith reversed distinct distinctBy groupBy associate associateBy
+associateWith partition chunked windowed zip joinToString toList toMutableList toSet toMutableSet
+toMap toMutableMap toTypedArray toIntArray asSequence asIterable plus minus contains containsKey
+containsValue isEmpty isNotEmpty isNullOrEmpty isNullOrBlank isBlank isNotBlank orEmpty ifEmpty
+getOrNull getOrElse getOrDefault getOrPut indexOf lastIndexOf indexOfFirst take takeLast drop
+dropLast subList onEach fold reduce size get set put add addAll remove removeAll removeAt
+removeIf clear iterator trim trimEnd trimStart split substring substringBefore substringAfter
+substringBeforeLast substringAfterLast startsWith endsWith replace replaceFirst lowercase uppercase
+capitalize format toInt toLong toDouble toFloat toBoolean toIntOrNull toLongOrNull toDoubleOrNull
+toByteArray toCharArray length isDigit isLetter compareTo coerceAtLeast coerceAtMost coerceIn
+rangeTo until downTo step orElse
+"""
+
+JVM_ANY_MEMBERS = frozenset(_JVM_ANY_MEMBER_NAMES.split())

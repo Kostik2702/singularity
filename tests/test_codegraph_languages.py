@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from singularity.codegraph import languages, resolve_py, resolve_ts, scope
+from singularity.codegraph import languages, resolve_jvm, resolve_py, resolve_ts, scope
 
 
 def test_each_family_copies_its_resolvers_kinds_exactly():
@@ -20,6 +20,16 @@ def test_each_family_copies_its_resolvers_kinds_exactly():
     assert languages.family("python").never_guessed == resolve_py.NEVER_GUESSED
     assert languages.family("ts").containers == resolve_ts._TYPELIKE
     assert languages.family("ts").never_guessed == resolve_ts.NEVER_GUESSED
+    assert languages.family("jvm").containers == resolve_jvm.CONTAINERS
+    assert languages.family("jvm").never_guessed == resolve_jvm.NEVER_GUESSED
+
+
+def test_only_the_jvm_family_resolves_through_packages():
+    """A file entering or leaving a JVM package re-resolves whoever listed it
+    (update); a Python or TypeScript file has no such membership."""
+    assert languages.membership("jvm", "com.ex") == {languages.PACKAGE_DEP + "com.ex"}
+    assert languages.membership("jvm", None) == {languages.PACKAGE_DEP}
+    assert languages.membership("python", None) == languages.membership("ts", "x") == set()
 
 
 def test_every_family_names_a_resolver_that_exists():
@@ -35,11 +45,15 @@ def test_the_table_reads_exactly_the_graphs_universe():
     assert languages.SUFFIXES == scope.CODE_SUFFIXES
 
 
+_SOURCE = {"python": b"def f():\n    pass\n", "ts": b"function f() {}\n", "jvm": b"class F {}\n"}
+
+
 @pytest.mark.parametrize("path, lang", [("a/b.py", "python"), ("x.tsx", "ts"), ("x.js", "ts"),
-                                        ("x.jsx", "ts"), ("x.ts", "ts"), ("LEGACY.PY", "python")])
+                                        ("x.jsx", "ts"), ("x.ts", "ts"), ("LEGACY.PY", "python"),
+                                        ("a/F.java", "jvm"), ("a/F.kt", "jvm")])
 def test_a_file_goes_to_its_family_by_suffix_in_any_case(path, lang):
     assert languages.lang_of(path) == lang
-    got, facts = languages.extract(path, b"def f():\n    pass\n" if lang == "python" else b"function f() {}\n")
+    got, facts = languages.extract(path, _SOURCE[lang])
     assert got == lang and facts.lang == lang
 
 

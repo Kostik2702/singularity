@@ -20,6 +20,9 @@ predecessor):
                signature, which is where Python puts them, unlike a `#` banner
                above.
   * TS/JS/JSX— ported boundaries.
+  * Java, Kotlin — types and methods / functions by declaration shape
+               (CODE-GRAPH D3: the code graph and this corpus read one set of
+               files). Comments and annotations as in TS.
   * Ruby     — NOT implemented: zero `.rb` files exist here. `.rb` is not
                claimed as supported and simply lands in the fallback windower
                rather than being cut on invented boundaries.
@@ -60,6 +63,7 @@ EMBED_CODE_CHARS = 250       # path + signature + doc must outweigh the body
 LANG_BY_SUFFIX = {
     ".py": "python",
     ".ts": "ts", ".tsx": "ts", ".js": "ts", ".jsx": "ts",
+    ".java": "java", ".kt": "kotlin",
 }
 
 # --------------------------------------------------------------------------
@@ -69,7 +73,7 @@ LANG_BY_SUFFIX = {
 # The one thing that IS configuration is WHERE to look — `code_repos_dir`.
 # --------------------------------------------------------------------------
 
-CODE_PATTERNS = ("*.py", "*.ts", "*.tsx", "*.js", "*.jsx")   # D6: no *.rb
+CODE_PATTERNS = ("*.py", "*.ts", "*.tsx", "*.js", "*.jsx", "*.java", "*.kt")   # D6: no *.rb; D3: JVM
 
 # Cut during traversal, at any depth. This is the single highest-leverage
 # filter in the whole feature: on a measured repositories root it removed ~99%
@@ -117,6 +121,17 @@ SKIP_REPOS = ("test-project",)
 # A source file past this is generated, vendored or a data blob pretending to be
 # code; embedding it costs real time and returns noise.
 MAX_FILE_BYTES = 100_000
+# ...except in Java and Kotlin (CODE-GRAPH D3, owner decision 2026-09-28):
+# there is no minified bundle or data-blob convention there, generated code
+# lives under `build/` (pruned), and a hand-written class past 100 KB is a
+# central one -- nextcloud's FileDataStorageManager.java is 135 KB, and
+# leaving it out made every call into it look external.
+MAX_FILE_BYTES_BY_SUFFIX = {".java": 512_000, ".kt": 512_000}
+
+
+def max_file_bytes(path: str) -> int:
+    """The size ceiling for one file, by its suffix."""
+    return MAX_FILE_BYTES_BY_SUFFIX.get(Path(path).suffix.lower(), MAX_FILE_BYTES)
 
 # A vendored third-party distribution unpacked inside a project: an engine SDK,
 # a bundled runtime, an extracted release. `SKIP_DIRS` cannot express these —
@@ -147,6 +162,19 @@ _TS_BOUNDARY_RE = re.compile(
     r"(class|interface|function|enum)\s+(\w+)")
 _TS_EXPORT_CONST_RE = re.compile(
     r"^[ \t]*export\s+(?:const|let|var)\s+(\w+)\s*[=:(]")
+_JAVA_BOUNDARY_RE = re.compile(
+    r"^[ \t]*(?:@[\w.]+(?:\([^)]*\))?\s+)*"
+    r"(?:(?:public|protected|private|static|final|abstract|sealed|non-sealed|strictfp|default|synchronized|"
+    r"native)\s+)*"
+    r"(?:(class|interface|enum|record|@interface)\s+(\w+)|(?:<[^>]+>\s+)?([\w<>\[\],.?]+)\s+(\w+)\s*\()")
+# the first word of a statement, never a method's return type
+_JAVA_NOT_TYPES = frozenset({"return", "new", "throw", "else", "case", "yield", "if", "while", "for",
+                             "switch", "catch", "do", "try", "synchronized", "assert"})
+_KOTLIN_BOUNDARY_RE = re.compile(
+    r"^[ \t]*(?:@[\w.:]+(?:\([^)]*\))?\s+)*"
+    r"(?:(?:public|private|protected|internal|open|abstract|final|override|suspend|inline|operator|infix|"
+    r"tailrec|external|data|sealed|enum|annotation|inner|value|expect|actual|companion)\s+)*"
+    r"(fun|class|interface|object)\s+(?:<[^>]+>\s*)?(?:[\w.<>?, ]+\.)?(\w+)")
 _DECORATOR_RE = re.compile(r"^[ \t]*@\w")
 _PY_COMMENT_RE = re.compile(r"^[ \t]*#")
 _TS_COMMENT_RE = re.compile(r"^[ \t]*(?://|/\*|\*)")
@@ -259,6 +287,18 @@ def _boundaries(lines: list[str], lang: str) -> list[tuple[int, str, str]]:
             kind = "class" if keyword == "class" else (
                 "method" if indent else "function")
             found.append((i, kind, name))
+            continue
+        if lang == "java":
+            m = _JAVA_BOUNDARY_RE.match(line)
+            if m and m.group(1):
+                found.append((i, "interface" if m.group(1) == "@interface" else m.group(1), m.group(2)))
+            elif m and m.group(3) not in _JAVA_NOT_TYPES and m.group(4) not in _JAVA_NOT_TYPES:
+                found.append((i, "method", m.group(4)))
+            continue
+        if lang == "kotlin":
+            m = _KOTLIN_BOUNDARY_RE.match(line)
+            if m:
+                found.append((i, "function" if m.group(1) == "fun" else m.group(1), m.group(2)))
             continue
         m = _TS_BOUNDARY_RE.match(line)
         if m:

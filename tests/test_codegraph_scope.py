@@ -90,6 +90,26 @@ def test_the_file_set_is_what_git_sees_minus_the_filters(tmp_path, project):
     assert not files["app/main.py"].is_test
 
 
+def test_java_and_kotlin_join_the_universe_with_their_own_ceiling_and_test_names(tmp_path):
+    """D3: `.java`/`.kt` are graph files; a hand-written class past 100 KB is
+    kept up to 512 KB (owner decision 2026-09-28) while a Python file of the
+    same size is not; JUnit and Android test names and dirs are tests --
+    case-sensitively, so `Edit.kt` is not an `IT`."""
+    big = "class Big {\n" + "    int x;\n" * 15_000 + "}\n"          # ~150 KB
+    _repo(tmp_path / "Project" / "app", {
+        "src/main/java/a/Big.java": big, "src/main/java/a/big_data.py": "x = 1\n" * 30_000,
+        "src/main/java/a/Edit.kt": "class Edit\n", "src/main/java/a/RepoTest.kt": "class RepoTest\n",
+        "src/main/java/a/SyncIT.kt": "class SyncIT\n", "src/androidTestGplay/java/a/Ui.kt": "class Ui\n",
+        "src/test/java/a/Unit.java": "class Unit {}\n", "build.gradle.kts": "plugins {}\n"})
+    cfg = _cfg(tmp_path)
+    files = {f.path: f for f in scope.list_files(_units(cfg)["app"], cfg)}
+    assert "src/main/java/a/Big.java" in files and "src/main/java/a/big_data.py" not in files
+    assert "build.gradle.kts" not in files                                  # ASSUMED D3: build scripts are out
+    tests = {p for p, f in files.items() if f.is_test}
+    assert tests == {"src/main/java/a/RepoTest.kt", "src/main/java/a/SyncIT.kt",
+                     "src/androidTestGplay/java/a/Ui.kt", "src/test/java/a/Unit.java"}
+
+
 def test_a_nested_repository_belongs_to_itself_not_to_its_parent(tmp_path, project):
     """`git status` in the parent shows only `?? plugins/inner/` whatever
     changes inside it, so reading those files as the parent's would index

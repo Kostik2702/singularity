@@ -80,6 +80,58 @@ def test_python_handles_tabs_for_indentation(tmp_path):
     assert by_name["inner"]["kind"] == "method"      # indented -> method, tabs or not
 
 
+# --- Java and Kotlin (CODE-GRAPH D3) ---------------------------------------------
+
+def test_java_types_and_methods_become_chunks_and_statements_do_not(tmp_path):
+    src = tmp_path / "Repo.java"
+    src.write_text("package a;\n\n"
+                   "/** Stores the items the app shows, one row per item. */\n"
+                   "public class Repo {\n"
+                   "    private final Client client = new Client(Config.DEFAULT);\n\n"
+                   "    @Override\n"
+                   "    public List<Item> load(int page) {\n"
+                   "        return fetch(page, pageSizeFor(page)).stream().toList();\n"
+                   "    }\n\n"
+                   "    private static void save(Item item) throws IOException {\n"
+                   "        if (item == null) { throw new IllegalArgumentException(\"no item to save\"); }\n"
+                   "        writer.write(item.serialise());\n"
+                   "    }\n"
+                   "}\n", encoding="utf-8")
+    by_name = _by_name(extract_code_chunks(src, "demo/Repo.java"))
+    assert by_name["Repo"]["kind"] == "class"
+    assert by_name["Repo"]["description"] == "Stores the items the app shows, one row per item."
+    assert by_name["load"]["kind"] == "method" and by_name["save"]["kind"] == "method"
+    assert by_name["load"]["content"].splitlines()[0].strip() == "@Override"
+    assert not {"fetch", "IllegalArgumentException", "write"} & set(by_name)
+
+
+def test_kotlin_functions_classes_objects_and_extensions_become_chunks(tmp_path):
+    src = tmp_path / "Repo.kt"
+    src.write_text("package a\n\n"
+                   "// Loads a page of items from the server and caches the result.\n"
+                   "suspend fun <T> Repo.loadPage(page: Int): List<T> {\n"
+                   "    return client.get(page).also { cache.put(page, it) }\n"
+                   "}\n\n"
+                   "data class Item(val id: Long, val title: String, val updatedAt: Long)\n\n"
+                   "object Registry {\n"
+                   "    private val items = mutableMapOf<Long, Item>()\n\n"
+                   "    fun register(item: Item) { items[item.id] = item; notifyObservers(item) }\n"
+                   "}\n", encoding="utf-8")
+    by_name = _by_name(extract_code_chunks(src, "demo/Repo.kt"))
+    assert by_name["loadPage"]["kind"] == "function"
+    assert by_name["loadPage"]["description"] == "Loads a page of items from the server and caches the result."
+    assert by_name["Item"]["kind"] == "class" and by_name["Registry"]["kind"] == "object"
+    assert by_name["register"]["kind"] == "function"
+
+
+def test_the_code_corpus_reads_java_and_kotlin_up_to_their_own_ceiling():
+    """D3: Java and Kotlin join the corpus, with a 512 KB ceiling of their own
+    (owner decision 2026-09-28); every other language keeps 100 KB."""
+    assert {"*.java", "*.kt"} <= set(code_chunking.CODE_PATTERNS)
+    assert code_chunking.max_file_bytes("a/Big.java") == code_chunking.max_file_bytes("a/Big.KT") == 512_000
+    assert code_chunking.max_file_bytes("a/big.py") == code_chunking.max_file_bytes("a/b.tsx") == 100_000
+
+
 # --- TS/JS: the ported path --------------------------------------------------
 
 def test_typescript_finds_class_interface_const_and_arrow_function():

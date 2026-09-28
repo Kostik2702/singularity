@@ -35,6 +35,7 @@ imgqa = ["Pillow>=10", "scipy>=1.10"]
 # Python) is `mb code arch`'s Louvain, used at build time only.
 graph = ["tree-sitter==0.26.0", "tree-sitter-python==0.25.0",
          "tree-sitter-typescript==0.23.2", "tree-sitter-javascript==0.25.0",
+         "tree-sitter-java==0.23.5", "tree-sitter-kotlin==1.1.0",
          "networkx==3.4.2"]
 # Everything the fast suite needs, and nothing heavy: the runtime deps come
 # from [project.dependencies], keyring and Pillow/scipy from the extras that

@@ -233,8 +233,10 @@ def _scan_nodes(con: sqlite3.Connection, s: _Scanner) -> None:
 def _scan_facts(path: str, blob: bytes, s: _Scanner) -> None:
     """Every source text of one stored FileFacts outside its definitions
     (model.encode_facts: path, lang, degraded, definitions, imports, calls,
-    hints, exports, refs)."""
-    _path, _lang, _degraded, defs, imports, calls, hints, exports, refs = json.loads(zlib.decompress(blob))
+    hints, exports, refs, package -- the last absent from a schema-5 blob)."""
+    _path, _lang, _degraded, defs, imports, calls, hints, exports, refs, *rest = json.loads(zlib.decompress(blob))
+    if rest and rest[0]:
+        s.add(f"{path}::<module>", "facts.package", rest[0])
     for d in defs:
         s.add(d[0], "facts.returns", d[10])
     for part, bindings in (("facts.imports", imports), ("facts.exports", exports)):
@@ -242,8 +244,10 @@ def _scan_facts(path: str, blob: bytes, s: _Scanner) -> None:
             s.add(scope, part, spec)
             s.add(scope, part, local)
             s.add(scope, part, attr)
-    for caller, _line, _callee, receiver, _klass in calls:
+    for caller, _line, _callee, receiver, _klass, *implicit in calls:
         s.add(caller, "facts.calls.receiver", receiver)
+        for text in implicit:                    # a Kotlin receiver lambda's receiver
+            s.add(caller, "facts.calls.receiver", text)
     for scope, _target, type_expr, _source, _origin in hints:
         s.add(scope, "facts.hints", type_expr)
     module, clean = f"{path}::<module>", s.clean
