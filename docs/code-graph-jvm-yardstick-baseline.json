@@ -46,13 +46,13 @@
   },
   "needs-types": {
    "n": 9,
-   "tp": 3,
-   "wrong": 2,
+   "tp": 4,
+   "wrong": 1,
    "miss": 1,
    "tn": 1,
    "false_edge": 2,
-   "precision": 0.4286,
-   "recall": 0.5,
+   "precision": 0.5714,
+   "recall": 0.6667,
    "false_edge_rate": 0.6667
   },
   "this-method": {
@@ -123,13 +123,13 @@
   },
   "companion": {
    "n": 4,
-   "tp": 3,
-   "wrong": 1,
+   "tp": 2,
+   "wrong": 2,
    "miss": 0,
    "tn": 0,
    "false_edge": 0,
-   "precision": 0.75,
-   "recall": 0.75,
+   "precision": 0.5,
+   "recall": 0.5,
    "false_edge_rate": null
   },
   "common-name": {
@@ -235,13 +235,13 @@
  "name-unique": {
   "_overall": {
    "n": 92,
-   "tp": 27,
+   "tp": 26,
    "wrong": 2,
-   "miss": 42,
+   "miss": 43,
    "tn": 13,
    "false_edge": 8,
-   "precision": 0.7297,
-   "recall": 0.3803,
+   "precision": 0.7222,
+   "recall": 0.3662,
    "false_edge_rate": 0.381
   },
   "constructor": {
@@ -356,13 +356,13 @@
   },
   "companion": {
    "n": 4,
-   "tp": 3,
+   "tp": 2,
    "wrong": 1,
-   "miss": 0,
+   "miss": 1,
    "tn": 0,
    "false_edge": 0,
-   "precision": 0.75,
-   "recall": 0.75,
+   "precision": 0.6667,
+   "recall": 0.5,
    "false_edge_rate": null
   },
   "common-name": {
