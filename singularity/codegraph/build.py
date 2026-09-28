@@ -19,10 +19,9 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Config
-from . import arch, audit, extract_py, extract_ts, fresh, scope, sidecar, store
+from . import arch, audit, fresh, languages, scope, sidecar, store
 from .model import FileFacts, encode_facts
-from .resolve_py import PyResolver
-from .resolve_ts import TsResolver, load_workspace
+from .resolve_ts import load_workspace
 from .rows import dep_rows, name_ref_counts, node_rows, workspace_meta
 from .versions import RESOLVER_VERSION, parser_versions, version_mismatch  # noqa: F401  (re-exported)
 
@@ -47,10 +46,7 @@ def _read_text(unit: scope.Unit):
 def extract_file(root: Path, path: str) -> tuple[str, FileFacts, str, bytes]:
     """(lang, facts, content hash, stored facts) of one file."""
     data = (root / path).read_bytes()
-    if path.endswith(".py"):
-        lang, facts = "python", extract_py.extract(path, data)
-    else:
-        lang, facts = "ts", extract_ts.extract(path, data)
+    lang, facts = languages.extract(path, data)
     return lang, facts, hashlib.sha256(data).hexdigest(), encode_facts(facts)
 
 
@@ -143,14 +139,13 @@ def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None,
         t = time.perf_counter()
         file_rows: list[dict[str, Any]] = []
         facts_rows: list[tuple[int, bytes]] = []
-        py_facts: dict[str, FileFacts] = {}
-        ts_facts: dict[str, FileFacts] = {}
+        by_lang: dict[str, dict[str, FileFacts]] = {lang: {} for lang in languages.LANGS}
         langs: Counter[str] = Counter()
         n_workers = _worker_count(len(entries), workers)
         extracted = _extract_all(unit.root, [e.path for e in entries], n_workers)
         read_done = time.time_ns()
         for fid, (entry, (lang, facts, digest, blob)) in enumerate(zip(entries, extracted, strict=True), 1):
-            (py_facts if lang == "python" else ts_facts)[entry.path] = facts
+            by_lang[lang][entry.path] = facts
             langs[lang] += 1
             file_rows.append({"id": fid, "path": entry.path, "lang": lang, "size": entry.size,
                               "mtime_ns": store.recorded_mtime(entry.mtime_ns, read_done),
@@ -162,17 +157,19 @@ def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None,
         timings["extract"] = time.perf_counter() - t
         t, cpu = time.perf_counter(), time.process_time()
         test_paths = {e.path for e in entries if e.is_test}
-        py = PyResolver(py_facts, test_paths=test_paths)
-        edges, unresolved = py.resolve()
-        file_deps = dict(py.file_deps)
         packages, aliases = load_workspace(_read_text(unit), [p for p in watch if fresh.WATCHED.match(
             p.rsplit("/", 1)[-1])])
-        if ts_facts:
-            ts = TsResolver(ts_facts, test_paths, packages, aliases)
-            ts_edges, ts_unresolved = ts.resolve()
-            edges += ts_edges
-            unresolved += ts_unresolved
-            file_deps.update(ts.file_deps)
+        edges, unresolved = [], []
+        file_deps: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
+        for lang in languages.LANGS:                # a family's files resolve together, in table order
+            if not by_lang[lang]:
+                continue
+            resolver = languages.resolver(lang, facts=by_lang[lang], test_paths=test_paths,
+                                          workspace=(packages, aliases))
+            lang_edges, lang_unresolved = resolver.resolve()
+            edges += lang_edges
+            unresolved += lang_unresolved
+            file_deps.update(resolver.file_deps)
         timings["resolve"] = time.perf_counter() - t
         # Resolve is one CPU-bound thread in this process: well below 1 means the
         # process was kept waiting and the timings measure the machine.
@@ -182,7 +179,7 @@ def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None,
         timings["arch"] = time.perf_counter() - t
         t = time.perf_counter()
         file_id = {r["path"]: r["id"] for r in file_rows}
-        nodes = [n for facts_by_path in (py_facts, ts_facts) for f in facts_by_path.values()
+        nodes = [n for lang in languages.LANGS for f in by_lang[lang].values()
                  for n in node_rows(f, file_id[f.path])]
         edge_rows = [(e.src, e.dst, e.kind, e.tier, e.callee, file_id[e.file], e.line) for e in edges]
         unresolved_rows = [(u.src, u.name, u.receiver, file_id[u.file], u.line) for u in unresolved]
@@ -194,7 +191,7 @@ def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None,
                 "watched": watch, "workspace": workspace_meta(packages, aliases),
                 "built_at": time.time(), "files": len(file_rows),
                 "arch": {"seed": arch.SEED, "computed_at_seq": 0, "note": arch_note}}
-        refs = name_ref_counts(list(py_facts.values()) + list(ts_facts.values()))
+        refs = name_ref_counts([f for lang in languages.LANGS for f in by_lang[lang].values()])
         written = store.write_generation(
             cfg, unit.key, meta=meta, files=file_rows, nodes=nodes, edges=edge_rows,
             unresolved=unresolved_rows, facts=facts_rows, deps=deps, lookups=lookups,

@@ -277,14 +277,11 @@ def test_broken_source_is_recovered_not_refused(tmp_path):
 
 def test_an_extractor_failure_on_one_file_warns_and_keeps_its_text(tmp_path, monkeypatch, caplog):
     path = _write(tmp_path, "nested.py", NESTED_PY)
-    extractors = v2.load_extractors()
 
-    class Exploding:
-        @staticmethod
-        def extract(rel, data):
-            raise RuntimeError("node shape nobody expected")
+    def exploding(rel, data):
+        raise RuntimeError("node shape nobody expected")
 
-    monkeypatch.setattr(v2, "load_extractors", lambda: {**extractors, "python": Exploding})
+    monkeypatch.setattr(v2.languages, "extract", exploding)
     with caplog.at_level(logging.WARNING, logger="mb"):
         chunks = _chunks(path)
     assert chunks and all(c["kind"] == "lines" for c in chunks)

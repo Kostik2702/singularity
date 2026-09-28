@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Config
-from . import fresh, scope, sidecar, store, versions
+from . import fresh, languages, scope, sidecar, store, versions
 from .model import FileFacts, decode_facts
 
 
@@ -286,11 +286,9 @@ def _looked_up(con: sqlite3.Connection, names: dict[str, set[str]]) -> dict[str,
 def _outcomes(con: sqlite3.Connection, names: dict[str, set[str]]) -> dict[tuple[str, str], tuple]:
     """The unique-name tier's answer for each name, from a production and
     from a test caller -- what a guess on the name would draw right now."""
-    from .resolve_py import NEVER_GUESSED as PY_NEVER
-    from .resolve_ts import NEVER_GUESSED as TS_NEVER
     out = {}
     for lang, ns in names.items():
-        never = PY_NEVER if lang == "python" else TS_NEVER
+        never = languages.family(lang).never_guessed
         for n in ns:
             out[(lang, n)] = (guess_sql(con, n, lang, False, never), guess_sql(con, n, lang, True, never))
     return out
@@ -309,8 +307,6 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
     changed the graph since `det` was taken -- detect again. `also_resolve`:
     paths to re-resolve regardless (the stale set, in the background run).
     `wait`: how long to wait for another writer (store default if None)."""
-    from .resolve_py import PyResolver
-    from .resolve_ts import TsResolver
     from .rows import dep_rows, name_ref_counts, node_rows, workspace_from_meta
 
     with store.write_transaction(db, **({} if wait is None else {"wait": wait})) as con:
@@ -366,7 +362,7 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
             return store.recorded_mtime(st.st_mtime_ns, read_done)
 
         # the unique-name answers before the change, for every name it touches
-        names: dict[str, set[str]] = {"python": set(), "ts": set()}
+        names: dict[str, set[str]] = {lang: set() for lang in languages.LANGS}
         gone_ids = [rows[p][0] for p in (*modified, *deleted)]
         for chunk in _chunks(gone_ids):
             for name, lang in con.execute(
@@ -416,7 +412,7 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
 
         # who has to be resolved again
         after = _outcomes(con, names)
-        moved: dict[str, list[str]] = {"python": [], "ts": []}
+        moved: dict[str, list[str]] = {lang: [] for lang in languages.LANGS}
         for (lang, n), was in before.items():
             if after[(lang, n)] != was:
                 moved[lang].append(n)
@@ -444,17 +440,13 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
         edges: list = []
         unresolved: list = []
         file_deps: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
-        py_targets = [p for p in targets if rows[p][1] == "python"]
-        ts_targets = [p for p in targets if rows[p][1] == "ts"]
-        if py_targets:
-            resolver = PyResolver(source=DbSource(con, "python", parsed))
-            e, u = resolver.resolve(py_targets)
-            edges, unresolved = edges + e, unresolved + u
-            file_deps.update(resolver.file_deps)
-        if ts_targets:
-            packages, aliases = workspace_from_meta(meta)
-            resolver = TsResolver(packages=packages, aliases=aliases, source=DbSource(con, "ts", parsed))
-            e, u = resolver.resolve(ts_targets)
+        for lang in languages.LANGS:
+            lang_targets = [p for p in targets if rows[p][1] == lang]
+            if not lang_targets:
+                continue
+            resolver = languages.resolver(lang, source=DbSource(con, lang, parsed),
+                                          workspace=workspace_from_meta(meta))
+            e, u = resolver.resolve(lang_targets)
             edges, unresolved = edges + e, unresolved + u
             file_deps.update(resolver.file_deps)
         fid = {p: rows[p][0] for p in targets}

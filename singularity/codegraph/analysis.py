@@ -30,6 +30,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from . import languages
 from .query import page
 
 _DUNDER = re.compile(r"^__\w+__$")
@@ -161,7 +162,7 @@ def deadcode(con, root: Path, meta: dict[str, Any], limit: int = 50, offset: int
         elif mentioned.get((lang, name)):
             why = ("name mentioned", f"its name is mentioned in {mentioned[(lang, name)]} file(s): "
                                      "a callback, a table, a re-export")
-        elif lang == "ts" and exported:
+        elif exported and languages.family(lang).exports_leave_unit:
             why = ("exported", "code outside this unit may import it")
         elif kind == "method" and parent_kind == "class":
             text = overrides(parent, name, class_bases.get(parent, []))

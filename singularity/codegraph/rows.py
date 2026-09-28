@@ -8,15 +8,14 @@ import json
 from collections import Counter
 from typing import Any
 
+from . import languages
 from .model import FileFacts
-from .resolve_py import CONTAINERS
-from .resolve_ts import _TYPELIKE as TS_CONTAINERS
 from .resolve_ts import Package
 from .tables import is_local
 
 
 def node_rows(f: FileFacts, file_id: int) -> list[dict[str, Any]]:
-    containers = CONTAINERS if f.lang == "python" else TS_CONTAINERS
+    containers = languages.family(f.lang).containers
     defs = {d.qname: d for d in f.definitions}
     return [{"qname": d.qname, "name": d.name, "kind": d.kind, "file_id": file_id, "parent": d.parent,
              "spans": json.dumps(d.spans), "signature": d.signature, "doc1": d.doc1,
