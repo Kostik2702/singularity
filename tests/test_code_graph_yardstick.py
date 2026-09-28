@@ -15,6 +15,7 @@ sys.path.insert(0, str(REPO))
 
 from tools.code_graph_yardstick import (  # noqa: E402
     FIXTURE,
+    FIXTURE_JVM,
     GATE,
     _jvm_defs,
     _py_defs,
@@ -98,9 +99,10 @@ def test_the_recorded_naive_baselines_miss_the_owners_gate():
     resolvers failing the gate. If a re-record ever shows one passing, the set
     has gone soft and gates nothing."""
     import json
-    runs = json.loads((REPO / "docs" / "code-graph-yardstick-baseline.json").read_text(encoding="utf-8"))
-    for name in ("name-first", "name-unique"):
-        assert gate(runs[name]["_overall"]), f"{name} passes the gate: the set cannot fail it"
+    for baseline in ("code-graph-yardstick-baseline.json", "code-graph-jvm-yardstick-baseline.json"):
+        runs = json.loads((REPO / "docs" / baseline).read_text(encoding="utf-8"))
+        for name in ("name-first", "name-unique"):
+            assert gate(runs[name]["_overall"]), f"{name} passes the gate on {baseline}: the set cannot fail it"
 
 
 # --- the fixture itself -------------------------------------------------------
@@ -109,6 +111,18 @@ def test_the_committed_fixture_is_well_formed():
     data = load_fixture(FIXTURE)
     assert validate_fixture(data) == []
     assert len(data["edges"]) >= 45
+
+
+def test_the_jvm_fixture_is_well_formed_and_pins_its_clone():
+    """CODE-GRAPH D3: the JVM set lives outside code_repos_dir, so the unit
+    must say how to get exactly the labelled tree back."""
+    data = load_fixture(FIXTURE_JVM)
+    assert validate_fixture(data) == []
+    assert len(data["edges"]) >= 80
+    for unit in data["units"].values():
+        assert unit["repo"].startswith("https://") and "checkout" in unit["clone"]
+    assert any(isinstance(e["expect"], list) for e in data["edges"])       # variant sites exist
+    assert sum(e["expect"] is None for e in data["edges"]) >= 15
 
 
 def test_validate_fixture_names_each_planted_defect():
