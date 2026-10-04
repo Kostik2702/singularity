@@ -47,7 +47,7 @@ CONTAINERS = ("class", "interface", "enum", "object")
 # The unique-name tier does not exist here; types are never a method call's target anyway.
 NEVER_GUESSED = ("class", "interface", "enum", "object")
 _MAX_HOPS = 8
-_TEST_SETS = ("androidTest", "testFixtures", "test")
+_TEST_SETS = ("androidTest", "testFixtures", "sharedTest", "test")      # prefixes; languages.is_test_set decides
 _EVERY_FLAVOR = frozenset({"", "main", "debug", "release"})
 _CAST = re.compile(r"^\((.+?)\s+as\??\s+(.+)\)$")
 
@@ -70,29 +70,24 @@ def _ext(name: str | None = None) -> Meaning:
     return ("external", (), None, name)
 
 
-def source_set(path: str) -> str | None:
-    """`app/src/gplay/java/...` -> `gplay`; None outside a `src/<set>/` layout."""
-    parts = path.split("/")
-    for i, part in enumerate(parts[:-2]):
-        if part == "src":
-            return parts[i + 1]
-    return None
+source_set = languages.source_set
 
 
 def _flavor(source: str | None) -> str:
     """The flavor a source set is compiled with; '' when it is compiled with
     every flavor (main, the build types, the plain test sets)."""
     s = source or ""
-    for prefix in _TEST_SETS:
-        if s.startswith(prefix):
-            s = s[len(prefix):]
-            s = s[:1].lower() + s[1:]
-            break
+    if languages.is_test_set(s):
+        for prefix in _TEST_SETS:
+            if s.startswith(prefix):
+                s = s[len(prefix):]
+                s = s[:1].lower() + s[1:]
+                break
     return "" if s in _EVERY_FLAVOR else s
 
 
 def _sees(flavor: str, theirs: str | None) -> bool:
-    if not flavor or theirs is None or theirs in _EVERY_FLAVOR or theirs.startswith(_TEST_SETS):
+    if not flavor or theirs is None or theirs in _EVERY_FLAVOR or languages.is_test_set(theirs):
         return True
     a, b = flavor.lower(), theirs.lower()
     return a.startswith(b) or b.startswith(a)
@@ -166,6 +161,7 @@ class JvmResolver:
         # Per-file memo tables (cleared for every resolved file: a hit must be
         # this file's own, recorded read -- see tables).
         self._packages: dict[str, tuple[str, ...]] = {}
+        self._names: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
         self._lineage: dict[str, tuple[list[str], bool]] = {}
         self._types: dict[tuple, Meaning] = {}
         self._fqn: dict[str, tuple[str, tuple[str, ...]]] = {}
@@ -183,20 +179,29 @@ class JvmResolver:
     # --- the namespace ----------------------------------------------------------
 
     def package_files(self, package: str) -> tuple[str, ...]:
+        """The files of a package, recorded as a read of its membership: only
+        for "is this a first-party package at all" (see _global)."""
         if package not in self._packages:
             self.t.probe(languages.PACKAGE_DEP + package)
-            self._packages[package] = tuple(sorted(self.source.package_files(package)))
+            self._packages[package] = tuple(self.source.package_files(package))
         return self._packages[package]
 
+    def _by_name(self, package: str, name: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        """(top-level definitions, Kotlin facade files) the package calls
+        `name` -- several when build flavors each define it -- recorded as a
+        read of that one name in that package, never of every file in it."""
+        key = languages.name_key(package, name)
+        hit = self._names.get(key)
+        if hit is None:
+            self.t.probe(key)
+            hit = self._names[key] = (self.source.top_level(package, name), self.source.facades(package, name))
+        return hit
+
     def _top_level(self, package: str, name: str) -> tuple[str, ...]:
-        """The definitions called `name` at the top of the package's files --
-        several when build flavors each define it."""
-        return tuple(q for p in self.package_files(package) if (q := self.members[_module(p)].get(name)))
+        return self._by_name(package, name)[0]
 
     def _facades(self, package: str, name: str) -> tuple[str, ...]:
-        """Kotlin files of the package that Java sees as the class `name`."""
-        return tuple(p for p in self.package_files(package)
-                     if any(e.local == name for e in self.exports.get(p) or ()))
+        return self._by_name(package, name)[1]
 
     def fqn(self, dotted: str) -> tuple[str, tuple[str, ...]]:
         """('symbol', qnames) | ('facade', paths) | ('', ()) for a fully
@@ -206,7 +211,9 @@ class JvmResolver:
             return self._fqn[dotted]
         parts = [p for p in dotted.split(".") if p]
         found: tuple[str, tuple[str, ...]] = ("", ())
-        for i in range(len(parts) - 1, -1, -1):
+        # longest package first; the default package only for a bare name --
+        # `a.b.C` meaning a default-package class `a` is not written
+        for i in range(len(parts) - 1, 0 if len(parts) > 1 else -1, -1):
             package, rest = ".".join(parts[:i]), parts[i:]
             tops = self._top_level(package, rest[0])
             for name in rest[1:]:
@@ -380,10 +387,13 @@ class JvmResolver:
         """What a simple name used in `scope` means (a value or a type)."""
         fns, types = self._enclosing(scope)
         for s in fns:
-            for h in self.hints[s].get(name, ()):
+            hints = self.hints[s].get(name, ())
+            for h in hints:
                 m = self._hint_type(h, s, path, depth + 1)
                 if m[0]:
                     return m
+            if hints:                                # a local of a type we cannot tell: it still hides
+                return _UNKNOWN                      # any field or property of that name
             q = self.members[s].get(name)
             if q:
                 return self._meaning_of((q,), "scope")
@@ -537,6 +547,10 @@ class JvmResolver:
                     break
             if not m[0] and types:
                 m = ("instance", (types[0],), "self", self.defs[types[0]].name)
+        elif head.startswith("this@"):                # Kotlin's labelled `this`: the enclosing type named so
+            label = head[5:]
+            owner = next((k for k in types if self.defs[k].name == label), None)
+            m = ("instance", (owner,), "self", label) if owner else _UNKNOWN
         elif head.startswith("new "):
             m = self.type_of_type(head[4:].replace("(...)", ""), scope, path)
             m = ("instance", m[1], "local-type", m[3]) if m[0] == "instance" else m
@@ -556,9 +570,16 @@ class JvmResolver:
                     if m[0]:
                         steps = [steps[i - 1]] + steps[i:]
                         break
-        for step in steps[1:]:
+            if (not m[0] and len(steps) > 1 and re.fullmatch(r"[a-z_]\w*", head)
+                    and not self._declared(head, scope, path)):
+                # `android.util.Log.d(..)`: lower-case segments, then a type, none of it ours
+                first = next((i for i, s in enumerate(steps) if s[:1].isupper()), None)
+                if first is not None and all(re.fullmatch(r"[a-z_]\w*", s) for s in steps[:first]):
+                    return _ext(steps[first]) if first == len(steps) - 1 else _ext()
+        for i, step in enumerate(steps[1:], 1):
             if not m[0] or m[0] == "external":
-                break
+                # the chain left the graph with steps to go: what they yield is not the type named so far
+                return _ext() if m[0] == "external" and i < len(steps) else m
             if step.endswith("(...)"):
                 name = re.sub(r"<[^>]*>", "", step[:-5])           # `<T>emptyList(...)`
                 targets, _tier, external = self._call_on(m, name, scope, path, depth)
@@ -633,8 +654,8 @@ class JvmResolver:
         -- several in reach -- the one whose receiver type the receiver is
         named after (`intent.x()` -> the extension on Intent). A name every
         receiver has is never matched this way."""
-        if name in JVM_ANY_MEMBERS:
-            return ()
+        if name in JVM_ANY_MEMBERS or "(" in receiver:
+            return ()                                # nor on the result of a call chain: nothing is known of it
         found = self._extensions(name, scope, path)
         if len(found) == 1:
             return (found[0][0],)
@@ -676,11 +697,14 @@ class JvmResolver:
     def _call_on(self, m: Meaning, name: str, scope: str, path: str, depth: int, receiver: str = ""
                  ) -> tuple[tuple[str, ...], str | None, bool]:
         """(targets, tier, external) of `x.name(...)` for x meaning `m`;
-        `receiver` is x as written, when it is known."""
+        `receiver` is x as written, when it is known. Extension functions
+        only from Kotlin: Java calls one as a static member of its facade,
+        never with receiver syntax."""
         kind, targets, tier = m[0], m[1], m[2]
+        kotlin = path.endswith(".kt")
         if kind is None and receiver:
-            ext = self._extension_of_unknown(name, receiver, scope, path)
-            return (ext, "extension", False) if ext else ((), None, False)
+            ext = self._extension_of_unknown(name, receiver, scope, path) if kotlin else ()
+            return (ext, "extension-guess", False) if ext else ((), None, False)
         if kind == "facade":
             found = tuple(q for p in targets if (q := self.members[_module(p)].get(name)))
             return (found, "import", False) if found else ((), None, False)
@@ -688,17 +712,21 @@ class JvmResolver:
             found = self._static_member(targets, name) if kind == "class" else self._find_member(targets, name)[0]
             if found:
                 return found, ("class-attr" if kind == "class" else (tier or "annotation")), False
-            ext = self._extension(name, self._receiver_names(m), scope, path)
+            ext = self._extension(name, self._receiver_names(m), scope, path) if kotlin else ()
             if ext:
                 return ext, "extension", False
             _, external = self._find_member(targets, name)
             return (), None, external or name in JVM_ANY_MEMBERS
         if kind == "external":
             # a library type: an extension on it by its name -- or, the name
-            # lost on the way (`event.intent.extras`), as for an unknown receiver
-            ext = (self._extension(name, self._receiver_names(m), scope, path) if m[3]
-                   else self._extension_of_unknown(name, receiver, scope, path) if receiver else ())
-            return (ext, "extension", False) if ext else ((), None, True)
+            # lost on the way (`event.intent.extras`), a guess as for an unknown receiver
+            if not kotlin:
+                return (), None, True
+            if m[3]:
+                ext = self._extension(name, self._receiver_names(m), scope, path)
+                return (ext, "extension", False) if ext else ((), None, True)
+            ext = self._extension_of_unknown(name, receiver, scope, path) if receiver else ()
+            return (ext, "extension-guess", False) if ext else ((), None, True)
         return (), None, False
 
     def _bare(self, name: str, scope: str, path: str, depth: int, implicit: str | None = None
@@ -765,14 +793,28 @@ class JvmResolver:
             return (), None, True
         return (), None, external or name in JVM_ANY_MEMBERS
 
+    def _declared(self, name: str, scope: str, path: str) -> bool:
+        """`name` is a local, a parameter, a field or a property where it is
+        used -- a value, whatever its type -- rather than the first segment of
+        a package name."""
+        fns, types = self._enclosing(scope)
+        if any(self.hints[s].get(name) for s in fns + [_module(path)]):
+            return True
+        return any(self.hints[c].get(f"this.{name}") or self.hints[c].get(name) or self.members[c].get(name)
+                   for k in types for c in self.lineage(k)[0])
+
+    def _extension_receiver(self, scope: str) -> bool:
+        """Some enclosing function is an extension: `this` is its receiver."""
+        return any(self.hints[s].get("this") for s in self._enclosing(scope)[0])
+
     def resolve_call(self, c: CallSite, path: str) -> tuple[tuple[str, ...], str | None, bool]:
         if c.receiver is None:
             return self._bare(c.callee, c.caller, path, 0, c.implicit)
-        if c.receiver == "this" and c.klass is None:
+        if c.receiver == "this" and c.klass is None and not self._extension_receiver(c.caller):
             return (), None, False                   # an anonymous class's own method
         if c.receiver == "super":
             _fns, types = self._enclosing(c.caller)
-            if not types:
+            if not types or c.klass is None:         # in an anonymous class: ITS supertype, not known here
                 return (), None, False
             order, external = self.lineage(types[0])
             for ancestor in order[1:]:               # the nearest declaration above the class, alone
@@ -780,6 +822,10 @@ class JvmResolver:
                 if q:
                     return (q,), "self", False
             return (), None, external
+        if (re.fullmatch(r"[a-z_]\w*(\.[a-z_]\w*)+", c.receiver) and c.callee[:1].isupper()
+                and not self.fqn(f"{c.receiver}.{c.callee}")[0]
+                and not self._declared(c.receiver.split(".")[0], c.caller, path)):
+            return (), None, True                    # `new java.util.ArrayList<>()`: a platform class by package
         return self._call_on(self.type_of_expr(c.receiver, c.caller, path), c.callee, c.caller, path, 0,
                              receiver=c.receiver)
 
@@ -807,7 +853,7 @@ class JvmResolver:
         for path in (self.source.paths() if targets is None else targets):
             f = self.source.facts(path)
             self.t.begin(path)
-            for cache in (self._packages, self._lineage, self._types, self._fqn):
+            for cache in (self._packages, self._names, self._lineage, self._types, self._fqn):
                 cache.clear()
             self._resolve_file(path, f, edges, unresolved)
             self.file_deps[path] = (frozenset(self.t.deps), frozenset(self.t.names))
@@ -819,7 +865,8 @@ class JvmResolver:
             if b.attr == "*" or not b.module:
                 continue
             kind, targets = self.fqn(f"{b.module}.{b.attr}")
-            for dst in (targets if kind == "facade" else tuple(_file(q) for q in targets)):
+            files = targets if kind == "facade" else tuple(dict.fromkeys(_file(q) for q in targets))
+            for dst in self._visible(path, files):   # an import in gplay reaches gplay's variant only
                 if dst != path and dst not in seen:
                     seen.add(dst)
                     edges.append(Edge(_module(path), _module(dst), "IMPORTS", "import", None, path, 0))

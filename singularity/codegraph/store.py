@@ -37,8 +37,10 @@ from ..platform import proc
 # must not call a function handed over as a value dead), file communities with
 # stable labels (`arch`), `nodes.bases`.
 # 5: the `v1_*` views `mb code sql` reads (P5), and `views_version` in meta.
-# 6: `files.package`, a JVM file's package (CODE-GRAPH D3). An update finds the
-# files of a package by it instead of decoding every stored facts blob.
+# 6: `files.package` and `files.facade`, a JVM file's package and the class
+# name Java sees its Kotlin top level through (CODE-GRAPH D3): an update
+# answers "what does package P define as N" from them and `nodes`, without
+# decoding a stored facts blob.
 SCHEMA_VERSION = 6
 _LOCK_WAIT_SECONDS = 5.0
 # A writer that finds another writer busy polls instead of sleeping in
@@ -52,7 +54,7 @@ CREATE TABLE meta(k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE files(
     id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE, lang TEXT NOT NULL,
     size INTEGER NOT NULL, mtime_ns INTEGER NOT NULL, content_hash TEXT NOT NULL,
-    parse_status TEXT NOT NULL, is_test INTEGER NOT NULL, package TEXT);
+    parse_status TEXT NOT NULL, is_test INTEGER NOT NULL, package TEXT, facade TEXT);
 CREATE TABLE nodes(
     id INTEGER PRIMARY KEY, qname TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
     kind TEXT NOT NULL, file_id INTEGER NOT NULL, parent TEXT, spans TEXT NOT NULL,
@@ -92,6 +94,7 @@ CREATE INDEX lookups_name ON lookups(name);
 CREATE INDEX lookups_file ON lookups(file_id);
 CREATE INDEX communities_by ON communities(community);
 CREATE INDEX files_package ON files(package);
+CREATE INDEX nodes_top ON nodes(name) WHERE parent IS NULL;
 """
 
 # What `mb code sql` reads (CODE-GRAPH D1, P5): plain views over the tables,
@@ -273,9 +276,10 @@ def write_generation(cfg: Config, unit_key: str, *, meta: dict[str, Any],
                             [(k, json.dumps(v)) for k, v in {**meta, "schema_version": SCHEMA_VERSION,
                                                              "views_version": VIEWS_VERSION}.items()])
             con.executemany(
-                "INSERT INTO files(id, path, lang, size, mtime_ns, content_hash, parse_status, is_test, package)"
-                " VALUES (:id, :path, :lang, :size, :mtime_ns, :content_hash, :parse_status, :is_test, :package)",
-                [{"package": None, **f} for f in files])
+                "INSERT INTO files(id, path, lang, size, mtime_ns, content_hash, parse_status, is_test, package,"
+                " facade) VALUES (:id, :path, :lang, :size, :mtime_ns, :content_hash, :parse_status, :is_test,"
+                " :package, :facade)",
+                [{"package": None, "facade": None, **f} for f in files])
             insert_nodes(con, nodes)
             con.executemany("INSERT INTO edges(src, dst, kind, tier, callee, file_id, line)"
                             " VALUES (?, ?, ?, ?, ?, ?, ?)", edges)

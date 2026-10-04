@@ -33,7 +33,7 @@ from typing import Any
 
 from ..config import Config
 from ..search import code_chunking
-from . import scope
+from . import languages, scope
 
 WATCHED = scope._MANIFEST            # package.json / tsconfig*.json, by basename
 
@@ -65,7 +65,7 @@ def scope_fingerprint(cfg: Config) -> str:
         list(scope.PRIVACY_PATTERNS), sorted(scope.CODE_SUFFIXES), code_chunking.MAX_FILE_BYTES,
         scope._TEST_NAME.pattern, sorted(scope._TEST_DIRS),
         sorted(code_chunking.MAX_FILE_BYTES_BY_SUFFIX.items()), scope._JVM_TEST_NAME.pattern,
-        list(scope._TEST_DIR_PREFIXES)]).encode()).hexdigest()[:16]
+        languages._TEST_SET.pattern]).encode()).hexdigest()[:16]
 
 
 class GitFailed(RuntimeError):

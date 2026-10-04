@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -60,15 +61,66 @@ def family(lang: str) -> Family:
     return _BY_LANG[lang]
 
 
-# A resolver that listed a package's files read this pseudo-path (see tables);
-# a file entering or leaving the package changes that answer (see update).
+# Pseudo-paths a JVM resolution reads (see tables), and a file's presence or
+# content answers: `jvm-package:<p>` -- whether and which files declare
+# package p -- and `jvm-name:<p>:<n>` -- which top-level definitions (or
+# Kotlin facades) package p calls n. A resolver asks the second for every
+# name it looks up in a package, so an edit re-resolves only the readers of
+# a name that entered or left the package, never every reader of it (see
+# update); the first only for "is this a first-party package at all".
 PACKAGE_DEP = "jvm-package:"
+NAME_DEP = "jvm-name:"
 
 
 def membership(lang: str, package: str | None) -> set[str]:
-    """The pseudo-paths a file's presence answers for: its package's, in a
+    """The pseudo-path a file's presence in its package answers for, in a
     family that resolves through packages; nothing otherwise."""
     return {PACKAGE_DEP + (package or "")} if family(lang).packages else set()
+
+
+def name_key(package: str | None, name: str) -> str:
+    return f"{NAME_DEP}{package or ''}:{name}"
+
+
+def name_keys(lang: str, package: str | None, names) -> set[str]:
+    """The pseudo-paths of `names` in the package, in a family that resolves
+    through packages; nothing otherwise."""
+    return {name_key(package, n) for n in names} if family(lang).packages else set()
+
+
+def facade(facts: Any) -> str | None:
+    """The class Java calls a Kotlin file's top level through (extract_kotlin
+    records it as an export from module ''), or None."""
+    if not family(facts.lang).packages:
+        return None
+    return next((e.local for e in facts.exports if not e.module and e.attr is None), None)
+
+
+def top_names(facts: Any) -> set[str]:
+    """What a JVM file answers for in its package: the names of its top-level
+    definitions, and its facade."""
+    names = {d.name for d in facts.definitions if d.parent is None}
+    fac = facade(facts)
+    return names | {fac} if fac else names
+
+
+# Gradle's source sets: `src/<set>/java|kotlin/...`. A test set is `test`,
+# `androidTest`, `testFixtures` or `sharedTest`, alone or with a flavor or
+# build type after it (`androidTestGplay`, `testDebug`).
+_TEST_SET = re.compile(r"(?:androidTest|testFixtures|sharedTest|test)(?:[A-Z]\w*)?")
+
+
+def source_set(path: str) -> str | None:
+    """`app/src/gplay/java/...` -> `gplay`; None outside a `src/<set>/` layout."""
+    parts = path.split("/")
+    for i, part in enumerate(parts[:-2]):
+        if part == "src":
+            return parts[i + 1]
+    return None
+
+
+def is_test_set(source: str) -> bool:
+    return bool(_TEST_SET.fullmatch(source))
 
 
 def _suffix(path: str) -> str:

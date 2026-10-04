@@ -88,7 +88,8 @@ def cmd_code(cfg, args) -> int:
 
 def _build(cfg, args) -> int:
     try:
-        from ..codegraph import build, scope
+        from ..codegraph import build, languages, scope
+        languages.load_extractors()  # every grammar, now: a missing one fails here, not mid-build
     except ImportError as exc:       # the parser wheels are not in this interpreter
         print(f"[mb] cannot build here: {exc}. Install the parser into {sys.executable}:\n"
               "  python -m pip install --require-hashes -r requirements-graph.txt", file=sys.stderr)

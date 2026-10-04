@@ -99,9 +99,34 @@ def _written(cfg: Config, key: str) -> tuple:
 
 @pytest.mark.parametrize("seed", range(1, 9))
 def test_an_updated_graph_equals_a_full_build(seed, tmp_path):
-    """A slice of the oracle: random Python and TypeScript edits, half in git."""
+    """A slice of the oracle: random Python, TypeScript, Java and Kotlin edits, half in git."""
     result = run_sequence(seed, 4, git=seed % 2 == 0, base=tmp_path)
     assert result["equal"], json.dumps(result, indent=1)[:3000]
+
+
+_BIG = "app/src/main/java/com/ex/big"
+BIG_PACKAGE = {f"{_BIG}/C{i}.java": f"package com.ex.big;\npublic class C{i} {{\n    public void m() {{}}\n}}\n"
+               for i in range(30)}
+BIG_PACKAGE["app/src/main/java/com/ex/use/User.java"] = (
+    "package com.ex.use;\nimport com.ex.big.C1;\npublic class User {\n    void go(C1 c) { c.m(); }\n}\n")
+
+
+def test_a_jvm_edit_re_resolves_the_readers_of_what_moved_not_the_whole_package(tmp_path):
+    """User looked up ONE name in a 30-file package. An edit elsewhere in the
+    package that adds or drops no top-level name is nothing to User (it was
+    re-resolved -- 8.5 s for one file on a real app -- when a lookup read every
+    file of the package); a second C1, in a flavor, moves User's answer."""
+    cfg, unit, root = _unit(tmp_path, BIG_PACKAGE)
+    c29 = root / _BIG / "C29.java"
+    c29.write_text(c29.read_text(encoding="utf-8").replace("m() {}", "m() { m(); }"), encoding="utf-8")
+    done = update.update_unit(cfg, unit.key)
+    assert done["mode"] == "update" and done["resolved"] == 1                 # C29 alone
+    flavor = root / "app/src/gplay/java/com/ex/big/C1.java"
+    flavor.parent.mkdir(parents=True)
+    flavor.write_text(BIG_PACKAGE[f"{_BIG}/C1.java"], encoding="utf-8")
+    done = update.update_unit(cfg, unit.key)
+    assert done["mode"] == "update" and done["resolved"] == 2                 # the new C1, and User
+    assert dump(cfg, unit.key) == _full(tmp_path, cfg, unit.key)
 
 
 def test_an_unchanged_tree_is_not_written_and_no_watcher_starts(tmp_path):

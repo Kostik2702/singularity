@@ -36,6 +36,7 @@ _TYPE_DECLS = {"class_declaration": "class", "interface_declaration": "interface
 _REF_KINDS = {"identifier", "type_identifier"}
 _IDENT_STRING = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
 _NO_ANON: frozenset[str] = frozenset()
+_BOM = "﻿".encode()
 
 
 def _text(node: ts.Node | None) -> str:
@@ -176,6 +177,7 @@ class _Facts:
 
 
 def extract(path: str, src: bytes) -> FileFacts:
+    src = src.removeprefix(_BOM)                     # a byte-order mark would read as a syntax error
     root = _PARSER.parse(src).root_node
     f = _Facts(path, src)
     # (node, caller scope, definition prefix, enclosing class, names an enclosing anonymous body declares)
@@ -304,6 +306,16 @@ def extract(path: str, src: bytes) -> FileFacts:
             typ, name = node.child_by_field_name("right"), node.child_by_field_name("name")
             if typ is not None and name is not None:
                 f.hints.append(TypeHint(scope, _text(name), _type_text(typ), "annotation"))
+
+        elif kind == "lambda_expression":            # `x -> x.save()`: `x` hides a field called x
+            params = node.child_by_field_name("parameters")
+            for p in ([params] if params is not None and params.type == "identifier"
+                      else params.named_children if params is not None else []):
+                if p.type == "identifier":
+                    f.hints.append(TypeHint(scope, _text(p), "", "annotation"))
+                elif p.type == "formal_parameter" and (pname := p.child_by_field_name("name")) is not None:
+                    f.hints.append(TypeHint(scope, _text(pname), _type_text(p.child_by_field_name("type")),
+                                            "annotation"))
 
         elif kind == "assignment_expression":
             left, right = node.child_by_field_name("left"), node.child_by_field_name("right")

@@ -45,7 +45,7 @@ from . import store
 # per-file table's first column is a file id, compared as its path, and the
 # rows of a stale file are left out.
 TABLES: dict[str, tuple[str, bool]] = {
-    "files": ("SELECT path, lang, content_hash, parse_status, is_test, package FROM files", False),
+    "files": ("SELECT path, lang, content_hash, parse_status, is_test, package, facade FROM files", False),
     "nodes": ("SELECT file_id, qname, name, kind, parent, spans, signature, doc1, decorators,"
               " exported, local, bases FROM nodes", True),
     "name_refs": ("SELECT lang, name, files FROM name_refs", False),

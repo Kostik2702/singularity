@@ -40,6 +40,7 @@ _TYPES = {"user_type", "nullable_type", "function_type", "parenthesized_type", "
 _BODIES = {"class_body", "enum_class_body", "function_body", "block"}
 _IDENT_STRING = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
 _NO_ANON: frozenset[str] = frozenset()
+_BOM = "﻿".encode()
 
 
 def _text(node: ts.Node | None) -> str:
@@ -112,9 +113,9 @@ def _type_text(node: ts.Node | None) -> str:
 
 def _receiver_text(node: ts.Node) -> str:
     """A call's receiver as the resolver reads it: `a?.b` and `a!!.b` are
-    `a.b`, `this@Outer` is `this`."""
+    `a.b`, `super@Outer` is `super`; `this@Outer` stays, naming its class."""
     text = _flat(node).replace("?.", ".").replace("!!", "")
-    return re.sub(r"\b(this|super)@\w+", r"\1", text)
+    return re.sub(r"\bsuper@\w+", "super", text)
 
 
 def _is_reference(nav: ts.Node) -> bool:
@@ -141,7 +142,7 @@ _NO_CTX = _Ctx()
 
 def _substitute(text: str | None, subst: tuple[tuple[str, str], ...]) -> str | None:
     """`it.pause()` inside `op.let { ... }` is `op.pause()`."""
-    if not text or not subst:
+    if not text or not subst or text.startswith("this@"):
         return text
     m = re.match(r"[A-Za-z_]\w*", text)
     if m:
@@ -155,7 +156,7 @@ def facade_name(path: str, jvm_name: str | None) -> str:
     """The class Java calls a Kotlin file's top-level functions through."""
     if jvm_name:
         return jvm_name
-    stem = os.path.splitext(os.path.basename(path))[0]
+    stem = re.sub(r"\W", "_", os.path.splitext(os.path.basename(path))[0])      # as kotlinc: `my-utils` -> My_utils
     return (stem[:1].upper() + stem[1:]) + "Kt"
 
 
@@ -277,6 +278,7 @@ def _initializer(node: ts.Node) -> ts.Node | None:
 
 
 def extract(path: str, src: bytes) -> FileFacts:
+    src = src.removeprefix(_BOM)                     # a byte-order mark would read as a syntax error
     root = _PARSER.parse(src).root_node
     f = _Facts(path, src)
     # (node, caller scope, definition prefix, enclosing class, names an enclosing object expression
@@ -446,7 +448,7 @@ def extract(path: str, src: bytes) -> FileFacts:
                 name, typ = _child(v, "identifier"), _child(v, *_TYPES)
                 if name is not None:
                     names.append(_text(name))
-                if name is not None and typ is not None:
+                    # untyped too: a lambda's parameter hides a property of its name
                     f.hints.append(TypeHint(scope, _text(name), _type_text(typ), "annotation"))
             params = names or ["it"]              # a parameter shadows every outer binding of its name
             subst = tuple((n, r) for n, r in ctx.subst if n not in params)

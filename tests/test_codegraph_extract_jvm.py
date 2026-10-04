@@ -195,6 +195,15 @@ def test_kotlin_property_hints_and_bean_spellings():
     assert {"getName", "isName", "setName"} <= set(f.refs)           # `user.name` may be a Java getter
 
 
+def test_a_facade_is_named_as_kotlinc_names_it_and_a_bom_is_not_a_syntax_error():
+    assert extract_kotlin.facade_name("app/my-utils.kt", None) == "My_utilsKt"
+    assert extract_kotlin.facade_name("app/x.kt", "Named") == "Named"
+    bom = "﻿".encode()
+    kt = _kotlin("A.kt", bom + b"package a\n\nclass A\n")
+    java = extract_java.extract("A.java", bom + b"package a;\n\nclass A {}\n")
+    assert not kt.degraded and not java.degraded and kt.package == java.package == "a"
+
+
 def test_implicit_receivers_survive_the_stored_form():
     f = _kotlin()
     back = decode_facts(encode_facts(f))

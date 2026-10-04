@@ -106,8 +106,16 @@ def test_java_and_kotlin_join_the_universe_with_their_own_ceiling_and_test_names
     assert "src/main/java/a/Big.java" in files and "src/main/java/a/big_data.py" not in files
     assert "build.gradle.kts" not in files                                  # ASSUMED D3: build scripts are out
     tests = {p for p, f in files.items() if f.is_test}
-    assert tests == {"src/main/java/a/RepoTest.kt", "src/main/java/a/SyncIT.kt",
-                     "src/androidTestGplay/java/a/Ui.kt", "src/test/java/a/Unit.java"}
+    # in a Gradle layout the SOURCE SET decides: RepoTest.kt in src/main is production code
+    assert tests == {"src/androidTestGplay/java/a/Ui.kt", "src/test/java/a/Unit.java"}
+
+
+def test_jvm_test_sets_and_names():
+    assert scope.is_test_path("app/src/testGplay/java/a/B.kt") and scope.is_test_path("app/src/sharedTest/java/B.kt")
+    assert scope.is_test_path("app/src/testFixtures/kotlin/B.kt")
+    assert not scope.is_test_path("app/src/main/java/a/ScreenshotTest.java")    # nextcloud keeps one in main
+    assert not scope.is_test_path("app/src/testing/java/B.kt")                  # `test` + lower case: not a set
+    assert scope.is_test_path("lib/RepoTest.java") and not scope.is_test_path("lib/Edit.kt")   # no layout: names
 
 
 def test_a_nested_repository_belongs_to_itself_not_to_its_parent(tmp_path, project):

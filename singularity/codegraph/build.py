@@ -151,7 +151,8 @@ def build_unit(cfg: Config, unit: scope.Unit, workers: int | None = None,
                               "mtime_ns": store.recorded_mtime(entry.mtime_ns, read_done),
                               "content_hash": digest,
                               "parse_status": "partial" if facts.degraded else "ok",
-                              "is_test": int(entry.is_test), "package": facts.package})
+                              "is_test": int(entry.is_test), "package": facts.package,
+                              "facade": languages.facade(facts)})
             facts_rows.append((fid, blob))
         after = fresh.git_state(unit.root) if unit.is_git else None
         timings["extract"] = time.perf_counter() - t

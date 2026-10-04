@@ -102,11 +102,9 @@ def _source_sets(con) -> list[str]:
     """`<module>/src/<set>` of every JVM file: where its manifest and res/ live."""
     out = set()
     for (path,) in con.execute("SELECT path FROM files WHERE lang = 'jvm'"):
-        parts = path.split("/")
-        for i, part in enumerate(parts[:-2]):
-            if part == "src":
-                out.add("/".join(parts[:i + 2]))
-                break
+        if languages.source_set(path) is not None:
+            parts = path.split("/")
+            out.add("/".join(parts[:parts.index("src") + 2]))
     return sorted(out)
 
 
@@ -166,15 +164,16 @@ def _jvm_entries(con, root: Path) -> tuple[set[str], set[str]]:
     if con.execute("SELECT 1 FROM files WHERE lang = 'jvm' LIMIT 1").fetchone() is None:
         return set(), set()
     names, handlers = android_names(con, root)
+    types = languages.family("jvm").containers
     entries: set[str] = set()
     for qname, kind, signature, package in con.execute(
             "SELECT n.qname, n.kind, n.signature, f.package FROM nodes n JOIN files f ON f.id = n.file_id"
-            " WHERE f.lang = 'jvm' AND (n.kind IN ('class', 'interface', 'enum', 'object') OR n.name = 'main')"):
+            f" WHERE f.lang = 'jvm' AND (n.kind IN ({','.join('?' * len(types))}) OR n.name = 'main')", types):
         local = qname.split("::", 1)[1]
         if local == "main" or (local.endswith(".main") and "static" in signature):
             entries.add(qname)                       # Kotlin's top-level main, Java's static main
             continue
-        if kind not in ("class", "interface", "enum", "object"):
+        if kind not in types:
             continue
         fqn = f"{package}.{local}" if package else local
         if any(fqn == n or fqn.endswith("." + n) for n in names):

@@ -220,13 +220,70 @@ def test_several_definitions_in_one_source_set_are_not_variants():
     assert ("Host.go", "twin") in {(u.src.split("::")[1], u.name) for u in unresolved}
 
 
-def test_listing_a_package_is_recorded_as_a_read_of_its_pseudo_path():
-    """An update must re-resolve Screen when a file enters or leaves a package
-    it listed (see update): the listing is a dependency like any file read."""
+def test_a_name_looked_up_in_a_package_is_recorded_as_a_read_of_that_name_only():
+    """An update must re-resolve Screen when a file brings or takes away a
+    name it looked up (see update) -- and only then: the read is of the name
+    in its package, never of every file of the package, and a dotted name
+    never probes the default package."""
     _, _, _, resolver = _resolved()
     deps, _names = resolver.file_deps[f"{M}/ui/Screen.java"]
-    assert languages.PACKAGE_DEP + "com.ex.data" in deps
-    assert languages.PACKAGE_DEP + "com.ex.util" in deps
+    assert {languages.name_key("com.ex.data", "Repo"), languages.name_key("com.ex.util", "PushUtils")} <= deps
+    assert languages.PACKAGE_DEP not in deps                         # the default package
+    assert not any(d.startswith(languages.NAME_DEP + ":") for d in deps)
+    assert f"{M}/ext/TwinA.kt" not in deps                          # a file of a package it never read
+
+
+R = "app/src/main/java/com/rv"
+REVIEW = {
+    f"{R}/ViewExt.kt": "package com.rv\nfun View.hide() {}\nfun Intent.handle() {}\n",
+    f"{R}/Store.kt": "package com.rv\nclass Store {\n    fun save() {}\n}\nfun Store.tidy() {\n    this.save()\n}\n",
+    f"{R}/Base.java": "package com.rv;\npublic class Base {\n    public void run() {}\n}\n",
+    f"{R}/Bar.java": (
+        "package com.rv;\npublic class Bar extends Base {\n"
+        "    void go() {\n"
+        "        getSupportActionBar().hide();\n"
+        "        new Runnable() { public void run() { super.run(); } };\n"
+        "        new java.util.ArrayList<String>();\n"
+        "        android.util.Log.d(\"a\", \"b\");\n"
+        "    }\n}\n"),
+    f"{R}/Screen.kt": (
+        "package com.rv\n"
+        "class Screen(private val store: Store) {\n"
+        "    fun finish() {}\n"
+        "    fun go(repo: Store, intent: Intent, x: Any) {\n"
+        "        supportActionBar?.hide()\n"
+        "        repo.apply { this@Screen.finish() }\n"
+        "        val store = x\n"
+        "        store.save()\n"
+        "        intent.getStringExtra(\"k\").handle()\n"
+        "    }\n}\n"),
+}
+
+
+def _review():
+    facts = {p: languages.extract(p, s.encode())[1] for p, s in REVIEW.items()}
+    edges, unresolved = JvmResolver(facts).resolve()
+    calls = {(e.src.split("::")[1], e.callee): (e.dst.split("::")[1], e.tier) for e in edges if e.kind == "CALLS"}
+    return calls, {(u.src.split("::")[1], u.name) for u in unresolved}
+
+
+def test_an_extension_on_an_unknown_receiver_is_a_named_guess_and_never_from_java():
+    """Java cannot call an extension with receiver syntax; Kotlin reading an
+    external getter as a property (`supportActionBar`) leaves the receiver
+    unknown, and the one `hide` in reach is a guess -- said so by its tier."""
+    calls, _ = _review()
+    assert ("Bar.go", "hide") not in calls
+    assert calls[("Screen.go", "hide")] == ("hide", "extension-guess")
+
+
+def test_review_edge_cases_of_this_super_and_the_platform():
+    calls, unresolved = _review()
+    assert ("Bar.go", "run") not in calls                        # super in an anonymous class: ITS base
+    assert calls[("tidy", "save")][0] == "Store.save"           # `this` in a Kotlin extension function
+    assert calls[("Screen.go", "finish")][0] == "Screen.finish" # this@Screen inside repo.apply { }
+    assert ("Screen.go", "save") not in calls                    # a local `store` hides the property
+    assert ("Screen.go", "handle") not in calls                  # the chain left Intent: not Intent.handle
+    assert not {("Bar.go", "ArrayList"), ("Bar.go", "d")} & unresolved       # platform, by package
 
 
 def test_source_sets_are_read_from_the_android_layout():

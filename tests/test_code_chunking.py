@@ -124,6 +124,16 @@ def test_kotlin_functions_classes_objects_and_extensions_become_chunks(tmp_path)
     assert by_name["register"]["kind"] == "function"
 
 
+def test_java_generic_returns_constructors_and_kotlin_fun_interfaces_are_boundaries():
+    java = ["public class Repo {", "    public Repo(Client c) {", "    }",
+            "    public Map<String, List<Item>> load(int page) {", "    }", "    Repo(int x) {"]
+    got = {(kind, name) for _i, kind, name in code_chunking._boundaries(java, "java")}
+    assert {("class", "Repo"), ("constructor", "Repo"), ("method", "load")} <= got
+    assert len([g for g in got if g[0] == "constructor"]) == 1     # package-private ctor: not told from a call
+    kotlin = ["fun interface Callback {", "    fun call()", "}"]
+    assert ("interface", "Callback") in {(k, n) for _i, k, n in code_chunking._boundaries(kotlin, "kotlin")}
+
+
 def test_the_code_corpus_reads_java_and_kotlin_up_to_their_own_ceiling():
     """D3: Java and Kotlin join the corpus, with a 512 KB ceiling of their own
     (owner decision 2026-09-28); every other language keeps 100 KB."""

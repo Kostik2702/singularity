@@ -24,6 +24,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable
 from typing import Any, NamedTuple
 
+from . import languages
 from .model import Definition, FileFacts
 
 _EMPTY: dict = {}          # the answer for a scope with no entries; never written to
@@ -58,19 +59,41 @@ class MemorySource:
         containers = tuple(containers)
         by_name: dict[str, list[Candidate]] = defaultdict(list)
         by_package: dict[str, list[str]] = defaultdict(list)
-        for path, f in facts.items():
+        tops: dict[tuple[str, str], list[str]] = defaultdict(list)
+        facades: dict[tuple[str, str], list[str]] = defaultdict(list)
+        for path, f in sorted(facts.items()):
             defs = {d.qname: d for d in f.definitions}
             for d in f.definitions:
                 by_name[d.name].append(Candidate(d.qname, d.kind, is_local(defs, d.qname, containers),
                                                  path, path in self._tests))
-            by_package[f.package or ""].append(path)
+            if languages.family(f.lang).packages:
+                package = f.package or ""
+                by_package[package].append(path)
+                for d in f.definitions:
+                    if d.parent is None:
+                        tops[(package, d.name)].append(d.qname)
+                if (fac := languages.facade(f)) is not None:
+                    facades[(package, fac)].append(path)
         self._by_name = {k: tuple(v) for k, v in by_name.items()}
         self._by_package = {k: tuple(v) for k, v in by_package.items()}
+        self._tops = {k: tuple(v) for k, v in tops.items()}
+        self._facades = {k: tuple(v) for k, v in facades.items()}
+
+    # The JVM family finds a type through its package, not its file's path.
+    # '' is the default package.
 
     def package_files(self, package: str) -> tuple[str, ...]:
-        """The files declaring `package` ('' = the default package): the JVM
-        family finds a type through its package, not its file's path."""
+        """The files declaring `package`, sorted."""
         return self._by_package.get(package, ())
+
+    def top_level(self, package: str, name: str) -> tuple[str, ...]:
+        """Qnames of the top-level definitions called `name` in `package`'s
+        files, sorted by path: several when build flavors each define it."""
+        return self._tops.get((package, name), ())
+
+    def facades(self, package: str, name: str) -> tuple[str, ...]:
+        """The Kotlin files of `package` Java sees as the class `name`."""
+        return self._facades.get((package, name), ())
 
     def paths(self) -> list[str]:
         return list(self._facts)

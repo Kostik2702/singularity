@@ -166,7 +166,10 @@ _JAVA_BOUNDARY_RE = re.compile(
     r"^[ \t]*(?:@[\w.]+(?:\([^)]*\))?\s+)*"
     r"(?:(?:public|protected|private|static|final|abstract|sealed|non-sealed|strictfp|default|synchronized|"
     r"native)\s+)*"
-    r"(?:(class|interface|enum|record|@interface)\s+(\w+)|(?:<[^>]+>\s+)?([\w<>\[\],.?]+)\s+(\w+)\s*\()")
+    r"(?:(class|interface|enum|record|@interface)\s+(\w+)"
+    r"|(?:<[^()]+?>\s+)?([\w.]+(?:<[^()]*?>)?(?:\[\])*)\s+(\w+)\s*\("   # a method: `Map<K, List<V>> load(`
+    r"|(?<=[\s])([A-Z]\w*)\s*\()")                                        # a constructor, after a modifier
+_JAVA_VISIBILITY = re.compile(r"^[ \t]*(?:@[\w.]+(?:\([^)]*\))?\s+)*(?:public|protected|private)\s")
 # the first word of a statement, never a method's return type
 _JAVA_NOT_TYPES = frozenset({"return", "new", "throw", "else", "case", "yield", "if", "while", "for",
                              "switch", "catch", "do", "try", "synchronized", "assert"})
@@ -174,7 +177,7 @@ _KOTLIN_BOUNDARY_RE = re.compile(
     r"^[ \t]*(?:@[\w.:]+(?:\([^)]*\))?\s+)*"
     r"(?:(?:public|private|protected|internal|open|abstract|final|override|suspend|inline|operator|infix|"
     r"tailrec|external|data|sealed|enum|annotation|inner|value|expect|actual|companion)\s+)*"
-    r"(fun|class|interface|object)\s+(?:<[^>]+>\s*)?(?:[\w.<>?, ]+\.)?(\w+)")
+    r"(fun\s+interface|fun|class|interface|object)\s+(?:<[^>]+>\s*)?(?:[\w.<>?, ]+\.)?(\w+)")
 _DECORATOR_RE = re.compile(r"^[ \t]*@\w")
 _PY_COMMENT_RE = re.compile(r"^[ \t]*#")
 _TS_COMMENT_RE = re.compile(r"^[ \t]*(?://|/\*|\*)")
@@ -292,13 +295,17 @@ def _boundaries(lines: list[str], lang: str) -> list[tuple[int, str, str]]:
             m = _JAVA_BOUNDARY_RE.match(line)
             if m and m.group(1):
                 found.append((i, "interface" if m.group(1) == "@interface" else m.group(1), m.group(2)))
-            elif m and m.group(3) not in _JAVA_NOT_TYPES and m.group(4) not in _JAVA_NOT_TYPES:
+            elif m and m.group(4) and m.group(3) not in _JAVA_NOT_TYPES and m.group(4) not in _JAVA_NOT_TYPES:
                 found.append((i, "method", m.group(4)))
+            elif m and m.group(5) and _JAVA_VISIBILITY.match(line):
+                found.append((i, "constructor", m.group(5)))
             continue
         if lang == "kotlin":
             m = _KOTLIN_BOUNDARY_RE.match(line)
             if m:
-                found.append((i, "function" if m.group(1) == "fun" else m.group(1), m.group(2)))
+                keyword = m.group(1)
+                kind = "function" if keyword == "fun" else "interface" if keyword.startswith("fun") else keyword
+                found.append((i, kind, m.group(2)))
             continue
         m = _TS_BOUNDARY_RE.match(line)
         if m:

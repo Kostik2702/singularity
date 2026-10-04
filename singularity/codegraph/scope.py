@@ -31,15 +31,19 @@ from pathlib import Path
 
 from ..config import Config
 from ..search import code_chunking
+from . import languages
 
 CODE_SUFFIXES = frozenset(p.lstrip("*") for p in code_chunking.CODE_PATTERNS)
 PRIVACY_PATTERNS = ("*secret*", "*credential*")        # CODE-INDEX D5, layer two
 _TEST_NAME = re.compile(r"(^test_.*\.py$|.*_test\.py$|^conftest\.py$|.*\.(test|spec)\.[jt]sx?$|.*\.d\.ts$)",
                         re.IGNORECASE)
-# JUnit's and Android's naming, case-sensitive on purpose: `Edit.kt` is not an `IT`.
+# Java and Kotlin: in a Gradle layout the source set decides (`src/test/`,
+# `src/androidTestGplay/`, ... -- languages.is_test_set), so a production class
+# called `ScreenshotTest` in `src/main/` is not a test. Outside one, JUnit's
+# naming -- case-sensitive on purpose: `Edit.kt` is not an `IT`.
 _JVM_TEST_NAME = re.compile(r".*(Test|Tests|IT)\.(java|kt)$")
+_JVM_SUFFIXES = (".java", ".kt")
 _TEST_DIRS = {"tests", "test", "__tests__"}
-_TEST_DIR_PREFIXES = ("androidTest",)       # androidTest, androidTestGplay, ...: a flavor's instrumented tests
 
 
 class GraphError(RuntimeError):
@@ -314,8 +318,12 @@ def discover_units(cfg: Config) -> list[Unit]:
 
 def is_test_path(path: str) -> bool:
     parts = path.split("/")
-    return (bool(_TEST_NAME.match(parts[-1]) or _JVM_TEST_NAME.match(parts[-1]))
-            or any(p in _TEST_DIRS or p.startswith(_TEST_DIR_PREFIXES) for p in parts[:-1]))
+    if path.lower().endswith(_JVM_SUFFIXES):
+        source = languages.source_set(path)
+        if source is not None:
+            return languages.is_test_set(source)
+        return bool(_JVM_TEST_NAME.match(parts[-1])) or any(p in _TEST_DIRS for p in parts[:-1])
+    return bool(_TEST_NAME.match(parts[-1])) or any(p in _TEST_DIRS for p in parts[:-1])
 
 
 def _wanted(path: str, skip: frozenset[str], vendored: re.Pattern[str] | None,
