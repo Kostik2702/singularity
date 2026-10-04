@@ -108,9 +108,12 @@ def is_linked_worktree(path: Path) -> bool:
 
 
 def _git(root: Path, *args: str) -> str:
+    from ..platform.proc import NO_WINDOW
+
     try:
         done = subprocess.run(["git", "--no-optional-locks", "-C", str(root), *args],
-                              capture_output=True, text=True, encoding="utf-8", errors="replace")
+                              capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              creationflags=NO_WINDOW)
     except FileNotFoundError as exc:
         raise GraphError("git is not on PATH; git units cannot be read without it") from exc
     if done.returncode != 0:

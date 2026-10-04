@@ -16,6 +16,9 @@ LIFECYCLE_SCRIPTS = {"preinstall", "install", "postinstall", "prepare",
 HEAVY_ENGINES = {"three", "gsap", "@react-three/fiber", "@react-three/drei",
                  "motion", "framer-motion", "animejs"}
 NETWORK_ALLOWLIST = ("fonts.googleapis.com", "fonts.gstatic.com")
+# no console window per child (singularity.platform.proc.NO_WINDOW; the factory
+# imports nothing from the engine, so the expression is repeated)
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 _EVAL_RE = re.compile(r"\beval\s*\(|new\s+Function\s*\(")
 _NET_RE = re.compile(
@@ -168,7 +171,7 @@ def check_build(files: list[dict], workspace: Path) -> dict:
                 [exe, str(src), f"--loader:.{loader}={'jsx' if loader in ('js', 'jsx') else 'tsx'}",
                  "--outfile=" + str(workspace / "build" / (src.name + ".out.js"))],
                 capture_output=True, text=True, encoding="utf-8",
-                timeout=60, env=_scrubbed_env())
+                timeout=60, env=_scrubbed_env(), creationflags=_NO_WINDOW)
         except (subprocess.TimeoutExpired, OSError) as exc:
             return {"status": "unavailable", "why": f"esbuild run failed: {exc}"}
         if proc.returncode != 0:

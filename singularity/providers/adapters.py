@@ -85,8 +85,11 @@ def adapt_twentyfirst_cli(prov, queries, capabilities, ctx):
             continue
         cmd = [exe, "search", query, "--limit", str(min(per, 10)), "--json"]
         try:
+            # no console window per child (singularity.platform.proc.NO_WINDOW; the
+            # factory imports nothing from the engine, so the expression is repeated)
             proc = subprocess.run(cmd, capture_output=True, text=True,
-                                  encoding="utf-8", timeout=timeout)
+                                  encoding="utf-8", timeout=timeout,
+                                  creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         except (subprocess.TimeoutExpired, OSError):
             status = status or "unavailable:timeout"
             continue

@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .config import Config
 from .platform import current_os, scheduler
+from .platform.proc import NO_WINDOW
 
 MEMORY_FOLDERS = ["learnings/active", "learnings/archive", "decisions", "howto",
                   "incidents", "rules", "reference", "changelog", "templates", "_moc"]
@@ -80,7 +81,8 @@ def _run_shim(sh: str, shim: Path, cwd: str | None = None) -> tuple[int, str, st
     CWD-dependent (issue #16), so inheriting doctor's own directory made the
     verdict depend on where the user happened to stand."""
     proc = subprocess.run([sh, str(shim), "--version"],
-                          capture_output=True, text=True, timeout=60, cwd=cwd)
+                          capture_output=True, text=True, timeout=60, cwd=cwd,
+                          creationflags=NO_WINDOW)
     return proc.returncode, (proc.stdout or "").strip(), (proc.stderr or "").strip()
 
 
@@ -493,7 +495,7 @@ def wiki_loop_block(rep: Report, cfg: Config, fix: bool) -> None:
         try:
             proc = subprocess.run(
                 [git, "check-ignore", "-q", ".mb/sources"],
-                cwd=str(cfg.vault), capture_output=True, timeout=10)
+                cwd=str(cfg.vault), capture_output=True, timeout=10, creationflags=NO_WINDOW)
         except (OSError, subprocess.SubprocessError):
             rep.add("W3-sources-portability", "SKIP", "git check-ignore unavailable")
             return
@@ -1157,7 +1159,8 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
             return
         inside = subprocess.run([git, "-C", str(cfg.vault), "rev-parse",
                                  "--is-inside-work-tree"],
-                                capture_output=True, text=True, check=False)
+                                capture_output=True, text=True, check=False,
+                                creationflags=NO_WINDOW)
         if inside.returncode != 0 or inside.stdout.strip() != "true":
             # A vault that is not under git needs no commit identity; warning
             # about it would be noise, not diagnosis.
@@ -1169,7 +1172,8 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
             # `--get` already resolves local over global, and checking --global
             # alone would warn at people who configured this on purpose
             out = subprocess.run([git, "-C", str(cfg.vault), "config", "--get", key],
-                                 capture_output=True, text=True, check=False)
+                                 capture_output=True, text=True, check=False,
+                                 creationflags=NO_WINDOW)
             if not out.stdout.strip():
                 missing.append(key)
         if not missing:

@@ -23,7 +23,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape as _xml_escape, unescape as _xml_unescape
 
 from . import current_os
-from .proc import module_search_root, python_executable
+from .proc import NO_WINDOW, module_search_root, python_executable
 
 
 @dataclass
@@ -43,7 +43,8 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess:
     # (e.g. cp866/cp1251 localized text) that the locale text decoder chokes on —
     # a raw decode crashes the subprocess reader thread. Never let scheduler I/O
     # raise on undecodable status output.
-    return subprocess.run(cmd, capture_output=True, text=True, errors="replace")
+    return subprocess.run(cmd, capture_output=True, text=True, errors="replace",
+                          creationflags=NO_WINDOW)
 
 
 # --------------------------------------------------------------------------

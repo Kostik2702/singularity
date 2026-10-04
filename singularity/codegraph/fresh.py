@@ -73,9 +73,11 @@ class GitFailed(RuntimeError):
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
+    from ..platform.proc import NO_WINDOW
+
     try:
         return subprocess.run(["git", "--no-optional-locks", "-C", str(root), *args],
-                              capture_output=True)
+                              capture_output=True, creationflags=NO_WINDOW)
     except FileNotFoundError as exc:
         raise GitFailed("git is not on PATH") from exc
 

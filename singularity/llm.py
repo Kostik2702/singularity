@@ -776,7 +776,7 @@ def server_bin_ok(path: Path) -> bool:
     """True iff the binary exists and `--version` exits 0 (sanity, not health)."""
     try:
         return subprocess.run([str(path), "--version"], capture_output=True,
-                              timeout=30).returncode == 0
+                              timeout=30, creationflags=proc.NO_WINDOW).returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
 

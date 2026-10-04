@@ -208,5 +208,33 @@
       "tests/test_authoring_discipline.py"
     ],
     "expect": "GREEN"
+  },
+  {
+    "label": "no-console: the code graph's git call loses its flag",
+    "file": "singularity/codegraph/fresh.py",
+    "old": "capture_output=True, creationflags=NO_WINDOW)",
+    "new": "capture_output=True)",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_no_console_windows.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "no-console: the background code update goes back to DETACHED_PROCESS",
+    "file": "singularity/codegraph/update.py",
+    "old": "flags = NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP",
+    "new": "flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_no_console_windows.py"
+    ],
+    "expect": "RED"
   }
 ]

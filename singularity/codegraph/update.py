@@ -507,8 +507,13 @@ def spawn(cfg: Config, key: str, root: Path, verb: str) -> bool:
         return True
     if not versions.parser_available() or os.environ.get("MB_CODE_NO_BACKGROUND"):
         return False
+    from ..platform.proc import NO_WINDOW
+
     log = store.unit_dir(cfg, key) / "background.log"
-    flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+    # A hidden console of its own, not DETACHED_PROCESS: a detached child has NO
+    # console, so each console program it starts -- git, the build's pool
+    # workers -- would flash a window of its own; these inherit the hidden one.
+    flags = NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
     with open(log, "ab") as out:
         subprocess.Popen([sys.executable, "-m", "singularity", "code", verb, "--json"], cwd=str(root),
                          stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
