@@ -16,9 +16,11 @@ must be removed, so the list keeps describing the code.
 from __future__ import annotations
 
 import ast
+import inspect
 import os
 import pathlib
 import subprocess
+import textwrap
 
 import pytest
 
@@ -148,6 +150,14 @@ def test_the_background_code_update_gets_a_hidden_console_not_none(monkeypatch, 
         assert not flags & subprocess.DETACHED_PROCESS
     else:
         assert flags == 0
+    # The flags are chosen only on Windows, so off it the call above cannot see
+    # them, and a plant that brought DETACHED_PROCESS back went green on all six
+    # POSIX runners. The source is the same on every runner.
+    names = {n.attr if isinstance(n, ast.Attribute) else n.id
+             for n in ast.walk(ast.parse(textwrap.dedent(inspect.getsource(update.spawn))))
+             if isinstance(n, (ast.Attribute, ast.Name))}
+    assert "DETACHED_PROCESS" not in names
+    assert "NO_WINDOW" in names
 
 
 @pytest.mark.skipif(os.name != "nt", reason="console windows exist only on Windows")
