@@ -223,9 +223,10 @@ def doctor_report(cfg) -> dict:
         "checks": [{"id": c["id"], "status": c["status"],
                     **({"detail": c["detail"]} if c["id"] in verbose else {})}
                    for c in payload["checks"]],
+        # v0.19.0 adds no check: it widens what K2 counts to the jvm family
         "new_in_this_release": sorted(
             c["id"] for c in payload["checks"]
-            if c["id"] in {"K2-code-graph"}),                     # v0.18.0
+            if c["id"] in set()),
         "pass": rc == 0,
     }
 
@@ -627,12 +628,17 @@ def package_layout() -> dict:
     discovered = set(find_packages(where=str(REPO), include=["singularity*"]))
     rows = [{"package": name, "discovered": name in discovered} for name in expected]
 
+    # v0.19.0: the jvm family's modules; the two extractors import their
+    # pinned grammars at module level, so importing them proves the `graph`
+    # extra carries Java and Kotlin on this machine
     imports = []
     for module in ("singularity.knowledge.sources", "singularity.machine.status",
                    "singularity.telemetry.reflect", "singularity.commands.memory",
                    "singularity.render", "singularity.contracts",
                    "singularity.search.lexical", "singularity.search.metrics",
-                   "singularity.codegraph.sidecar", "singularity.platform.fslock"):
+                   "singularity.codegraph.sidecar", "singularity.platform.fslock",
+                   "singularity.codegraph.languages", "singularity.codegraph.extract_java",
+                   "singularity.codegraph.extract_kotlin", "singularity.codegraph.resolve_jvm"):
         try:
             importlib.import_module(module)
             imports.append({"module": module, "ok": True})
@@ -661,7 +667,7 @@ def main() -> None:
 
     snap = {
         "taken_at": datetime.now().isoformat(timespec="seconds"),
-        "note": "v0.18.0 baseline: the same eight surfaces, taken on the release merge commit. The release adds a subsystem (the code graph, off by default) that reaches the machine in three places a snapshot can see: a new doctor check (K2-code-graph), a new skill every client is meant to carry (mb-code), and a SessionStart line read from a sidecar. The first Windows snapshot since v0.12.0, after eight on macOS, and the first release since v0.15.0 whose CI matrix actually ran: its 25 Windows-only suite failures, and a Windows lock defect in the product, were fixed before this snapshot and the tag moved to the green merge",
+        "note": "v0.19.0 baseline: the same eight surfaces, taken on the release merge commit. The release teaches the code graph Java and Kotlin (one jvm family) and rebuilds every graph once (schema 6, resolver 6); it adds no doctor check and no package, so what a snapshot can see of it is K2's detail and the jvm modules importing with their pinned grammars. It also stops the scheduler's jobs from flashing a console window per child process on Windows, which no surface here measures (tests/test_no_console_windows.py does)",
         "version": singularity.__version__,
         "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(REPO),
                                  capture_output=True, text=True).stdout.strip(),
