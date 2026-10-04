@@ -10,6 +10,120 @@ is the repo-facing summary. Commit hashes refer to `master`.
 
 ---
 
+# v0.19.0 — the code graph reads Java and Kotlin
+
+`mb code` now reads `.java` and `.kt` (issue #22: Android apps, mixed Java and
+Kotlin, build flavors). The two resolve as ONE family (decision CODE-GRAPH
+D3): they share a namespace of fully qualified names and call each other
+inside a module, so a Kotlin call into Java and a Java call into Kotlin are
+ordinary edges. Every graph is rebuilt once after the upgrade (schema 6, new
+grammar pins, resolver 6); refresh starts that rebuild in the background.
+
+## The yardstick came first, and from someone else
+
+There is no Java or Kotlin on the owner's machine, so the gate is a public
+repository pinned to a commit: nextcloud/android at `6722740` (271 Java and
+1059 Kotlin files, five build flavors, an external library missing from the
+clone). An independent agent labelled 92 call sites there before a line of
+the resolver existed: cross-language calls both ways, companions and
+objects, extension functions, Kotlin file facades called from Java,
+interface dispatch, Dagger-injected members, and seven sites into classes
+defined once per flavor. Both name-only resolvers fail it (0.45 / 0.52 /
+0.81 and 0.72 / 0.37 / 0.38 against the owner's 0.90 / 0.65 / 0.10).
+
+The resolver, unseen by the labels, scored 0.98 precision, 0.77 recall and
+0.05 false edges at first contact. Ten of its sixteen misses were not the
+resolver's: five labels sat in files the privacy rule drops by design (a
+path with `credential` in it; the labeller replaced them), five touched two
+hand-written classes over the 100 KB size cap. After the fixes the rest
+pointed at: 1.00 / 0.96 / 0.00 (in-sample), five fresh labels 5 of 5. An
+independent audit of a random sample of the output: 59 of 60 edges right
+(every tier but `variant` 54/54), 21 of 25 unresolved sites truly external,
+28 of 30 dead candidates dead. The wrong edge and both false deads are fixed
+in this release, with tests; the fixed output was not re-audited
+(`docs/code-graph-jvm-audit.json`).
+
+## What it understands
+
+* packages and imports (static, wildcard, `as`); a type is found by
+  `<package>.<Name>`, wherever its file sits;
+* constructors (one `Class.constructor` node, `new Foo()` and Kotlin
+  `Foo()` call the class), records, enums, inheritance and interfaces by
+  the receiver's static type, `super`;
+* Kotlin top-level functions and their Java facade (`FooKt`,
+  `@file:JvmName`), companions (through the class, `.Companion` or
+  `@JvmStatic`), objects (and `INSTANCE` from Java), extension functions
+  matched by receiver type -- the supertypes a class names outside the graph
+  count -- and property syntax over a Java getter;
+* scope functions: `x.let { it.go() }` is a call on x, and a bare call in
+  `x.apply { }`, `x.run { }` or `with(x) { }` looks in x first;
+* build flavors: a class defined in `src/gplay/` and `src/generic/` draws an
+  edge to each variant the caller's source set can see, tier `variant`,
+  named a guess in every answer. Several definitions left in ONE source set
+  are an ambiguity and draw nothing.
+
+There is no unique-name guess for the JVM, and an import into a first-party
+package that finds nothing is unresolved, never silently external. Not
+tracked: Kotlin smart casts, types inferred from a `when` or from a
+generic's argument (`list.forEach { it.x() }`).
+
+## The universe grows, for search too
+
+`*.java` and `*.kt` join the code corpus as well as the graph (the owner
+chose one set of files for both), with a size ceiling of 512 KB instead of
+100 KB -- there is no minified-bundle convention there, generated code lives
+under `build/`, and nextcloud's central `FileDataStorageManager.java` is
+135 KB. On this machine that adds nothing yet: every Java file under
+`E:\Project` is vendored. JUnit and Android test names and `androidTest*`
+directories are tests; Gradle scripts stay out.
+
+deadcode knows what Android starts: the manifest's components, the classes
+and `android:onClick` handlers a layout names, a runner a Gradle script
+names, a class a library loads from `resources/` or `META-INF/services`, a
+class whose constructor is annotated (`@Inject`), a test class, `main`.
+
+## One table names the languages
+
+Python, TypeScript and now the JVM family are rows of
+`codegraph/languages.py`; build, update, impact, rows, deadcode and chunker
+v2 ask it instead of branching "python, or else ts". Proven unchanged for
+the first two: three real units build to graphs identical on every column
+they share with the graphs from before the table.
+
+## Incremental updates follow packages
+
+A file's package and a Kotlin file's facade are stored (`files.package`,
+`files.facade`, schema 6), and a name looked up in a package is recorded as
+a read of `jvm-name:<package>:<name>`: a definition entering or leaving a
+package re-resolves the readers of that name, not every reader of the
+package (`jvm-package:<name>` answers only whether a package is first-party
+at all). The random-edit oracle now grows Java and Kotlin too, with
+classes changing package and a flavor class defined twice: 200 sequences,
+1200 steps, 2384 edits, 0 differences
+(`docs/code-graph-p3-oracle.json`). Planting "a package move re-resolves nobody"
+fails 12 of 40 sequences. An edit to the most central class of nextcloud
+(`OCFile.java`, read by 427 files) is written in place in 7.3 s, a typical
+file in about 3 s: the same fan-out cost as CG-01.
+
+## Also in this release
+
+* **The secret audit accepts a finding by its fingerprint** (decision
+  CODE-GRAPH D2): `code_graph_audit_allow` lists sha256(qname, field, exact
+  text) of findings the owner checked, never a file or a path, so a real key
+  added next to a fake one is still reported. `mb code audit` prints each
+  finding's fingerprint.
+* **No console window per child process on Windows** (135305b). After a
+  boot, `nightly` caught up on the missed 03:00 run and its code-graph step
+  flashed a terminal ~380 times in three minutes: pythonw has no console, so
+  each `git` it started was given one. Every captured subprocess call now
+  passes `platform.proc.NO_WINDOW`; the background `mb code update` gets a
+  hidden console instead of DETACHED_PROCESS (whose pool workers flashed
+  too); `tests/test_no_console_windows.py` fails on a new call without the
+  flag. Measured: the same 7 git processes from pythonw, 3 windows before, 0
+  after.
+
+---
+
 # v0.18.0 — a code graph that knows when it is stale
 
 `mb code` answers the structural questions a semantic search cannot: who calls
