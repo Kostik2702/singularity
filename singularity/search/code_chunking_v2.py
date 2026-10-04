@@ -43,12 +43,12 @@ the interpreter loaded -- see `writer_guard`.
 """
 from __future__ import annotations
 
-import importlib
 import re
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
+from ..codegraph import languages
 from ..codegraph.versions import PARSER_PACKAGES
 from ..log import log
 from . import code_chunking as v1
@@ -124,22 +124,20 @@ def loaded_grammar_versions() -> dict[str, str]:
     return out
 
 
-def load_extractors() -> dict[str, Any]:
-    """The shared extractor modules, keyed by the v1 language label.
+def load_extractors() -> None:
+    """Import every extractor the code graph has (`codegraph.languages`).
 
     Importing them builds every grammar's `Language`, which is exactly where
     a grammar that cannot load fails (a missing wheel, an ABI the core does
     not accept, a DLL that will not load) -- so this IS the load check."""
     try:
-        py = importlib.import_module("singularity.codegraph.extract_py")
-        ts = importlib.import_module("singularity.codegraph.extract_ts")
+        languages.load_extractors()
     except Exception as exc:  # noqa: BLE001 -- any failure to load a grammar is the same refusal
         raise GrammarPinRefused(
             f"code_chunk_schema v2: a grammar cannot load ({type(exc).__name__}: {exc}). "
             f"Refusing to write the code index rather than chunking it with v1 -- the "
             f"index is untouched. Install the pinned parser: "
             f"python -m pip install --require-hashes -r requirements-graph.txt") from exc
-    return {"python": py, "ts": ts}
 
 
 def writer_guard() -> dict[str, str]:
@@ -198,10 +196,11 @@ def _span_text(lines: list[str], spans: list[tuple[int, int]]) -> str:
     return "\n".join("\n".join(lines[a - 1:b]) for a, b in spans)
 
 
-def _units(definitions: list[Any], lines: list[str]) -> list[Any]:
+def _units(definitions: list[Any], lines: list[str], containers: tuple[str, ...] = ("class",)) -> list[Any]:
     """Definitions that get chunks of their own, outermost first.
 
-    A unit sits at module level or directly in a class that is itself a unit.
+    A unit sits at module level or directly in a container (a class; for the
+    JVM family also an interface, enum or object) that is itself a unit.
     Anything smaller than `MIN_CHUNK_CHARS` stays in the region around it --
     v1 dropped such a stub, v2 keeps its text where it stands."""
     by_q = {d.qname: d for d in definitions}
@@ -210,7 +209,7 @@ def _units(definitions: list[Any], lines: list[str]) -> list[Any]:
     for d in ordered:
         if d.parent is not None:
             parent = by_q.get(d.parent)
-            if parent is None or d.parent not in chosen or parent.kind != "class":
+            if parent is None or d.parent not in chosen or parent.kind not in containers:
                 continue
         if len(_span_text(lines, d.spans).strip()) < v1.MIN_CHUNK_CHARS:
             continue
@@ -279,7 +278,8 @@ def _chunk_lines(path: Path, rel_path: str, text: str, facts: Any,
     lines = _split_lines(text)
     n = len(lines)
     repo = rel_path.split("/", 1)[0] if "/" in rel_path else ""
-    units = _units(facts.definitions, lines) if facts is not None else []
+    units = (_units(facts.definitions, lines, languages.family(facts.lang).chunk_containers)
+             if facts is not None else [])
     uid = {u.qname: i for i, u in enumerate(units)}
 
     # 1. every line belongs to its innermost unit, or to the module (None)
@@ -407,12 +407,12 @@ def extract_code_chunks(path: Path, rel_path: str,
     if not text.strip():
         return []
     rel_path = rel_path.replace("\\", "/")
-    lang = v1.LANG_BY_SUFFIX.get(path.suffix.lower())
+    lang = v1.LANG_BY_SUFFIX.get(path.suffix.lower())      # v1's label: the comment style
     facts = None
-    if lang is not None:
-        extractor = load_extractors()[lang]
+    if languages.lang_of(path.name) is not None:
+        load_extractors()
         try:
-            facts = extractor.extract(rel_path, data)
+            _family, facts = languages.extract(rel_path, data)
         except Exception as exc:  # noqa: BLE001 -- see the docstring
             log.warning("[mb] WARNING: chunker v2 could not extract %s (%s: %s); "
                         "chunked without definitions", rel_path, type(exc).__name__, exc)

@@ -49,7 +49,8 @@ def endpoint():
     host, port, model = "127.0.0.1", 8080, "local"
     try:
         out = subprocess.run(["mb", "llm", "status", "--json"],
-                             capture_output=True, text=True, timeout=20)
+                             capture_output=True, text=True, timeout=20,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         stdout = (out.stdout or "").strip()
         if not stdout:
             print(f"[delegate] warn: 'mb llm status --json' produced no output "

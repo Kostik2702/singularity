@@ -30,6 +30,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from . import languages
 from .query import page
 
 _DUNDER = re.compile(r"^__\w+__$")
@@ -82,11 +83,111 @@ def _package_entry_files(root: Path, manifests: list[str]) -> list[str]:
     return out
 
 
-def entry_points(con, root: Path, meta: dict[str, Any]) -> set[str]:
-    """Qnames something outside the graph runs: pyproject scripts and entry
-    points, and every definition in a file a package.json exposes."""
-    paths = {r[0] for r in con.execute("SELECT path FROM files")}
+# Android (CODE-GRAPH D3): the framework starts what the manifest declares and
+# inflates what a layout names; neither is a call the graph can see.
+_MANIFEST_COMPONENT = re.compile(
+    r"<(?:activity|activity-alias|service|receiver|provider|application|instrumentation)\b[^>]*?"
+    r"android:name\s*=\s*\"([^\"]+)\"", re.S)
+_RES_TAG = re.compile(r"<([A-Za-z_][\w]*(?:\.[A-Za-z_][\w$]*)+)[\s/>]")
+_RES_ATTR = re.compile(r"(?:android:name|class|tools:context|app:layout_behavior|android:onClick|"
+                       r"app:argType|android:targetActivity)\s*=\s*\"([^\"@{]+)\"")
+# a Gradle script names classes the build hands to a tool: a test runner, a filter
+_GRADLE_CLASS = re.compile(r"[\"']((?:[a-z_]\w*\.)+[A-Z]\w*)[\"']")
+# a Java resource names classes a library loads by reflection: a `*.properties`
+# setting, a ServiceLoader registration in META-INF/services
+_RESOURCE_CLASS = re.compile(r"\b((?:[a-z_]\w*\.)+[A-Z][\w$]*)\b")
+
+
+def _source_sets(con) -> list[str]:
+    """`<module>/src/<set>` of every JVM file: where its manifest and res/ live."""
+    out = set()
+    for (path,) in con.execute("SELECT path FROM files WHERE lang = 'jvm'"):
+        if languages.source_set(path) is not None:
+            parts = path.split("/")
+            out.add("/".join(parts[:parts.index("src") + 2]))
+    return sorted(out)
+
+
+def android_names(con, root: Path) -> tuple[set[str], set[str]]:
+    """(dotted class names the manifests declare or the resources name,
+    method names a layout's android:onClick names) -- read from disk at query
+    time, never stored: they decide nothing a resolution depends on."""
+    classes: set[str] = set()
+    handlers: set[str] = set()
+    sources = _source_sets(con)
+    for module in sorted({s.rsplit("/src/", 1)[0] if "/src/" in s else "" for s in sources}):
+        for script in ("build.gradle.kts", "build.gradle"):
+            try:
+                classes |= set(_GRADLE_CLASS.findall((root / module / script).read_text(
+                    encoding="utf-8", errors="replace")))
+            except OSError:
+                continue
+    for source in sources:
+        base = root / source
+        try:
+            text = (base / "AndroidManifest.xml").read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            text = ""
+        classes |= {m.lstrip(".").replace("$", ".") for m in _MANIFEST_COMPONENT.findall(text)}
+        resources = base / "resources"
+        if resources.is_dir():
+            for f in resources.rglob("*"):
+                if f.is_file() and (f.suffix == ".properties" or f.parent.name == "services"):
+                    try:
+                        classes |= {m.replace("$", ".") for m in _RESOURCE_CLASS.findall(
+                            f.read_text(encoding="utf-8", errors="replace"))}
+                    except OSError:
+                        continue
+        res = base / "res"
+        if not res.is_dir():
+            continue
+        for xml in res.rglob("*.xml"):
+            try:
+                body = xml.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            classes |= {t.replace("$", ".") for t in _RES_TAG.findall(body)}
+            for value in _RES_ATTR.findall(body):
+                value = value.strip()
+                if "." in value:
+                    classes.add(value.lstrip(".").replace("$", "."))
+                elif value.isidentifier():
+                    handlers.add(value)
+    return classes, handlers
+
+
+def _jvm_entries(con, root: Path) -> tuple[set[str], set[str]]:
+    """(JVM qnames something outside the graph runs, method names a layout
+    names): the manifest's components and the classes resources name --
+    matched by fully qualified name, or its tail when the manifest is
+    relative to a namespace the graph does not read -- and every `main`."""
+    if con.execute("SELECT 1 FROM files WHERE lang = 'jvm' LIMIT 1").fetchone() is None:
+        return set(), set()
+    names, handlers = android_names(con, root)
+    types = languages.family("jvm").containers
     entries: set[str] = set()
+    for qname, kind, signature, package in con.execute(
+            "SELECT n.qname, n.kind, n.signature, f.package FROM nodes n JOIN files f ON f.id = n.file_id"
+            f" WHERE f.lang = 'jvm' AND (n.kind IN ({','.join('?' * len(types))}) OR n.name = 'main')", types):
+        local = qname.split("::", 1)[1]
+        if local == "main" or (local.endswith(".main") and "static" in signature):
+            entries.add(qname)                       # Kotlin's top-level main, Java's static main
+            continue
+        if kind not in types:
+            continue
+        fqn = f"{package}.{local}" if package else local
+        if any(fqn == n or fqn.endswith("." + n) for n in names):
+            entries.add(qname)
+    return entries, handlers
+
+
+def entry_points(con, root: Path, meta: dict[str, Any], jvm: set[str] | None = None) -> set[str]:
+    """Qnames something outside the graph runs: pyproject scripts and entry
+    points, every definition in a file a package.json exposes, and (JVM) the
+    Android components and resources' classes and every `main` -- `jvm` when
+    the caller has them already."""
+    paths = {r[0] for r in con.execute("SELECT path FROM files")}
+    entries: set[str] = set(_jvm_entries(con, root)[0] if jvm is None else jvm)
     for target in _script_targets(root):
         module, _, func = target.partition(":")
         stem = module.replace(".", "/")
@@ -107,9 +208,14 @@ def entry_points(con, root: Path, meta: dict[str, Any]) -> set[str]:
 
 def deadcode(con, root: Path, meta: dict[str, Any], limit: int = 50, offset: int = 0,
              show_unknown: bool = False) -> dict[str, Any]:
-    entries = entry_points(con, root, meta)
+    jvm_entries, handlers = _jvm_entries(con, root)
+    entries = entry_points(con, root, meta, jvm=jvm_entries)
+    # a JVM class whose constructor is annotated (`@Inject`) is built by a framework
+    built_by_framework = {parent for parent, decorators in con.execute(
+        "SELECT n.parent, n.decorators FROM nodes n JOIN files f ON f.id = n.file_id"
+        " WHERE f.lang = 'jvm' AND n.name = 'constructor'") if json.loads(decorators)}
     kinds = {r[0]: r[1] for r in con.execute("SELECT qname, kind FROM nodes WHERE kind IN ('class', 'interface',"
-                                             " 'type', 'enum')")}
+                                             " 'type', 'enum', 'object')")}
     unresolved = Counter((lang, name) for lang, name in con.execute(
         "SELECT f.lang, u.name FROM unresolved u JOIN files f ON f.id = u.file_id"))
     mentioned = {(lang, name): n for lang, name, n in con.execute("SELECT lang, name, files FROM name_refs")}
@@ -124,7 +230,8 @@ def deadcode(con, root: Path, meta: dict[str, Any], limit: int = 50, offset: int
         " AND e.kind IN ('CALLS', 'INHERITS'))", _CANDIDATE_KINDS).fetchall()
     for name, parent in con.execute("SELECT name, parent FROM nodes WHERE parent IS NOT NULL"):
         members[parent].add(name)
-    class_bases = {q: json.loads(b) for q, b in con.execute("SELECT qname, bases FROM nodes WHERE kind = 'class'")}
+    class_bases = {q: json.loads(b) for q, b in con.execute(
+        "SELECT qname, bases FROM nodes WHERE kind IN ('class', 'object', 'enum')")}
 
     def overrides(klass: str, name: str, bases: list[str]) -> str | None:
         seen, todo = set(), list(inherits.get(klass, []))
@@ -148,22 +255,27 @@ def deadcode(con, root: Path, meta: dict[str, Any], limit: int = 50, offset: int
         if parent_kind in _TYPELIKE:
             continue                               # a signature in an interface: nothing to be dead
         if (_DUNDER.match(name) or q in entries or name == "constructor"
-                or (is_test and (name.startswith("test") or (parent or "").split(".")[-1].startswith("Test")))):
-            continue                               # alive by declaration
+                or (is_test and (name.startswith("test") or (parent or "").split(".")[-1].startswith("Test")))
+                or (is_test and lang == "jvm" and kind == "class" and parent is None)):
+            continue                               # alive by declaration (a JVM test class: its runner builds it)
         why: tuple[str, str] | None = None             # (reason key, what to tell the reader)
         if kind in ("getter", "setter"):
             why = ("accessor", "an accessor is read or assigned, never called")
         elif json.loads(decorators):
             why = ("decorated", "a decorator may register or wrap it")
+        elif q in built_by_framework:
+            why = ("decorated", "its constructor is annotated: a framework may build it")
+        elif lang == "jvm" and name in handlers:
+            why = ("android resource", "a layout names it (android:onClick)")
         elif unresolved[(lang, name)]:
             why = ("unresolved same-name calls",
                    f"{unresolved[(lang, name)]} call site(s) of this name the resolver could not place")
         elif mentioned.get((lang, name)):
             why = ("name mentioned", f"its name is mentioned in {mentioned[(lang, name)]} file(s): "
                                      "a callback, a table, a re-export")
-        elif lang == "ts" and exported:
+        elif exported and languages.family(lang).exports_leave_unit:
             why = ("exported", "code outside this unit may import it")
-        elif kind == "method" and parent_kind == "class":
+        elif kind == "method" and parent_kind in ("class", "object", "enum"):
             text = overrides(parent, name, class_bases.get(parent, []))
             why = ("override", text) if text else None
         item = {"qname": q, "kind": kind, "file": path, "line": json.loads(spans)[0][0]}

@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Config
-from . import fresh, scope, sidecar, store, versions
+from . import fresh, languages, scope, sidecar, store, versions
 from .model import FileFacts, decode_facts
 
 
@@ -92,6 +92,25 @@ class DbSource:
 
     def is_test(self, path: str) -> bool:
         return path in self._tests
+
+    # tables.MemorySource's package index, over `files.package`, `files.facade`
+    # and the top-level rows of `nodes` -- as the update has already rewritten them.
+
+    def package_files(self, package: str) -> tuple[str, ...]:
+        rows = self._con.execute("SELECT path FROM files WHERE lang = ? AND package IS ? ORDER BY path",
+                                 (self._lang, package or None))
+        return tuple(r[0] for r in rows)
+
+    def top_level(self, package: str, name: str) -> tuple[str, ...]:
+        rows = self._con.execute(
+            "SELECT n.qname FROM nodes n JOIN files f ON f.id = n.file_id WHERE n.name = ? AND n.parent IS NULL"
+            " AND f.lang = ? AND f.package IS ? ORDER BY f.path", (name, self._lang, package or None))
+        return tuple(r[0] for r in rows)
+
+    def facades(self, package: str, name: str) -> tuple[str, ...]:
+        rows = self._con.execute("SELECT path FROM files WHERE lang = ? AND package IS ? AND facade = ? ORDER BY path",
+                                 (self._lang, package or None, name))
+        return tuple(r[0] for r in rows)
 
     def guess(self, name: str, from_test: bool, never: tuple[str, ...]) -> str | None:
         key = (name, from_test)
@@ -254,12 +273,13 @@ def _marks(chunk: list) -> str:
     return ",".join("?" * len(chunk))
 
 
-def _ids(con: sqlite3.Connection, paths) -> dict[str, tuple[int, str, str]]:
-    """{path: (id, lang, content_hash)} of the stored files among `paths`."""
-    out: dict[str, tuple[int, str, str]] = {}
+def _ids(con: sqlite3.Connection, paths) -> dict[str, tuple[int, str, str, str | None, str | None]]:
+    """{path: (id, lang, content_hash, package, facade)} of the stored files among `paths`."""
+    out: dict[str, tuple[int, str, str, str | None, str | None]] = {}
     for chunk in _chunks(sorted(paths)):
-        out.update({r[0]: (r[1], r[2], r[3]) for r in con.execute(
-            f"SELECT path, id, lang, content_hash FROM files WHERE path IN ({_marks(chunk)})", chunk)})
+        out.update({r[0]: (r[1], r[2], r[3], r[4], r[5]) for r in con.execute(
+            f"SELECT path, id, lang, content_hash, package, facade FROM files WHERE path IN ({_marks(chunk)})",
+            chunk)})
     return out
 
 
@@ -286,11 +306,9 @@ def _looked_up(con: sqlite3.Connection, names: dict[str, set[str]]) -> dict[str,
 def _outcomes(con: sqlite3.Connection, names: dict[str, set[str]]) -> dict[tuple[str, str], tuple]:
     """The unique-name tier's answer for each name, from a production and
     from a test caller -- what a guess on the name would draw right now."""
-    from .resolve_py import NEVER_GUESSED as PY_NEVER
-    from .resolve_ts import NEVER_GUESSED as TS_NEVER
     out = {}
     for lang, ns in names.items():
-        never = PY_NEVER if lang == "python" else TS_NEVER
+        never = languages.family(lang).never_guessed
         for n in ns:
             out[(lang, n)] = (guess_sql(con, n, lang, False, never), guess_sql(con, n, lang, True, never))
     return out
@@ -309,8 +327,6 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
     changed the graph since `det` was taken -- detect again. `also_resolve`:
     paths to re-resolve regardless (the stale set, in the background run).
     `wait`: how long to wait for another writer (store default if None)."""
-    from .resolve_py import PyResolver
-    from .resolve_ts import TsResolver
     from .rows import dep_rows, name_ref_counts, node_rows, workspace_from_meta
 
     with store.write_transaction(db, **({} if wait is None else {"wait": wait})) as con:
@@ -366,7 +382,7 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
             return store.recorded_mtime(st.st_mtime_ns, read_done)
 
         # the unique-name answers before the change, for every name it touches
-        names: dict[str, set[str]] = {"python": set(), "ts": set()}
+        names: dict[str, set[str]] = {lang: set() for lang in languages.LANGS}
         gone_ids = [rows[p][0] for p in (*modified, *deleted)]
         for chunk in _chunks(gone_ids):
             for name, lang in con.execute(
@@ -377,6 +393,16 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
             names[lang].update(d.name for d in facts.definitions)
         names = _looked_up(con, names)
         before = _outcomes(con, names)
+
+        # what each JVM file answered for in its package before the change:
+        # its top-level names and its facade (see languages.NAME_DEP)
+        old_tops: dict[str, set[str]] = {p: {rows[p][4]} if rows[p][4] else set()
+                                         for p in (*modified, *deleted) if languages.family(rows[p][1]).packages}
+        by_id = {rows[p][0]: p for p in old_tops}
+        for chunk in _chunks(list(by_id)):
+            for fid, name in con.execute(
+                    f"SELECT file_id, name FROM nodes WHERE parent IS NULL AND file_id IN ({_marks(chunk)})", chunk):
+                old_tops[by_id[fid]].add(name)
 
         # name mentions: the old versions' out, the new versions' in (deadcode reads the counts)
         mentions: Counter[tuple[str, str]] = Counter()
@@ -398,16 +424,17 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
             con.execute("UPDATE files SET size = ?, mtime_ns = ? WHERE id = ?",
                         (st.st_size, mtime(st), rows[p][0]))
         for p, (st, _lang, facts, digest, _blob) in modified.items():
-            con.execute("UPDATE files SET size = ?, mtime_ns = ?, content_hash = ?, parse_status = ?"
-                        " WHERE id = ?", (st.st_size, mtime(st), digest,
-                                          "partial" if facts.degraded else "ok", rows[p][0]))
+            con.execute("UPDATE files SET size = ?, mtime_ns = ?, content_hash = ?, parse_status = ?, package = ?,"
+                        " facade = ? WHERE id = ?",
+                        (st.st_size, mtime(st), digest, "partial" if facts.degraded else "ok", facts.package,
+                         languages.facade(facts), rows[p][0]))
         for p, (st, lang, facts, digest, _blob) in added.items():
             cur = con.execute(
-                "INSERT INTO files(path, lang, size, mtime_ns, content_hash, parse_status, is_test)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO files(path, lang, size, mtime_ns, content_hash, parse_status, is_test, package, facade)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (p, lang, st.st_size, mtime(st), digest, "partial" if facts.degraded else "ok",
-                 int(scope.is_test_path(p))))
-            rows[p] = (cur.lastrowid, lang, digest)
+                 int(scope.is_test_path(p)), facts.package, languages.facade(facts)))
+            rows[p] = (cur.lastrowid, lang, digest, facts.package, languages.facade(facts))
         parsed: dict[str, FileFacts] = {}
         for p, (_st, _lang, facts, _digest, blob) in (*modified.items(), *added.items()):
             store.insert_nodes(con, node_rows(facts, rows[p][0]))
@@ -416,13 +443,31 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
 
         # who has to be resolved again
         after = _outcomes(con, names)
-        moved: dict[str, list[str]] = {"python": [], "ts": []}
+        moved: dict[str, list[str]] = {lang: [] for lang in languages.LANGS}
         for (lang, n), was in before.items():
             if after[(lang, n)] != was:
                 moved[lang].append(n)
         changed = sorted({*modified, *added, *deleted})
+        # A JVM package's answers that moved (languages.PACKAGE_DEP, NAME_DEP):
+        # a file entering or leaving it moves its membership and every name
+        # it holds; an edit in place moves only the names it gained or lost.
+        moved_keys: set[str] = set()
+        for p in deleted:
+            lang, package = rows[p][1], rows[p][3]
+            moved_keys |= languages.membership(lang, package) | languages.name_keys(lang, package, old_tops.get(p, ()))
+        for _st, lang, facts, _digest, _blob in added.values():
+            moved_keys |= (languages.membership(lang, facts.package)
+                           | languages.name_keys(lang, facts.package, languages.top_names(facts)))
+        for p, (_st, lang, facts, _digest, _blob) in modified.items():
+            old, new = old_tops.get(p, set()), languages.top_names(facts)
+            if facts.package != rows[p][3]:
+                moved_keys |= (languages.membership(lang, rows[p][3]) | languages.membership(lang, facts.package)
+                               | languages.name_keys(lang, rows[p][3], old)
+                               | languages.name_keys(lang, facts.package, new))
+            else:
+                moved_keys |= languages.name_keys(lang, facts.package, old ^ new)
         dependents: set[str] = set()
-        for chunk in _chunks(changed):
+        for chunk in _chunks(changed + sorted(moved_keys)):
             dependents |= {r[0] for r in con.execute(
                 "SELECT DISTINCT f.path FROM dep_paths dp JOIN deps d ON d.path_id = dp.id"
                 f" JOIN files f ON f.id = d.file_id WHERE dp.path IN ({_marks(chunk)})", chunk)}
@@ -444,17 +489,13 @@ def apply(db: Path, det: fresh.Detection, seq_seen: int, *, cap_dependents: bool
         edges: list = []
         unresolved: list = []
         file_deps: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
-        py_targets = [p for p in targets if rows[p][1] == "python"]
-        ts_targets = [p for p in targets if rows[p][1] == "ts"]
-        if py_targets:
-            resolver = PyResolver(source=DbSource(con, "python", parsed))
-            e, u = resolver.resolve(py_targets)
-            edges, unresolved = edges + e, unresolved + u
-            file_deps.update(resolver.file_deps)
-        if ts_targets:
-            packages, aliases = workspace_from_meta(meta)
-            resolver = TsResolver(packages=packages, aliases=aliases, source=DbSource(con, "ts", parsed))
-            e, u = resolver.resolve(ts_targets)
+        for lang in languages.LANGS:
+            lang_targets = [p for p in targets if rows[p][1] == lang]
+            if not lang_targets:
+                continue
+            resolver = languages.resolver(lang, source=DbSource(con, lang, parsed),
+                                          workspace=workspace_from_meta(meta))
+            e, u = resolver.resolve(lang_targets)
             edges, unresolved = edges + e, unresolved + u
             file_deps.update(resolver.file_deps)
         fid = {p: rows[p][0] for p in targets}
@@ -499,8 +540,13 @@ def spawn(cfg: Config, key: str, root: Path, verb: str) -> bool:
         return True
     if not versions.parser_available() or os.environ.get("MB_CODE_NO_BACKGROUND"):
         return False
+    from ..platform.proc import NO_WINDOW
+
     log = store.unit_dir(cfg, key) / "background.log"
-    flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+    # A hidden console of its own, not DETACHED_PROCESS: a detached child has NO
+    # console, so each console program it starts -- git, the build's pool
+    # workers -- would flash a window of its own; these inherit the hidden one.
+    flags = NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
     with open(log, "ab") as out:
         subprocess.Popen([sys.executable, "-m", "singularity", "code", verb, "--json"], cwd=str(root),
                          stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,

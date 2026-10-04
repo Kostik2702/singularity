@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import fresh
+from . import fresh, languages
 from .query import page
 
 IMPACT_MAX_FILES = 2000
@@ -97,8 +97,7 @@ def _body(text_lines: list[str], spans: list[tuple[int, int]]) -> str:
 
 
 def _defs_of(path: str, data: bytes) -> dict[str, _Def]:
-    from . import extract_py, extract_ts         # the parser: impact parses the base revision
-    facts = (extract_py.extract if path.endswith(".py") else extract_ts.extract)(path, data)
+    _lang, facts = languages.extract(path, data)     # the parser: impact parses the base revision
     lines = data.decode("utf-8", "replace").split("\n")
     return {d.qname: _Def(d.qname, d.name, d.kind, [tuple(s) for s in d.spans], _body(lines, d.spans))
             for d in facts.definitions}
@@ -118,8 +117,7 @@ def impact(con: sqlite3.Connection, root: Path, base: str | None, depth: int = 3
     base_sha, base_what = resolve_base(root, base)
     files = changed_files(root, base_sha)
     in_graph = {r[0]: (r[1], bool(r[2])) for r in con.execute("SELECT path, lang, is_test FROM files")}
-    code = sorted(p for p in files if p in in_graph or (files[p] == "D" and p.endswith(
-        (".py", ".ts", ".tsx", ".js", ".jsx"))))
+    code = sorted(p for p in files if p in in_graph or (files[p] == "D" and languages.lang_of(p)))
     outside = sorted(p for p in files if p not in code)
     lines = changed_lines(root, base_sha, [p for p in code if files[p] != "D"])
 
@@ -146,14 +144,15 @@ def impact(con: sqlite3.Connection, root: Path, base: str | None, depth: int = 3
                          and nd.body == od.body and nq not in renamed.values()), None)
             if twin:
                 renamed[oq] = twin
+        lang = languages.lang_of(path)
         for oq, nq in renamed.items():
             changed.append({"symbol": nq, "change": "renamed", "was": oq, "file": path})
             sources.add(nq)
-            gone_names[deleted[oq].name] = "python" if path.endswith(".py") else "ts"
+            gone_names[deleted[oq].name] = lang
         for oq, d in deleted.items():
             if oq not in renamed:
                 changed.append({"symbol": oq, "change": "deleted", "file": path})
-                gone_names[d.name] = "python" if path.endswith(".py") else "ts"
+                gone_names[d.name] = lang
         for nq in added:
             if nq not in renamed.values():
                 changed.append({"symbol": nq, "change": "added", "file": path})

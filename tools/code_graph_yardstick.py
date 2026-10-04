@@ -26,7 +26,20 @@ Usage:
     python tools/code_graph_yardstick.py check            # are the labels still true?
     python tools/code_graph_yardstick.py baseline         # score the name-only resolvers
     python tools/code_graph_yardstick.py score preds.json # score a resolver's answers
-       preds.json = {"<edge id>": "<qname>" | null, ...}
+       preds.json = {"<edge id>": "<qname>" | ["<qname>", ...] | null, ...}
+    python tools/code_graph_yardstick.py graph            # build and score the shipped resolver
+
+A second set lives outside `code_repos_dir` (CODE-GRAPH D3: there is no Java
+or Kotlin code on the owner's machine, so the JVM gate is a public repository
+pinned to a commit):
+    python tools/code_graph_yardstick.py --fixture tests/fixtures/code_graph_edges_jvm.json \
+        --root <dir holding the clone> graph --lang jvm
+`--root` also isolates the build: the graphs go to `<root>/.mb`, never into
+the machine's own graph store. The clone command is in the fixture's `units`.
+
+A site where one name is defined in several build-flavor source sets expects
+a LIST of qnames: the resolver draws an edge to each variant (D3), and the
+site is right only when the edges are exactly that set.
 """
 from __future__ import annotations
 
@@ -44,6 +57,7 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
 FIXTURE = REPO / "tests" / "fixtures" / "code_graph_edges.json"
+FIXTURE_JVM = REPO / "tests" / "fixtures" / "code_graph_edges_jvm.json"
 RELOCATE_WINDOW = 40   # lines searched either side when a pinned file changed
 
 # The P1 acceptance gate, set by the owner on 2026-09-26 against the P0 set
@@ -69,7 +83,17 @@ CATEGORIES = (
     "same-file", "import-resolved", "self-method", "this-method", "inherited",
     "module-level", "common-name", "external-collision", "builtin-external",
     "needs-types", "decorated", "barrel", "di-member", "test-calls-prod",
+    # JVM (D3): Java and Kotlin in one namespace, and what each language adds
+    "cross-language", "same-package", "static-import", "wildcard-import", "constructor",
+    "companion", "object", "extension", "facade", "interface-dispatch", "variant",
 )
+
+
+def _same(pred: str | list[str] | None, truth: str | list[str]) -> bool:
+    """A variant site (a list) is right only as the whole set of variants."""
+    if isinstance(truth, list):
+        return isinstance(pred, list) and sorted(pred) == sorted(truth)
+    return pred == truth
 
 
 # --- scoring: pure, so the suite gates it without any repository ------------
@@ -80,6 +104,8 @@ def score(edges: list[dict[str, Any]], predictions: dict[str, str | None]) -> di
     Per labelled site with truth E and prediction P:
       E is a qname:  P == E -> tp;  P is None -> miss;  P != E -> wrong (fp + miss)
       E is None:     P is None -> tn;  P is a qname -> false edge (fp)
+    E and P may be lists (the variants of a build-flavor site): equal as sets
+    or wrong -- one variant of three is not two thirds right.
     A site absent from `predictions` counts as P = None: an unanswered site
     is a miss for a first-party call and a correct abstention for an
     external one, which is exactly how a resolver that skips it behaves.
@@ -97,7 +123,7 @@ def score(edges: list[dict[str, Any]], predictions: dict[str, str | None]) -> di
                     b["tn"] += 1
                 else:
                     b["false_edge"] += 1
-            elif pred == truth:
+            elif _same(pred, truth):
                 b["tp"] += 1
             elif pred is None:
                 b["miss"] += 1
@@ -136,6 +162,9 @@ def validate_fixture(data: dict[str, Any]) -> list[str]:
                 problems.append(f"{eid}: missing {field}")
         if "expect" not in e:
             problems.append(f"{eid}: missing expect (use null for no first-party edge)")
+        elif isinstance(e["expect"], list):
+            if len(e["expect"]) < 2 or not all(isinstance(q, str) and "::" in q for q in e["expect"]):
+                problems.append(f"{eid}: a variant expect is two or more qnames: {e['expect']!r}")
         elif e["expect"] is not None and "::" not in e["expect"]:
             problems.append(f"{eid}: expect is not a qname: {e['expect']!r}")
         if e.get("category") not in CATEGORIES:
@@ -205,8 +234,21 @@ _TS_METHOD = re.compile(
     r"([A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\([^;]*$")
 _TS_NOT_METHODS = {"if", "for", "while", "switch", "catch", "return", "function",
                    "constructor", "super", "new", "await", "typeof", "else"}
+_JVM_TYPE = re.compile(
+    r"^\s*(?:@[\w.]+(?:\([^)]*\))?\s+)*"
+    r"(?:(?:public|protected|private|internal|static|final|abstract|sealed|non-sealed|open|data|enum|"
+    r"annotation|inner|value|strictfp)\s+)*"
+    r"(?:(class|interface|object|record|enum|@interface)\s+([A-Za-z_]\w*)|companion\s+object\b\s*([A-Za-z_]\w*)?)")
+_KT_FUN = re.compile(r"\bfun\s+(?:<[^>]+>\s*)?(?:[\w.<>?, ]+\.)?([A-Za-z_]\w*)\s*\(")
+_JAVA_METHOD = re.compile(
+    r"^\s+(?:@[\w.]+(?:\([^)]*\))?\s+)*"
+    r"(?:(?:public|protected|private|static|final|abstract|synchronized|native|default|strictfp)\s+)*"
+    r"(?:<[^>]+>\s+)?([\w<>\[\],.?]+)\s+([A-Za-z_]\w*)\s*\(")
+_JAVA_NOT_TYPES = {"return", "new", "throw", "else", "case", "yield", "if", "while", "for", "switch",
+                   "catch", "do", "try", "synchronized", "assert"}
 _PY_SUFFIXES = (".py",)
 _TS_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+_JVM_SUFFIXES = (".java", ".kt")
 _SKIP_PARTS = {"node_modules", ".git", "__pycache__", ".venv", "venv", "dist", "build"}
 
 
@@ -251,6 +293,36 @@ def _ts_defs(rel: str, lines: list[str]) -> list[tuple[str, str]]:
     return out
 
 
+def _jvm_defs(rel: str, lines: list[str]) -> list[tuple[str, str]]:
+    """Types (a Kotlin companion is `Companion` unless named) and the
+    functions declared at the top level or directly in a type, by brace depth."""
+    out = []
+    stack: list[tuple[int, str]] = []          # (depth the type was declared at, its name)
+    depth = 0
+    kotlin = rel.endswith(".kt")
+    for raw in lines:
+        code = raw.split("//", 1)[0]
+        m = _JVM_TYPE.match(code)
+        name = None
+        if m:
+            name = m.group(2) or m.group(3) or "Companion"
+        elif depth == (stack[-1][0] + 1 if stack else 0) and (kotlin or stack):
+            mm = _KT_FUN.search(code) if kotlin else _JAVA_METHOD.match(code)
+            if mm and kotlin:
+                name = mm.group(1)
+            elif mm and mm.group(1) not in _JAVA_NOT_TYPES and mm.group(2) not in _JAVA_NOT_TYPES:
+                name = mm.group(2)
+        if name:
+            prefix = ".".join(s[1] for s in stack)
+            out.append((name, f"{rel}::{prefix}.{name}" if prefix else f"{rel}::{name}"))
+            if m:
+                stack.append((depth, name))
+        depth += code.count("{") - code.count("}")
+        while stack and depth <= stack[-1][0]:
+            stack.pop()
+    return out
+
+
 def definitions_by_name(root: Path) -> dict[str, list[str]]:
     """Every def/class/function name in a unit -> the qnames that carry it,
     sorted by path. Regex, not a parser: this is the NAIVE baseline."""
@@ -259,11 +331,12 @@ def definitions_by_name(root: Path) -> dict[str, list[str]]:
         if not path.is_file() or _SKIP_PARTS.intersection(path.relative_to(root).parts):
             continue
         suffix = path.suffix.lower()
-        if suffix not in _PY_SUFFIXES + _TS_SUFFIXES:
+        if suffix not in _PY_SUFFIXES + _TS_SUFFIXES + _JVM_SUFFIXES:
             continue
         rel = path.relative_to(root).as_posix()
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-        pairs = _py_defs(rel, lines) if suffix in _PY_SUFFIXES else _ts_defs(rel, lines)
+        pairs = (_py_defs(rel, lines) if suffix in _PY_SUFFIXES else
+                 _jvm_defs(rel, lines) if suffix in _JVM_SUFFIXES else _ts_defs(rel, lines))
         for name, qname in pairs:
             table[name].append(qname)
     return table
@@ -285,36 +358,46 @@ def name_unique(edges: list[dict[str, Any]], tables: dict[str, dict[str, list[st
 
 # --- the shipped resolver, read back from the graph it built -----------------
 
-_LANG_SUFFIX = {"py": (".py",), "ts": (".ts", ".tsx", ".js", ".jsx"), "all": None}
+_LANG_SUFFIX = {"py": (".py",), "ts": (".ts", ".tsx", ".js", ".jsx"), "jvm": _JVM_SUFFIXES, "all": None}
 
 
-def graph_predictions(cfg: Any, edges: list[dict[str, Any]]) -> dict[str, str | None]:
+def graph_predictions(cfg: Any, edges: list[dict[str, Any]]) -> dict[str, str | list[str] | None]:
     """The target the graph recorded at each labelled site: the CALLS edge on
-    that file and line whose called name matches, or None when the site went
-    to `unresolved` or was judged external."""
+    that file and line whose called name matches -- every such edge, as a
+    sorted list, when the site drew several (build-flavor variants) -- or None
+    when the site went to `unresolved` or was judged external."""
     from singularity.codegraph import store
-    preds: dict[str, str | None] = {}
+    preds: dict[str, str | list[str] | None] = {}
     cons: dict[str, Any] = {}
     for e in edges:
         if e["unit"] not in cons:
             db = store.current_db(cfg, e["unit"])
             cons[e["unit"]] = store.connect_ro(db) if db else None
         con = cons[e["unit"]]
-        row = None if con is None else con.execute(
+        dsts = [] if con is None else sorted({r[0] for r in con.execute(
             "SELECT e.dst FROM edges e JOIN files f ON f.id = e.file_id"
-            " WHERE f.path = ? AND e.line = ? AND e.callee = ? AND e.kind = 'CALLS' LIMIT 1",
-            (e["file"], e["line"], e["callee_name"])).fetchone()
-        preds[e["id"]] = row[0] if row else None
+            " WHERE f.path = ? AND e.line = ? AND e.callee = ? AND e.kind = 'CALLS'",
+            (e["file"], e["line"], e["callee_name"]))})
+        preds[e["id"]] = None if not dsts else dsts[0] if len(dsts) == 1 else dsts
     for con in cons.values():
         if con is not None:
             con.close()
     return preds
 
 
+def _config(root: str | None) -> Any:
+    """The machine's config -- or, with `--root`, one whose repositories root
+    is `root` and whose graphs live in `<root>/.mb` (pruned from every scan),
+    so a yardstick build never touches the machine's own graph store."""
+    from singularity.config import Config, load_config
+    if root is None:
+        return load_config()
+    return Config(vault=Path(root), data={"code_repos_dir": str(Path(root))})
+
+
 def _graph(data: dict[str, Any], live: list[dict[str, Any]], args: Any) -> int:
     from singularity.codegraph import build, scope
-    from singularity.config import load_config
-    cfg = load_config()
+    cfg = _config(args.root)
     wanted = {e["unit"] for e in live}
     if not args.no_build:
         units = {u.key: u for u in scope.discover_units(cfg)}
@@ -331,7 +414,7 @@ def _graph(data: dict[str, Any], live: list[dict[str, Any]], args: Any) -> int:
     preds = graph_predictions(cfg, scored)
     sc = score(scored, preds)
     _render(f"shipped resolver ({args.lang})", sc)
-    wrong = [e for e in scored if preds[e["id"]] is not None and preds[e["id"]] != e["expect"]]
+    wrong = [e for e in scored if preds[e["id"]] is not None and not _same(preds[e["id"]], e["expect"])]
     for e in wrong:
         print(f"   WRONG {e['id']} [{e['category']}] {e['call_text']}: got {preds[e['id']]}, "
               f"want {e['expect']}")
@@ -346,11 +429,11 @@ def _graph(data: dict[str, Any], live: list[dict[str, Any]], args: Any) -> int:
 
 # --- CLI ---------------------------------------------------------------------
 
-def _unit_root_factory() -> Callable[[str], Path]:
-    from singularity.config import load_config
-    cfg = load_config()
+def _unit_root_factory(root: str | None = None) -> Callable[[str], Path]:
+    cfg = _config(root)
     if cfg.code_repos_dir is None:
-        raise SystemExit("[yardstick] code_repos_dir is not set; the labelled units live under it")
+        raise SystemExit("[yardstick] code_repos_dir is not set; the labelled units live under it "
+                         "(or pass --root)")
     base = Path(cfg.code_repos_dir)
     return lambda unit: base / unit
 
@@ -369,6 +452,9 @@ def _render(name: str, scores: dict[str, Any]) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--fixture", default=str(FIXTURE), help="the labelled set (default: the P0 set)")
+    ap.add_argument("--root", help="the directory holding the labelled units, instead of code_repos_dir; "
+                                   "`graph` then builds into <root>/.mb")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("check", help="are the labelled sites still where they were?")
     b = sub.add_parser("baseline", help="score the name-only resolvers the set must defeat")
@@ -376,13 +462,13 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("score", help="score a resolver's predictions")
     s.add_argument("predictions")
     g = sub.add_parser("graph", help="build the labelled units' graphs and score the SHIPPED resolver")
-    g.add_argument("--lang", choices=("py", "ts", "all"), default="all",
+    g.add_argument("--lang", choices=("py", "ts", "jvm", "all"), default="all",
                    help="score only sites in files of this language")
     g.add_argument("--no-build", action="store_true", help="score the graphs as they are")
     g.add_argument("--out", help="write the predictions and scores as JSON")
     args = ap.parse_args(argv)
 
-    data = load_fixture()
+    data = load_fixture(Path(args.fixture))
     problems = validate_fixture(data)
     if problems:
         print("[yardstick] the fixture is malformed:", file=sys.stderr)
@@ -390,7 +476,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"   {p}", file=sys.stderr)
         return 2
 
-    unit_root = _unit_root_factory()
+    unit_root = _unit_root_factory(args.root)
     live, notes, failures = locate(data["edges"], data["files"], unit_root)
     for n in notes:
         print(f"[yardstick] {n}")

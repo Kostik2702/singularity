@@ -15,7 +15,9 @@ sys.path.insert(0, str(REPO))
 
 from tools.code_graph_yardstick import (  # noqa: E402
     FIXTURE,
+    FIXTURE_JVM,
     GATE,
+    _jvm_defs,
     _py_defs,
     _sha256,
     _ts_defs,
@@ -68,6 +70,18 @@ def test_a_perfect_resolver_scores_one_and_a_constant_one_does_not():
     assert constant["precision"] < 1.0 and constant["false_edge_rate"] == 1.0
 
 
+def test_a_variant_site_is_right_only_as_the_whole_set_of_variants():
+    """CODE-GRAPH D3: a name defined in several build-flavor source sets draws
+    an edge to each. One variant of two, or the variants where one target was
+    expected, is wrong -- not partly right."""
+    both = ["gplay/P.java::P.f", "generic/P.java::P.f"]
+    edges = [_edge("all", both), _edge("one", both), _edge("extra", "gplay/P.java::P.f"),
+             _edge("order", both)]
+    preds = {"all": list(both), "one": both[0], "extra": list(both), "order": list(reversed(both))}
+    o = score(edges, preds)["_overall"]
+    assert (o["tp"], o["wrong"]) == (2, 2)
+
+
 def test_the_gate_rejects_each_axis_on_its_own():
     """Each threshold must bite alone: a resolver that is precise but finds
     nothing, or finds everything but invents edges, fails the gate."""
@@ -85,9 +99,10 @@ def test_the_recorded_naive_baselines_miss_the_owners_gate():
     resolvers failing the gate. If a re-record ever shows one passing, the set
     has gone soft and gates nothing."""
     import json
-    runs = json.loads((REPO / "docs" / "code-graph-yardstick-baseline.json").read_text(encoding="utf-8"))
-    for name in ("name-first", "name-unique"):
-        assert gate(runs[name]["_overall"]), f"{name} passes the gate: the set cannot fail it"
+    for baseline in ("code-graph-yardstick-baseline.json", "code-graph-jvm-yardstick-baseline.json"):
+        runs = json.loads((REPO / "docs" / baseline).read_text(encoding="utf-8"))
+        for name in ("name-first", "name-unique"):
+            assert gate(runs[name]["_overall"]), f"{name} passes the gate on {baseline}: the set cannot fail it"
 
 
 # --- the fixture itself -------------------------------------------------------
@@ -98,6 +113,18 @@ def test_the_committed_fixture_is_well_formed():
     assert len(data["edges"]) >= 45
 
 
+def test_the_jvm_fixture_is_well_formed_and_pins_its_clone():
+    """CODE-GRAPH D3: the JVM set lives outside code_repos_dir, so the unit
+    must say how to get exactly the labelled tree back."""
+    data = load_fixture(FIXTURE_JVM)
+    assert validate_fixture(data) == []
+    assert len(data["edges"]) >= 80
+    for unit in data["units"].values():
+        assert unit["repo"].startswith("https://") and "checkout" in unit["clone"]
+    assert any(isinstance(e["expect"], list) for e in data["edges"])       # variant sites exist
+    assert sum(e["expect"] is None for e in data["edges"]) >= 15
+
+
 def test_validate_fixture_names_each_planted_defect():
     data = {"units": {"u": {}}, "files": {"u|a.py": "x"}, "edges": [
         _edge("dup", "a.py::f"), _edge("dup", "a.py::f"),
@@ -105,11 +132,16 @@ def test_validate_fixture_names_each_planted_defect():
         _edge("notqname", "f"),
         _edge("badcat", "a.py::f", category="nonsense"),
         _edge("badunit", "a.py::f", unit="other"),
+        _edge("onevariant", ["a.py::f"]),
+        _edge("badvariant", ["a.py::f", "f"]),
+        _edge("goodvariant", ["a.py::f", "b.py::f"]),
     ]}
     joined = "\n".join(validate_fixture(data))
     for needle in ("duplicate edge ids", "noexpect: missing expect", "notqname: expect is not a qname",
-                   "badcat: unknown category", "badunit: unit 'other' not declared"):
+                   "badcat: unknown category", "badunit: unit 'other' not declared",
+                   "onevariant: a variant expect", "badvariant: a variant expect"):
         assert needle in joined, needle
+    assert "goodvariant" not in joined
 
 
 # --- relocation: a moved label is re-found, a vanished one fails --------------
@@ -151,6 +183,24 @@ def test_ts_definitions_see_classes_methods_and_arrow_functions():
     assert {"s.ts::JobService", "s.ts::JobService.enqueue", "s.ts::retryWithBackoff",
             "s.ts::toKey"} <= qnames
     assert "s.ts::JobService.if" not in qnames and "s.ts::JobService.constructor" not in qnames
+
+
+def test_jvm_definitions_nest_types_and_skip_statements():
+    java = ["package a;", "public class Outer {", "    private Repo repo = new Repo();",
+            "    public static Outer create(int n) {", "        return helper(n);", "    }",
+            "    static class Inner {", "        void run() { if (x) { go(); } }", "    }", "}"]
+    got = {q for _, q in _jvm_defs("Outer.java", java)}
+    assert {"Outer.java::Outer", "Outer.java::Outer.create", "Outer.java::Outer.Inner",
+            "Outer.java::Outer.Inner.run"} <= got
+    assert not any(q.endswith((".helper", ".repo", ".go", ".if")) for q in got)
+    kotlin = ["package a", "fun String.slug(): String = lowercase()", "class Repo {",
+              "    companion object {", "        fun create() = Repo()", "    }",
+              "    fun load() { val x = listOf(1).map { fun inner() = 1 } }", "}",
+              "object Cache { fun clear() {} }"]
+    got = {q for _, q in _jvm_defs("Repo.kt", kotlin)}
+    assert {"Repo.kt::slug", "Repo.kt::Repo", "Repo.kt::Repo.Companion", "Repo.kt::Repo.Companion.create",
+            "Repo.kt::Repo.load", "Repo.kt::Cache"} <= got
+    assert "Repo.kt::Repo.load.inner" not in got and "Repo.kt::Repo.inner" not in got
 
 
 def test_name_guessing_is_fooled_by_a_colliding_external_call(tmp_path):

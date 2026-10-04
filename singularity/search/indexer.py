@@ -103,6 +103,8 @@ class Corpus:
       AFTER the cheap directory cuts and BEFORE any `stat()`.
     * `max_file_bytes`— size ceiling; `None` disables the check entirely (and
       with it the only `stat()` the scan would otherwise perform).
+    * `max_file_bytes_by_suffix` — ceilings that replace it for a suffix
+      (lower-case, with the dot): Java and Kotlin in the code corpus.
     * `chunk_schema`  — the chunk-format version of THIS corpus. Used to be a
       single global constant stamped onto every corpus (D3): bumping the
       markdown chunker forced a needless rebuild of the code index, and bumping
@@ -119,6 +121,7 @@ class Corpus:
     prune_dirs: tuple[str, ...] = ()
     skip_file_patterns: tuple[str, ...] = ()
     max_file_bytes: int | None = None
+    max_file_bytes_by_suffix: dict[str, int] = field(default_factory=dict)
     chunk_schema: int = chunking.CHUNK_SCHEMA_VERSION
     # C09: directory-name regex for vendored third-party distributions, pruned
     # at any depth like `prune_dirs` but by shape rather than by an enumerated
@@ -217,6 +220,7 @@ def code_corpus(cfg: Config) -> Corpus:
         patterns=code_chunking.CODE_PATTERNS,
         skip_file_patterns=code_chunking.SKIP_FILE_PATTERNS,
         max_file_bytes=code_chunking.MAX_FILE_BYTES,
+        max_file_bytes_by_suffix=code_chunking.MAX_FILE_BYTES_BY_SUFFIX,
         chunker=chunker,
         chunk_schema=chunk_schema,
         pin_guard=pin_guard,
@@ -512,6 +516,7 @@ def _scan_corpus(corpus: Corpus, report: dict[str, Any] | None = None
     match_name = _glob_matcher(tuple(corpus.patterns))
     match_skip = _glob_matcher(tuple(corpus.skip_file_patterns))
     max_bytes = corpus.max_file_bytes
+    by_suffix = corpus.max_file_bytes_by_suffix
 
     def _on_walk_error(exc: OSError) -> None:
         """Record only errors that could actually have HIDDEN indexable content.
@@ -576,9 +581,10 @@ def _scan_corpus(corpus: Corpus, report: dict[str, Any] | None = None
                 continue
             if match_skip is not None and match_skip(sub):
                 continue
-            if max_bytes is not None:
+            limit = by_suffix.get(os.path.splitext(name)[1].lower(), max_bytes) if by_suffix else max_bytes
+            if limit is not None:
                 try:
-                    if path.stat().st_size > max_bytes:
+                    if path.stat().st_size > limit:
                         continue
                 except OSError:
                     continue      # vanished/unreadable between walk and stat

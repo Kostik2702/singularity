@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .config import Config
 from .platform import current_os, scheduler
+from .platform.proc import NO_WINDOW
 
 MEMORY_FOLDERS = ["learnings/active", "learnings/archive", "decisions", "howto",
                   "incidents", "rules", "reference", "changelog", "templates", "_moc"]
@@ -80,7 +81,8 @@ def _run_shim(sh: str, shim: Path, cwd: str | None = None) -> tuple[int, str, st
     CWD-dependent (issue #16), so inheriting doctor's own directory made the
     verdict depend on where the user happened to stand."""
     proc = subprocess.run([sh, str(shim), "--version"],
-                          capture_output=True, text=True, timeout=60, cwd=cwd)
+                          capture_output=True, text=True, timeout=60, cwd=cwd,
+                          creationflags=NO_WINDOW)
     return proc.returncode, (proc.stdout or "").strip(), (proc.stderr or "").strip()
 
 
@@ -493,7 +495,7 @@ def wiki_loop_block(rep: Report, cfg: Config, fix: bool) -> None:
         try:
             proc = subprocess.run(
                 [git, "check-ignore", "-q", ".mb/sources"],
-                cwd=str(cfg.vault), capture_output=True, timeout=10)
+                cwd=str(cfg.vault), capture_output=True, timeout=10, creationflags=NO_WINDOW)
         except (OSError, subprocess.SubprocessError):
             rep.add("W3-sources-portability", "SKIP", "git check-ignore unavailable")
             return
@@ -707,6 +709,8 @@ def _code_graph_unit(cfg: Config, card: dict, parser_ok: bool) -> tuple[list[tup
             if rec["findings"]:
                 kinds = ", ".join(f"{k} {n}" for k, n in (rec.get("by_kind") or {}).items())
                 problems.append((f"{rec['findings']} secret-shaped value(s) stored ({kinds})", "audit"))
+            if rec.get("allowed"):
+                notes.append(f"{card['key']}: {rec['allowed']} audit finding(s) accepted by code_graph_audit_allow")
             since = int(meta.get("seq") or 0) - int(rec.get("at_seq") or 0)
             if since:
                 notes.append(f"{card['key']}: {since} in-place update(s) since the last audit")
@@ -1155,7 +1159,8 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
             return
         inside = subprocess.run([git, "-C", str(cfg.vault), "rev-parse",
                                  "--is-inside-work-tree"],
-                                capture_output=True, text=True, check=False)
+                                capture_output=True, text=True, check=False,
+                                creationflags=NO_WINDOW)
         if inside.returncode != 0 or inside.stdout.strip() != "true":
             # A vault that is not under git needs no commit identity; warning
             # about it would be noise, not diagnosis.
@@ -1167,7 +1172,8 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
             # `--get` already resolves local over global, and checking --global
             # alone would warn at people who configured this on purpose
             out = subprocess.run([git, "-C", str(cfg.vault), "config", "--get", key],
-                                 capture_output=True, text=True, check=False)
+                                 capture_output=True, text=True, check=False,
+                                 creationflags=NO_WINDOW)
             if not out.stdout.strip():
                 missing.append(key)
         if not missing:

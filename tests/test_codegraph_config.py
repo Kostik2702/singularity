@@ -39,6 +39,21 @@ def test_extra_roots_expand_home_and_ignore_blanks(tmp_path):
     assert roots[1] == tmp_path
 
 
+def test_accepted_audit_findings_are_fingerprints_and_stay_on_the_machine(tmp_path):
+    """`code_graph_audit_allow`: 16-hex fingerprints as `mb code audit` prints
+    them, empty by default, and never in the shared example -- each is a hash
+    of text that looked like a secret."""
+    assert DEFAULT_CONFIG["code_graph_audit_allow"] == []
+    assert validate_config({"code_graph_audit_allow": ["0123456789abcdef"]})["errors"] == []
+    for bad in ("0123456789abcdef", ["tests/test_redact.py"], ["0123456789ABCDEF"], [1]):
+        assert any("code_graph_audit_allow" in e
+                   for e in validate_config({"code_graph_audit_allow": bad})["errors"]), bad
+    cfg = Config(vault=tmp_path, data={"code_graph_audit_allow": ["0123456789abcdef"]})
+    cfg.save()
+    example = json.loads(cfg.config_example_path.read_text(encoding="utf-8"))
+    assert "code_graph_audit_allow" not in example
+
+
 def test_the_shareable_example_never_carries_extra_roots(tmp_path):
     """The example is made to be committed and shared; an extra root is a
     path to someone's work repository and does not travel with it."""

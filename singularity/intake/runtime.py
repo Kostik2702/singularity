@@ -14,7 +14,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from .inspect import _esbuild_path, _scrubbed_env
+from .inspect import _NO_WINDOW, _esbuild_path, _scrubbed_env
 
 MOTION_QA = (Path(__file__).resolve().parents[1]
              / "skills" / "motion-qa" / "scripts" / "motion-qa.mjs")
@@ -87,7 +87,7 @@ def run_runtime(files: list[dict], workspace: Path,
     env["NODE_PATH"] = str(deps)
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
-                              encoding="utf-8", timeout=120, env=env)
+                              encoding="utf-8", timeout=120, env=env, creationflags=_NO_WINDOW)
     except (subprocess.TimeoutExpired, OSError) as exc:
         return {"status": "unavailable", "why": f"esbuild bundle failed to run: {exc}"}
     if proc.returncode != 0:
@@ -116,7 +116,8 @@ def run_runtime(files: list[dict], workspace: Path,
              "--url", url, "--out", str(qa_out),
              "--scroll-steps", "2", "--settle-ms", "600",
              "--block-network", "1"],
-            capture_output=True, text=True, encoding="utf-8", timeout=180)
+            capture_output=True, text=True, encoding="utf-8", timeout=180,
+            creationflags=_NO_WINDOW)
         qa_env = json.loads(qa.stdout)
     except (subprocess.TimeoutExpired, OSError, ValueError) as exc:
         return {"status": "unavailable", "why": f"motion-qa run failed: {exc}"}

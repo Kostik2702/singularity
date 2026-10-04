@@ -45,7 +45,7 @@ from . import store
 # per-file table's first column is a file id, compared as its path, and the
 # rows of a stale file are left out.
 TABLES: dict[str, tuple[str, bool]] = {
-    "files": ("SELECT path, lang, content_hash, parse_status, is_test FROM files", False),
+    "files": ("SELECT path, lang, content_hash, parse_status, is_test, package, facade FROM files", False),
     "nodes": ("SELECT file_id, qname, name, kind, parent, spans, signature, doc1, decorators,"
               " exported, local, bases FROM nodes", True),
     "name_refs": ("SELECT lang, name, files FROM name_refs", False),
@@ -229,16 +229,15 @@ def _foreign_package(root: Path) -> str | None:
 def _mb_code(cfg: Config, root: Path, verb: str, timeout: float) -> dict[str, Any]:
     """`mb code <verb> --json` in the unit's root, in a child process of this
     interpreter. {"out": parsed JSON} or {"error": ..., "stderr": tail}."""
-    from ..platform.proc import module_search_root
+    from ..platform.proc import NO_WINDOW, module_search_root
 
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(p for p in (module_search_root(), env.get("PYTHONPATH")) if p)
     env["MB_CODE_NO_BACKGROUND"] = "1"          # nightly waits for its own work; nothing detaches
-    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     argv = [sys.executable, "-m", "singularity", "--vault", str(cfg.vault), "code", verb, "--json"]
     try:
         proc = subprocess.run(argv, cwd=str(root), env=env, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", timeout=timeout, creationflags=flags,
+                              encoding="utf-8", errors="replace", timeout=timeout, creationflags=NO_WINDOW,
                               stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired as exc:
         return {"error": f"`mb code {verb}` did not finish in {timeout:.0f}s and was stopped",

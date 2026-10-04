@@ -18,10 +18,12 @@ from typing import Any
 # typed interface properties become callable members. 5: Python star imports
 # bounded by the hop limit (a star cycle recursed without end; a chain of more
 # than _MAX_HOPS star re-exports no longer resolves).
-RESOLVER_VERSION = 5
+# 6: Java and Kotlin, one `jvm` family (CODE-GRAPH D3).
+RESOLVER_VERSION = 6
 PARSER_PACKAGES = ("tree-sitter", "tree-sitter-python", "tree-sitter-typescript",
-                   "tree-sitter-javascript")
-_MODULES = ("tree_sitter", "tree_sitter_python", "tree_sitter_typescript", "tree_sitter_javascript")
+                   "tree-sitter-javascript", "tree-sitter-java", "tree-sitter-kotlin")
+_MODULES = ("tree_sitter", "tree_sitter_python", "tree_sitter_typescript", "tree_sitter_javascript",
+            "tree_sitter_java", "tree_sitter_kotlin")
 
 
 def parser_versions() -> dict[str, str]:

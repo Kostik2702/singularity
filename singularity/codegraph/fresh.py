@@ -33,7 +33,7 @@ from typing import Any
 
 from ..config import Config
 from ..search import code_chunking
-from . import scope
+from . import languages, scope
 
 WATCHED = scope._MANIFEST            # package.json / tsconfig*.json, by basename
 
@@ -63,7 +63,9 @@ def scope_fingerprint(cfg: Config) -> str:
     return hashlib.sha256(json.dumps([
         sorted(scope._skip_dirs(cfg)), vendored.pattern if vendored else None,
         list(scope.PRIVACY_PATTERNS), sorted(scope.CODE_SUFFIXES), code_chunking.MAX_FILE_BYTES,
-        scope._TEST_NAME.pattern, sorted(scope._TEST_DIRS)]).encode()).hexdigest()[:16]
+        scope._TEST_NAME.pattern, sorted(scope._TEST_DIRS),
+        sorted(code_chunking.MAX_FILE_BYTES_BY_SUFFIX.items()), scope._JVM_TEST_NAME.pattern,
+        languages._TEST_SET.pattern]).encode()).hexdigest()[:16]
 
 
 class GitFailed(RuntimeError):
@@ -71,9 +73,11 @@ class GitFailed(RuntimeError):
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
+    from ..platform.proc import NO_WINDOW
+
     try:
         return subprocess.run(["git", "--no-optional-locks", "-C", str(root), *args],
-                              capture_output=True)
+                              capture_output=True, creationflags=NO_WINDOW)
     except FileNotFoundError as exc:
         raise GitFailed("git is not on PATH") from exc
 
@@ -231,7 +235,7 @@ def _present(root: Path, path: str, wanted) -> bool:
         st = (root / path).stat()
     except OSError:
         return False
-    return st.st_size <= code_chunking.MAX_FILE_BYTES and os.path.isfile(root / path)
+    return st.st_size <= code_chunking.max_file_bytes(path) and os.path.isfile(root / path)
 
 
 def _watched_changed(root: Path, paths: set[str], watched: dict[str, list]) -> str | None:
@@ -279,7 +283,7 @@ def detect(cfg: Config, meta: dict[str, Any], con: sqlite3.Connection,
         if why:
             return Detection(rebuild=why)
         _compare_all(root, con, {p: st for p, st in files.items()
-                                 if wanted(p) and st[0] <= code_chunking.MAX_FILE_BYTES}, det)
+                                 if wanted(p) and st[0] <= code_chunking.max_file_bytes(p)}, det)
         return det
 
     state = git_state(root)

@@ -31,8 +31,8 @@ class ImportBinding:
     scope: str                 # qname of the scope the import is visible in
     local: str                 # the name code in that scope uses
     module: str                # dotted module as written (no leading dots)
-    level: int                 # relative-import depth; 0 = absolute
-    attr: str | None           # `from m import attr`; None for `import m`
+    level: int                 # relative-import depth; 0 = absolute. JVM: 1 = Java `import static`
+    attr: str | None           # `from m import attr`; None for `import m`. JVM: `*` for a wildcard
 
 
 @dataclass
@@ -42,6 +42,14 @@ class CallSite:
     callee: str                # the called name
     receiver: str | None       # `obj` of `obj.callee(...)`, as written; None for a bare call
     klass: str | None          # enclosing class qname, for `self`/`cls`
+    # Kotlin: a bare call inside `x.apply { }`, `x.run { }` or `with(x) { }` is
+    # first a member of x -- the lambda's receiver, as written. None elsewhere.
+    implicit: str | None = None
+
+
+# The TypeHint target that carries a function's return VALUE when it declares
+# no return type (Kotlin `fun create() = Foo()`); the JVM resolver reads it.
+RETURN = "<return>"
 
 
 @dataclass
@@ -74,6 +82,10 @@ class FileFacts:
     # decorator) is used without being called, and `deadcode` must not call
     # it dead (P4). Sorted, one entry per name.
     refs: list[str] = field(default_factory=list)
+    # The JVM family's `package a.b.c` (CODE-GRAPH D3): a type's fully qualified
+    # name is its package plus its name, whatever the file is called. None for
+    # a language without packages, and for a Java/Kotlin file in the default one.
+    package: str | None = None
 
 
 # --- stored form ---------------------------------------------------------------
@@ -91,15 +103,19 @@ def encode_facts(f: FileFacts) -> bytes:
         [[d.qname, d.name, d.kind, d.parent, d.spans, d.signature, d.doc1, d.decorators, d.exported,
           d.bases, d.returns] for d in f.definitions],
         [_binding(b) for b in f.imports],
-        [[c.caller, c.line, c.callee, c.receiver, c.klass] for c in f.calls],
+        # `implicit` only when set: every Python and TypeScript blob stays as it was
+        [[c.caller, c.line, c.callee, c.receiver, c.klass, *([c.implicit] if c.implicit else [])] for c in f.calls],
         [[h.scope, h.target, h.type_expr, h.source, h.origin] for h in f.hints],
         [_binding(b) for b in f.exports],
         f.refs,
+        f.package,
     ], separators=(",", ":"), ensure_ascii=False).encode("utf-8"), 1)
 
 
 def decode_facts(blob: bytes) -> FileFacts:
-    path, lang, degraded, defs, imports, calls, hints, exports, refs = json.loads(zlib.decompress(blob))
+    # A blob written before `package` existed (schema 5) has nine fields; the
+    # read-only answers of a graph not yet rebuilt still decode it.
+    path, lang, degraded, defs, imports, calls, hints, exports, refs, *rest = json.loads(zlib.decompress(blob))
     return FileFacts(
         path=path, lang=lang, degraded=degraded,
         definitions=[Definition(q, n, k, p, [tuple(s) for s in spans], sig, doc, dec, exp, bases, ret)
@@ -108,4 +124,4 @@ def decode_facts(blob: bytes) -> FileFacts:
         calls=[CallSite(*c) for c in calls],
         hints=[TypeHint(*h) for h in hints],
         exports=[ImportBinding(*b) for b in exports],
-        refs=refs)
+        refs=refs, package=rest[0] if rest else None)

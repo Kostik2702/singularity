@@ -31,11 +31,18 @@ from pathlib import Path
 
 from ..config import Config
 from ..search import code_chunking
+from . import languages
 
 CODE_SUFFIXES = frozenset(p.lstrip("*") for p in code_chunking.CODE_PATTERNS)
 PRIVACY_PATTERNS = ("*secret*", "*credential*")        # CODE-INDEX D5, layer two
 _TEST_NAME = re.compile(r"(^test_.*\.py$|.*_test\.py$|^conftest\.py$|.*\.(test|spec)\.[jt]sx?$|.*\.d\.ts$)",
                         re.IGNORECASE)
+# Java and Kotlin: in a Gradle layout the source set decides (`src/test/`,
+# `src/androidTestGplay/`, ... -- languages.is_test_set), so a production class
+# called `ScreenshotTest` in `src/main/` is not a test. Outside one, JUnit's
+# naming -- case-sensitive on purpose: `Edit.kt` is not an `IT`.
+_JVM_TEST_NAME = re.compile(r".*(Test|Tests|IT)\.(java|kt)$")
+_JVM_SUFFIXES = (".java", ".kt")
 _TEST_DIRS = {"tests", "test", "__tests__"}
 
 
@@ -105,9 +112,12 @@ def is_linked_worktree(path: Path) -> bool:
 
 
 def _git(root: Path, *args: str) -> str:
+    from ..platform.proc import NO_WINDOW
+
     try:
         done = subprocess.run(["git", "--no-optional-locks", "-C", str(root), *args],
-                              capture_output=True, text=True, encoding="utf-8", errors="replace")
+                              capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              creationflags=NO_WINDOW)
     except FileNotFoundError as exc:
         raise GraphError("git is not on PATH; git units cannot be read without it") from exc
     if done.returncode != 0:
@@ -308,6 +318,11 @@ def discover_units(cfg: Config) -> list[Unit]:
 
 def is_test_path(path: str) -> bool:
     parts = path.split("/")
+    if path.lower().endswith(_JVM_SUFFIXES):
+        source = languages.source_set(path)
+        if source is not None:
+            return languages.is_test_set(source)
+        return bool(_JVM_TEST_NAME.match(parts[-1])) or any(p in _TEST_DIRS for p in parts[:-1])
     return bool(_TEST_NAME.match(parts[-1])) or any(p in _TEST_DIRS for p in parts[:-1])
 
 
@@ -364,7 +379,7 @@ def list_files(unit: Unit, cfg: Config) -> list[FileEntry]:
             st = (unit.root / path).stat()
         except OSError:
             continue                     # tracked by git but deleted in the worktree
-        if st.st_size > code_chunking.MAX_FILE_BYTES:
+        if st.st_size > code_chunking.max_file_bytes(path):
             continue
         out.append(FileEntry(path=path, size=st.st_size, mtime_ns=st.st_mtime_ns,
                              is_test=is_test_path(path)))

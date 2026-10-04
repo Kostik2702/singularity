@@ -17,7 +17,10 @@ VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi"}
 
 def _run(cmd: list[str], timeout: int = SUBPROCESS_TIMEOUT_LONG) -> subprocess.CompletedProcess:
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        # no console window per child (singularity.platform.proc.NO_WINDOW; the
+        # factory imports nothing from the engine, so the expression is repeated)
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except FileNotFoundError as exc:
         raise ContractError(f"executable not found: {cmd[0]}") from exc
     except subprocess.TimeoutExpired as exc:

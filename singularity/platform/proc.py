@@ -15,6 +15,16 @@ from typing import Any
 
 from . import current_os
 
+# Windows: a console program (git, schtasks, node...) started by a process that
+# has no console of its own -- pythonw, or anything spawned DETACHED, which is
+# how the scheduler's jobs and the daemon run -- is given a console window of
+# its own, shown and gone in a blink. `nightly` made ~380 git calls after a
+# boot and flashed a terminal for each (2026-10-04). The flag does not help on
+# the PARENT: pythonw is a GUI program, for it the flag is a no-op, and its
+# children are still born without a console. So every call that captures its
+# output passes it; tests/test_no_console_windows.py holds the line. 0 on POSIX.
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 
 def python_executable(windowed: bool = False) -> str:
     """Interpreter of the current venv; pythonw.exe for windowed daemons on Windows."""
@@ -77,13 +87,12 @@ def spawn_detached(args: list[str], log_file: Path, cwd: str | None = None) -> i
     cwd = cwd or module_search_root()
     if current_os() == "windows":
         DETACHED_PROCESS = 0x00000008
-        CREATE_NO_WINDOW = 0x08000000
         proc = subprocess.Popen(
             args,
             stdout=log,
             stderr=log,
             stdin=subprocess.DEVNULL,
-            creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
+            creationflags=DETACHED_PROCESS | NO_WINDOW,
             close_fds=True,
             cwd=cwd,
         )
@@ -109,7 +118,8 @@ def is_running(pid: int) -> bool:
         pass
     if current_os() == "windows":
         out = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}"], capture_output=True, text=True
+            ["tasklist", "/FI", f"PID eq {pid}"], capture_output=True, text=True,
+            creationflags=NO_WINDOW,
         )
         return str(pid) in out.stdout
     try:
@@ -131,7 +141,8 @@ def kill(pid: int) -> bool:
         return False
     try:
         if current_os() == "windows":
-            subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
+            subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True,
+                           creationflags=NO_WINDOW)
         else:
             os.kill(pid, 15)
         return True

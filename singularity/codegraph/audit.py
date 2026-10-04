@@ -73,9 +73,23 @@ redact reads the teaching-line exemption by line number, the batch keeps each
 text's lines intact, and a text holding a line break other than `\\n` (redact
 counts `\\n`, str.splitlines counts more, and the two would disagree) is never
 batched. tests/test_codegraph_audit.py pins the equivalence.
+
+Findings the owner accepted
+---------------------------
+The audit knows shapes, not intent: a redactor's own tests hold fake keys of
+every shape it masks, and they are reported like real ones. The owner accepts
+them one finding at a time, never by file or path -- a real key added to the
+same test file must still be reported. Each finding carries a `fingerprint`,
+sha256 of its definition, field and exact text, cut to 16 hex; the ones listed
+in `code_graph_audit_allow` are counted as `allowed`, not as findings, and
+doctor K2 is quiet about them. Any change to the text (another key beside the
+fake one, a new value) or to where it stands makes a new fingerprint, and the
+finding is back. The fingerprint is of text that looked like a secret; the
+config keeps it off the shared example (config._EXAMPLE_REDACTED_KEYS).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sqlite3
@@ -110,6 +124,12 @@ class Finding:
     field: str      # nodes.<column> or facts.<part>
     kind: str       # the detector rule: redact's kind, or private-key-header
     excerpt: str    # the text around the first mask, every secret in it masked
+    fingerprint: str  # of this definition, field and exact text: what `code_graph_audit_allow` lists
+
+
+def fingerprint(qname: str, fld: str, text: str) -> str:
+    """One finding's identity for the owner's allowlist (see the module doc)."""
+    return hashlib.sha256("\x00".join((qname, fld, text)).encode("utf-8")).hexdigest()[:16]
 
 
 def _check(text: str) -> tuple[list[str], str]:
@@ -181,8 +201,8 @@ class _Scanner:
             if len(text) <= _CACHED_CHARS:
                 self.clean.add(text)
             return
-        excerpt = _excerpt(masked)
-        self.findings.extend(Finding(qname, fld, k, excerpt) for k in dict.fromkeys(kinds))
+        excerpt, fp = _excerpt(masked), fingerprint(qname, fld, text)
+        self.findings.extend(Finding(qname, fld, k, excerpt, fp) for k in dict.fromkeys(kinds))
 
 
 def scan_items(items: Iterable[tuple[str, str, str]]) -> list[Finding]:
@@ -213,8 +233,10 @@ def _scan_nodes(con: sqlite3.Connection, s: _Scanner) -> None:
 def _scan_facts(path: str, blob: bytes, s: _Scanner) -> None:
     """Every source text of one stored FileFacts outside its definitions
     (model.encode_facts: path, lang, degraded, definitions, imports, calls,
-    hints, exports, refs)."""
-    _path, _lang, _degraded, defs, imports, calls, hints, exports, refs = json.loads(zlib.decompress(blob))
+    hints, exports, refs, package -- the last absent from a schema-5 blob)."""
+    _path, _lang, _degraded, defs, imports, calls, hints, exports, refs, *rest = json.loads(zlib.decompress(blob))
+    if rest and rest[0]:
+        s.add(f"{path}::<module>", "facts.package", rest[0])
     for d in defs:
         s.add(d[0], "facts.returns", d[10])
     for part, bindings in (("facts.imports", imports), ("facts.exports", exports)):
@@ -222,8 +244,10 @@ def _scan_facts(path: str, blob: bytes, s: _Scanner) -> None:
             s.add(scope, part, spec)
             s.add(scope, part, local)
             s.add(scope, part, attr)
-    for caller, _line, _callee, receiver, _klass in calls:
+    for caller, _line, _callee, receiver, _klass, *implicit in calls:
         s.add(caller, "facts.calls.receiver", receiver)
+        for text in implicit:                    # a Kotlin receiver lambda's receiver
+            s.add(caller, "facts.calls.receiver", text)
     for scope, _target, type_expr, _source, _origin in hints:
         s.add(scope, "facts.hints", type_expr)
     module, clean = f"{path}::<module>", s.clean
@@ -232,9 +256,11 @@ def _scan_facts(path: str, blob: bytes, s: _Scanner) -> None:
             s.add(module, "facts.refs", name)
 
 
-def scan(con: sqlite3.Connection) -> dict[str, Any]:
+def scan(con: sqlite3.Connection, allowed: Iterable[str] = ()) -> dict[str, Any]:
     """The audit of the graph open on `con`; reads only. A graph of another
-    schema is refused, not half read: its columns and blob layout differ."""
+    schema is refused, not half read: its columns and blob layout differ.
+    Findings whose fingerprint is in `allowed` are reported apart, as
+    `allowed`, and are not counted."""
     started = time.perf_counter()
     meta = store.read_meta(con)
     if meta.get("schema_version") != store.SCHEMA_VERSION:
@@ -249,9 +275,12 @@ def scan(con: sqlite3.Connection) -> dict[str, Any]:
             # a part the audit cannot read is a part it did not check: never a clean result
             raise GraphError(f"the stored facts of {path} cannot be read ({exc}): rebuild the graph") from exc
     s.flush()
-    findings = s.findings
+    accepted = frozenset(allowed)
+    findings = [f for f in s.findings if f.fingerprint not in accepted]
+    kept = [f for f in s.findings if f.fingerprint in accepted]
     return {"count": len(findings), "by_kind": dict(sorted(Counter(f.kind for f in findings).items())),
             "findings": [asdict(f) for f in findings],
+            "allowed": len(kept), "allowed_findings": [asdict(f) for f in kept],
             "files": con.execute("SELECT count(*) FROM files").fetchone()[0],
             "nodes": con.execute("SELECT count(*) FROM nodes").fetchone()[0],
             "seq": meta.get("seq", 0), "seconds": round(time.perf_counter() - started, 2)}
@@ -263,7 +292,7 @@ def record(db: Path, report: dict[str, Any]) -> bool:
     only, never a finding. `seq` is not moved -- nothing the queries read
     changed. False when another writer held the graph too long."""
     row = {"findings": report["count"], "by_kind": report["by_kind"], "at_seq": report["seq"],
-           "at": time.time()}
+           "allowed": report.get("allowed", 0), "at": time.time()}
     try:
         with store.write_transaction(db, wait=_RECORD_WAIT_SECONDS) as con:
             con.execute("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)", (RECORD_KEY, json.dumps(row)))
@@ -272,14 +301,15 @@ def record(db: Path, report: dict[str, Any]) -> bool:
     return True
 
 
-def audit_db(db: Path, *, keep: bool = True) -> dict[str, Any]:
+def audit_db(db: Path, *, keep: bool = True, allowed: Iterable[str] = ()) -> dict[str, Any]:
     """Scan the graph in `db`; with `keep`, record the result in its meta.
     One read transaction: an update applied meanwhile is not half seen, and
-    the `seq` recorded is the state that was scanned."""
+    the `seq` recorded is the state that was scanned. `allowed`: the owner's
+    accepted fingerprints (`code_graph_audit_allow`)."""
     con = store.connect_ro(db)
     try:
         con.execute("BEGIN")
-        report = scan(con)
+        report = scan(con, allowed)
     finally:
         con.close()
     report["recorded"] = record(db, report) if keep else False

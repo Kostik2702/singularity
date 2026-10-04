@@ -1,8 +1,9 @@
 """The P3 equivalence oracle: an updated graph equals a full build (UNMET j).
 
-Each sequence grows a small random project -- Python and TypeScript files
-drawn from ONE vocabulary of paths and names, so imports hit and miss,
-names collide and part again, bases and re-exports cross files -- then
+Each sequence grows a small random project -- Python, TypeScript, Java and
+Kotlin files drawn from ONE vocabulary of paths and names, so imports hit and
+miss, names collide and part again, bases and re-exports cross files, JVM
+classes change package and build flavors define one class twice -- then
 applies random edits step by step: a file rewritten, deleted, created at a
 path something already imports, moved, broken and fixed; in git mode also
 commits, staged edits and reverts to HEAD. After every step the unit is
@@ -37,6 +38,16 @@ TS_PATHS = ["web/index.ts", "web/a.ts", "web/b.ts", "web/c.tsx", "web/lib/index.
 FUNCS = ["run", "helper", "load", "store", "parse"]
 CLASSES = ["Engine", "Repo", "Base", "Service"]
 METHODS = ["start", "find", "store", "run"]
+# Java and Kotlin (CODE-GRAPH D3): two packages and a third nobody declares at
+# first, a class defined once per build flavor, a test set. A file's package
+# line is usually its directory's and sometimes not -- a class moving between
+# packages is what the resolver's package pseudo-paths must follow.
+JVM_PATHS = ["app/src/main/java/com/o/a/Engine.java", "app/src/main/java/com/o/a/Repo.kt",
+             "app/src/main/java/com/o/a/Tools.kt", "app/src/main/java/com/o/b/Service.java",
+             "app/src/main/java/com/o/b/Base.kt", "app/src/gplay/java/com/o/a/Flavor.java",
+             "app/src/generic/java/com/o/a/Flavor.java", "app/src/test/java/com/o/a/EngineTest.kt"]
+JVM_PACKAGES = ["com.o.a", "com.o.b", "com.o.c"]
+JVM_CLASSES = CLASSES + ["Flavor"]
 
 
 def _module(path: str) -> str:
@@ -162,8 +173,91 @@ def _ts_calls(rng: random.Random) -> list[str]:
     return out
 
 
+def _jvm_package(rng: random.Random, path: str) -> str:
+    own = ".".join(path.split("/java/", 1)[1].split("/")[:-1])
+    return own if rng.random() < 0.8 else rng.choice(JVM_PACKAGES)
+
+
+def _jvm_calls(rng: random.Random, java: bool) -> list[str]:
+    end = ";" if java else ""
+    out = []
+    for _ in range(rng.randint(0, 4)):
+        m, c, fn = rng.choice(METHODS), rng.choice(JVM_CLASSES), rng.choice(FUNCS)
+        forms = [f"repo.{m}(null){end}", f"other.{m}(null){end}", f"{m}(null){end}", f"{c}.{m}(null){end}",
+                 f"super.{m}(null){end}", f"this.repo.{m}(null){end}"]
+        if java:
+            forms += [f"new {c}();", f"{c}.Companion.{m}(null);", f"ToolsKt.{fn}(null);",
+                      f"{c}.INSTANCE.{m}(null);"]
+        else:
+            forms += [f"{c}().{m}(null)", f"{fn}(null)", f"other?.let {{ it.{m}(null) }}",
+                      f"repo.apply {{ {m}(null) }}", f"other.{fn}()", f"with(repo) {{ {m}(null) }}"]
+        out.append(rng.choice(forms))
+    return out
+
+
+def java_source(rng: random.Random, path: str) -> str:
+    lines = [f"package {_jvm_package(rng, path)};"]
+    for _ in range(rng.randint(0, 3)):
+        lines.append(f"import {rng.choice(JVM_PACKAGES)}.{rng.choice(JVM_CLASSES + ['ToolsKt'])};")
+    if rng.random() < 0.3:
+        lines.append(f"import {rng.choice(JVM_PACKAGES)}.*;")
+    if rng.random() < 0.2:
+        lines.append(f"import static {rng.choice(JVM_PACKAGES)}.{rng.choice(JVM_CLASSES)}.{rng.choice(METHODS)};")
+    name = path.rsplit("/", 1)[1].split(".")[0]
+    base = rng.choice(JVM_CLASSES + [""])
+    lines.append(f"public class {name}" + (f" extends {base}" if base and base != name else "") + " {")
+    lines.append(f"    private {rng.choice(JVM_CLASSES)} repo = new {rng.choice(JVM_CLASSES)}();")
+    for m in rng.sample(METHODS, rng.randint(1, 3)):
+        lines.append(f"    public void {m}({rng.choice(JVM_CLASSES)} other) {{")
+        lines += [f"        {c}" for c in _jvm_calls(rng, java=True)]
+        lines.append("    }")
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def kotlin_source(rng: random.Random, path: str) -> str:
+    lines = [f"package {_jvm_package(rng, path)}"]
+    for _ in range(rng.randint(0, 3)):
+        name = rng.choice(JVM_CLASSES + FUNCS)
+        alias = f" as {name}Alias" if rng.random() < 0.15 else ""
+        lines.append(f"import {rng.choice(JVM_PACKAGES)}.{name}{alias}")
+    if rng.random() < 0.3:
+        lines.append(f"import {rng.choice(JVM_PACKAGES)}.*")
+    for fn in rng.sample(FUNCS, rng.randint(0, 2)):
+        if rng.random() < 0.4:
+            lines.append(f"fun {rng.choice(JVM_CLASSES)}.{fn}() {{")
+        else:
+            lines.append(f"fun {fn}(x: {rng.choice(JVM_CLASSES)}?) {{")
+        lines += [f"    {c}" for c in _jvm_calls(rng, java=False)] or ["    Unit"]
+        lines.append("}")
+    for _ in range(rng.randint(0, 2)):
+        name, base = rng.choice(JVM_CLASSES), rng.choice(JVM_CLASSES + [""])
+        head = f"class {name}(private val repo: {rng.choice(JVM_CLASSES)})"
+        lines.append(head + (f" : {base}()" if base and base != name else "") + " {")
+        for m in rng.sample(METHODS, rng.randint(1, 2)):
+            lines.append(f"    fun {m}(other: {rng.choice(JVM_CLASSES)}) {{")
+            lines += [f"        {c}" for c in _jvm_calls(rng, java=False)]
+            lines.append("    }")
+        if rng.random() < 0.5:
+            lines += ["    companion object {", f"        fun {rng.choice(METHODS)}(x: Any?) {{", "        }",
+                      "    }"]
+        lines.append("}")
+    if rng.random() < 0.3:
+        lines += [f"object {rng.choice(JVM_CLASSES)}Registry {{", f"    fun {rng.choice(METHODS)}(x: Any?) {{",
+                  "    }", "}"]
+    return "\n".join(lines) + "\n"
+
+
 def source(rng: random.Random, path: str) -> str:
+    if path.endswith(".java"):
+        return java_source(rng, path)
+    if path.endswith(".kt"):
+        return kotlin_source(rng, path)
     return py_source(rng, path) if path.endswith(".py") else ts_source(rng, path)
+
+
+def _family_paths(path: str) -> list[str]:
+    return PY_PATHS if path.endswith(".py") else JVM_PATHS if path.endswith((".java", ".kt")) else TS_PATHS
 
 
 class Project:
@@ -189,7 +283,7 @@ class Project:
         self.sh("-c", "user.email=o@o", "-c", "user.name=o", "commit", "-q", "--allow-empty", "-m", "s")
 
     def seed(self) -> None:
-        for rel in self.rng.sample(PY_PATHS, 6) + self.rng.sample(TS_PATHS, 5):
+        for rel in self.rng.sample(PY_PATHS, 6) + self.rng.sample(TS_PATHS, 5) + self.rng.sample(JVM_PATHS, 6):
             self.write(rel, source(self.rng, rel))
         self.write("web/package.json", json.dumps({"name": "@o/web"}))
         if self.git:
@@ -202,7 +296,7 @@ class Project:
         for _ in range(self.rng.randint(1, 3)):
             op = self.rng.random()
             existing = sorted(self.files)
-            code = [p for p in existing if p.endswith((".py", ".ts", ".tsx", ".js"))]
+            code = [p for p in existing if p.endswith((".py", ".ts", ".tsx", ".js", ".java", ".kt"))]
             if op < 0.35 and code:
                 rel = self.rng.choice(code)
                 self.write(rel, source(self.rng, rel))
@@ -212,14 +306,14 @@ class Project:
                 self.delete(rel)
                 done.append(f"delete {rel}")
             elif op < 0.65:
-                rel = self.rng.choice(PY_PATHS + TS_PATHS + ["pkg/missing.py", "pkg/sub/f.py",
-                                                             "web/missing.ts", "web/lib/f.ts"])
+                rel = self.rng.choice(PY_PATHS + TS_PATHS + JVM_PATHS + [
+                    "pkg/missing.py", "pkg/sub/f.py", "web/missing.ts", "web/lib/f.ts",
+                    "app/src/main/java/com/o/c/Late.kt", "app/src/generic/java/com/o/b/Flavor.java"])
                 self.write(rel, source(self.rng, rel))
                 done.append(f"create {rel}")
             elif op < 0.75 and code:
                 src = self.rng.choice(code)
-                pool = PY_PATHS if src.endswith(".py") else TS_PATHS
-                dst = self.rng.choice([p for p in pool if p != src])
+                dst = self.rng.choice([p for p in _family_paths(src) if p != src])
                 text = self.files[src]
                 self.delete(src)
                 self.write(dst, text)
@@ -227,7 +321,9 @@ class Project:
             elif op < 0.85 and code:
                 rel = self.rng.choice(code)
                 text = self.files[rel]
-                broken = "def broken(:\n" if rel.endswith(".py") else "export function broken( {\n"
+                broken = ("def broken(:\n" if rel.endswith(".py") else "fun broken( {\n" if rel.endswith(".kt")
+                          else "class Broken { void f( {\n" if rel.endswith(".java")
+                          else "export function broken( {\n")
                 self.write(rel, text.replace(broken, "") if broken in text else text + broken)
                 done.append(f"break/fix {rel}")
             elif self.git and op < 0.92:
@@ -243,8 +339,11 @@ class Project:
                     done.append(f"revert {rel} (not in HEAD)")
             elif code:
                 rel = self.rng.choice(code)
-                self.write(rel, self.files[rel] + "\ndef helper():\n    return 9\n" if rel.endswith(".py")
-                           else self.files[rel] + "\nexport function helper(): void {}\n")
+                extra = ("\ndef helper():\n    return 9\n" if rel.endswith(".py")
+                         else "\nfun helper(x: Any?) {}\n" if rel.endswith(".kt")
+                         else "\nclass Helper { static void helper() {} }\n" if rel.endswith(".java")
+                         else "\nexport function helper(): void {}\n")
+                self.write(rel, self.files[rel] + extra)
                 done.append(f"duplicate helper in {rel}")
         return done
 

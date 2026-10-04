@@ -48,6 +48,19 @@ def _run(cfg, capsys, *argv):
     return code, out.out, out.err
 
 
+def test_a_build_without_one_grammar_is_refused_with_the_install_line(repo, capsys, monkeypatch):
+    """An upgrade that did not bring the new grammar wheels (D3: Java and
+    Kotlin) must say so, not die in the middle of a build with a traceback."""
+    from singularity.codegraph import languages
+    cfg, _ = repo
+
+    def missing():
+        raise ModuleNotFoundError("No module named 'tree_sitter_kotlin'")
+    monkeypatch.setattr(languages, "load_extractors", missing)
+    code, _, err = _run(cfg, capsys, "build")
+    assert code == 2 and "cannot build here" in err and "requirements-graph.txt" in err
+
+
 def test_every_verb_but_status_refuses_while_the_graph_is_off(repo, capsys):
     cfg, _ = repo
     cfg.data["code_graph_enabled"] = False
