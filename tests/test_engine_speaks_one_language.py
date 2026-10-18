@@ -104,6 +104,12 @@ ALLOWED: dict[str, str] = {
         "the justification marker the lead writes into an advisor brief. A "
         "plugin may match it byte for byte to refuse an unjustified spawn, so "
         "a translated spelling would silently stop matching. Marker, not prose",
+    "singularity/skills/team-lead/SKILL.md":
+        "the same advisor justification marker, quoted where the lead is told "
+        "to write it. Marker, not prose",
+    "singularity/machine/hooks_state.py":
+        "the advisor justification marker inside the SessionStart delegation "
+        "fragment: the lead must write it exactly. Marker, not prose",
 }
 
 #: Recorded machine output over a vault that is not written in English. These
@@ -274,10 +280,15 @@ BUDGET: dict[str, int] = {
     "docs/search-eval-code-v2.json": 1506,
     "docs/v0.5.0-baseline.json": 1908,
     "golden-registry/files/letter-glitch-wall/reference-implementation-index.html": 10,
-    # 11 -> 17: the advisor's justification marker, registered as its delivery.
-    "singularity/machine/rules_delivery.py": 17,
+    # 11 -> 17 -> 23: the advisor's justification marker, registered as its
+    # delivery in advisor.md and in the team-lead skill.
+    "singularity/machine/rules_delivery.py": 23,
     # The justification marker, twice: the description and the refusal rule.
     "singularity/agents/advisor.md": 12,
+    # The justification marker, once: section 8.
+    "singularity/skills/team-lead/SKILL.md": 6,
+    # The justification marker, once: the delegation fragment.
+    "singularity/machine/hooks_state.py": 6,
     "tests/fixtures/grok/README.md": 2,
     # 3347 -> 3386 (CODE-GRAPH P0): one crosslingual code case, c-xl-06, a RU query
     # whose target is outside this engine; the set had none before.

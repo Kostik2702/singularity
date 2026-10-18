@@ -74,6 +74,10 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "council personas are Claude agent definitions, not adapted or "
                   "real-client tested there",
     },
+    "team-lead": {
+        "clients": ["claude"], "tools": ["Agent"],
+        "reason": "spawns Claude subagents by model tier via the Agent tool",
+    },
     "visual-regression-bootstrap": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "acceptance requires the operator to visually review initial "

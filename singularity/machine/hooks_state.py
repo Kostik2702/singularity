@@ -137,6 +137,13 @@ MEASURED_AXIS_FRAGMENT = """## Measure the axis you were ASKED about
   at the artefact itself (open the file, render the frame), not another log."""
 
 
+TEAM_LEAD_FRAGMENT = """## Delegating to executors
+- You choose model and effort for each executor (skill `team-lead`): haiku — reading, search, mechanics; sonnet — code by a plan (the default when no model is named); opus — checks and thinking, always named. Do it yourself when the brief would cost as much as the work; 2–4 executors, not dozens.
+- Background executors; big results come back as a file path. Fable only via `advisor` with `ПОЧЕМУ FABLE:`.
+- A council starts only on the owner's command — ask for it.
+- Told the budget is spent: stop and ask the owner."""
+
+
 def _read_json_tolerant(path: Path) -> tuple[dict[str, Any], str | None]:
     """(data, error). Missing file -> ({}, None). Malformed/non-object -> ({}, reason)."""
     if not path.exists():

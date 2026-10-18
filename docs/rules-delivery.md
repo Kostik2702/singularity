@@ -38,7 +38,8 @@ SessionStart is paid for in every session. The figure is not kept in prose: it
 went 18% out of date in two weeks and nobody noticed. The aggregate ceiling on
 the fragments is an executable gate, `test_the_fragments_have_an_aggregate_ceiling_too`
 (`tests/test_rules_delivery.py`); raising it takes a change that raises this line
-too. As of 2026-08-07 the fragments occupy ~4.1k characters.
+too. As of 2026-10-18 the fragments the gate counts occupy ~4.6k characters,
+ceiling 4700 (raised from 4150 by the owner for the delegation fragment).
 `CAPTURE_HOOKS_FRAGMENT` is the size unit: the test requires a new fragment to be
 smaller than two of them. That is why a fragment states a **class** of failure
 rather than one bullet per case: "green is not the same as verified" covers the

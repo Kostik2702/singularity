@@ -118,6 +118,7 @@ def build_context(event_cwd: str | None = None) -> str:
         MEASURED_AXIS_FRAGMENT,
         MEMORY_WRITES_FRAGMENT,
         RULE_POINT_FRAGMENT,
+        TEAM_LEAD_FRAGMENT,
         THINK_FIRST_FRAGMENT,
         VERIFICATION_FRAGMENT,
     )
@@ -126,6 +127,7 @@ def build_context(event_cwd: str | None = None) -> str:
     lines.append(VERIFICATION_FRAGMENT)
     lines.append(RULE_POINT_FRAGMENT)
     lines.append(THINK_FIRST_FRAGMENT)
+    lines.append(TEAM_LEAD_FRAGMENT)
     lines.append(MEASURED_AXIS_FRAGMENT)
 
     if not vault.exists():

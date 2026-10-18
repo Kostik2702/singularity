@@ -22,6 +22,7 @@ from singularity.machine.hooks_state import (
     CAPTURE_HOOKS_FRAGMENT,
     MEMORY_WRITES_FRAGMENT,
     RULE_POINT_FRAGMENT,
+    TEAM_LEAD_FRAGMENT,
     THINK_FIRST_FRAGMENT,
     VERIFICATION_FRAGMENT,
 )
@@ -177,6 +178,7 @@ ALL_FRAGMENTS = {
     "RULE_POINT": RULE_POINT_FRAGMENT,
     "VERIFICATION": VERIFICATION_FRAGMENT,
     "THINK_FIRST": THINK_FIRST_FRAGMENT,
+    "TEAM_LEAD": TEAM_LEAD_FRAGMENT,
 }
 
 
@@ -193,7 +195,8 @@ def test_the_fragments_have_an_aggregate_ceiling_too():
     the number `docs/rules-delivery.md` documents, so the doc cannot drift from
     reality without this failing."""
     total = sum(len(f) for f in ALL_FRAGMENTS.values())
-    assert total <= 4150, (
+    # 4150 -> 4700 (owner, 2026-10-18): the delegation fragment, where spawns are decided.
+    assert total <= 4700, (
         f"fragments total {total} chars; raise the ceiling here AND the figure "
         f"in docs/rules-delivery.md in the same change, or cut text")
 
@@ -212,6 +215,21 @@ def test_both_fragments_reach_every_session(tmp_path, monkeypatch):
     payload = session_start.build_context(str(vault))
     assert MEMORY_WRITES_FRAGMENT in payload
     assert RULE_POINT_FRAGMENT in payload
+
+
+def test_team_lead_fragment_reaches_every_session(tmp_path, monkeypatch):
+    """The delegation core has to stand where a spawn is decided — in the lead's
+    context from the first turn — not only in a skill that may never load."""
+    from singularity.hooks import session_start
+
+    vault = tmp_path / "vault"
+    (vault / ".mb").mkdir(parents=True)
+    (vault / ".mb" / "config.json").write_text("{}", encoding="utf-8")
+    import singularity.config as config_mod
+    monkeypatch.setattr(config_mod, "resolve_vault", lambda explicit=None: vault)
+
+    assert TEAM_LEAD_FRAGMENT in session_start.build_context(str(vault))
+    assert len(TEAM_LEAD_FRAGMENT) <= 560
 
 
 def test_session_start_imports_the_fragments_from_one_source():
