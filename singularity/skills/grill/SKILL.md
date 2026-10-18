@@ -1,6 +1,6 @@
 ---
 name: grill
-description: Adversarial self-interrogation gate before plans/designs/complex analysis - expose hidden assumptions, scope gaps, missing data, wrong framing. Self-resolves from codebase/memory first. Triggers: grill, grill me, grill auto, self-check before a plan or design.
+description: 'Adversarial self-interrogation gate before plans/designs/complex analysis - expose hidden assumptions, scope gaps, missing data, wrong framing. Self-resolves from codebase/memory first. Triggers: grill, grill me, grill auto, self-check before a plan or design.'
 allowed-tools: Read, Grep, Glob, Bash, AskUserQuestion, Skill
 ---
 

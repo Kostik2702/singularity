@@ -1,6 +1,6 @@
 ---
 name: pattern-adapter
-description: Adapting an external component into a project through an adaptation recipe — carrying over the pattern's design/motion DNA without the demo blob: scaffolding the recipe from the intake report, resolving the TODOs by the method (tokens, timing, breakpoints, reduced/static fallback, cleanup, lazy), validation, and a re-intake after adaptation. A thin wrapper over `component-intake recipe`. Use when "adapt the component", adaptation, "port the pattern into the project", after a quarantine ADAPT verdict, before any code in the implementation branch.
+description: 'Adapting an external component into a project through an adaptation recipe — carrying over the pattern''s design/motion DNA without the demo blob: scaffolding the recipe from the intake report, resolving the TODOs by the method (tokens, timing, breakpoints, reduced/static fallback, cleanup, lazy), validation, and a re-intake after adaptation. A thin wrapper over `component-intake recipe`. Use when "adapt the component", adaptation, "port the pattern into the project", after a quarantine ADAPT verdict, before any code in the implementation branch.'
 ---
 
 # pattern-adapter — the pattern's DNA, not the demo blob

@@ -1,6 +1,6 @@
 ---
 name: mb-code
-description: Structural code graph of a repository (Singularity, CLI mb code) - who calls a function, what it calls, what a change breaks, dead code, architecture. Use when the user asks "who calls X", "where is X used", "what does this change affect", impact, blast radius, callers, callees, call chain, trace, dead code, unused functions, architecture, modules, hotspots - or BEFORE grep/Read whenever the question is about relations between symbols in a repository that has a graph (the SessionStart line "Code graph: ..." says so).
+description: 'Structural code graph of a repository (Singularity, CLI mb code) - who calls a function, what it calls, what a change breaks, dead code, architecture. Use when the user asks "who calls X", "where is X used", "what does this change affect", impact, blast radius, callers, callees, call chain, trace, dead code, unused functions, architecture, modules, hotspots - or BEFORE grep/Read whenever the question is about relations between symbols in a repository that has a graph (the SessionStart line "Code graph: ..." says so).'
 ---
 
 # mb-code — the structural code graph

@@ -1,6 +1,6 @@
 ---
 name: error-reports
-description: Review PENDING error-report notes in the vault, formulate preventive rules, embed each rule at its execution point, mark reports LEARNED. Triggers: error reports, process reports, work through the mistakes, PENDING reports.
+description: 'Review PENDING error-report notes in the vault, formulate preventive rules, embed each rule at its execution point, mark reports LEARNED. Triggers: error reports, process reports, work through the mistakes, PENDING reports.'
 ---
 
 # error-reports — errors into rules (self-learning pipeline: OUTPUT)

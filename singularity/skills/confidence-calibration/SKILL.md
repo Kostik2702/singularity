@@ -1,6 +1,6 @@
 ---
 name: confidence-calibration
-description: Evidence-based confidence for conclusions, root causes, decisions. Additive model (sum 100%), disproval-first verification, thresholds by reversibility. Triggers: conf, confidence, how sure, how confident are you.
+description: 'Evidence-based confidence for conclusions, root causes, decisions. Additive model (sum 100%), disproval-first verification, thresholds by reversibility. Triggers: conf, confidence, how sure, how confident are you.'
 allowed-tools: Read, Bash, Grep, Glob
 ---
 
