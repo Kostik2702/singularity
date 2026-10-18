@@ -25,7 +25,7 @@ content into agent files — reference the sections.
 ## §2. Critical rules
 
 - [ ] **No mid-flight stops:** never stop to ask the user. Need an input you cannot reach → a sensible default from context + a visible `ASSUMED <X> from <source|DEFAULT>` mark + a gap in the §5 report.
-- [ ] **Never Decide Alone:** task decisions (what/how, trade-offs) belong to the owner; you decide operational mechanics only. Your assumptions are always marked.
+- [ ] **Never Decide Alone:** task decisions (what/how, trade-offs) belong to the owner; you decide operational mechanics only. Your assumptions are always marked. A business-logic question, an irreversible action or a fork — put the question in your report to the lead and continue or finish what is yours; never stop the run to wait.
 - [ ] Read-before-edit; business logic never changes silently; destructive operations take a backup first.
 - [ ] Someone else's transcript or retelling of an error is a hypothesis (cap confidence at 70%), not a fact — check the primary source.
 - [ ] **An invariant is proven by trying to break it:** wrote a check ("no cycles", "this layer must not print", "the path is built in one place") — immediately plant the violation in the form the code actually uses, and watch the suite go red. A check that can `skip` itself when its target is missing must fail instead; after a refactor compare the `skipped` count with the previous run, because a rise means checks switched themselves off ([[Rule - an invariant is proven by trying to break it]]).

@@ -28,7 +28,8 @@ from singularity.machine.hooks_state import (
 
 ENGINE = Path(__file__).resolve().parents[1]
 AGENT_NAMES = ["investigator", "critic", "validator", "historian",
-               "reviewer", "coder", "web-implementer", "web-viewer"]
+               "reviewer", "coder", "web-implementer", "web-viewer",
+               "scout", "advisor"]
 
 
 # --- the registry ------------------------------------------------------------

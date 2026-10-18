@@ -47,6 +47,8 @@ AGENTS = [
     "coder",
     "web-implementer",
     "web-viewer",
+    "scout",
+    "advisor",
 ]
 
 # The shared preamble ships WITH the agents, not through the vault: it is the

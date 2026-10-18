@@ -100,6 +100,10 @@ ALLOWED: dict[str, str] = {
     "golden-registry/files/letter-glitch-wall/reference-implementation-index.html":
         "`const GLYPHS` is the alphabet the glitch wall renders. Those "
         "characters are the effect's pixels, not words addressed to a reader",
+    "singularity/agents/advisor.md":
+        "the justification marker the lead writes into an advisor brief. A "
+        "plugin may match it byte for byte to refuse an unjustified spawn, so "
+        "a translated spelling would silently stop matching. Marker, not prose",
 }
 
 #: Recorded machine output over a vault that is not written in English. These
@@ -270,7 +274,10 @@ BUDGET: dict[str, int] = {
     "docs/search-eval-code-v2.json": 1506,
     "docs/v0.5.0-baseline.json": 1908,
     "golden-registry/files/letter-glitch-wall/reference-implementation-index.html": 10,
-    "singularity/machine/rules_delivery.py": 11,
+    # 11 -> 17: the advisor's justification marker, registered as its delivery.
+    "singularity/machine/rules_delivery.py": 17,
+    # The justification marker, twice: the description and the refusal rule.
+    "singularity/agents/advisor.md": 12,
     "tests/fixtures/grok/README.md": 2,
     # 3347 -> 3386 (CODE-GRAPH P0): one crosslingual code case, c-xl-06, a RU query
     # whose target is outside this engine; the set had none before.

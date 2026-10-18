@@ -1,6 +1,7 @@
 ---
 name: web-implementer
 description: "WEBSITE-FACTORY implementation half of the WSF-11 loop pair: implements/fixes ONE website slice strictly from a validated adaptation recipe (or explicitly marked greenfield spike) plus the web-viewer's latest structured verdict. Never self-assesses — after changes it stops and waits for the viewer round. Use when a website slice is to be built from a recipe, or a viewer's verdict applied — in any language, however phrased."
+model: sonnet
 ---
 
 ## ⚠️ MANDATORY: Read `{{AGENTS}}/AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning. ⚠️
