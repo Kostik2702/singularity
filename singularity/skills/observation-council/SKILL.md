@@ -51,7 +51,7 @@ Local logs (`.mb/*.log`, app logs) · `git log/diff/blame` · `mb search` (prior
 ## OC-1: Round 1 — spawn agents in parallel
 
 - [ ] All agents spawned in ONE message (parallel Agent calls, each with `model: "opus"`), each with the full OBSERVATION + role overlay; every overlay starts with the `SRE MISSION:` marker line.
-- [ ] Roles = agent definitions investigator / critic / validator (`C:\Users\Admin\.claude\agents\`); definition missing → fall back to `general-purpose` with the same overlay.
+- [ ] Roles = agent definitions investigator / critic / validator (`C:\Users\Admin\.claude\agents\`); definition missing → fall back to `general-purpose` with the same overlay and `model: "opus"` (it has no default model of its own).
 
 ### Hypothesis Generator — subagent_type: `investigator`
 ```
@@ -112,7 +112,7 @@ Per prediction:
   - `HAVE SOMETHING TO ADD: <one line — new hypothesis / disproof / status change>`
   - `NOTHING TO ADD` — full agreement, nothing new
   - `NEED DATA: <exact command or user question>` — blocked on a fetchable datum
-- [ ] All `NOTHING TO ADD` → OC-4. Any `HAVE SOMETHING TO ADD` → next round. `NEED DATA` → lead fetches it (or applies the 🔒 default) and re-spawns that agent.
+- [ ] All `NOTHING TO ADD` → OC-4. Any `HAVE SOMETHING TO ADD` → next round. `NEED DATA` → lead fetches it (or applies the 🔒 default) and re-spawns that agent with `model: "opus"`.
 - [ ] Hard cap 5 rounds; not converged → surface disagreements explicitly in the verdict.
 - [ ] Early exit after Round 1 only if ALL: full mutual agreement, one clear root cause with a ground-truth anchor, no 🔒 gap on the winner, severity not P0/P1.
 

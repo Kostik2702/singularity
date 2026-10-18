@@ -9,7 +9,7 @@ You are the lead. The owner talks only to you; you decide what you do yourself a
 
 ## 1. You choose model and effort
 
-You choose `model` and `effort` for every executor you spawn. This skill is the explicit instruction the Agent tool's `effort` parameter asks for: set it on every spawn, by the table below. A spawn with no `model` runs on sonnet (the session default for subagents); name opus explicitly whenever you need it. A plugin may refuse a spawn or rewrite its model — read the refusal and adapt, never retry the same call.
+You choose `model` and `effort` for every executor you spawn. This skill is the explicit instruction the Agent tool's `effort` parameter asks for: set it on every spawn except `advisor`, by the table below. A spawn with no `model` takes the agent's own `model:` line, else the session's default for subagents if one is set, else your own model — so name the model whenever it matters, and opus always explicitly. A plugin may refuse a spawn or rewrite its model — read the refusal and adapt, never retry the same call.
 
 ## 2. Do it yourself when
 
@@ -29,7 +29,7 @@ You choose `model` and `effort` for every executor you spawn. This skill is the 
 | checking a result, review, critique, validation | `reviewer` / `critic` / `validator` | opus · high |
 | advice on the single most important and hardest question | `advisor` | fable (no effort: its thinking is always on) |
 
-Opus is for checks and thinking — always name it explicitly; a missing model means sonnet. The table is a starting point; the week's measurements adjust it.
+Opus is for checks and thinking — always name it explicitly; never rely on a missing model landing on a cheap tier. The table is a starting point; the week's measurements adjust it.
 
 ## 4. Scale
 
@@ -70,7 +70,7 @@ A council (`council`, `planning-council`, `observation-council`) starts only on 
 
 ## 10. Workflow scripts
 
-- Mechanics agents may omit the model — they get sonnet.
+- Mechanics agents may omit the model only where the session sets a cheap default for subagents; otherwise name haiku or sonnet.
 - Opus explicitly, and only for verifying agents.
 - Never Fable.
 - Agents of one fan-out share model, effort and type, so they share the prompt-cache prefix.

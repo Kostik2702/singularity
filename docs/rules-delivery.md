@@ -39,7 +39,9 @@ went 18% out of date in two weeks and nobody noticed. The aggregate ceiling on
 the fragments is an executable gate, `test_the_fragments_have_an_aggregate_ceiling_too`
 (`tests/test_rules_delivery.py`); raising it takes a change that raises this line
 too. As of 2026-10-18 the fragments the gate counts occupy ~4.6k characters,
-ceiling 4700 (raised from 4150 by the owner for the delegation fragment).
+ceiling 4700 (raised from 4150 by the owner for the delegation fragment). The gate
+does not count `MEASURED_AXIS_FRAGMENT` (~0.7k): every session actually pays ~5.3k.
+Counting it needs the owner's decision on a new ceiling or a cut.
 `CAPTURE_HOOKS_FRAGMENT` is the size unit: the test requires a new fragment to be
 smaller than two of them. That is why a fragment states a **class** of failure
 rather than one bullet per case: "green is not the same as verified" covers the

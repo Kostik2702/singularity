@@ -138,7 +138,7 @@ MEASURED_AXIS_FRAGMENT = """## Measure the axis you were ASKED about
 
 
 TEAM_LEAD_FRAGMENT = """## Delegating to executors
-- You choose model and effort for each executor (skill `team-lead`): haiku — reading, search, mechanics; sonnet — code by a plan (the default when no model is named); opus — checks and thinking, always named. Do it yourself when the brief would cost as much as the work; 2–4 executors, not dozens.
+- You choose model and effort for each executor (skill `team-lead`): haiku — reading, search, mechanics; sonnet — code by a plan; opus — checks and thinking, always named (no model named → agent's default, else session's). Do it yourself when the brief costs as much as the work; 2–4 executors, not dozens.
 - Background executors; big results come back as a file path. Fable only via `advisor` with `ПОЧЕМУ FABLE:`.
 - A council starts only on the owner's command — ask for it.
 - Told the budget is spent: stop and ask the owner."""

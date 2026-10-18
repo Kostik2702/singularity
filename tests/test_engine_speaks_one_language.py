@@ -280,9 +280,9 @@ BUDGET: dict[str, int] = {
     "docs/search-eval-code-v2.json": 1506,
     "docs/v0.5.0-baseline.json": 1908,
     "golden-registry/files/letter-glitch-wall/reference-implementation-index.html": 10,
-    # 11 -> 17 -> 23: the advisor's justification marker, registered as its
-    # delivery in advisor.md and in the team-lead skill.
-    "singularity/machine/rules_delivery.py": 23,
+    # 11 -> 17: the advisor's justification marker, registered as its delivery
+    # in the team-lead skill (advisor.md is guarded by an English marker).
+    "singularity/machine/rules_delivery.py": 17,
     # The justification marker, twice: the description and the refusal rule.
     "singularity/agents/advisor.md": 12,
     # The justification marker, once: section 8.

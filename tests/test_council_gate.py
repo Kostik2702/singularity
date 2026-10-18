@@ -44,8 +44,26 @@ def test_council_frontmatter_is_read_by_the_harness(name):
 
 @pytest.mark.parametrize("name", COUNCILS)
 def test_council_agents_run_on_opus(name):
+    """Round 1 and every later round both spawn: each spawn point names opus."""
     spawn_lines = [line for line in _text(name).splitlines() if "Agent" in line and 'model: "opus"' in line]
-    assert spawn_lines, f"{name}: no spawn instruction names model: \"opus\""
+    assert len(spawn_lines) >= 2, f"{name}: round 1 and round N+1 must both name model: \"opus\""
+
+
+def test_observation_fallback_and_respawn_keep_opus():
+    """The `general-purpose` fallback has no frontmatter model, and a single
+    re-spawn is still a council agent: both run on opus."""
+    lines = _text("observation-council").splitlines()
+    fallback = [line for line in lines if "fall back to `general-purpose`" in line]
+    respawn = [line for line in lines if "re-spawns that agent" in line]
+    assert fallback and all('model: "opus"' in line for line in fallback)
+    assert respawn and all('model: "opus"' in line for line in respawn)
+
+
+def test_step_back_asks_the_owner_for_plc():
+    """The model can no longer start planning-council; the phase must not tell it to."""
+    text = (ENGINE / "singularity" / "workflow" / "phase-SB-step-back.md").read_text(encoding="utf-8")
+    assert "decompose through plc" not in text
+    assert "ask the owner to run plc" in text
 
 
 @pytest.mark.parametrize("name", COUNCILS)
