@@ -1,7 +1,10 @@
 ---
 name: council
 description: Multi-agent architectural council for design decisions, implementation approaches, and technical strategy. Spawns investigator, critic, validator, historian in adversarial parallel rounds with a consensus loop. Triggers - "council", "convene a council", "architectural decision", "X vs Y", "trade-off", "trade-offs", "which approach", "which approach is better", "design decision", "should we move to".
+disable-model-invocation: true
 ---
+
+Starts only on the owner's explicit command. If you think a council is needed, ask the owner to run it and say why.
 
 # Architectural Council — Decision Making
 
@@ -62,7 +65,7 @@ OPEN QUESTIONS: [what to decide]
 ## Phase 1: Round 1 — Spawn 4 Agents
 
 **Checklist:**
-- [ ] All 4 agents spawned in a SINGLE message with 4 parallel `Agent` calls (subagent types: `investigator`, `critic`, `validator`, `historian`)
+- [ ] All 4 agents spawned in a SINGLE message with 4 parallel `Agent` calls (subagent types: `investigator`, `critic`, `validator`, `historian`), each with `model: "opus"`
 - [ ] Each prompt = `COUNCIL MISSION` marker + role overlay + CONTEXT_PAYLOAD + Round Contract (below)
 - [ ] All 4 returned final responses (that is how the lead reads them)
 
@@ -136,7 +139,7 @@ COUNCIL MISSION: Prior art, reuse analysis, historical context.
 
 **Checklist:**
 - [ ] Round counter incremented (cap 5)
-- [ ] All 4 re-spawned in parallel, single message
+- [ ] All 4 re-spawned in parallel, single message — `Agent` calls with `model: "opus"`, as in Round 1
 - [ ] Each prompt = **byte-identical Round-1 prefix** (MISSION + overlay + CONTEXT_PAYLOAD + Round Contract — never edited/reordered) + appended AFTER it: `Round N. Previous-round summary: [...]` + fetched NEED-DATA answers. Enables prompt-cache reuse.
 - [ ] Suffix instruction: "Attack or verify these points by id. Raise new findings/corrections/contradictions, or reply NOTHING TO ADD."
 

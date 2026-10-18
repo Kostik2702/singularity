@@ -1,7 +1,10 @@
 ---
 name: observation-council
-description: Hypothesis-driven root cause investigation (SRE-style multi-agent council) for bugs, incidents, strange behavior. Triggers: oc, observation council, "why is X happening", "why does X do Y", strange behavior, not working, incident, regression, silent failure, figure out why it broke.
+description: 'Hypothesis-driven root cause investigation (SRE-style multi-agent council) for bugs, incidents, strange behavior. Triggers: oc, observation council, "why is X happening", "why does X do Y", strange behavior, not working, incident, regression, silent failure, figure out why it broke.'
+disable-model-invocation: true
 ---
+
+Starts only on the owner's explicit command. If you think a council is needed, ask the owner to run it and say why.
 
 # Observation Council — Hypothesis-Driven RCA
 
@@ -47,7 +50,7 @@ Local logs (`.mb/*.log`, app logs) · `git log/diff/blame` · `mb search` (prior
 
 ## OC-1: Round 1 — spawn agents in parallel
 
-- [ ] All agents spawned in ONE message (parallel Agent calls), each with the full OBSERVATION + role overlay; every overlay starts with the `SRE MISSION:` marker line.
+- [ ] All agents spawned in ONE message (parallel Agent calls, each with `model: "opus"`), each with the full OBSERVATION + role overlay; every overlay starts with the `SRE MISSION:` marker line.
 - [ ] Roles = agent definitions investigator / critic / validator (`C:\Users\Admin\.claude\agents\`); definition missing → fall back to `general-purpose` with the same overlay.
 
 ### Hypothesis Generator — subagent_type: `investigator`
@@ -104,7 +107,7 @@ Per prediction:
 
 ## OC-3: Rounds and convergence
 
-- [ ] Round N+1: re-spawn all agents in parallel. Prompt = byte-identical Round-1 prefix (overlay + OBSERVATION, never edited) + appended inter-round summary (prompt-cache reuse).
+- [ ] Round N+1: re-spawn all agents in parallel (Agent calls with `model: "opus"`). Prompt = byte-identical Round-1 prefix (overlay + OBSERVATION, never edited) + appended inter-round summary (prompt-cache reuse).
 - [ ] Machine-parseable round contract — every agent MUST end its reply with exactly one line:
   - `HAVE SOMETHING TO ADD: <one line — new hypothesis / disproof / status change>`
   - `NOTHING TO ADD` — full agreement, nothing new

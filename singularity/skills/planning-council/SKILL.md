@@ -1,7 +1,10 @@
 ---
 name: planning-council
 description: Multi-agent planning council for task decomposition, dependency mapping, risk assessment, and estimation before implementation. Spawns investigator (Decomposer), critic (Risk Finder), validator (Feasibility & Estimator), historian in adversarial parallel rounds. Triggers - "plc", "planning council", "break down", "decompose", "plan the task", "estimate the timeline".
+disable-model-invocation: true
 ---
+
+Starts only on the owner's explicit command. If you think a council is needed, ask the owner to run it and say why.
 
 # Planning Council — Decomposition & Estimation
 
@@ -56,7 +59,7 @@ CODE ANCHORS:   [existing-flow only: files/entry points — or "greenfield"]
 ## PLC-1: Round 1 — Spawn 4 Agents
 
 **Checklist:**
-- [ ] All 4 spawned in a SINGLE message with 4 parallel `Agent` calls (types: `investigator`, `critic`, `validator`, `historian`)
+- [ ] All 4 spawned in a SINGLE message with 4 parallel `Agent` calls (types: `investigator`, `critic`, `validator`, `historian`), each with `model: "opus"`
 - [ ] Each prompt = `PLANNING MISSION` marker + role overlay + PLANNING_CONTEXT + Round Contract (below)
 - [ ] All 4 returned final responses
 
@@ -150,7 +153,7 @@ PLANNING MISSION: You are the HISTORIAN. Prior-task and estimation scan.
 ## PLC-3: Round N+1 — Re-spawn
 
 - [ ] Round counter incremented (cap 5)
-- [ ] All 4 re-spawned in parallel, single message
+- [ ] All 4 re-spawned in parallel, single message — `Agent` calls with `model: "opus"`, as in Round 1
 - [ ] Prompt = **byte-identical Round-1 prefix** (MISSION + overlay + PLANNING_CONTEXT + Round Contract, never edited) + AFTER it: `Round N. Previous-round summary: [...]` + fetched NEED-DATA answers (prompt-cache reuse)
 - [ ] Suffix: "Attack or verify these points by id. Raise new risks, missing subtasks, estimate corrections — or reply NOTHING TO ADD."
 
