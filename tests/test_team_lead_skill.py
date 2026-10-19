@@ -76,6 +76,16 @@ def test_delegation_delivery_markers_name_one_place_each():
         assert count == 1, f"{name}: marker {marker!r} occurs {count} times in {path.name}"
 
 
+def test_the_measured_axis_rows_stay_together():
+    """The two SessionStart rows of one rule sit next to each other under their
+    incident comment; delegation rows went in between them once."""
+    from singularity.machine import rules_delivery
+
+    names = [r[0] for r in rules_delivery.DELIVERIES if r[1] == "SessionStart"]
+    axis = [i for i, n in enumerate(names) if n == "measure the axis you were asked about"]
+    assert len(axis) == 2 and axis[1] == axis[0] + 1
+
+
 def test_team_lead_sends_councils_and_budget_back_to_the_owner():
     text = _text()
     assert "owner's explicit command" in text

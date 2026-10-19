@@ -56,3 +56,23 @@ def test_preamble_returns_questions_without_stopping():
     preamble = (AGENTS / "AGENT_SHARED_PREAMBLE.md").read_text(encoding="utf-8")
     section = preamble.split("## §2.", 1)[1].split("\n## ", 1)[0]
     assert "never stop the run to wait" in section
+
+
+def test_preamble_no_stop_rule_is_a_registered_delivery():
+    """The rule acts in every subagent, so the registry names it: deleting the
+    line must turn the delivery check red, not only this file."""
+    from singularity.machine import rules_delivery
+
+    rows = [r for r in rules_delivery.DELIVERIES if r[3] == "never stop the run to wait"]
+    assert len(rows) == 1 and rows[0][1] == "preamble §2"
+
+
+def test_advisor_is_not_asked_for_what_its_tools_cannot_do():
+    """The preamble's §1 asks for `mb search` and §5 for the confidence skill;
+    the advisor has neither Bash nor Skill, so its own file says how it meets them."""
+    lines = frontmatter("advisor")
+    tools = next(line for line in lines if line.startswith("tools:"))
+    assert "Bash" not in tools and "Skill" not in tools, "control: advisor tools changed, revisit this test"
+    body = (AGENTS / "advisor.md").read_text(encoding="utf-8")
+    assert "the lead brings the vault facts" in body
+    assert "additive model by hand" in body
