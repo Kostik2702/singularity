@@ -6,7 +6,9 @@
 # one of them only is how sentence-transformers drifted past its `<5` unseen.
 #
 # Hashes are of the Windows amd64 wheels (cp310 for the core, abi3 for the
-# grammars; networkx is pure Python, one wheel for every platform). A new
+# grammars) and of the macOS arm64 wheels (cp313 for the core, abi3 for the
+# grammars; each checked against PyPI's published digest, 2026-10-20);
+# networkx is pure Python, one wheel for every platform. A new
 # platform adds its wheels' hashes here; `pip download --only-binary=:all:
 # --no-deps` + `pip hash` produce them.
 #
@@ -16,17 +18,23 @@
 networkx==3.4.2 \
     --hash=sha256:df5d4365b724cf81b8c6a7312509d0c22386097011ad1abe274afd5e9d3bbc5f
 tree-sitter==0.26.0 \
-    --hash=sha256:f289be0225ba2ace8e87d6c9639b2bc9ff2b5271afb7c5d39282a4a00e248682
+    --hash=sha256:f289be0225ba2ace8e87d6c9639b2bc9ff2b5271afb7c5d39282a4a00e248682 \
+    --hash=sha256:6189c6c340c7384357711e3d92645e96bfb79f7a502f86de1ebdb23eb43f7dab
 # Java and Kotlin (CODE-GRAPH D3). Both grammars are ABI 14, which the 0.26
 # core accepts (13-15). tree-sitter-kotlin is the tree-sitter-grammars fork,
 # the one published on PyPI.
 tree-sitter-java==0.23.5 \
-    --hash=sha256:1ee45e790f8d31d416bc84a09dac2e2c6bc343e89b8a2e1d550513498eedfde7
+    --hash=sha256:1ee45e790f8d31d416bc84a09dac2e2c6bc343e89b8a2e1d550513498eedfde7 \
+    --hash=sha256:24acd59c4720dedad80d548fe4237e43ef2b7a4e94c8549b0ca6e4c4d7bf6e69
 tree-sitter-javascript==0.25.0 \
-    --hash=sha256:e5ed840f5bd4a3f0272e441d19429b26eedc257abe5574c8546da6b556865e3c
+    --hash=sha256:e5ed840f5bd4a3f0272e441d19429b26eedc257abe5574c8546da6b556865e3c \
+    --hash=sha256:8264a996b8845cfce06965152a013b5d9cbb7d199bc3503e12b5682e62bb1de1
 tree-sitter-kotlin==1.1.0 \
-    --hash=sha256:d4d3f330f515ba8b91da04a5335eb9ff3ce071c7b7855958912f2560f6e14976
+    --hash=sha256:d4d3f330f515ba8b91da04a5335eb9ff3ce071c7b7855958912f2560f6e14976 \
+    --hash=sha256:910b41a580dae00d319e555075f3886a41386d1067931b14c7de504eeae3ae2a
 tree-sitter-python==0.25.0 \
-    --hash=sha256:9bcde33f18792de54ee579b00e1b4fe186b7926825444766f849bf7181793a76
+    --hash=sha256:9bcde33f18792de54ee579b00e1b4fe186b7926825444766f849bf7181793a76 \
+    --hash=sha256:480c21dbd995b7fe44813e741d71fed10ba695e7caab627fb034e3828469d762
 tree-sitter-typescript==0.23.2 \
-    --hash=sha256:3f730b66396bc3e11811e4465c41ee45d9e9edd6de355a58bbbc49fa770da8f9
+    --hash=sha256:3f730b66396bc3e11811e4465c41ee45d9e9edd6de355a58bbbc49fa770da8f9 \
+    --hash=sha256:c7cc1b0ff5d91bac863b0e38b1578d5505e718156c9db577c8baea2557f66de8
