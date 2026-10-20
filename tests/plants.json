@@ -400,5 +400,19 @@
       "registered_router"
     ],
     "expect": "RED"
+  },
+  {
+    "label": "team-lead brief stops asking executors to stop their background jobs",
+    "file": "singularity/skills/team-lead/SKILL.md",
+    "old": "Leave nothing running",
+    "new": "Tidy up",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_rules_delivery.py"
+    ],
+    "expect": "RED"
   }
 ]

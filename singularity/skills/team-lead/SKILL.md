@@ -53,10 +53,11 @@ Every brief carries:
 7. **Questions go back**: business-logic questions, irreversible actions and forks are not yours to decide — put them in the report.
 8. **Quotes, not retellings**: findings come with `file:line`.
 9. The spawn's `description` carries one line: `tier · effort · why`.
+10. **Leave nothing running**: before the report, stop every background job you started (shells, servers, test runs) and say in the report that none is left — an executor waiting on its own background work stays alive after it is done.
 
 ## 6. Acceptance
 
-Check the result against the done criterion. A remark goes to the SAME executor (`SendMessage` to its `agentId`), not to a new one: it already holds the context.
+Check the result against the done criterion. A remark goes to the SAME executor (`SendMessage` to its `agentId`), not to a new one: it already holds the context. A notification that the executor is "waiting on its own background work" after its final report means a job was left running — ask it to stop the job, or stop the executor with `TaskStop` once nothing more is needed from it.
 
 ## 7. Background
 

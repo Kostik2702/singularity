@@ -148,6 +148,8 @@ DELIVERIES: list[tuple[str, str, Path, str]] = [
      SKILLS / "team-lead" / "SKILL.md", "owner's explicit command"),
     ("executors run in the background", "skill",
      SKILLS / "team-lead" / "SKILL.md", "run_in_background"),
+    ("an executor leaves nothing running when it reports", "skill",
+     SKILLS / "team-lead" / "SKILL.md", "Leave nothing running"),
     ("investigation mechanics go to executors", "skill",
      ENGINE / "singularity" / "workflow" / "phase-1-investigation.md", "team-lead"),
     ("agentic-development estimates have two cost classes", "skill",
