@@ -90,6 +90,8 @@ DELIVERIES: list[tuple[str, str, Path, str]] = [
      "plant the violation"),
     ("a pipe over the test command must not swallow the exit code", "preamble §2", PREAMBLE,
      "PIPESTATUS"),
+    ("a check and an irreversible act do not share one shell invocation",
+     "preamble §2", PREAMBLE, "sequences and does not condition"),
     ("re-check an evidential measurement when the population changes", "preamble §3", PREAMBLE,
      "together with the population"),
     ("when an agent re-renders its own input, the input is what to fix", "preamble §6", PREAMBLE,

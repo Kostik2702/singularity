@@ -168,6 +168,20 @@
     "expect": "RED"
   },
   {
+    "label": "sequencing: \u00a72 stops separating a check from the act that depends on it",
+    "file": "singularity/agents/AGENT_SHARED_PREAMBLE.md",
+    "old": "sequences and does not condition",
+    "new": "runs both commands",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_rules_delivery.py"
+    ],
+    "expect": "RED"
+  },
+  {
     "label": "CONTROL: accented Latin is not another language",
     "file": "singularity/knowledge/gaps.py",
     "old": "Six deterministic signals, no model, no network, no writes (D5):",
