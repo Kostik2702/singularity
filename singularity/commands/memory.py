@@ -88,10 +88,29 @@ def cmd_search(cfg, args) -> int:
         # The enrichment needs each hit's fields, which only the JSON answer
         # carries; the text lines are then rendered here (`_compact_line`).
         payload["format"] = "json"
+    # Jev rerank (off = the payload and the answer are exactly what they were):
+    # ask for more candidates and longer excerpts, then cut both back below.
+    jev_key = None
+    if cfg.get("jev_enabled") is True:
+        from ..jev import rerank
+        jev_key = rerank.active(cfg, disabled=getattr(args, "no_jev", False))
+    if jev_key:
+        excerpt = None if args.full else int(cfg.get("excerpt_chars"))
+        payload["top_k"] = rerank.candidates_wanted(args.top)
+        payload["format"] = "json"
+        if excerpt is not None:
+            payload["excerpt_chars"] = max(excerpt, rerank.EXCERPT_CHARS)
     resp = client.search(cfg, payload)
     if "error" in resp:
         print(f"[mb] error: {resp['error']}", file=sys.stderr)
         return 1
+    if jev_key:
+        rerank.apply(cfg, resp, args.query, args.top, excerpt=excerpt, explain=args.explain,
+                     key=jev_key)
+        if not (args.json or graph or graph_boost):
+            hits = resp.pop("results")
+            tails = [f" | jev={h['jev']:.2f}" if args.explain and "jev" in h else "" for h in hits]
+            resp["lines"] = [_compact_line(h) + t for h, t in zip(hits, tails, strict=True)]
     if graph_boost:
         # re-rank first; with --graph the lines are rendered below, after enrichment
         from ..search import graph_boost as boost

@@ -22,6 +22,20 @@ ENGINE = Path(__file__).resolve().parents[1]
 PYTHON = ENGINE / ".venv" / ("Scripts/python.exe" if sys.platform.startswith("win")
                              else "bin/python")
 
+def guarded_command(script: Path) -> str:
+    """A command that exits 0 whatever happens to `script`.
+
+    `python missing.py` exits 2, and for UserPromptSubmit exit 2 blocks and
+    erases the prompt - so no UserPromptSubmit hook can be registered as a bare
+    script path: an engine checkout that loses the file would block every
+    prompt. The launcher is an inline `-c` (no file of ours to lose), runs
+    the script as a child and drops its exit status. Single quotes inside
+    double quotes mean the same thing to bash, cmd and PowerShell; forward
+    slashes are accepted by Python on Windows."""
+    return (f'"{PYTHON}" -c "import subprocess,sys;'
+            f"subprocess.call([sys.executable,'{script.as_posix()}']);sys.exit(0)\"")
+
+
 HOOKS = {
     "SessionStart": [
         {
@@ -40,9 +54,19 @@ HOOKS = {
             "_mb": True,
             "hooks": [{
                 "type": "command",
-                "command": f'"{PYTHON}" "{ENGINE / "singularity" / "hooks" / "user_prompt_submit.py"}"',
+                "command": guarded_command(ENGINE / "singularity" / "hooks" / "user_prompt_submit.py"),
             }],
-        }
+        },
+        # Jev's size hint: its own process and its own 5 s budget, so a slow API
+        # can never delay the chain table above. A no-op until `mb jev on`.
+        {
+            "_mb": True,
+            "hooks": [{
+                "type": "command",
+                "command": guarded_command(ENGINE / "singularity" / "hooks" / "jev_router.py"),
+                "timeout": 5,
+            }],
+        },
     ],
     "Stop": [
         {
@@ -80,7 +104,7 @@ HOOKS = {
 # T08 vault_guard), each its own matcher-group entry.
 _OWNED_SCRIPTS = {
     "SessionStart": {"session_start.py"},
-    "UserPromptSubmit": {"user_prompt_submit.py"},
+    "UserPromptSubmit": {"user_prompt_submit.py", "jev_router.py"},
     "Stop": {"stop_capture.py"},
     "PreToolUse": {"module_context.py", "vault_guard.py"},
 }

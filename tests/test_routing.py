@@ -332,6 +332,46 @@ def test_the_hook_is_registered_and_owned():
         "ownership fallback missing — a pre-marker install would be orphaned"
 
 
+def _registered_router_command() -> str:
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "register_hooks_guard_probe", ENGINE / "install" / "register_hooks.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.HOOKS["UserPromptSubmit"][0]["hooks"][0]["command"]
+
+
+@pytest.mark.parametrize("body", [None, "import sys\nsys.exit(2)\n",
+                                  "raise RuntimeError('broken')\n", "syntax error here\n"])
+def test_the_registered_router_exits_zero_whatever_happens_to_the_hook(tmp_path, body):
+    """`python missing.py` exits 2, and for UserPromptSubmit exit 2 erases the
+    prompt. Runs the exact registered command against a copy of the hook that
+    is missing, exits 2, raises or does not parse."""
+    cmd = _registered_router_command()
+    real = (ENGINE / "singularity" / "hooks" / "user_prompt_submit.py").as_posix()
+    assert real in cmd, "the router is registered as something else than the guarded script"
+    target = tmp_path / "user_prompt_submit.py"
+    if body is not None:
+        target.write_text(body)
+    proc = subprocess.run(cmd.replace(real, target.as_posix()), shell=True,
+                          input=json.dumps({"prompt": "fix the indexer"}),
+                          capture_output=True, text=True, timeout=20)
+    assert proc.returncode == 0 and proc.stdout == ""
+
+
+def test_the_registered_router_still_pushes_the_table(tmp_path):
+    import os
+    (tmp_path / ".mb").mkdir()
+    proc = subprocess.run(
+        _registered_router_command(), shell=True, cwd=ENGINE, timeout=20,
+        input=json.dumps({"hook_event_name": "UserPromptSubmit", "session_id": "s1",
+                          "prompt": "fix the failing test in the indexer"}),
+        capture_output=True, text=True, encoding="utf-8",
+        env={**os.environ, "MB_HOME": str(tmp_path)})
+    assert proc.returncode == 0
+    assert "mb route" in _pushed(json.loads(proc.stdout))
+
+
 # --- what the review of 2026-08-06 found ---------------------------------------
 #
 # Every test below was written BEFORE its fix and observed red. They guard the

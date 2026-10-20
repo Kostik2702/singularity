@@ -148,6 +148,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "session_context_max_lines": 200,  # T06: total SessionStart injection budget
     "module_note_max_lines": 60,       # T07: per-module context note truncation
     "module_context_enabled": False,   # T07: PreToolUse hook installed but no-op until true
+    # Jev (TypeSafe decision API): off until `mb jev on`. `save()` writes decisions
+    # only, so a machine that never turned it on carries no `jev_enabled` line.
+    "jev_enabled": False,
+    "jev_budget_usd": None,            # what the owner topped up; balance = this - logged cost
+    "jev_search": True,                # rerank `mb search` with Jev, when jev_enabled
     # T08: PreToolUse guard. On by default since 2026-08-04 (owner decision) —
     # `audit` only annotates a write, and the failure it catches is silent by
     # construction: a new note written with a client's Write tool skips the
@@ -453,6 +458,14 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
         errors.append("auto_capture: must be a boolean")
     if "module_context_enabled" in data and not isinstance(data["module_context_enabled"], bool):
         errors.append("module_context_enabled: must be a boolean")
+    for key in ("jev_enabled", "jev_search"):
+        if key in data and not isinstance(data[key], bool):
+            errors.append(f"{key}: must be a boolean")
+    if "jev_budget_usd" in data and data["jev_budget_usd"] is not None and (
+            isinstance(data["jev_budget_usd"], bool)
+            or not isinstance(data["jev_budget_usd"], (int, float))
+            or data["jev_budget_usd"] < 0):
+        errors.append("jev_budget_usd: must be a number >= 0 or null")
     if "vault_guard_enabled" in data and not isinstance(data["vault_guard_enabled"], bool):
         errors.append("vault_guard_enabled: must be a boolean")
     if "vault_guard_mode" in data and data["vault_guard_mode"] not in ("audit", "deny"):

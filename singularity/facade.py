@@ -50,8 +50,9 @@ GROUPS: dict[str, tuple[str, ...]] = {
     # `code` (the structural code graph, CODE-GRAPH D1) joins for the same
     # reason as `sessions`: a store that is off by default, with a build
     # lifecycle. Agents reach it by the direct path `mb code ...`.
+    # `jev` (the decision API) is off by default too, and agents call it directly.
     "service": ("daemon", "index", "model", "watch", "backup", "selftest",
-                "sessions", "route", "code"),
+                "sessions", "route", "code", "jev"),
     "setup": ("config", "project", "hooks", "init", "uninstall"),
 }
 
@@ -79,7 +80,7 @@ HOSTS: dict[str, tuple[str, ...]] = {
 }
 
 GROUP_BLURB: dict[str, str] = {
-    "service": "daemon, index, model, watcher, backups, selftest, sessions, code graph",
+    "service": "daemon, index, model, watcher, backups, selftest, sessions, code graph, jev",
     "setup": "config, projects, hooks, install/uninstall",
     "curator": "vault health, gaps, contradictions, digest, nightly",
 }

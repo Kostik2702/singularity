@@ -33,6 +33,8 @@ mb usage [--session ID] [--list [--days N]] [--turns] [--top N] [--json]
 mb llm start|stop|status|list|logs|code|setup
 mb code status|build [--all]|update|outline <file>|snippet|callers|callees|trace <symbol>|find <text>|schema|impact|arch|deadcode|sql|audit
                                  # the structural code graph (off until code_graph_enabled)
+mb jev status [--json]|key set|status|delete|on|off|ask|pick "<brief>"|log [--tail N] [--session S]
+                                 # Jev decision API (off until `mb jev on`)
 mb init            # write ~/.singularity.json pointer + folder tree
 mb uninstall       # remove hooks/scheduler jobs/daemon (vault untouched)
 """
@@ -53,6 +55,16 @@ from .config import Config, ConfigError, load_config
 
 
 
+def _error_without_values(parser: argparse.ArgumentParser):
+    """argparse echoes the offending token ("invalid choice: 'SECRET'"); on the
+    `jev key` path that token may be a pasted API key."""
+    def error(message: str):
+        parser.print_usage(sys.stderr)
+        print(f"{parser.prog}: error: invalid arguments (values are not echoed)", file=sys.stderr)
+        parser.exit(2)
+    return error
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="mb", description="Singularity memory brain CLI")
     p.add_argument("--vault", help="vault path (default: MB_HOME / ~/.singularity.json)")
@@ -61,7 +73,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("search", help="semantic search over vault (+code)")
     s.add_argument("query")
-    s.add_argument("--top", type=int, default=5)
+    s.add_argument("--top", type=int, default=5,
+                   help="how many hits (with the Jev rerank on, only the first 30 are "
+                        "reranked; any more follow them in the engine's order)")
     s.add_argument("--type", dest="filter_type")
     s.add_argument("--tags", dest="filter_tags")
     s.add_argument("--links", dest="filter_wikilinks",
@@ -97,6 +111,9 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("--sessions", action="store_true", dest="with_sessions",
                    help="also search your own past sessions (.mb/sessions.db) — "
                         "opt-in store, never in the default result set")
+    s.add_argument("--no-jev", action="store_true", dest="no_jev",
+                   help="skip the Jev rerank for this query (it runs only when "
+                        "jev_enabled and jev_search are on and a key is stored)")
     s.add_argument("--json", action="store_true")
 
     ses = sub.add_parser("sessions", help="the opt-in store of your past sessions")
@@ -482,6 +499,30 @@ def _build_parser() -> argparse.ArgumentParser:
     iba.add_argument("--title")
     iba.add_argument("--json", action="store_true")
 
+    jv = sub.add_parser("jev", help="Jev decision API: size hint, executor pick, search rerank (off until `mb jev on`)")
+    jvsub = jv.add_subparsers(dest="jev_action", required=True)
+    jvst = jvsub.add_parser("status", help="enabled, key, journal, counts, cost and balance")
+    jvst.add_argument("--json", action="store_true")
+    jvk = jvsub.add_parser("key", help="the API key lives in the OS keyring; `set` reads it from stdin")
+    jvksub = jvk.add_subparsers(dest="key_action", required=True)
+    jvks = jvksub.add_parser("set", help="store the key read from stdin (never argv)")
+    # Accepted only to be refused: left out, argparse would print the pasted key
+    # back in "unrecognized arguments".
+    jvks.add_argument("rest", nargs="*", help=argparse.SUPPRESS)
+    jvksub.add_parser("status", help="is a key stored, and where")
+    jvksub.add_parser("delete", help="remove the stored key")
+    jvsub.add_parser("on", help="enable Jev (jev_enabled=true)")
+    jvsub.add_parser("off", help="disable Jev (removes jev_enabled)")
+    jva = jvsub.add_parser("ask", help='one request: {"state":..,"questions":{..}} on stdin, answers as JSON')
+    jva.add_argument("--timeout", type=float, default=10.0)
+    jvp = jvsub.add_parser("pick", help="model·effort for an executor brief (text args or stdin)")
+    jvp.add_argument("text", nargs="*")
+    jvl = jvsub.add_parser("log", help="print journal lines")
+    jvl.add_argument("--tail", type=int, default=20, help="last N lines (0 = all)")
+    jvl.add_argument("--session")
+    for quiet in (jv, jvk):
+        quiet.error = _error_without_values(quiet)
+
     sub.add_parser("init", help="bind this vault (pointer file) + create folder tree")
     sub.add_parser("uninstall", help="remove hooks/scheduler jobs/daemon (vault untouched)")
     return p
@@ -653,6 +694,9 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_learn(cfg, args)
     if args.command == "llm":
         return cmd_llm(cfg, args)
+    if args.command == "jev":
+        from .commands.jev import cmd_jev
+        return cmd_jev(cfg, args)
     if args.command == "init":
         return cmd_init(cfg, args)
     if args.command == "uninstall":

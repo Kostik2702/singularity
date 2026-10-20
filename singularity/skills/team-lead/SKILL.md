@@ -11,6 +11,8 @@ You are the lead. The owner talks only to you; you decide what you do yourself a
 
 You choose `model` and `effort` for every executor you spawn. This skill is the explicit instruction the Agent tool's `effort` parameter asks for: set it on every spawn except `advisor`, by the table below. A spawn with no `model` takes the agent's own `model:` line, else the session's default for subagents if one is set, else your own model — so name the model whenever it matters, and opus always explicitly. A plugin may refuse a spawn or rewrite its model — read the refusal and adapt, never retry the same call.
 
+If `mb jev status` says enabled, run `mb jev pick "<brief summary>"` before a spawn and use its pick unless it says `decide yourself`.
+
 ## 2. Do it yourself when
 
 - the edit is small and you already know its content — the brief would cost as much as the edit;

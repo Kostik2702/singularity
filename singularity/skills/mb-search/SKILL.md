@@ -27,6 +27,10 @@ mb search "..." --full                    # no excerpt truncation
 
 Compact output: `file | score | [type] | title/section | excerpt(150)`. A score below ~0.3 is a weak match; rephrase the query. The embedding model is multilingual, so the query does not have to be in the language the note was written in, and languages may be mixed within one query.
 
+## Jev rerank (optional)
+
+When the owner has turned Jev on (`mb jev status` says enabled) and `jev_search` is not false, `mb search` asks Jev whether each candidate excerpt answers the query and reorders by that. It fetches up to 30 candidates, sends title, section and a short redacted excerpt (never a note classified personal, never code), and cuts back to `--top` (only the first 30 are reranked; a larger `--top` keeps the rest after them unchanged). `--explain` adds `jev=<p>`; `--json` adds `"reranked": true|false` and a `"jev"` value per reranked hit. Any Jev failure leaves the semantic order as it was. `--no-jev` skips it for one query.
+
 ## Maintenance (when search behaves oddly)
 
 ```bash

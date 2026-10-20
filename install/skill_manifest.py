@@ -78,6 +78,11 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
         "clients": ["claude"], "tools": ["Agent"],
         "reason": "spawns Claude subagents by model tier via the Agent tool",
     },
+    "jev-guide": {
+        "clients": ["claude"], "tools": ["Bash"],
+        "reason": "Jev's answers feed the lead's delegation (the UserPromptSubmit "
+                  "size hint and the per-spawn pick) - wired only on Claude Code",
+    },
     "visual-regression-bootstrap": {
         "clients": ["claude"], "tools": ["Bash"],
         "reason": "acceptance requires the operator to visually review initial "

@@ -250,5 +250,155 @@
       "tests/test_no_console_windows.py"
     ],
     "expect": "RED"
+  },
+  {
+    "label": "jev router: the hook exits 2 (a prompt can be erased)",
+    "file": "singularity/hooks/jev_router.py",
+    "old": "    sys.exit(main())",
+    "new": "    sys.exit(2)",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_jev_router.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "jev rerank: a personal note is sent to Jev",
+    "file": "singularity/jev/rerank.py",
+    "old": "and not is_personal(meta, personal_roots)",
+    "new": "and not False",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_jev_rerank.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "jev hook command: a missing hook file exits 2 again",
+    "file": "install/register_hooks.py",
+    "old": "subprocess.call([sys.executable,'{script.as_posix()}']);sys.exit(0)",
+    "new": "sys.exit(subprocess.call([sys.executable,'{script.as_posix()}']))",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_jev_router.py",
+      "-k",
+      "registered_command"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "jev client: a garbage status line escapes as a non-JevError",
+    "file": "singularity/jev/client.py",
+    "old": "except Exception as exc:  # noqa: BLE001 - HTTPException, ssl, OSError, ValueError, ...",
+    "new": "except OSError as exc:  # noqa: BLE001 - HTTPException, ssl, OSError, ValueError, ...",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_jev_client.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "jev client: a redirect carries the key to another host",
+    "file": "singularity/jev/client.py",
+    "old": "_OPENER = urllib.request.build_opener(_NoRedirect)",
+    "new": "_OPENER = urllib.request.build_opener()",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_jev_client.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "jev client: a stored key follows the endpoint override",
+    "file": "singularity/jev/client.py",
+    "old": "(os.environ.get(KEY_ENV) or \"\").strip() == key",
+    "new": "True",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_jev_client.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "jev client: the deadline stops bounding a slow drip",
+    "file": "singularity/jev/client.py",
+    "old": "worker.join(budget)",
+    "new": "worker.join()",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_jev_client.py",
+      "-k",
+      "drip"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "jev router: size confidence outranks a follow-up again",
+    "file": "singularity/jev/router.py",
+    "old": "    if followup >= THRESHOLD:\n",
+    "new": "    if followup >= THRESHOLD and confidence >= THRESHOLD:\n",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_jev_router.py",
+      "-k",
+      "followup"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "jev journal: a rotated generation's cost is dropped, not carried",
+    "file": "singularity/jev/log.py",
+    "old": "            if lost:\n",
+    "new": "            if False:\n",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_jev_cli.py",
+      "-k",
+      "rotation or rotating"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "route hook command: registered as a bare script path again, so a missing file exits 2",
+    "file": "install/register_hooks.py",
+    "old": "guarded_command(ENGINE / \"singularity\" / \"hooks\" / \"user_prompt_submit.py\")",
+    "new": "f'\"{PYTHON}\" \"{ENGINE / \"singularity\" / \"hooks\" / \"user_prompt_submit.py\"}\"'",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_routing.py",
+      "-k",
+      "registered_router"
+    ],
+    "expect": "RED"
   }
 ]
