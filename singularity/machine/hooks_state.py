@@ -138,10 +138,10 @@ MEASURED_AXIS_FRAGMENT = """## Measure the axis you were ASKED about
 
 
 TEAM_LEAD_FRAGMENT = """## Delegating to executors
-- You choose model and effort for each executor (skill `team-lead`): haiku — reading, search, mechanics; sonnet — code by a plan; opus — checks and thinking, always named (no model named → agent's default, else session's). Do it yourself when the brief costs as much as the work; 2–4 executors, not dozens.
-- Background executors; big results come back as a file path. Fable only via `advisor` with `ПОЧЕМУ FABLE:`.
-- A council starts only on the owner's command — ask for it.
-- Told the budget is spent: stop and ask the owner."""
+- Work runs on tickets (`mb board`, skill `team-lead`): you write the ticket, assign the agent ID, move status, accept by your own check; never do the work yourself. Executors only `mb board note`.
+- You choose model and effort (haiku — reading, mechanics; sonnet — code by a plan; opus — checks, always named; none named → agent's default, else session's). 2–4 background executors; big results as a file.
+- Fable only via `advisor` with `ПОЧЕМУ FABLE:`. Council only on the owner's command.
+- Budget spent: stop, ask the owner."""
 
 
 def _read_json_tolerant(path: Path) -> tuple[dict[str, Any], str | None]:

@@ -75,8 +75,9 @@ SKILL_MANIFEST: dict[str, dict[str, Any]] = {
                   "real-client tested there",
     },
     "team-lead": {
-        "clients": ["claude"], "tools": ["Agent"],
-        "reason": "spawns Claude subagents by model tier via the Agent tool",
+        "clients": ["claude"], "tools": ["Agent", "Bash"],
+        "reason": "spawns Claude subagents by model tier via the Agent tool and "
+                  "drives the ticket board through the `mb board` CLI (Bash)",
     },
     "jev-guide": {
         "clients": ["claude"], "tools": ["Bash"],

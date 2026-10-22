@@ -25,7 +25,7 @@ def _manifest():
 def test_team_lead_registered_for_claude_only():
     entry = _manifest().SKILL_MANIFEST["team-lead"]
     assert entry["clients"] == ["claude"]
-    assert entry["tools"] == ["Agent"]
+    assert entry["tools"] == ["Agent", "Bash"], "the skill drives `mb board` through Bash"
     assert entry["reason"]
 
 
@@ -54,7 +54,8 @@ def test_a_missing_model_is_not_promised_to_be_sonnet():
     and seven engine agents default to something else."""
     from singularity.machine.hooks_state import TEAM_LEAD_FRAGMENT
 
-    for text in (_text(), TEAM_LEAD_FRAGMENT):
+    preamble = (ENGINE / "singularity" / "agents" / "AGENT_SHARED_PREAMBLE.md").read_text(encoding="utf-8")
+    for text in (_text(), TEAM_LEAD_FRAGMENT, preamble):
         assert "means sonnet" not in text
         assert "the default when no model is named" not in text
     assert "own `model:` line" in _text()
@@ -91,3 +92,53 @@ def test_team_lead_sends_councils_and_budget_back_to_the_owner():
     assert "owner's explicit command" in text
     assert "AskUserQuestion" in text
     assert "run_in_background" in text
+
+
+def test_team_lead_works_through_tickets_and_does_not_do_the_work():
+    """The lead is the PM and the tech lead: any work is a ticket, and the lead
+    does not do it, not even a one-line edit. The old rubric said "do it yourself
+    when the brief costs as much as the work"; a rule of the opposite sign in the
+    same text would win by being last, so it must be gone."""
+    text = _text()
+    assert "Any work is a ticket on the board" in text
+    assert "mb note new ticket" in text
+    assert "INDEPENDENT check" in text
+    low = text.lower()
+    for old in ("do it yourself", "do it yourself when", "brief would cost as much"):
+        assert old not in low, old
+    assert "not even a one-line edit" in text
+    assert "permission" in low and "ask the owner" in low
+
+
+def test_team_lead_fragment_carries_the_ticket_rule():
+    from singularity.machine.hooks_state import TEAM_LEAD_FRAGMENT
+
+    assert "Work runs on tickets" in TEAM_LEAD_FRAGMENT
+    assert "agent ID" in TEAM_LEAD_FRAGMENT
+    assert "never do the work yourself" in TEAM_LEAD_FRAGMENT
+
+
+def test_team_lead_covers_sections_one_to_twelve():
+    import re
+
+    heads = re.findall(r"^## (\d+)\. ", _text(), flags=re.M)
+    assert heads == [str(n) for n in range(1, 13)]
+
+
+def test_every_board_subcommand_named_by_the_lead_surfaces_exists_in_the_parser():
+    """The skill and the SessionStart fragment name `mb board <sub>`; a sub that
+    the parser does not know turns the rule into an error at the point of use."""
+    import re
+
+    from singularity.cli import _build_parser
+    from singularity.machine.hooks_state import TEAM_LEAD_FRAGMENT
+
+    top = _build_parser()._subparsers._group_actions[0].choices
+    known = set(top["board"]._subparsers._group_actions[0].choices)
+    assert {"next", "show", "move", "note", "assign", "check"} <= known, "control"
+    named = set()
+    preamble = (ENGINE / "singularity" / "agents" / "AGENT_SHARED_PREAMBLE.md").read_text(encoding="utf-8")
+    for text in (_text(), TEAM_LEAD_FRAGMENT, preamble):
+        named |= set(re.findall(r"mb board ([a-z][a-z-]*)", text))
+    assert {"assign", "move", "note", "next", "show", "check"} <= named, "control: the surfaces name the board"
+    assert named <= known, f"unknown board subcommands: {sorted(named - known)}"

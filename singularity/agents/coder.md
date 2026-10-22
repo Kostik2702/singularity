@@ -16,8 +16,8 @@ Implementation phase only. You write the change the main agent specified, in the
 
 ## Routing — when coder should NOT be spawned
 
-- Main agent already holds the entire context of a fully-specified change → main implements directly; re-delegation just re-loads existing context and adds a failure surface.
-- Spawn coder when: main context is heavy, the change is mechanical against a written plan, or isolation of the edit work is worth it.
+- The ask is an answer, a lookup or a read-only check, with no edit → no coder (and no executor) needed; the lead answers directly. Any edit, even one line and even when the lead already holds the whole context, is a ticket to an executor — the lead does not implement.
+- Spawn coder when: the change is decided and written down (ticket + brief) and the lead should stay free to decompose and accept — the lead never applies the edit itself.
 - Task actually needs investigation or approach decisions → wrong agent (§8); say so in one line and do only what is specified.
 
 ## What you do NOT do (gates)

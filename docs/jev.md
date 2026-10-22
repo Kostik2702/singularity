@@ -34,6 +34,7 @@ The key is read from stdin only, stored in the OS keyring under the fixed name `
 ## Decisions made on the owner's behalf (ASSUMED, lead, 2026-10-20)
 
 - **Follow-ups are judged first.** A message the noul reads as a follow-up (p >= 0.6) inherits the session's previous route and is `decided: jev`. With no previous route it is `decided: self` and nothing is injected - what it continues is unknown, and "yes, do the whole plan" reads as a tiny task. Everything else goes by the size question and its confidence (< 0.6 = `self`). The size is `floor(score + 0.5)` clamped to 0..3.
+- **Tiny tasks** get `answer directly (no executor); any edit is a ticket` (team-lead: the lead answers and reads, every edit is a ticket to an executor).
 - **Large tasks** get `sonnet·high executors + opus·high review; plan first` (team-lead §3: opus is for checks).
 - **Outbound personal check is stricter than the engine's.** A note under any `personal_roots` path is never sent, even when its frontmatter names a project; the engine's own classification (explicit project wins) is untouched elsewhere.
 - **Harness-injected turns are skipped** (no call, no journal line): prompts that START with `<task-notification`, `<system-reminder`, `[SYSTEM NOTIFICATION`, `<local-command`, `<command-name`, `<command-message`, `Caveat: The messages below`, `Stop hook feedback:` or `Hook additional context:`. Slash commands are skipped only when they look like one (`/word` followed by a space or the end); a path such as `/Users/me/x.py fails` is a prompt.

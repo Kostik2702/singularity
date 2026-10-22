@@ -64,6 +64,9 @@ DELIVERIES: list[tuple[str, str, Path, str]] = [
     ("the lead chooses model and effort for every executor", "SessionStart",
      ENGINE / "singularity" / "hooks" / "session_start.py",
      "lines.append(TEAM_LEAD_FRAGMENT)"),
+    ("the lead works through tickets", "SessionStart",
+     ENGINE / "singularity" / "machine" / "hooks_state.py",
+     "Work runs on tickets"),
 
     # --- every subagent: preamble sections 1-2 are the mandatory minimum -----
     ("a claim of absence requires a control", "preamble §2", PREAMBLE,
@@ -88,6 +91,8 @@ DELIVERIES: list[tuple[str, str, Path, str]] = [
      "never stop the run to wait"),
     ("an invariant is proven by trying to break it", "preamble §2", PREAMBLE,
      "plant the violation"),
+    ("an executor leaves the ticket to the lead and writes to its feed", "preamble §2",
+     PREAMBLE, "**Work on a ticket:**"),
     ("a pipe over the test command must not swallow the exit code", "preamble §2", PREAMBLE,
      "PIPESTATUS"),
     ("a check and an irreversible act do not share one shell invocation",
@@ -150,6 +155,8 @@ DELIVERIES: list[tuple[str, str, Path, str]] = [
      SKILLS / "team-lead" / "SKILL.md", "run_in_background"),
     ("an executor leaves nothing running when it reports", "skill",
      SKILLS / "team-lead" / "SKILL.md", "Leave nothing running"),
+    ("the lead works through tickets", "skill",
+     SKILLS / "team-lead" / "SKILL.md", "Any work is a ticket on the board"),
     ("investigation mechanics go to executors", "skill",
      ENGINE / "singularity" / "workflow" / "phase-1-investigation.md", "team-lead"),
     ("agentic-development estimates have two cost classes", "skill",

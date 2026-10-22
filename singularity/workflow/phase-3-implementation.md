@@ -10,6 +10,7 @@ status: active
 
 Parent: `_router.md`.
 
+- [ ] Who edits: this phase is a ticket for an executor (skill `team-lead`), never the lead's own work; the checklist below is the executor's.
 - [ ] Load the repository's rules (its CLAUDE.md / conventions) and [[Core Discipline - Checkbox Gates]]; write in the idiom of the surrounding code.
 - [ ] Read-before-edit: the file is read before it is edited; the edit is minimal within the plan's scope.
 - [ ] Not one silent change to business logic beyond the plan — noticed that one is needed → stop and record the decision.

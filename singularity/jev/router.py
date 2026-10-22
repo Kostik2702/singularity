@@ -26,7 +26,7 @@ KEPT_SESSIONS = 50
 # is for checks (team-lead §3), so a large task is built on sonnet and reviewed
 # on opus.
 ROUTES = {
-    "tiny": "yourself (no executor)",
+    "tiny": "answer directly (no executor); any edit is a ticket",
     "small": "haiku·low",
     "medium": "sonnet·medium",
     "large": "sonnet·high executors + opus·high review; plan first",

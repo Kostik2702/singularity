@@ -325,3 +325,10 @@ def test_the_registered_command_still_delivers_the_hooks_answer(world):
                           text=True, env=env, cwd=ENGINE, timeout=20)
     assert proc.returncode == 0
     assert "haiku·low" in json.loads(proc.stdout)["hookSpecificOutput"]["additionalContext"]
+
+
+def test_the_tiny_hint_never_tells_the_lead_to_do_an_edit_itself():
+    """Team-lead rule: any edit is a ticket. The hint sits in the lead's context
+    on every turn, so a "yourself" wording there overrides the skill."""
+    assert router.ROUTES["tiny"] == "answer directly (no executor); any edit is a ticket"
+    assert "yourself" not in " ".join(router.ROUTES.values())

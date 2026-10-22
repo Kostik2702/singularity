@@ -414,5 +414,469 @@
       "tests/test_rules_delivery.py"
     ],
     "expect": "RED"
+  },
+  {
+    "label": "ticket numbering counts existing tickets instead of taking max+1",
+    "file": "singularity/knowledge/tickets.py",
+    "old": "highest = max(highest, int(m.group(1)))",
+    "new": "highest += 1",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_ticket_note.py",
+      "-k",
+      "numbering"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "tickets root dropped from the guarded roots while the note type still points at it",
+    "file": "singularity/machine/vault_guard.py",
+    "old": "\"daily\",\n                 \"tickets\"]",
+    "new": "\"daily\"]",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_note_covers_managed_roots.py",
+      "tests/test_vault_guard.py",
+      "tests/test_ticket_note.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "a project without a ticket prefix gets a made-up one instead of a refusal",
+    "file": "singularity/knowledge/tickets.py",
+    "old": "PREFIX_RE.match(prefix) else None",
+    "new": "PREFIX_RE.match(prefix) else \"XX\"",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_ticket_note.py",
+      "-k",
+      "refused"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board: blocked_by check disabled for in-progress",
+    "file": "singularity/knowledge/board.py",
+    "old": "        open_ = _open_blockers(ticket, by_id)\n        if open_:\n",
+    "new": "        open_ = _open_blockers(ticket, by_id)\n        if False and open_:\n",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "rule1 or force or next"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board: acceptance criteria count as filled whatever they hold",
+    "file": "singularity/knowledge/board.py",
+    "old": "    return any(ln.lower() not in _PLACEHOLDERS for ln in lines)",
+    "new": "    return True",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "rule2 or check"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board: WIP limit lets one ticket past it (>= becomes >)",
+    "file": "singularity/knowledge/board.py",
+    "old": "if len(running) >= limit:",
+    "new": "if len(running) > limit:",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "rule3"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board: owns overlap only on exactly equal paths",
+    "file": "singularity/knowledge/board.py",
+    "old": "x == y or x.startswith(y + \"/\") or y.startswith(x + \"/\")",
+    "new": "x == y",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "rule4 or collide"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board: done reachable from any status",
+    "file": "singularity/knowledge/board.py",
+    "old": "if target == \"done\" and current != \"review\":",
+    "new": "if target == \"done\" and current != \"review\" and False:",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "rule5"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board: a Feed note swallows the sections after Feed (Verdict)",
+    "file": "singularity/knowledge/tickets.py",
+    "old": "tail + text[stop:]",
+    "new": "tail",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "note_appends or parallel"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "the SQL allowlist lets load_extension through",
+    "file": "singularity/codegraph/sql.py",
+    "old": "pow power radians sin sinh sqrt tan tanh trunc",
+    "new": "pow power radians sin sinh sqrt tan tanh trunc load_extension",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_codegraph_sql.py",
+      "-k",
+      "planted_attack"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "the nightly snapshot keeps the WAL flag of the live graph",
+    "file": "singularity/codegraph/compare.py",
+    "old": "            out.execute(\"PRAGMA journal_mode=DELETE\")\n",
+    "new": "",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_codegraph_p6.py",
+      "-k",
+      "rollback_mode"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board: epics are not excluded from next",
+    "file": "singularity/knowledge/board.py",
+    "old": "             and not _is_epic(t) and not _open_blockers(t, by_id)]",
+    "new": "             and not _open_blockers(t, by_id)]",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "never_offers_epics"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "team-lead skill drops the rule that any work is a ticket",
+    "file": "singularity/skills/team-lead/SKILL.md",
+    "old": "Any work is a ticket on the board",
+    "new": "Work as you see fit",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_rules_delivery.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "preamble drops the executor's ticket rule",
+    "file": "singularity/agents/AGENT_SHARED_PREAMBLE.md",
+    "old": "**Work on a ticket:**",
+    "new": "**On tickets:**",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_rules_delivery.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "jev router tiny hint tells the lead to do it yourself",
+    "file": "singularity/jev/router.py",
+    "old": "\"tiny\": \"answer directly (no executor); any edit is a ticket\"",
+    "new": "\"tiny\": \"yourself (no executor)\"",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_jev_router.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board edit: status becomes an editable field",
+    "file": "singularity/knowledge/board.py",
+    "old": "EDITABLE_FM = (\"priority\", \"kind\")",
+    "new": "EDITABLE_FM = (\"priority\", \"kind\", \"status\")",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "cannot_touch"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board edit: replacing the Goal drops the sections after it (Verdict)",
+    "file": "singularity/knowledge/tickets.py",
+    "old": "+ middle + text[stop:]",
+    "new": "+ middle",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "untouched_sections or every_field"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board: done accepted with an empty Verdict",
+    "file": "singularity/knowledge/board.py",
+    "old": "    elif target == \"done\" and not ticket[\"sections\"][tk.SECTION_VERDICT].strip():",
+    "new": "    elif False:",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "verdict"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "config save: lock removed (parallel saves lose edits)",
+    "file": "singularity/config.py",
+    "old": "    while not make_lock_dir(lock):",
+    "new": "    while False and not make_lock_dir(lock):",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_config_save_concurrent.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "config save: no re-read of the file under the lock",
+    "file": "singularity/config.py",
+    "old": "merged = _apply_changes(base, self.data, on_disk)",
+    "new": "merged = _apply_changes(base, self.data, {})",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_config_save_concurrent.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board: file-changing kinds may start without owns",
+    "file": "singularity/knowledge/board.py",
+    "old": "            if fm.get(\"kind\") in OWNS_KINDS and not mine:",
+    "new": "            if False and fm.get(\"kind\") in OWNS_KINDS and not mine:",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "no_owns"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "config save: merged result is not validated under the lock",
+    "file": "singularity/config.py",
+    "old": "            if fresh:\n",
+    "new": "            if False:\n",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_config_save_concurrent.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "fslock: stale break does not verify what it removed",
+    "file": "singularity/platform/fslock.py",
+    "old": "        if (got.st_ino, got.st_mtime_ns) != (seen.st_ino, seen.st_mtime_ns):",
+    "new": "        if False:",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_config_save_concurrent.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "project set: refused save is not reported (traceback)",
+    "file": "singularity/commands/machine.py",
+    "old": "    except ConfigError as exc:\n        for line in exc.lines:",
+    "new": "    except KeyError as exc:\n        for line in exc.lines:",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_config_save_concurrent.py"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "tickets: create accepts a parent or blocker that is not a ticket",
+    "file": "singularity/knowledge/tickets.py",
+    "old": "                if ref not in known:",
+    "new": "                if False and ref not in known:",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "create_refuses"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board edit: an unknown --parent is accepted",
+    "file": "singularity/knowledge/board.py",
+    "old": "                 if ref not in known]",
+    "new": "                 if ref not in known and ref != changes.get(\"parent\")]",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "edit_parent"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "tickets: ids reach the glob unvalidated",
+    "file": "singularity/knowledge/tickets.py",
+    "old": "if not _ID_RE.fullmatch(ticket_id) or not root.is_dir():",
+    "new": "if not root.is_dir():",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "validated_before"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "board: blocked_by cycles are not detected",
+    "file": "singularity/knowledge/board.py",
+    "old": "    for start in sorted(blocked):",
+    "new": "    for start in []:",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "cycle"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "tickets: the prefix hint points at a command that does not work",
+    "file": "singularity/knowledge/tickets.py",
+    "old": "f\"(2-6 capital letters) with `mb project set \"",
+    "new": "f\"(2-6 capital letters) with `mb config set \"",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "prefix_hint"
+    ],
+    "expect": "RED"
+  },
+  {
+    "label": "tickets: a stale ticket lock is broken by naive stat + rmdir",
+    "file": "singularity/knowledge/tickets.py",
+    "old": "if break_stale_lock(lock, _LOCK_STALE_SECONDS):",
+    "new": "if time.time() - lock.stat().st_mtime > _LOCK_STALE_SECONDS and lock.rmdir() is None:",
+    "cmd": [
+      "{python}",
+      "-m",
+      "pytest",
+      "-q",
+      "tests/test_board.py",
+      "-k",
+      "stale_ticket_lock"
+    ],
+    "expect": "RED"
   }
 ]
