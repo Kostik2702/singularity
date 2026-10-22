@@ -153,18 +153,23 @@ def _no_real_machine_config(request, tmp_path_factory, monkeypatch):
     # whatever route a write took, the test that took it fails.
     after = real.read_bytes() if real.exists() else None
     if after != before:
-        try:                                    # put it back before failing
-            if before is None:
-                real.unlink(missing_ok=True)
-            else:
-                real.write_bytes(before)
-        except OSError:
-            pass
+        # NOT restored. This used to write `before` back, which turned the
+        # witness into a writer: a legitimate `mb project set` by someone else
+        # during a test run changed the file, the guard read that as the test's
+        # doing and rolled it back (two lost ticket prefixes, 2026-10-22). The
+        # old bytes go to a side file so a real clobber is still recoverable.
+        saved = ""
+        if before is not None:
+            side = tmp_path_factory.mktemp("config-before") / real.name
+            side.write_bytes(before)
+            saved = f" Content from before the test: {side}."
         raise AssertionError(
-            f"test modified the REAL machine config {real}. Use "
+            f"the REAL machine config {real} changed during this test (left as "
+            f"found, not restored).{saved} Either the test wrote it -- use "
             f"`from singularity import config as config_mod` and reference "
             f"`config_mod.CONFIG_FILE` so the redirect applies, or mark the "
-            f"test @pytest.mark.real_machine_config.")
+            f"test @pytest.mark.real_machine_config -- or another `mb` process "
+            f"on this machine wrote it meanwhile.")
 
 
 @pytest.fixture(autouse=True)
