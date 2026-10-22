@@ -214,6 +214,20 @@ def cmd_config(cfg, args) -> int:
         return 0
     return 1
 
+def _save_reporting(cfg) -> bool:
+    """`cfg.save()` that turns a refused save (the merged config would be
+    invalid because another `mb` changed the file meanwhile) into a message."""
+    from ..config import ConfigError
+
+    try:
+        cfg.save()
+    except ConfigError as exc:
+        for line in exc.lines:
+            print(line, file=sys.stderr)
+        return False
+    return True
+
+
 def cmd_project(cfg, args) -> int:
 
     from ..machine import projects
@@ -236,7 +250,7 @@ def cmd_project(cfg, args) -> int:
             if not shown:
                 print("(no projects registered)")
             for pid, e in sorted(shown.items()):
-                extra = "".join(f"  {k}={e[k]}" for k in ("group", "about") if e.get(k))
+                extra = "".join(f"  {k}={e[k]}" for k in ("group", "about", "ticket_prefix") if e.get(k))
                 print(f"{pid}: {e.get('path')}{extra}")
         return 0
 
@@ -252,6 +266,8 @@ def cmd_project(cfg, args) -> int:
             entry["group"] = args.group
         if args.about:
             entry["about"] = args.about
+        if getattr(args, "ticket_prefix", None):
+            entry["ticket_prefix"] = args.ticket_prefix
         candidate = {**cfg.data, "projects": {**entries, args.id: entry}}
         result = validate_config(candidate)
         if result["errors"]:
@@ -259,9 +275,28 @@ def cmd_project(cfg, args) -> int:
                 print(f"[mb] {e}", file=sys.stderr)
             return 1
         cfg.data = candidate
-        cfg.save()
+        if not _save_reporting(cfg):
+            return 1
         verb = "updated" if isinstance(previous, dict) else "added"
         print(f"project {verb}: {args.id} -> {entry['path']}")
+        return 0
+
+    if args.project_action == "set":
+        if args.id not in entries:
+            print(f"[mb] unknown project id: {args.id} (known: "
+                  f"{', '.join(sorted(entries)) or '(none)'})", file=sys.stderr)
+            return 1
+        entry = {**entries[args.id], "ticket_prefix": args.ticket_prefix}
+        candidate = {**cfg.data, "projects": {**entries, args.id: entry}}
+        result = validate_config(candidate)
+        if result["errors"]:
+            for e in result["errors"]:
+                print(f"[mb] {e}", file=sys.stderr)
+            return 1
+        cfg.data = candidate
+        if not _save_reporting(cfg):
+            return 1
+        print(f"project updated: {args.id} ticket_prefix={args.ticket_prefix}")
         return 0
 
     if args.project_action == "remove":
@@ -271,7 +306,8 @@ def cmd_project(cfg, args) -> int:
             return 1
         remaining = {pid: e for pid, e in entries.items() if pid != args.id}
         cfg.data = {**cfg.data, "projects": remaining}
-        cfg.save()
+        if not _save_reporting(cfg):
+            return 1
         print(f"project removed: {args.id}")
         return 0
 

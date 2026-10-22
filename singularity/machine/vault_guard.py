@@ -22,7 +22,8 @@ from __future__ import annotations
 from pathlib import Path
 
 MANAGED_ROOTS = ["learnings/active", "learnings/archive", "decisions", "howto",
-                 "incidents", "rules", "reference", "changelog", "_moc", "daily"]
+                 "incidents", "rules", "reference", "changelog", "_moc", "daily",
+                 "tickets"]
 EXEMPT_ROOTS = ["templates", "compaction-plans"]
 # WIKI-LOOP D6: roots whose contents are immutable by contract. Unlike every
 # other check here, a hit is denied even in `vault_guard_mode: audit` — the

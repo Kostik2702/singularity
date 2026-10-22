@@ -35,7 +35,7 @@ SUGGEST_THRESHOLD = 0.65
 SUGGEST_LIMIT = 15
 STALE_DAYS = 60
 # housekeeping notes: excluded from orphan/suggestion analysis (not from validation)
-EXCLUDED_PREFIXES = ("_moc/", "changelog/", "daily/", "templates/")
+EXCLUDED_PREFIXES = ("_moc/", "changelog/", "daily/", "templates/", "tickets/")
 
 # T13: chunk-level semantic lint (near-duplicate / supersession detection).
 # Higher bar than SUGGEST_THRESHOLD -- that one flags "topically related, no

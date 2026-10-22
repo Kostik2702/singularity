@@ -384,3 +384,16 @@ def test_run_human_output_includes_lint_sections(cfg, capsys):
     assert "Duplicate sections (same file" in out
     assert "Supersession candidates" in out
     assert "Context budget/reference issues" in out
+
+
+def test_tickets_are_never_orphans(cfg):
+    """A ticket is work state, not knowledge: nothing links to it by design, so
+    without the `tickets/` exclusion every ticket would be reported an orphan.
+    The plain note beside it is the control: the same scan must still flag it."""
+    for rel in ("tickets/proj/DD-1 - x.md", "reference/lonely.md"):
+        path = cfg.vault / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("---\ntype: ticket\ntitle: t\n---\n\nbody\n", encoding="utf-8")
+    orphans = curator.analyze(cfg)["orphans"]
+    assert "reference/lonely.md" in orphans
+    assert "tickets/proj/DD-1 - x.md" not in orphans

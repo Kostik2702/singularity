@@ -20,7 +20,8 @@ The watcher indexes what you save automatically (~5-15 s) — nothing needs to b
 ```bash
 mb learn "<a dense insight in one to three sentences>" --task <TASK-ID>   # quick append to learnings/active/<TASK-ID>.md
 mb note new decision "Name of the decision"    # a new note from the template
-# types: learning|decision|howto|incident|rule|reference|daily|moc|changelog — one per managed root
+# types: learning|decision|howto|incident|rule|reference|daily|moc|changelog|ticket — one per managed root
+# ticket: mb note new ticket "Title" --project <id> [--kind --priority --parent --blocked-by --owns --assignee] -> tickets/<id>/<PREFIX>-<n> - Title.md
 mb note new rule "X" --filename "Rule - X"   # vault convention: type in the filename, title kept clean
 ```
 

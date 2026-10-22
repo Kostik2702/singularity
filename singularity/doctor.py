@@ -20,7 +20,7 @@ from .platform import current_os, scheduler
 from .platform.proc import NO_WINDOW
 
 MEMORY_FOLDERS = ["learnings/active", "learnings/archive", "decisions", "howto",
-                  "incidents", "rules", "reference", "changelog", "templates", "_moc"]
+                  "incidents", "rules", "reference", "changelog", "templates", "_moc", "tickets"]
 
 
 @dataclass

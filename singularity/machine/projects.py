@@ -9,12 +9,13 @@ space, T04/T05) — they are never registrable entries in `projects`.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import Any
 
 RESERVED_IDS = {"general", "personal"}
-_KNOWN_ENTRY_KEYS = {"path", "group", "about"}
+_KNOWN_ENTRY_KEYS = {"path", "group", "about", "ticket_prefix"}
 
 
 def validate_projects(data: dict[str, Any]) -> dict[str, list[str]]:
@@ -30,6 +31,7 @@ def validate_projects(data: dict[str, Any]) -> dict[str, list[str]]:
         return {"errors": [f"projects: must be an object, got {type(projects).__name__}"],
                 "warnings": []}
 
+    claimed_prefixes: dict[str, str] = {}
     claimed_paths: dict[str, str] = {}   # normalized path -> first id that claimed it
 
     for pid, entry in projects.items():
@@ -67,6 +69,17 @@ def validate_projects(data: dict[str, Any]) -> dict[str, list[str]]:
         about = entry.get("about")
         if about is not None and not isinstance(about, str):
             errors.append(f"projects.{pid}.about: must be a string or absent")
+
+        prefix = entry.get("ticket_prefix")
+        if prefix is not None:
+            if not isinstance(prefix, str) or not re.fullmatch(r"[A-Z]{2,6}", prefix):
+                errors.append(f"projects.{pid}.ticket_prefix: must be 2-6 capital "
+                              f"letters A-Z or absent")
+            elif prefix in claimed_prefixes and claimed_prefixes[prefix] != pid:
+                errors.append(f"projects.{pid}.ticket_prefix: '{prefix}' already used "
+                              f"by '{claimed_prefixes[prefix]}'")
+            else:
+                claimed_prefixes[prefix] = pid
 
         unknown = set(entry) - _KNOWN_ENTRY_KEYS
         if unknown:
