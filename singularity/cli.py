@@ -35,6 +35,8 @@ mb code status|build [--all]|update|outline <file>|snippet|callers|callees|trace
                                  # the structural code graph (off until code_graph_enabled)
 mb jev status [--json]|key set|status|delete|on|off|ask|pick "<brief>"|log [--tail N] [--session S]
                                  # Jev decision API (off until `mb jev on`)
+mb board [next|show ID|move ID STATUS|note ID "text"|assign ID|edit ID|check] [--project X] [--json]
+                                 # the ticket board (tickets/<project>/ in the vault)
 mb init            # write ~/.singularity.json pointer + folder tree
 mb uninstall       # remove hooks/scheduler jobs/daemon (vault untouched)
 """
@@ -331,6 +333,12 @@ def _build_parser() -> argparse.ArgumentParser:
     pra.add_argument("path")
     pra.add_argument("--group")
     pra.add_argument("--about")
+    pra.add_argument("--ticket-prefix", dest="ticket_prefix",
+                     help="2-6 capital letters, unique: the project's ticket ids (DD-12)")
+    prs = prsub.add_parser("set", help="change fields of a registered project")
+    prs.add_argument("id")
+    prs.add_argument("--ticket-prefix", dest="ticket_prefix", required=True,
+                     help="2-6 capital letters, unique: the project's ticket ids (DD-12)")
     prr = prsub.add_parser("remove", help="unregister a project")
     prr.add_argument("id")
     prd = prsub.add_parser("detect", help="resolve a path (default: cwd) to a registered project")
@@ -436,12 +444,71 @@ def _build_parser() -> argparse.ArgumentParser:
     nn.add_argument("--from-source", dest="from_source", action="append",
                     help="source_id this note is derived from (repeatable) — writes "
                          "`sources:` frontmatter and the registry back-link")
+    nn.add_argument("--kind", help="ticket only: epic|feature|task|bug|spike|review|chore")
+    nn.add_argument("--priority", help="ticket only: P0|P1|P2|P3")
+    nn.add_argument("--parent", help="ticket only: parent ticket id")
+    nn.add_argument("--blocked-by", dest="blocked_by", action="append",
+                    help="ticket only: id of a blocking ticket (repeatable)")
+    nn.add_argument("--owns", action="append",
+                    help="ticket only: a path or area the ticket owns (repeatable)")
+    nn.add_argument("--assignee", help="ticket only: who works on it")
+    nn.add_argument("--goal", help="ticket only: the Goal section text")
+    nn.add_argument("--criteria", action="append",
+                    help="ticket only: one acceptance criterion (repeatable, each a checklist line)")
     ns = nsub.add_parser("split",
                          help="split a note that outgrew its injection budget into "
                               "an index + one child note per `##` section")
     ns.add_argument("path", help="vault-relative path of the note to split")
     ns.add_argument("--dry-run", action="store_true",
                     help="show the plan, write nothing")
+
+    bo = sub.add_parser("board", help="ticket board: columns, next, move, note, assign, check")
+    bo.add_argument("--project", help="only this project's tickets")
+    bo.add_argument("--json", action="store_true")
+    bosub = bo.add_subparsers(dest="board_action")
+    _sup = argparse.SUPPRESS      # the parent's flags must survive a subcommand's defaults
+
+    def _bo(name, helptext, project=False):
+        sp = bosub.add_parser(name, help=helptext)
+        sp.add_argument("--json", action="store_true", default=_sup)
+        if project:
+            sp.add_argument("--project", default=_sup)
+        return sp
+
+    _bo("next", "ready tickets with closed blockers, P0 first", project=True)
+    _bo("show", "one ticket").add_argument("id")
+    bom = _bo("move", "change a ticket's status (rules enforced)")
+    bom.add_argument("id")
+    bom.add_argument("status")
+    bom.add_argument("--force-reason", dest="force_reason",
+                     help="bypass blocked/criteria/WIP/owns checks, recording why (lead only)")
+    bom.add_argument("--by")
+    bon = _bo("note", "append a dated line to the ticket's Feed")
+    bon.add_argument("id")
+    bon.add_argument("text")
+    bon.add_argument("--by")
+    boa = _bo("assign", "set assignee and/or agent id")
+    boa.add_argument("id")
+    boa.add_argument("--assignee")
+    boa.add_argument("--agent")
+    boa.add_argument("--by")
+    boe = _bo("edit", "change a ticket's body or descriptive fields (never id/status/project)")
+    boe.add_argument("id")
+    boe.add_argument("--parent", help="set the parent ticket id (must exist)")
+    boe.add_argument("--goal")
+    boe.add_argument("--criteria", action="append",
+                     help="replace the Acceptance criteria; repeat for several items")
+    boe.add_argument("--add-criterion", dest="add_criterion", action="append")
+    boe.add_argument("--verdict", help="replace the Verdict section")
+    boe.add_argument("--title")
+    boe.add_argument("--priority")
+    boe.add_argument("--kind")
+    boe.add_argument("--blocked-by", dest="blocked_by", action="append")
+    boe.add_argument("--remove-blocked-by", dest="remove_blocked_by", action="append")
+    boe.add_argument("--owns", action="append")
+    boe.add_argument("--remove-owns", dest="remove_owns", action="append")
+    boe.add_argument("--by")
+    _bo("check", "invariants over every ticket", project=True)
 
     ll = sub.add_parser("llm", help="local inference server (llama-server + router)")
     llsub = ll.add_subparsers(dest="llm_action", required=True)
@@ -697,6 +764,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "jev":
         from .commands.jev import cmd_jev
         return cmd_jev(cfg, args)
+    if args.command == "board":
+        from .commands.board import cmd_board
+        return cmd_board(cfg, args)
     if args.command == "init":
         return cmd_init(cfg, args)
     if args.command == "uninstall":

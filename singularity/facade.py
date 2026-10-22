@@ -52,7 +52,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
     # lifecycle. Agents reach it by the direct path `mb code ...`.
     # `jev` (the decision API) is off by default too, and agents call it directly.
     "service": ("daemon", "index", "model", "watch", "backup", "selftest",
-                "sessions", "route", "code", "jev"),
+                "sessions", "route", "code", "jev", "board"),
     "setup": ("config", "project", "hooks", "init", "uninstall"),
 }
 

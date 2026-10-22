@@ -535,6 +535,34 @@ def _cmd_note_split(cfg, args) -> int:
     return 0
 
 
+def _cmd_note_ticket(cfg, args) -> int:
+    """`mb note new ticket`: the engine, not a template, owns a ticket's shape
+    (see knowledge/tickets.py). Every refusal happens before a byte is written."""
+    from ..knowledge import capture, tickets
+
+    project, err = capture.resolve_capture_project(cfg, args.project, tickets.TICKETS_DIR + "/")
+    if err:
+        print(f"[mb] {err}", file=sys.stderr)
+        return 1
+    try:
+        path = tickets.create_ticket(
+            cfg.vault, cfg.get("projects", {}) or {}, project, args.title,
+            kind=getattr(args, "kind", None) or tickets.DEFAULT_KIND,
+            priority=getattr(args, "priority", None) or tickets.DEFAULT_PRIORITY,
+            parent=getattr(args, "parent", None),
+            blocked_by=list(getattr(args, "blocked_by", None) or []),
+            owns=list(getattr(args, "owns", None) or []),
+            assignee=getattr(args, "assignee", None),
+            goal=getattr(args, "goal", None) or "",
+            criteria="\n".join(f"- [ ] {c.strip()}" for c in getattr(args, "criteria", None) or []
+                               if c.strip()))
+    except tickets.TicketError as exc:
+        print(f"[mb] {exc}", file=sys.stderr)
+        return 1
+    print(str(path))
+    return 0
+
+
 def cmd_note(cfg, args) -> int:
     from ..knowledge import capture
     from ..knowledge import sources as sources_mod
@@ -553,12 +581,15 @@ def cmd_note(cfg, args) -> int:
     folder_by_type = {"learning": "learnings/active", "decision": "decisions",
                       "howto": "howto", "incident": "incidents", "rule": "rules",
                       "reference": "reference", "daily": "daily",
-                      "moc": "_moc", "changelog": "changelog"}
+                      "moc": "_moc", "changelog": "changelog", "ticket": "tickets"}
     folder = folder_by_type.get(args.type)
     if folder is None:
         print(f"[mb] unknown type: {args.type} (use {', '.join(folder_by_type)})",
               file=sys.stderr)
         return 1
+
+    if args.type == "ticket":
+        return _cmd_note_ticket(cfg, args)
 
     # W04 provenance: validate every id BEFORE creating the file, so a typo
     # never leaves a note claiming a source that does not exist.

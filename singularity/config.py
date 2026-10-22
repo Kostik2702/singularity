@@ -27,6 +27,7 @@ evacuated with `mb ingest export <dir>`.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import platform
@@ -62,7 +63,7 @@ DEFAULT_VAULT_DIRNAME = "memory brain"
 # failing the other.
 MEMORY_FOLDERS = ["learnings/active", "learnings/archive", "decisions", "howto",
                   "incidents", "rules", "reference", "changelog", "templates",
-                  "_moc", "daily"]
+                  "_moc", "daily", "tickets"]
 
 # The staging area (AUD-21). Deliberately NOT a managed root and never indexed:
 # a capture is a thought nobody has classified yet, so letting it into the
@@ -151,6 +152,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # Jev (TypeSafe decision API): off until `mb jev on`. `save()` writes decisions
     # only, so a machine that never turned it on carries no `jev_enabled` line.
     "jev_enabled": False,
+    "board_wip_limit": 4,              # `mb board move`: max non-epic tickets in-progress per project
     "jev_budget_usd": None,            # what the owner topped up; balance = this - logged cost
     "jev_search": True,                # rerank `mb search` with Jev, when jev_enabled
     # T08: PreToolUse guard. On by default since 2026-08-04 (owner decision) —
@@ -401,6 +403,7 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     _int("excerpt_chars", 1, 1_000_000)
     _int("batch_size", 1, 1_000_000)
     _int("brain_max_lines", 1, 10_000)
+    _int("board_wip_limit", 1, 100)
     _int("session_context_max_lines", 1, 10_000)
     _int("module_note_max_lines", 1, 10_000)
     _num("digest_score_threshold", 0.0, 1.0)
@@ -512,6 +515,10 @@ def migrate_config(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
 class Config:
     vault: Path
     data: dict[str, Any] = field(default_factory=dict)
+    # What `data` looked like when it was read from disk: `save()` applies only
+    # the difference against this to the file as it is NOW (SING-14). None =
+    # nothing was loaded, so everything in `data` counts as this process's own.
+    _baseline: dict[str, Any] | None = field(default=None, repr=False, compare=False)
 
     # --- derived paths -------------------------------------------------
     @property
@@ -705,13 +712,34 @@ class Config:
         ("an install that has ever saved its config carries an explicit value").
         Choosing the current default is a choice, and a config that records
         decisions has to record that one too."""
-        doc: dict[str, Any] = {"schema_version": SCHEMA_VERSION,
-                               "vault_path": str(self.vault)}
-        for key in sorted(self.data):
-            if key in ("schema_version", "vault_path"):
-                continue
-            doc[key] = self.data[key]
-        atomic_write_json(self.config_path, doc, indent=2)
+        import copy
+
+        path = self.config_path
+        base = self._baseline or {}
+        with _config_lock(path):
+            # Re-read under the lock: another `mb` may have saved since this
+            # process loaded, and writing `data` whole would erase its keys.
+            on_disk = _read_json_object(path)
+            merged = _apply_changes(base, self.data, on_disk)
+            # Two valid edits can merge into an invalid file (same ticket
+            # prefix claimed twice), after which every `mb` exits 2. Refuse
+            # BEFORE writing; errors the file already had are not ours to block on.
+            fresh = [e for e in validate_config(merged)["errors"]
+                     if e not in validate_config(on_disk)["errors"]]
+            if fresh:
+                raise ConfigError(
+                    f"[mb] not saved: another process changed {path} meanwhile and "
+                    f"the merged config would be invalid:",
+                    *(f"[mb]   - {e}" for e in fresh),
+                    "[mb] re-run the command against the current config")
+            doc: dict[str, Any] = {"schema_version": SCHEMA_VERSION,
+                                   "vault_path": str(self.vault)}
+            for key in sorted(merged):
+                if key in ("schema_version", "vault_path"):
+                    continue
+                doc[key] = merged[key]
+            atomic_write_json(path, doc, indent=2)
+        self._baseline = copy.deepcopy(self.data)
         try:
             self._write_sanitized_example({**DEFAULT_CONFIG, **self.data})
         except Exception:  # noqa: BLE001 — example generation must never break a real save
@@ -768,6 +796,68 @@ class Config:
             truststore.inject_into_ssl()
         except ImportError:
             pass
+
+
+_LOCK_WAIT_SECONDS = 15.0
+_LOCK_STALE_SECONDS = 10.0   # the critical section is milliseconds; older = a crashed holder
+
+
+@contextlib.contextmanager
+def _config_lock(path: Path):
+    """Cross-process lock for read-modify-write of the machine config."""
+    import shutil
+    import time
+
+    from .platform.fslock import break_stale_lock, make_lock_dir
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock = path.with_name(path.name + ".lock")
+    deadline = time.monotonic() + _LOCK_WAIT_SECONDS
+    while not make_lock_dir(lock):
+        if break_stale_lock(lock, _LOCK_STALE_SECONDS):
+            continue
+        if time.monotonic() >= deadline:
+            raise OSError(f"config is locked by another process: {lock}")
+        time.sleep(0.01)
+    try:
+        mine = lock.stat().st_ino
+    except OSError:
+        mine = None
+    try:
+        yield
+    finally:
+        # release only OUR lock: if it was judged stale and replaced, the
+        # directory under this name is somebody else's now
+        try:
+            if mine is None or lock.stat().st_ino == mine:
+                shutil.rmtree(lock, ignore_errors=True)
+        except OSError:
+            pass
+
+
+def _apply_changes(base: dict[str, Any], mine: dict[str, Any],
+                   disk: dict[str, Any]) -> dict[str, Any]:
+    """`disk` plus only what this process changed between `base` and `mine`.
+
+    Sections (dicts) merge recursively, so two processes editing different
+    projects both survive; any other value, lists included, is replaced whole.
+    A key present in `base` but gone from `mine` is a deletion. Same key changed
+    by both sides: `mine` wins, i.e. the last writer."""
+    import copy
+
+    out = copy.deepcopy(disk)
+    for key, value in mine.items():
+        if key in base and base[key] == value:
+            continue
+        if (key in base and isinstance(base[key], dict) and isinstance(value, dict)
+                and isinstance(out.get(key), dict)):
+            out[key] = _apply_changes(base[key], value, out[key])
+        else:
+            out[key] = copy.deepcopy(value)
+    for key in base:
+        if key not in mine:
+            out.pop(key, None)
+    return out
 
 
 def atomic_write_json(path: Path, data: Any, *, indent: int = 1) -> None:
@@ -900,6 +990,8 @@ def load_config(vault_arg: str | None = None) -> Config:
                 f"[mb] invalid config {cfg.config_path}:",
                 *(f"[mb]   - {e}" for e in result["errors"]),
                 "[mb] fix the values above or run 'mb config validate'")
+        import copy
+        cfg._baseline = copy.deepcopy(cfg.data)
         migrated, changed = migrate_config(cfg.data)
         if changed:
             _backup_config(cfg.config_path)   # keep a copy before rewriting
