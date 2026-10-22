@@ -316,6 +316,17 @@ def _edit(db: Path, *sql: str) -> None:
     con.close()
 
 
+def test_a_snapshot_is_a_rollback_mode_file_that_opens_read_only(tmp_path):
+    """A backup carries the WAL flag over; a WAL file with no `-wal` and
+    `-shm` beside it cannot be opened `mode=ro` by every SQLite build, so the
+    copy must not be one (bytes 18 and 19 of the header are 1 in rollback
+    mode, 2 in WAL). The header, not a failed open, is asserted: a build that
+    can open such a file would pass the open and still hide the defect."""
+    a, b = _pair(tmp_path)
+    assert b.read_bytes()[18:20] == b"\x01\x01"
+    assert compare.dump(b)["files"]
+
+
 def test_the_comparator_sees_a_changed_row_a_missing_row_and_a_duplicate(tmp_path):
     a, b = _pair(tmp_path)
     assert compare.diff_graphs(a, b) == {}

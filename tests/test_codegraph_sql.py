@@ -148,12 +148,43 @@ def test_a_join_across_the_views_answers_in_paths_and_qnames(graph):
     assert unplaced == [["app/other.py::guess", "run", "x", "app/other.py", 9]]
 
 
+@pytest.fixture
+def stand_in_load_extension(monkeypatch):
+    """`load_extension()` is a SQL function only on a SQLite built with
+    extension loading and with it enabled on the connection; Python's
+    `sqlite3` on macOS is linked to Apple's build (OMIT_LOAD_EXTENSION), where
+    the name does not exist and SQLite stops at "no such function" before the
+    authorizer is asked. That would leave the allowlist untested there, so the
+    connection gets a harmless function of that name: the guard must refuse it
+    by name whatever the build, and it must never be called."""
+    calls: list[tuple] = []
+    real = store.connect_ro
+
+    def connect_ro(db):
+        con = real(db)
+        con.create_function("load_extension", -1, lambda *a: calls.append(a))
+        return con
+    monkeypatch.setattr(store, "connect_ro", connect_ro)
+    return calls
+
+
 @pytest.mark.parametrize("text,named", ATTACKS, ids=[a[1].removeprefix("refused: ") for a in ATTACKS])
-def test_a_planted_attack_is_refused_by_name(graph, text, named):
+def test_a_planted_attack_is_refused_by_name(graph, stand_in_load_extension, text, named):
     cfg, unit, _ = graph
     with pytest.raises(sql.SqlRefused) as refused:
         _run(cfg, unit, text)
     assert named in str(refused.value)
+    assert stand_in_load_extension == []
+
+
+def test_the_real_load_extension_is_absent_or_refused_never_run(graph):
+    """On this build's own connection: the function is not there (SQLite says
+    so) or the guard refuses it by name. Anything that answers is a defect."""
+    cfg, unit, _ = graph
+    with pytest.raises(sql.SqlRefused) as refused:
+        _run(cfg, unit, "SELECT load_extension('evil')")
+    assert str(refused.value) in ("refused: the function load_extension(). " + sql._WHAT_IS_ALLOWED,
+                                  "SQLite: no such function: load_extension")
 
 
 def test_no_attack_writes_a_byte_or_leaves_a_file(graph, tmp_path):

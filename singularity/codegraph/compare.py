@@ -254,13 +254,18 @@ def _mb_code(cfg: Config, root: Path, verb: str, timeout: float) -> dict[str, An
 
 def _snapshot(db: Path, dest: Path) -> None:
     """A consistent copy of a live WAL database: SQLite's backup, not a file
-    copy, which could miss what sits in the WAL."""
+    copy, which could miss what sits in the WAL. The copy is left in rollback
+    mode: backup carries the WAL flag over, and a WAL database with no `-wal`
+    and `-shm` beside it cannot be opened `mode=ro` by every SQLite build
+    (Apple's 3.51.0: "unable to open database file"), which is how `dump`
+    and `diff_graphs` open it."""
     _remove_db(dest)
     src = store.connect_ro(db)
     try:
         out = sqlite3.connect(dest)
         try:
             src.backup(out)
+            out.execute("PRAGMA journal_mode=DELETE")
         finally:
             out.close()
     finally:
