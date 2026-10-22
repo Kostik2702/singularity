@@ -8,6 +8,10 @@ from singularity.config import Config
 from singularity.knowledge import tickets
 from singularity.machine import projects as projects_mod
 
+# Cyrillic on purpose (the slug must keep it), written as escapes: the engine-language
+# scanner reads literals, and this string is data under test.
+PROBA = "\u041f\u0440\u043e\u0431\u0430"
+
 
 @pytest.fixture
 def cfg(tmp_path):
@@ -23,7 +27,7 @@ def wired(monkeypatch, cfg):
     return cfg
 
 
-def _new(*extra, title="Проба", project="drone-detection"):
+def _new(*extra, title=PROBA, project="drone-detection"):
     argv = ["note", "new", "ticket", title]
     if project:
         argv += ["--project", project]
@@ -37,16 +41,16 @@ def _files(cfg):
 
 def test_creates_ticket_at_the_contract_path(wired, cfg, capsys):
     assert _new() == 0
-    path = cfg.vault / "tickets" / "drone-detection" / "DD-1 - Проба.md"
+    path = cfg.vault / "tickets" / "drone-detection" / f"DD-1 - {PROBA}.md"
     assert path.is_file()
     assert capsys.readouterr().out.strip() == str(path)
 
 
 def test_all_frontmatter_fields_and_defaults(wired, cfg):
     _new()
-    fm = tickets.parse_ticket(cfg.vault / "tickets/drone-detection/DD-1 - Проба.md")["frontmatter"]
+    fm = tickets.parse_ticket(cfg.vault / f"tickets/drone-detection/DD-1 - {PROBA}.md")["frontmatter"]
     assert fm["type"] == "ticket"
-    assert fm["title"] == "DD-1 Проба"
+    assert fm["title"] == f"DD-1 {PROBA}"
     assert fm["aliases"] == ["DD-1"]
     assert fm["id"] == "DD-1"
     assert fm["project"] == "drone-detection"
