@@ -20,7 +20,10 @@ raised: delete-pending ends when the last handle closes, milliseconds later.
 """
 from __future__ import annotations
 
+import os
+import shutil
 import time
+import uuid
 from pathlib import Path
 
 from . import current_os
@@ -42,3 +45,48 @@ def make_lock_dir(lock: Path) -> bool:
             if current_os() != "windows" or time.monotonic() >= deadline:
                 raise
             time.sleep(_POLL_SECONDS)
+
+
+def break_stale_lock(lock: Path, max_age: float) -> bool:
+    """Remove `lock` if it is older than `max_age` seconds; True when this call did.
+
+    The naive `stat` then `rmdir` lets two waiters both judge one stale lock:
+    the first removes it and a new holder takes the name, then the second
+    removes that FRESH lock. So the break is serialized by a second lock dir,
+    the age is re-checked inside it, and the lock is renamed aside (atomic)
+    and verified to be the very directory that was judged stale (same inode and
+    mtime) before it is deleted; a fresh one grabbed by mistake is put back."""
+    breaker = lock.with_name(lock.name + ".break")
+    if not make_lock_dir(breaker):
+        try:                            # a breaker that died; it holds for milliseconds
+            if time.time() - breaker.stat().st_mtime > max_age:
+                breaker.rmdir()
+        except OSError:
+            pass
+        return False
+    try:
+        try:
+            seen = lock.stat()
+        except OSError:
+            return False
+        if time.time() - seen.st_mtime <= max_age:
+            return False
+        grave = lock.with_name(f"{lock.name}.gone-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+        try:
+            os.rename(lock, grave)
+        except OSError:
+            return False
+        got = grave.stat()
+        if (got.st_ino, got.st_mtime_ns) != (seen.st_ino, seen.st_mtime_ns):
+            try:                        # took a lock somebody just made: give it back
+                os.rename(grave, lock)
+            except OSError:
+                shutil.rmtree(grave, ignore_errors=True)
+            return False
+        shutil.rmtree(grave, ignore_errors=True)
+        return True
+    finally:
+        try:
+            breaker.rmdir()
+        except OSError:
+            pass
