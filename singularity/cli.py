@@ -35,7 +35,7 @@ mb code status|build [--all]|update|outline <file>|snippet|callers|callees|trace
                                  # the structural code graph (off until code_graph_enabled)
 mb jev status [--json]|key set|status|delete|on|off|ask|pick "<brief>"|log [--tail N] [--session S]
                                  # Jev decision API (off until `mb jev on`)
-mb board [next|show ID|move ID STATUS|note ID "text"|assign ID|edit ID|check] [--project X] [--json]
+mb board [next|show ID|move ID STATUS|start ID...|accept ID --verdict "..."|note ID "text"|assign ID|edit ID|check] [--project X] [--json]
                                  # the ticket board (tickets/<project>/ in the vault)
 mb init            # write ~/.singularity.json pointer + folder tree
 mb uninstall       # remove hooks/scheduler jobs/daemon (vault untouched)
@@ -469,7 +469,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ns.add_argument("--dry-run", action="store_true",
                     help="show the plan, write nothing")
 
-    bo = sub.add_parser("board", help="ticket board: columns, next, move, note, assign, check")
+    bo = sub.add_parser("board", help="ticket board: columns, next, move, start, accept, note, assign, check")
     bo.add_argument("--project", help="only this project's tickets")
     bo.add_argument("--json", action="store_true")
     bosub = bo.add_subparsers(dest="board_action")
@@ -490,6 +490,16 @@ def _build_parser() -> argparse.ArgumentParser:
     bom.add_argument("--force-reason", dest="force_reason",
                      help="bypass blocked/criteria/WIP/owns checks, recording why (lead only)")
     bom.add_argument("--by")
+    bost = _bo("start", "backlog/ready -> in-progress in one call (same rules as move)")
+    bost.add_argument("ids", nargs="+", metavar="ID")
+    bost.add_argument("--assignee")
+    bost.add_argument("--force-reason", dest="force_reason",
+                      help="bypass blocked/criteria/WIP/owns checks, recording why (lead only)")
+    bost.add_argument("--by")
+    boac = _bo("accept", "write the verdict and close: in-progress/review -> done")
+    boac.add_argument("id")
+    boac.add_argument("--verdict", required=True, help="what was run and the numbers")
+    boac.add_argument("--by")
     bon = _bo("note", "append a dated line to the ticket's Feed")
     bon.add_argument("id")
     bon.add_argument("text")

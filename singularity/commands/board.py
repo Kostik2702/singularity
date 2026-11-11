@@ -66,6 +66,33 @@ def cmd_board(cfg, args) -> int:
             _out(args, {"ok": True, **res}, f"{res['id']}: {res['from']} -> {res['to']}"
                  + (f" (forced: {', '.join(res['forced'])})" if res["forced"] else ""))
             return 0
+        if action == "start":
+            results, lines = [], []
+            for tid in args.ids:
+                try:
+                    res = bd.start(vault, cfg.get, tid, assignee=args.assignee,
+                                   force_reason=args.force_reason, by=args.by)
+                except bd.Refused as exc:
+                    vs = [v.as_dict() for v in exc.violations]
+                    msg = "; ".join(f"[{v['code']}] {v['message']}" for v in vs)
+                    results.append({"id": tid, "ok": False, "error": msg, "refused": vs})
+                    lines.append(f"{tid}: refused: {msg}")
+                    continue
+                except (bd.BoardError, tk.TicketError) as exc:
+                    results.append({"id": tid, "ok": False, "error": str(exc), "refused": []})
+                    lines.append(f"{tid}: {exc}")
+                    continue
+                results.append({"id": tid, "ok": True, "from": res["from"], "to": res["to"],
+                                "forced": res["forced"]})
+                lines.append(f"{tid}: {res['from']} -> {res['to']}"
+                             + (f" (forced: {', '.join(res['forced'])})" if res["forced"] else ""))
+            ok = all(r["ok"] for r in results)
+            _out(args, {"ok": ok, "results": results}, "\n".join(lines))
+            return 0 if ok else 1
+        if action == "accept":
+            res = bd.accept(vault, cfg.get, args.id, args.verdict, by=args.by)
+            _out(args, {"ok": True, **res}, f"{res['id']}: {res['from']} -> {res['to']}")
+            return 0
         if action == "note":
             res = bd.add_note(vault, args.id, args.text, by=args.by)
             _out(args, {"ok": True, **res}, f"noted {args.id}")

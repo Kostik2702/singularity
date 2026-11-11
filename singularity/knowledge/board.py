@@ -366,6 +366,43 @@ def assign(vault: Path, ticket_id: str, assignee: str | None = None,
     return {"id": ticket_id, "path": str(path), "assignee": assignee, "agent": agent}
 
 
+def start(vault: Path, cfg_get: Any, ticket_id: str, assignee: str | None = None,
+          force_reason: str | None = None, by: str | None = None) -> dict[str, Any]:
+    """Take a backlog or ready ticket to in-progress through the ordinary moves,
+    so every rule and Feed line is the same as two manual `move` calls. A
+    refusal on the second move leaves the ticket at ready and propagates."""
+    status = str(_fm(tk.parse_ticket(_need(vault, ticket_id))).get("status"))
+    if status not in ("backlog", "ready", "in-progress"):
+        raise BoardError(f"{ticket_id} is '{status}': start takes a backlog or ready ticket")
+    forced: list[str] = []
+    if status == "backlog":
+        forced += move(vault, cfg_get, ticket_id, "ready", force_reason=force_reason, by=by)["forced"]
+    if status != "in-progress":
+        forced += move(vault, cfg_get, ticket_id, "in-progress",
+                       force_reason=force_reason, by=by)["forced"]
+    if assignee is not None:
+        assign(vault, ticket_id, assignee=assignee, by=by)
+    return {"id": ticket_id, "from": status, "to": "in-progress", "forced": forced,
+            "assignee": assignee}
+
+
+def accept(vault: Path, cfg_get: Any, ticket_id: str, verdict: str,
+           by: str | None = None) -> dict[str, Any]:
+    """Write the lead's verdict and close the ticket. No force: a forced close
+    stays a deliberate, separate `move ID done --force-reason`. The status is
+    checked before the verdict is written, so a wrong ticket is left untouched."""
+    if not verdict.strip():
+        raise BoardError("accept needs a verdict: what was run and the numbers")
+    status = str(_fm(tk.parse_ticket(_need(vault, ticket_id))).get("status"))
+    if status not in ("in-progress", "review"):
+        raise BoardError(f"{ticket_id} is '{status}': accept takes a ticket in progress or in review")
+    edit(vault, ticket_id, {"verdict": verdict}, by=by)
+    if status == "in-progress":
+        move(vault, cfg_get, ticket_id, "review", by=by)
+    move(vault, cfg_get, ticket_id, "done", by=by)
+    return {"id": ticket_id, "from": status, "to": "done"}
+
+
 EDITABLE_FM = ("priority", "kind")
 _CHOICES = {"priority": tk.PRIORITIES, "kind": tk.KINDS}
 _LOCKED = ("id", "status", "project")

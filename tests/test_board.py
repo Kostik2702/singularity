@@ -510,3 +510,107 @@ def test_threads_never_share_a_ticket_lock_even_when_it_starts_stale(wired, cfg)
     [t.start() for t in threads]
     [t.join(timeout=60) for t in threads]
     assert overlaps and max(overlaps) == 1
+
+
+# --- start / accept: compound moves -----------------------------------------------------------
+
+def _t(cfg, tid):
+    return tk.parse_ticket(tk.find_ticket(cfg.vault, tid))
+
+
+def test_start_takes_backlog_through_ready_to_in_progress(wired, cfg, capsys):
+    a = mk(cfg, owns=["s1"])
+    rc, out = run_json(capsys, "start", a)
+    assert rc == 0 and out["ok"] and out["results"] == [
+        {"id": a, "ok": True, "from": "backlog", "to": "in-progress", "forced": []}]
+    t = _t(cfg, a)
+    assert t["frontmatter"]["status"] == "in-progress"
+    feed = t["sections"][tk.SECTION_FEED]
+    assert "status backlog -> ready" in feed and "status ready -> in-progress" in feed
+
+
+def test_start_from_ready_moves_once_and_in_progress_is_a_no_op(wired, cfg, capsys):
+    a = mk(cfg, status="ready", owns=["s2"])
+    rc, out = run_json(capsys, "start", a)
+    assert rc == 0 and out["results"][0]["from"] == "ready"
+    feed = _t(cfg, a)["sections"][tk.SECTION_FEED]
+    assert "status ready -> in-progress" in feed and "-> ready" not in feed
+    before = snapshot(cfg)
+    rc, out = run_json(capsys, "start", a)
+    assert rc == 0 and out["results"][0]["from"] == "in-progress"
+    assert snapshot(cfg) == before
+
+
+@pytest.mark.parametrize("status", ["done", "review"])
+def test_start_refuses_review_and_done(wired, cfg, capsys, status):
+    a = mk(cfg, status=status, owns=["s3"])
+    before = snapshot(cfg)
+    rc, out = run_json(capsys, "start", a)
+    assert rc == 1 and not out["ok"] and status in out["results"][0]["error"]
+    assert snapshot(cfg) == before
+
+
+def test_start_sets_the_assignee(wired, cfg, capsys):
+    a = mk(cfg, status="ready", owns=["s4"])
+    assert board("start", a, "--assignee", "coder · sonnet · medium") == 0
+    assert _t(cfg, a)["frontmatter"]["assignee"] == "coder · sonnet · medium"
+
+
+def test_start_many_keeps_going_past_a_refusal(wired, cfg, capsys):
+    a = mk(cfg, "a", owns=["s5"])
+    b = mk(cfg, "b", kind="feature")
+    capsys.readouterr()
+    assert board("start", a, b) == 1
+    out = capsys.readouterr().out
+    assert f"{a}: backlog -> in-progress" in out and f"{b}: refused: [no_owns]" in out
+    assert _t(cfg, a)["frontmatter"]["status"] == "in-progress"
+    assert _t(cfg, b)["frontmatter"]["status"] == "ready"
+    c = mk(cfg, "c", owns=["s6"])
+    rc, out = run_json(capsys, "start", c, b)
+    assert rc == 1 and not out["ok"] and len(out["results"]) == 2
+    assert out["results"][0]["ok"] and not out["results"][1]["ok"]
+    assert "no_owns" in [v["code"] for v in out["results"][1]["refused"]]
+
+
+def test_start_with_force_reason_records_it(wired, cfg, capsys):
+    a = mk(cfg, status="ready")
+    rc, out = run_json(capsys, "start", a, "--force-reason", "x")
+    assert rc == 0 and out["results"][0]["forced"] == ["no_owns"]
+    t = _t(cfg, a)
+    assert t["frontmatter"]["status"] == "in-progress"
+    assert "status ready -> in-progress [force: x]" in t["sections"][tk.SECTION_FEED]
+
+
+def test_accept_from_in_progress_writes_verdict_and_closes(wired, cfg, capsys):
+    a = mk(cfg, status="in-progress", owns=["c1"])
+    rc, out = run_json(capsys, "accept", a, "--verdict", "pytest: 12 passed")
+    assert rc == 0 and out == {"ok": True, "id": a, "from": "in-progress", "to": "done"}
+    t = _t(cfg, a)
+    assert t["frontmatter"]["status"] == "done"
+    assert t["sections"][tk.SECTION_VERDICT].strip() == "pytest: 12 passed"
+    feed = t["sections"][tk.SECTION_FEED]
+    assert "status in-progress -> review" in feed and "status review -> done" in feed
+
+
+def test_accept_from_review_closes(wired, cfg, capsys):
+    a = mk(cfg, status="review")
+    rc, out = run_json(capsys, "accept", a, "--verdict", "checked")
+    assert rc == 0 and out["from"] == "review"
+    assert _t(cfg, a)["frontmatter"]["status"] == "done"
+
+
+def test_accept_from_backlog_writes_nothing(wired, cfg, capsys):
+    a = mk(cfg)
+    before = snapshot(cfg)
+    rc, out = run_json(capsys, "accept", a, "--verdict", "checked")
+    assert rc == 1 and not out["ok"]
+    assert _t(cfg, a)["sections"][tk.SECTION_VERDICT].strip() == ""
+    assert snapshot(cfg) == before
+
+
+def test_accept_with_a_blank_verdict_is_refused(wired, cfg, capsys):
+    a = mk(cfg, status="review")
+    before = snapshot(cfg)
+    rc, out = run_json(capsys, "accept", a, "--verdict", "  ")
+    assert rc == 1 and "verdict" in out["error"]
+    assert _t(cfg, a)["frontmatter"]["status"] == "review" and snapshot(cfg) == before
