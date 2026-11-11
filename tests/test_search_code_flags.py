@@ -210,7 +210,7 @@ def test_compact_line_shows_kind_name_and_path_not_a_bare_path(tmp_path):
 def test_a_code_index_built_by_another_model_is_refused(tmp_path, monkeypatch):
     """Cosine across two embedding spaces is nonsense; serving it quietly is
     worse than refusing. Same rule the sources corpus got in W05."""
-    cfg = Config(vault=tmp_path, data={})
+    cfg = Config(vault=tmp_path, data={"model": "vault-model"})   # the machine's model
     eng = SearchEngine.__new__(SearchEngine)
     eng.cfg = cfg
 

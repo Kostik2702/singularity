@@ -188,3 +188,15 @@ def test_explain_adds_component_scores(tmp_path):
     out = eng.search({"query": "x", "top_k": 5, "explain": True, "format": "json"})
     assert "explain" in out["results"][0]
     assert "semantic" in out["results"][0]["explain"]
+
+
+def test_search_refuses_an_index_built_by_another_model(tmp_path):
+    """Mid-migration the config already names the new model while the notes
+    index still holds the old one's vectors. That must be a refusal that names
+    the fix, not a numpy shape error (or, at equal width, quiet nonsense)."""
+    eng = _searchable(tmp_path)
+    eng.mem_model = "some/older-model"
+    out = eng.search({"query": "anything"})
+    assert "mb model migrate" in out["error"] and "some/older-model" in out["error"]
+    eng.mem_model = eng.cfg.model
+    assert "error" not in eng.search({"query": "anything"})

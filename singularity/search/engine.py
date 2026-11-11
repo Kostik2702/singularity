@@ -86,6 +86,7 @@ class SearchEngine:
         # attribute, including tests that build the engine via __new__.
         self._bm25: dict[str, Any] = {}
         self.mem_embs, self.mem_chunks, mem_model = self._load_one(self.cfg.memory_index_dir)
+        self.mem_model = mem_model
         self.code_embs, self.code_chunks, self.code_warning = None, [], None
         self.src_embs, self.src_chunks, self.sources_warning = None, [], None
 
@@ -335,6 +336,14 @@ class SearchEngine:
         if not query:
             return {"error": "empty query"}
         top_k = int(req.get("top_k", 5))
+        built_by = getattr(self, "mem_model", None)
+        if built_by and built_by != self.cfg.model:
+            # A query vector from one model against an index from another is a
+            # shape error at best and quiet nonsense at worst (same width).
+            return {"error": f"the vault index was built with model {built_by!r} but "
+                             f"this machine is configured for {self.cfg.model!r}; "
+                             "search is off until they match - run `mb model migrate` "
+                             "(or wait for the one that is running)"}
         q_emb = self.encoder.encode([query])[0]
 
         # Both extra corpora are OPT-IN per query (W03 D2 for sources, C04 D2
