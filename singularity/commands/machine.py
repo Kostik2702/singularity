@@ -93,6 +93,37 @@ def cmd_model(cfg, args) -> int:
             print(f"cache: {state.get('cache', cfg.hf_cache)}")
         return 0 if state["installed"] else 1
 
+    if args.model_action == "migrate":
+        from ..search import migrate
+        target = args.to or model_store.RECOMMENDED_MODEL
+        revision = args.revision or (model_store.RECOMMENDED_REVISION
+                                     if target == model_store.RECOMMENDED_MODEL else None)
+        todo = migrate.plan(cfg, target)
+        if args.dry_run or todo["nothing_to_do"]:
+            if args.json:
+                print(json.dumps(todo, ensure_ascii=False))
+            elif todo["nothing_to_do"]:
+                print(f"already on {target}: config and every index agree")
+            else:
+                print(f"model: {todo['from']} -> {target}")
+                for c in todo["corpora"]:
+                    print(f"  {c['label']}: {c['chunks']} chunks, "
+                          + ("re-embed" if c["rebuild"] else "already on the target"))
+                print("nothing was changed (--dry-run)")
+            return 0
+        result = migrate.migrate(
+            cfg, target, revision,
+            say=(lambda line: print(line, file=sys.stderr)) if args.json else print)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False))
+        elif result["ok"]:
+            print(f"migrated to {target}; re-embedded: {', '.join(result['rebuilt']) or 'nothing'}")
+        else:
+            print(f"[mb] model migrate stopped at {result['failed']}; config model is "
+                  f"{result.get('config_model')}"
+                  + (f"; {result['resume']}" if result.get("resume") else ""), file=sys.stderr)
+        return 0 if result["ok"] else 1
+
     try:
         result = model_store.install(cfg, revision=args.revision, force=args.force)
         client.stop_daemon(cfg)

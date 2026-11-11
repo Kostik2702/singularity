@@ -20,6 +20,25 @@ instead of breaking things (see `install/register_*.py` docstrings — every
 one of them is idempotent by construction). No step below is destructive,
 and nothing here requires you to do anything by hand for a normal upgrade.
 
+## Moving a machine to the recommended embedding model
+
+The config (`~/.singularity.json`), the model weights and every index live on
+the machine, not in the vault. `git pull` therefore brings the new engine and
+leaves the machine embedding with whatever model it had. `mb doctor` reports
+it as `B10-embedding-model`. To move, on each machine:
+
+```bash
+mb model migrate --dry-run   # what it will re-embed, nothing changed
+mb model migrate             # install bge-m3, re-embed notes/sources/code, restart
+```
+
+Cost: about 2.3 GB of weights and one full re-embedding. On an Apple-silicon
+CPU that is ~20 chunks/s, 12 minutes per 15k chunks; a query then takes ~50 ms
+instead of ~20. Search keeps answering from the old index until each corpus
+is replaced. If the run stops, run it again: finished corpora are skipped. A
+failure before the notes index is rebuilt puts the old model back in the
+config. To stay on the old model, do nothing; the warning is the only effect.
+
 ## What actually changes on your machine
 
 - **Since v0.9.0 the config is a MACHINE file: `~/.singularity.json`.** It is

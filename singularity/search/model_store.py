@@ -21,6 +21,24 @@ class ModelNotInstalledError(RuntimeError):
     """The configured embedding model has no complete local snapshot."""
 
 
+#: The embedder `mb model migrate` moves a machine to, pinned by revision so
+#: every machine that syncs one vault embeds with the same weights. Measured
+#: 2026-11-11 on the 346-query set against the default MiniLM: recall@1
+#: 0.681 -> 0.752, recall@5 0.899 -> 0.936. MiniLM reads 128 tokens and the
+#: chunker cuts ~270-token windows, so half of every note's text never reached
+#: its embedding; this one reads the whole window.
+#:
+#: It is NOT the config default: 2.3 GB of weights and a full re-embedding of
+#: every corpus are a decision a machine makes, not something a `git pull`
+#: should start. `doctor B10-embedding-model` says when a machine is behind.
+RECOMMENDED_MODEL = "BAAI/bge-m3"
+RECOMMENDED_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
+
+#: Never fetched: exports for runtimes this engine does not use. For bge-m3
+#: they double the download (4.3 GB against 2.3 GB of torch weights).
+_SKIP_ON_DOWNLOAD = ["onnx/*", "openvino/*", "imgs/*", "*.onnx", "*.onnx_data"]
+
+
 def manifest_path(cfg: Config) -> Path:
     return cfg.hf_cache / MANIFEST_NAME
 
@@ -124,7 +142,8 @@ def install(cfg: Config, revision: str | None = None, force: bool = False) -> di
         snapshot = Path(_snapshot_download(**kwargs, local_files_only=True))
         source = "local-cache"
     except Exception:  # local probe only; explicit install may now use network
-        snapshot = Path(_snapshot_download(**kwargs, local_files_only=False))
+        snapshot = Path(_snapshot_download(**kwargs, local_files_only=False,
+                                           ignore_patterns=_SKIP_ON_DOWNLOAD))
         source = "download"
 
     missing = _missing_snapshot_files(snapshot)

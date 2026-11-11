@@ -1006,6 +1006,25 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
             rep.add("B7-daemon", "WARN", "daemon not running",
                     fix="mb daemon start")
 
+    def b10():
+        # Config, weights and indexes are per machine, so a machine that only
+        # pulled the engine keeps embedding with whatever it had. Never fixed
+        # from here: the migration downloads 2.3 GB and re-embeds every corpus.
+        from .search import migrate, model_store
+        todo = migrate.plan(cfg, cfg.model)
+        behind = [c["label"] for c in todo["corpora"] if c["rebuild"] and c["model"]]
+        if behind:
+            rep.add("B10-embedding-model", "WARN",
+                    f"index built by another model than the config's ({cfg.model}): "
+                    f"{', '.join(behind)}", fix=f"mb model migrate --to {cfg.model}")
+        elif cfg.model != model_store.RECOMMENDED_MODEL:
+            rep.add("B10-embedding-model", "WARN",
+                    f"embedding with {cfg.model}; the engine recommends "
+                    f"{model_store.RECOMMENDED_MODEL} (recall@1 0.68 -> 0.75 on the "
+                    f"346-query set)", fix="mb model migrate  (--dry-run shows the cost)")
+        else:
+            rep.add("B10-embedding-model", "PASS", cfg.model)
+
     def b8():
         from .search import client
         if not client.ping(cfg):
@@ -1038,6 +1057,7 @@ def run(cfg: Config, fix: bool = False, heavy: bool = False,
     _guard(rep, "B4", b4)
     _guard(rep, "B6b", b6b_sessions)
     _guard(rep, "B7", b7)
+    _guard(rep, "B10", b10)
     _guard(rep, "B8", b8)
     _guard(rep, "B9", b9)
 

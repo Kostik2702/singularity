@@ -204,6 +204,13 @@ def _build_parser() -> argparse.ArgumentParser:
     mdli.add_argument("--revision", help="optional Hugging Face revision to pin")
     mdli.add_argument("--force", action="store_true", help="re-resolve even with a healthy manifest")
     mdli.add_argument("--json", action="store_true")
+    mdlm = mdlsub.add_parser(
+        "migrate", help="move this machine to another embedding model: install it, "
+                        "re-embed every corpus, restart the daemon (resumable)")
+    mdlm.add_argument("--to", help="target model (default: the engine's recommended one)")
+    mdlm.add_argument("--revision", help="Hugging Face revision to pin")
+    mdlm.add_argument("--dry-run", action="store_true", help="say what would happen, change nothing")
+    mdlm.add_argument("--json", action="store_true")
 
     sub.add_parser("watch", help="on-save incremental index watcher")
 

@@ -290,6 +290,8 @@ mb daemon start|stop|restart|status|reload
                             # in place (a changed `model`, above all)
 mb model status             # verify pinned local snapshot + manifest
 mb model install            # explicit one-time adopt/download + daemon restart
+mb model migrate            # move THIS machine to the recommended embedder: install,
+                            # re-embed every corpus, restart (resumable; --dry-run)
 mb index rebuild            # full
 mb index update             # incremental (mtime+size diff)
 mb index inspect <path>     # chunk-level view of one file in the current index
