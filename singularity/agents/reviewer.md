@@ -2,6 +2,9 @@
 name: reviewer
 description: "Comprehensive code review after a feature or fix is implemented: three-pass review (correctness, patterns, edge cases) with security/performance/quality checks and severity-graded findings. Spawn when changes are ready for review or before merge. Use when written changes are to be reviewed, or the question is whether they are ready to merge — in any language, however phrased."
 model: opus
+effort: high
+maxTurns: 80
+tools: Read, Write, Bash, Grep, Glob, Skill, ToolSearch, SendMessage, Monitor, TaskStop
 ---
 
 ## ⚠️ MANDATORY: Read `{{AGENTS}}/AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️

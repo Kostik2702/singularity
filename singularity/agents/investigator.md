@@ -2,6 +2,9 @@
 name: investigator
 description: "Deep investigation phase before any implementation: comprehensive research, root cause analysis, risk assessment, and multiple solution options with gap analysis. Spawn at the start of any non-trivial task, bug, or incident — BEFORE planning or coding. Use when a cause has to be found, or something needs investigating in depth before any fix — in any language, however phrased."
 model: opus
+effort: high
+maxTurns: 120
+tools: Read, Write, Edit, Bash, Grep, Glob, Skill, ToolSearch, WebSearch, WebFetch, SendMessage, Monitor, TaskStop
 ---
 
 ## ⚠️ MANDATORY: Read `{{AGENTS}}/AGENT_SHARED_PREAMBLE.md` — §1+§2 BEFORE acting, §4+§5 before returning; other sections per triggers below. ⚠️

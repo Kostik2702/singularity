@@ -47,11 +47,33 @@ def test_fresh_install_creates_dot_claude_dir_when_absent(home):
     assert (home / ".claude" / "settings.json").exists()
 
 
-def test_fresh_install_registers_all_four_events(home):
+def test_fresh_install_registers_all_events(home):
     register_hooks.main()
     data = json.loads(_settings(home).read_text(encoding="utf-8"))
     hooks = data["hooks"]
-    assert set(hooks) == {"SessionStart", "UserPromptSubmit", "Stop", "PreToolUse"}
+    assert set(hooks) == {"SessionStart", "UserPromptSubmit", "Stop", "PreToolUse",
+                          "SubagentStop"}
+
+
+def test_subagent_stop_entry_is_guarded_owned_and_matcherless(home):
+    register_hooks.main()
+    register_hooks.main()
+    data = json.loads(_settings(home).read_text(encoding="utf-8"))
+    (entry,) = data["hooks"]["SubagentStop"]
+    assert entry["_mb"] is True and "matcher" not in entry
+    hook = entry["hooks"][0]
+    assert hook["timeout"] == 10
+    assert "subagent_stop.py" in hook["command"] and "sys.exit(0)" in hook["command"]
+
+
+def test_legacy_unmarked_subagent_stop_entry_is_replaced(home):
+    _settings(home).parent.mkdir(parents=True)
+    _settings(home).write_text(json.dumps({"hooks": {"SubagentStop": [
+        {"hooks": [{"type": "command", "command": "python .../hooks/subagent_stop.py"}]}]}}),
+        encoding="utf-8")
+    register_hooks.main()
+    data = json.loads(_settings(home).read_text(encoding="utf-8"))
+    assert len(data["hooks"]["SubagentStop"]) == 1
 
 
 def test_pretooluse_entries_have_matcher_and_ownership_marker(home):

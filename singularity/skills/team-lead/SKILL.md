@@ -24,17 +24,18 @@ Any work is a ticket on the board. No ticket — no executor.
 - `owns` (the files or areas the ticket may change) and `contracts` (the interfaces neighbours rely on) are what let executors run in parallel. A feature, task, bug or chore ticket without `owns` cannot start (`no_owns`); a spike, review or epic needs none and conflicts with nobody.
 - Flow: backlog → ready → in-progress → review → done.
   - backlog → ready: only with acceptance criteria written.
-  - ready → in-progress: FIRST `mb board move ID in-progress` (the board checks WIP, blockers, `owns` and its overlap; a refusal is information, not an obstacle to force), THEN start the executor, THEN AT ONCE `mb board assign ID --assignee "<agent · model · effort>" --agent <agent ID>`.
+  - ready → in-progress: FIRST `mb board start ID [ID ...]` — one call takes each ticket from backlog or ready to in-progress through the ordinary moves (the board checks criteria, WIP, blockers, `owns` and its overlap; a refusal is information, not an obstacle to force, and one refused ticket does not stop the others), THEN `mb jev pick` for the model and effort (section 3), THEN start the executor, THEN AT ONCE `mb board assign ID --assignee "<agent · model · effort>" --agent <agent ID>`.
   - in-progress → review: on the executor's report.
   - review → done: only after your independent check, section 6.
+  - Every other move — back to in-progress after a failed check, to blocked, a forced close — is `mb board move ID STATUS`.
 - `mb board next` shows the ready tickets whose blockers are closed; `mb board show ID` reads one; `mb board check` verifies the invariants of the whole board.
 - Findings of executors (bugs, debts, risks) become NEW tickets that you write, never a silent widening of the current one.
 
 ## 3. You choose model and effort
 
-You choose `model` and `effort` for every executor you spawn. This skill is the explicit instruction the Agent tool's `effort` parameter asks for: set it on every spawn except `advisor`, by the table below. A spawn with no `model` takes the agent's own `model:` line, else the session's default for subagents if one is set, else your own model — so name the model whenever it matters, and opus always explicitly. A plugin may refuse a spawn or rewrite its model — read the refusal and adapt, never retry the same call.
+You choose `model` and `effort` for every executor you spawn. This skill is the explicit instruction the Agent tool's `effort` parameter asks for: set it on every spawn except `advisor`, by the table below. A spawn with no `effort` takes the agent's own `effort:` line, so an omission is safe but never a choice. A spawn with no `model` takes the agent's own `model:` line, else the session's default for subagents if one is set, else your own model — so name the model whenever it matters, and opus always explicitly. A plugin may refuse a spawn or rewrite its model — read the refusal and adapt, never retry the same call.
 
-If `mb jev status` says enabled, run `mb jev pick "<brief summary>"` before a spawn and use its pick unless it says `decide yourself`.
+**Jev picks first.** When Jev is enabled (a `[jev]` hint in your context, or `mb jev status` says so), run `mb jev pick "<ticket ID: one-line summary of the brief>"` before EVERY spawn and take its model and effort; the table below is for when Jev is off or answers `decide yourself`. The session-level `[jev]` hint sizes the whole request and does not replace the per-spawn pick. Overruling a pick is allowed and is said aloud: the reason goes into the spawn's `description`. Measured before this rule was a step: 14 picks on ~150 spawns.
 
 | Work | Agent | Model · effort |
 |---|---|---|
@@ -72,15 +73,18 @@ Every brief carries:
 8. **Big results go to a file**: code, a table or a report longer than ~40 lines goes to a file — return its path and a summary.
 9. **Questions go back**: business-logic questions, irreversible actions and forks are not yours to decide — put them in the report.
 10. **Quotes, not retellings**: findings come with `file:line`.
-11. The spawn's `description` carries one line: `tier · effort · why`.
+11. The spawn's `description` carries one line: `tier · effort · why` — `why` names the source of the choice: `jev`, the table, or your reason for overruling Jev.
 12. **Leave nothing running**: before the report, stop every background job you started (shells, servers, test runs) and say in the report that none is left — an executor waiting on its own background work stays alive after it is done.
+13. **One ticket, a short run**: the executor works this ticket only; if the work runs long (well past ~60 tool calls) it stops at a safe point and returns a handoff file — what is done, what is left, the state of the tree, the commands to continue — instead of stretching the run.
 
 ## 6. Acceptance and verdict
 
 On the executor's report the ticket goes to review. It reaches done only after an INDEPENDENT check: your own run with your own numbers, or a separate `review` ticket on opus. A retelling of the report is not a check.
 
-- The check passes: write the Verdict with `mb board edit ID --verdict "<what you ran, the numbers>"`, then `mb board move ID done`.
-- It fails: the ticket goes back to in-progress, and the remark goes to the SAME executor (`SendMessage` to its `agentId`): it already holds the context. Do not open a new executor for it.
+- The check passes: `mb board accept ID --verdict "<what you ran, the numbers>"` — one call writes the Verdict and takes the ticket through review to done. It runs AFTER your check, never in the same shell call as the check.
+- It fails: the ticket goes back to in-progress. The remark goes to the same executor (`SendMessage` to its `agentId`) only while its run is short — the notification's `<usage>` shows under ~60 tool uses — and only for THIS ticket. A longer run gets a FRESH executor with the ticket, the report or handoff file and the remark: every request of a long run re-reads its whole history (measured: the 36 % of coder runs longer than 100 requests took 82 % of all coder context), so "it already holds the context" is the expensive part, not the saving.
+- An executor that finished a ticket is not given the next one. A new ticket is a new executor, even when the files are the same.
+- An executor cut by its turn limit (`maxTurns` in its frontmatter) returns NO report — the notification says so — and is not resumed to go on working: a resume gets a full new allowance of turns (measured: 30 + 30), so resuming is how a run grows past its limit. Send it ONE message asking for the handoff file and nothing else, then continue with a fresh executor from that file and `git diff`.
 - A criterion turned out wrong: revise it explicitly and write the reason in the Verdict; never accept by quietly relaxing it.
 - A notification that the executor is "waiting on its own background work" after its final report means a job was left running — ask it to stop the job, or stop the executor with `TaskStop` once nothing more is needed from it.
 
@@ -117,3 +121,11 @@ A council (`council`, `planning-council`, `observation-council`) starts only on 
 ## 12. Budget
 
 A plugin may refuse a spawn or a request and tell you the session budget is spent. Then stop and ask the owner with `AskUserQuestion`: add budget / wrap up the tickets in flight / stop all. When told 80 % is spent, tell the owner in one line.
+
+## 13. Your own context
+
+The board holds the state, so your session is disposable — and it has to be: every request you make re-reads your whole conversation, a board command included (measured: lead sessions averaging 450k tokens per request, 14–25 % of the requests being board commands alone).
+
+- At an epic's boundary, or once your context passes ~200k tokens, finish the acceptances in flight, save the state with the `compaction-plan` skill and ask the owner to clear the session. You cannot clear yourself; say it in one line and why.
+- Do not pull an executor's material into your context: read a report file by range, a log by `grep`, a diff by `--stat` first.
+- Board commands that belong together go in one shell call; `start` and `accept` already are one call each — do not spell them out as separate moves.

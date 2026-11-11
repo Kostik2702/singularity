@@ -15,10 +15,17 @@ required for the rule to act.
 every other section on the triggers named in the agent's own file. Never copy the
 content into agent files — reference the sections.
 
+**The steps of your profile are checked when you return.** A return hook reads
+your transcript: the preamble was read; for investigator, reviewer, critic,
+validator and historian — the memory was searched (§1) and confidence was
+calibrated (§5); for coder and web-implementer — the diff was checked after the
+last edit (§7). A missing step sends the report back to you once, with the list.
+Doing the step the first time is cheaper than doing the report twice.
+
 ## §1. Loading context
 
 - [ ] Read the assignment in full; extract the FINAL GOAL and its `UNMET if <X>` (if the prompt has none — formulate it yourself from the assignment and declare it in the report).
-- [ ] SEM-FIRST: `mb search "<the gist>"` over memory before grep/Read discovery ([[Core Discipline - SEM-FIRST]]).
+- [ ] SEM-FIRST: `mb search "<the gist>"` over memory before grep/Read discovery ([[Core Discipline - SEM-FIRST]]). Required of investigator, reviewer, critic, validator and historian, and checked at return; coder, scout and the web agents work from the brief and search only for something the brief leaves without a source.
 - [ ] If a TASK-ID is named — read `learnings/active/<TASK>.md` (decisions, constraints, earlier findings).
 - [ ] You may CHALLENGE the goal (wrong / ambiguous / ownerless) — that is a legitimate result of the work.
 
@@ -52,7 +59,7 @@ content into agent files — reference the sections.
 
 ## §5. Confidence calibration (before returning)
 
-- [ ] Confidence is computed by the `confidence-calibration` skill (never by feel), and by YOU — you hold the evidence, and the orchestrator cannot calibrate from a retelling.
+- [ ] Confidence is computed by the `confidence-calibration` skill (never by feel), and by YOU — you hold the evidence, and the orchestrator cannot calibrate from a retelling. The skill is required of investigator, reviewer, critic, validator and historian, and checked at return. coder, web-implementer, scout and web-viewer give the Summary Line from the evidence they hold, without the skill, unless the brief asks for a calibration: a 76-box model over a bulk edit or a file inventory measures nothing.
 - [ ] The Summary Line is mandatory: `X% — because <key evidence signals>`.
 - [ ] Below the threshold → three lists: Closed Items / Unresolved Gaps / Why Not Closed. Anti-laziness: "ran out of time / too hard / probably" is FORBIDDEN; the only legal blockers are missing credentials, a GUI is required, a human answer is required, an external deploy is required. Every gap carries "attempted: <what you tried>", never "skipped".
 
@@ -61,6 +68,7 @@ content into agent files — reference the sections.
 - [ ] Never read whole files for a single fact — sem → a targeted Read of the range.
 - [ ] Samples over 30 lines — aggregate them in a pipe or script; the report gets the aggregate plus examples.
 - [ ] Intermediate artefacts go to temporary files; the report gets the path plus the gist.
+- [ ] **A run is short, and a long one is handed over, not stretched.** Every request re-reads everything you have gathered so far, so the second hundred of tool calls costs several times the first. One ticket per run. Independent commands go into ONE call or one script, not one call each. When the work is clearly running long (well past ~60 tool calls, or the context is heavy with logs) — stop at the next safe point, write a handoff file (what is done with evidence, what is left, the exact state of the tree, the commands to continue) and return its path under the heading `HANDOFF`: a fresh executor continues from the file. Your frontmatter may carry a hard turn limit; a handoff you wrote beats a cut you did not choose.
 - [ ] Caught yourself preparing your own input (trimming, enlarging, reformatting the material you are judging) — that is a defect of the INPUT, not your diligence. Say it in one line in the report instead of running a second compensating round ([[Rule - when an agent re-renders its own input, the input is what to fix]]).
 
 ## §7. Verification after edits (for agents that write code)

@@ -118,11 +118,11 @@ def test_team_lead_fragment_carries_the_ticket_rule():
     assert "never do the work yourself" in TEAM_LEAD_FRAGMENT
 
 
-def test_team_lead_covers_sections_one_to_twelve():
+def test_team_lead_covers_sections_one_to_thirteen():
     import re
 
     heads = re.findall(r"^## (\d+)\. ", _text(), flags=re.M)
-    assert heads == [str(n) for n in range(1, 13)]
+    assert heads == [str(n) for n in range(1, 14)]
 
 
 def test_every_board_subcommand_named_by_the_lead_surfaces_exists_in_the_parser():
@@ -142,3 +142,36 @@ def test_every_board_subcommand_named_by_the_lead_surfaces_exists_in_the_parser(
         named |= set(re.findall(r"mb board ([a-z][a-z-]*)", text))
     assert {"assign", "move", "note", "next", "show", "check"} <= named, "control: the surfaces name the board"
     assert named <= known, f"unknown board subcommands: {sorted(named - known)}"
+
+
+def test_team_lead_keeps_runs_short_and_its_own_context_small():
+    """A rule of the opposite sign left in the same text would win over the new
+    one, so the old "keep going in the same executor" wording must be gone."""
+    text = _text()
+    for phrase in ("FRESH executor", "is not given the next one", "is not resumed",
+                   "One ticket, a short run", "ask the owner to clear the session",
+                   "own `effort:` line"):
+        assert phrase in text, phrase
+    assert "Do not open a new executor for it" not in text
+
+
+def test_preamble_section_six_hands_a_long_run_over():
+    preamble = (ENGINE / "singularity" / "agents" / "AGENT_SHARED_PREAMBLE.md").read_text(encoding="utf-8")
+    section = preamble.split("## §6.", 1)[1].split("\n## ", 1)[0]
+    assert "A run is short" in section
+    assert "HANDOFF" in section
+
+
+def test_jev_pick_is_a_step_of_the_spawn_not_a_side_note():
+    """The pick used to be one conditional sentence after the tier paragraph and
+    was run on about one spawn in ten. It now stands in the flow of section 2,
+    between taking the ticket and starting the executor, and the table is named
+    as the fallback - not the other way round."""
+    text = _text()
+    flow = text.split("## 2.", 1)[1].split("\n## 3.", 1)[0]
+    assert flow.index("mb board start") < flow.index("mb jev pick") < flow.index("mb board assign")
+    section = text.split("## 3.", 1)[1].split("\n## 4.", 1)[0]
+    assert "before EVERY spawn" in section
+    assert section.index("Jev picks first") < section.index("| Work | Agent |")
+    assert "decide yourself" in section
+

@@ -176,6 +176,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # while filter-only gave 0.775. With the default MiniLM the reorder still
     # buys recall@5 (0.899 -> 0.923), which is why the default stays True.
     "jev_reorder": True,
+    # SubagentStop hook: send a subagent back once when a step its contract
+    # requires is missing from its own transcript. False = log only.
+    "agent_contract_enforce": True,
     # T08: PreToolUse guard. On by default since 2026-08-04 (owner decision) —
     # `audit` only annotates a write, and the failure it catches is silent by
     # construction: a new note written with a client's Write tool skips the
@@ -484,7 +487,7 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
         errors.append("auto_capture: must be a boolean")
     if "module_context_enabled" in data and not isinstance(data["module_context_enabled"], bool):
         errors.append("module_context_enabled: must be a boolean")
-    for key in ("jev_enabled", "jev_search", "jev_reorder"):
+    for key in ("jev_enabled", "jev_search", "jev_reorder", "agent_contract_enforce"):
         if key in data and not isinstance(data[key], bool):
             errors.append(f"{key}: must be a boolean")
     if "jev_budget_usd" in data and data["jev_budget_usd"] is not None and (

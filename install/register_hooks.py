@@ -77,6 +77,17 @@ HOOKS = {
             }],
         }
     ],
+    # No matcher: agent_contract.CONTRACTS decides, an unknown agent type passes.
+    "SubagentStop": [
+        {
+            "_mb": True,
+            "hooks": [{
+                "type": "command",
+                "command": guarded_command(ENGINE / "singularity" / "hooks" / "subagent_stop.py"),
+                "timeout": 10,
+            }],
+        }
+    ],
     "PreToolUse": [
         {
             "_mb": True,
@@ -106,6 +117,7 @@ _OWNED_SCRIPTS = {
     "SessionStart": {"session_start.py"},
     "UserPromptSubmit": {"user_prompt_submit.py", "jev_router.py"},
     "Stop": {"stop_capture.py"},
+    "SubagentStop": {"subagent_stop.py"},
     "PreToolUse": {"module_context.py", "vault_guard.py"},
 }
 

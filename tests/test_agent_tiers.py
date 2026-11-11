@@ -25,6 +25,20 @@ DEFAULT_MODELS = {
     "web-viewer": "opus",
 }
 
+DEFAULT_EFFORTS = {
+    "scout": "low",
+    "coder": "medium",
+    "historian": "medium",
+    "web-implementer": "medium",
+    "investigator": "high",
+    "reviewer": "high",
+    "critic": "high",
+    "validator": "high",
+    "web-viewer": "high",
+}
+
+TURN_LIMITS = {"scout": 30, "advisor": 8, "coder": 100, "reviewer": 80, "investigator": 120}
+
 
 def frontmatter(name: str) -> list[str]:
     """The lines between the leading `---` fences of an agent file."""
@@ -76,3 +90,32 @@ def test_advisor_is_not_asked_for_what_its_tools_cannot_do():
     body = (AGENTS / "advisor.md").read_text(encoding="utf-8")
     assert "the lead brings the vault facts" in body
     assert "additive model by hand" in body
+
+
+def test_agent_default_efforts():
+    for name, effort in DEFAULT_EFFORTS.items():
+        assert f"effort: {effort}" in frontmatter(name), f"{name} should default to effort {effort}"
+    # Fable's thinking is always on, and the lead is told not to set effort for it.
+    assert not any(line.startswith("effort:") for line in frontmatter("advisor"))
+
+
+def test_agent_turn_limits():
+    """The limit is a backstop for the rule in preamble §6: a run that ignores
+    the handoff rule is cut, not left to re-read 300k tokens per request."""
+    for name, turns in TURN_LIMITS.items():
+        assert f"maxTurns: {turns}" in frontmatter(name), f"{name} should be limited to {turns} turns"
+
+
+def test_heavy_agents_carry_a_tool_allowlist():
+    """Without an allowlist the first request carried ~52k chars of tool schemas
+    (36k of them the `Artifact` tool these agents never use) against ~6k for scout."""
+    wanted = {"coder": {"Edit", "Write"}, "reviewer": set(), "investigator": set()}
+    for name, extra in wanted.items():
+        line = next((x for x in frontmatter(name) if x.startswith("tools:")), None)
+        assert line, f"{name} has no tools: allowlist"
+        tools = line[len("tools:"):].strip().split(", ")
+        assert not {"Agent", "Artifact"} & set(tools), f"{name} must not carry Agent/Artifact"
+        assert {"Bash", "Read", "Skill", "SendMessage"} <= set(tools), f"{name} lost a basic tool"
+        assert extra <= set(tools), f"{name} lost {extra - set(tools)}"
+    reviewer = next(x for x in frontmatter("reviewer") if x.startswith("tools:"))
+    assert "Edit" not in reviewer.split(", "), "reviewer reports, it does not fix"
