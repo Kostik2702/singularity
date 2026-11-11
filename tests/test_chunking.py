@@ -4,8 +4,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from singularity.search.chunking import (extract_chunks, infer_project,
-                                        parse_frontmatter, should_skip)
+from singularity.search.chunking import (CHUNK_SCHEMA_VERSION, MIN_CHUNK_CHARS,
+                                        WINDOW_CHARS, _clean_section,
+                                        extract_chunks, extract_source_chunks,
+                                        infer_project, parse_frontmatter,
+                                        should_skip)
 
 #: One section of this note is deliberately NOT in English. The chunker splits
 #: on markdown structure and merges tags, aliases and wikilinks — none of which
@@ -62,7 +65,8 @@ def test_chunks(tmp_path):
     assert "Short" not in sections  # < 50 chars dropped
 
     ctx = next(c for c in chunks if c["section"] == "Task context")
-    assert "must be removed" not in ctx["content"]       # code stripped
+    assert "must be removed" in ctx["content"]           # code is indexed (schema 5)
+    assert "```" not in ctx["content"] and "python" not in ctx["content"]
     assert "an alias" in ctx["content"]                   # wikilink -> alias text
     assert "bold" in ctx["content"]
     assert "Another note" in ctx["wikilinks"]             # link target captured
@@ -277,3 +281,92 @@ def test_unbroken_text_still_advances_and_covers_everything():
     windows = _window_text(content)
     assert sum(len(w) for w in windows) >= len(content)
     assert len(windows) < 10
+
+
+# --- fenced code blocks are indexed (schema 5) -------------------------------
+
+_HOWTO = """# Rotate an API key
+
+## Steps
+
+Rotate the key before it expires, then check that the new one answers.
+
+```bash
+curl -X POST https://api.example.test/v1/keys/rotate --fail
+```
+
+Afterwards the old key stops working.
+"""
+
+
+def _chunks(tmp_path, text, name="note.md"):
+    p = tmp_path / name
+    p.write_text(text, encoding="utf-8")
+    return extract_chunks(p, f"howto/{name}")
+
+
+def test_schema_version_is_five():
+    assert CHUNK_SCHEMA_VERSION == 5
+
+
+def test_code_block_text_is_indexed_without_fence_or_language(tmp_path):
+    (c,) = _chunks(tmp_path, _HOWTO)
+    assert "curl -X POST https://api.example.test/v1/keys/rotate --fail" in c["content"]
+    assert c["content"] in c["text"]
+    assert "```" not in c["content"]
+    assert "bash" not in c["content"]
+    assert "before it expires, then check that the new one answers. curl" in c["content"]
+
+
+def test_block_without_language_and_one_line_block():
+    text, _, _ = _clean_section("Intro words.\n```\nrotate --now\n```\nMore words.")
+    assert text == "Intro words. rotate --now More words."
+    text, _, _ = _clean_section("Run ```rotate --now``` once.")
+    assert text == "Run rotate --now once."
+
+
+def test_section_that_is_only_code_now_yields_a_chunk(tmp_path):
+    code = "curl -X POST https://api.example.test/v1/keys/rotate"
+    assert len(code) >= MIN_CHUNK_CHARS
+    (c,) = _chunks(tmp_path, f"# Only code\n\n## Cmd\n\n```sh\n{code}\n```\n")
+    assert c["content"] == code
+
+
+def test_code_never_adds_tags_but_prose_still_does(tmp_path):
+    body = ("Rotate the key then verify it works, tagged #rotation here.\n\n"
+            "```c\n#include <stdio.h>\n#!/bin/sh\n# note to self\n"
+            "color: #ff0000\n```\n")
+    (c,) = _chunks(tmp_path, f"# Tags\n\n## S\n\n{body}")
+    assert c["tags"] == "rotation"
+    assert "#include <stdio.h>" in c["content"] and "#ff0000" in c["content"]
+
+
+def test_code_links_survive_verbatim_prose_links_still_unwrap(tmp_path):
+    body = ("See [[Key Policy]] before rotating the credential today.\n\n"
+            '```sh\nif [[ -f "$f" ]]; then x[i](y); fi\n```\n')
+    (c,) = _chunks(tmp_path, f"# Links\n\n## S\n\n{body}")
+    assert 'if [[ -f "$f" ]]; then x[i](y); fi' in c["content"]
+    assert "See Key Policy before" in c["content"]
+    assert c["wikilinks"] == ["Key Policy"]
+
+
+def test_two_blocks_keep_their_order_around_prose():
+    text, _, _ = _clean_section(
+        "alpha\n```\nONE\n```\nbeta\n```py\nTWO\n```\ngamma")
+    assert text == "alpha ONE beta TWO gamma"
+
+
+def test_long_code_block_is_windowed(tmp_path):
+    code = "\n".join(f"step_{i} --run" for i in range(200))
+    assert len(code) > WINDOW_CHARS * 1.5
+    chunks = _chunks(tmp_path, f"# Long\n\n## S\n\n```sh\n{code}\n```\n")
+    assert len(chunks) > 1
+    first, second = chunks[0]["content"], chunks[1]["content"]
+    assert any(tok in first and tok in second for tok in second.split()[:12])
+
+
+def test_source_chunks_carry_the_code_too(tmp_path):
+    p = tmp_path / "src.md"
+    p.write_text("---\nsource_id: s1\n---\n" + _HOWTO, encoding="utf-8")
+    (c,) = extract_source_chunks(p, ".mb/sources/src.md")
+    assert "keys/rotate --fail" in c["content"]

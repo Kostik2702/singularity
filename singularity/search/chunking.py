@@ -5,6 +5,8 @@ Semantic_Search_Deep_Dive §3.2) with Obsidian extensions:
   * [[wikilinks]] / inline #tags / frontmatter aliases -> chunk metadata
   * aliases participate in the embedded text as title synonyms
   * callout markers (> [!note]) are stripped, text kept
+  * fenced code blocks are indexed as text (fences dropped), so an exact error
+    string or command inside one can be found
 
 Chunk = one `##` section; the embedded string is
 "{title} - {section}: {content}" so headers carry semantics.
@@ -24,7 +26,9 @@ MIN_CHUNK_CHARS = 50
 WINDOW_CHARS = 1000
 WINDOW_OVERLAP = 150
 # Bumped whenever the chunk shape changes so an old-format index auto-rebuilds.
-CHUNK_SCHEMA_VERSION = 4
+# 5: fenced code blocks are kept as text (they used to be dropped); measured on
+# 80 probe lines from code blocks, the exact line in the top 5 went 0.49 -> 0.90.
+CHUNK_SCHEMA_VERSION = 5
 
 _H1_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 _SENT_END_RE = re.compile(r"[.!?…](?:\s|$)")
@@ -130,9 +134,41 @@ def infer_project(frontmatter: dict[str, Any], rel_path: str = "",
     return None
 
 
+def _code_inner(block: str) -> str:
+    """The code of a ```...``` block without its fences: the opening fence line
+    (marker plus optional language tag) and the closing marker are dropped. A
+    block written on one line keeps its whole inner text."""
+    inner = block[3:-3]
+    if "\n" in inner:
+        return inner.split("\n", 1)[1]
+    return inner
+
+
 def _clean_section(text: str) -> tuple[str, list[str], list[str]]:
-    """Clean markdown noise; return (clean_text, wikilinks, inline_tags)."""
-    text = _CODE_BLOCK_RE.sub(" ", text)
+    """Clean markdown noise; return (clean_text, wikilinks, inline_tags).
+
+    Fenced code blocks stay in the text (fences dropped) but are never run
+    through the prose cleaners: `#include` or `#ff0000` in code is not a tag,
+    and `[[ -f "$f" ]]` or `a[b](c)` must survive verbatim. Tags and wikilinks
+    come from the prose only."""
+    parts: list[str] = []
+    wikilinks: list[str] = []
+    tags: list[str] = []
+    pos = 0
+    for m in [*_CODE_BLOCK_RE.finditer(text), None]:
+        end = m.start() if m else len(text)
+        if end > pos:
+            prose, links, found = _clean_prose(text[pos:end])
+            parts.append(prose)
+            wikilinks += links
+            tags += found
+        if m:
+            parts.append(_code_inner(m.group(0)))
+            pos = m.end()
+    return _WS_RE.sub(" ", " ".join(parts)).strip(), wikilinks, tags
+
+
+def _clean_prose(text: str) -> tuple[str, list[str], list[str]]:
     text = text.replace("\\|", "|")  # escaped pipe in md tables
     wikilinks = [m.group(1).strip() for m in _WIKILINK_RE.finditer(text)]
     tags = [m.group(1) for m in _INLINE_TAG_RE.finditer(text)]
@@ -141,7 +177,6 @@ def _clean_section(text: str) -> tuple[str, list[str], list[str]]:
     text = _BOLD_RE.sub(r"\1", text)
     text = _CALLOUT_RE.sub("", text)
     text = _QUOTE_RE.sub("", text)
-    text = _WS_RE.sub(" ", text).strip()
     return text, wikilinks, tags
 
 
