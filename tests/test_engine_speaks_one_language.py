@@ -70,6 +70,11 @@ ALLOWED: dict[str, str] = {
         "one section of the sample note is deliberately not Latin - an "
         "all-English fixture would pass with a Latin-only regex and stop "
         "testing anything",
+    "singularity/search/lexical.py":
+        "the Russian suffix table of the BM25 stemmer. The suffixes ARE the "
+        "data: a note and a query in different grammatical cases only collide "
+        "once these endings are stripped, and spelling them as escapes would "
+        "make the table unreviewable. Everything else in the file is English",
     "tests/test_search_hybrid.py":
         "the BM25 tokenizer must not drop a script; a tokenizer that does makes "
         "those notes unfindable while the suite stays green",
@@ -293,7 +298,7 @@ BUDGET: dict[str, int] = {
     # 3347 -> 3386 (CODE-GRAPH P0): one crosslingual code case, c-xl-06, a RU query
     # whose target is outside this engine; the set had none before.
     "tests/fixtures/search_eval.json": 3386,
-    "tests/test_chunking.py": 203,
+    "tests/test_chunking.py": 261,          # +58: prose whose windows must open on a sentence start
     "tests/test_codegraph_sql.py": 14,
     "tests/test_context_map.py": 29,
     "tests/test_contradictions.py": 87,
@@ -302,7 +307,8 @@ BUDGET: dict[str, int] = {
     "tests/test_routing.py": 83,
     "tests/test_rules_delivery.py": 11,
     "tests/test_scheduler.py": 27,
-    "tests/test_search_hybrid.py": 67,
+    "tests/test_search_hybrid.py": 344,     # +277: inflected forms the stemmer and the excerpt must fold
+    "singularity/search/lexical.py": 154,       # the suffix table, nothing else
     "tests/test_sources.py": 28,
 }
 

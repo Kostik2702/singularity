@@ -27,7 +27,7 @@ import math
 import re
 from collections import Counter
 from typing import Any
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 # Unicode-aware: Cyrillic and Latin alike. `_` is kept because identifiers are
 # exactly the case this module exists for (`chunk_id`, `min_score`).
@@ -41,6 +41,43 @@ def tokenize(text: str) -> list[str]:
     return [t.lower() for t in _TOKEN_RE.findall(text or "")]
 
 
+# --- prose tokens: inflection folded, identifiers untouched ----------------
+#
+# Russian inflects, so the exact-token tokenizer above treats the genitive,
+# nominative and instrumental of one noun as three unrelated words, and a
+# query in one case misses a note
+# written in another. A suffix stripper is enough here: BM25 needs the forms
+# of one word to COLLIDE, not a linguistically correct lemma, and it costs no
+# dependency. Measured on the 66-pair set, 2026-11-11, same session, stemming
+# plus the weighted head in `prose_document_text`: recall@1 0.515 -> 0.606,
+# recall@5 0.758 -> 0.788, no class moving down.
+#
+# A token that carries `_` or a digit is an identifier or a version and is
+# never stemmed -- those are the exact tokens this module exists for.
+_STEM_MIN_TOKEN = 5
+_STEM_MIN_STEM = 3
+_RU_RE = re.compile("[\u0430-\u044f\u0451]")
+_RU_SUFFIX_RE = re.compile(
+    r"(иями|ями|ами|ией|иям|ием|иях|ого|его|ому|ему|ыми|ими|ается|уется|ться|тся|"
+    r"ость|ости|ение|ения|ению|ений|ая|яя|ое|ее|ые|ие|ый|ий|ой|ых|их|ую|юю|ом|ем|"
+    r"ам|ям|ах|ях|ов|ев|ей|ть|ет|ют|ит|ят|ал|ил|ла|ло|ли|а|я|о|е|ы|и|у|ю|ь)$")
+_EN_SUFFIX_RE = re.compile(r"(ings|ing|edly|ed|ies|es|s)$")
+
+
+def stem(token: str) -> str:
+    """Fold a lowercase prose token to a crude stem; identifiers pass through."""
+    if len(token) < _STEM_MIN_TOKEN or "_" in token or any(ch.isdigit() for ch in token):
+        return token
+    suffix = _RU_SUFFIX_RE if _RU_RE.search(token) else _EN_SUFFIX_RE
+    stemmed = suffix.sub("", token)
+    return stemmed if len(stemmed) >= _STEM_MIN_STEM else token
+
+
+def tokenize_prose(text: str) -> list[str]:
+    """`tokenize` with inflection folded -- for notes, never for code."""
+    return [stem(t) for t in tokenize(text)]
+
+
 class BM25:
     """Okapi BM25 over a fixed list of documents, in the order they were given.
 
@@ -48,8 +85,12 @@ class BM25:
     caller can zip it against the chunk list it already holds.
     """
 
-    def __init__(self, documents: Iterable[str]):
-        self.docs: list[list[str]] = [tokenize(d) for d in documents]
+    def __init__(self, documents: Iterable[str],
+                 tokenizer: Callable[[str], list[str]] = tokenize):
+        # The same tokenizer must read the documents and the query: a stemmed
+        # index asked with unstemmed terms silently matches nothing.
+        self.tokenize = tokenizer
+        self.docs: list[list[str]] = [tokenizer(d) for d in documents]
         self.doc_len = [len(d) for d in self.docs]
         self.n = len(self.docs)
         self.avgdl = (sum(self.doc_len) / self.n) if self.n else 0.0
@@ -63,7 +104,7 @@ class BM25:
                     for term, c in df.items()}
 
     def scores(self, query: str) -> list[float]:
-        terms = [t for t in tokenize(query) if t in self.idf]
+        terms = [t for t in self.tokenize(query) if t in self.idf]
         if not terms or not self.n:
             return [0.0] * self.n
         out = [0.0] * self.n
@@ -78,6 +119,28 @@ class BM25:
                     total += self.idf[term] * (tf * (K1 + 1)) / (tf + norm)
             out[i] = total
         return out
+
+
+def covered(bm: BM25, query: str, doc_ids: list[int], share: float) -> list[int]:
+    """`doc_ids` narrowed to those holding at least `share` of the query's idf
+    mass -- the documents BM25 actually MATCHED, as opposed to those that
+    happen to contain one of its words.
+
+    Rank fusion gives the lexical list a vote equal to the vector's, and a
+    BM25 ranking is never empty: a query in another language than the note, or
+    one phrased in other words, still ranks whatever shares a single common
+    term with it, and those chunks then outvote the semantic answer. Weighing
+    by idf rather than counting terms keeps a lone rare identifier
+    (`IndexLockedError` among stop-words) above the bar by itself.
+    """
+    if share <= 0:
+        return doc_ids
+    terms = {t for t in bm.tokenize(query) if t in bm.idf}
+    total = sum(bm.idf[t] for t in terms)
+    if not total:
+        return []
+    return [i for i in doc_ids
+            if sum(bm.idf[t] for t in terms if t in bm.freqs[i]) / total >= share]
 
 
 def rrf(rankings: list[list[int]], k: int = 60) -> dict[int, float]:
@@ -112,3 +175,58 @@ def document_text(chunk: dict[str, Any]) -> str:
     section, which is where identifiers usually appear.
     """
     return str(chunk.get("text") or chunk.get("content") or "")
+
+
+def prose_document_text(chunk: dict[str, Any]) -> str:
+    """What BM25 indexes for a NOTE chunk: the head counted three times.
+
+    A note's path, title and section are where a person's query words usually
+    are (a rule note is NAMED after what it rules), yet in `text` they weigh the
+    same as any word of the body, and a long body mentioning the term in
+    passing outranks the note that is ABOUT it. Repeating the head is the
+    plain form of field weighting; `text` already holds title and section
+    once, hence two more here. The path is added once: folder and file name
+    carry tokens (`incidents`, a ticket id) the title may not.
+    """
+    head = f"{chunk.get('title') or ''} {chunk.get('section') or ''}"
+    return f"{chunk.get('file') or ''} {head} {head} {document_text(chunk)}"
+
+
+# --- the excerpt a result is shown with (here, not in the engine: the CLI
+# cuts excerpts too and must not import numpy to do it) ----------------------
+
+_WORD_RE = re.compile(r"\w+", re.UNICODE)
+
+
+def focus_excerpt(content: str, query: str, size: int) -> str:
+    """The `size`-char stretch of `content` that holds the most query words.
+
+    The excerpt is how a reader decides whether a hit is worth opening. The
+    head of the chunk answers that only when the match happens to be there; a
+    window is ~1000 chars and the excerpt 150, so usually it is not, and the
+    reader either opens the file to find out or trusts a line that says
+    nothing. Words are compared by stem, as BM25 above compares them.
+    No query word in the chunk (a cross-lingual or purely semantic hit) leaves
+    the head, exactly as before.
+    """
+    if len(content) <= size:
+        return content
+    wanted = {stem(t) for t in tokenize(query)}
+    wanted = {t for t in wanted if len(t) >= 3}
+    hits = [(m.start(), stem(m.group().lower()))
+            for m in _WORD_RE.finditer(content)] if wanted else []
+    hits = [(pos, st) for pos, st in hits if st in wanted]
+    if not hits:
+        return content[:size] + "..."
+    best_start, best_score = 0, -1
+    for i, (pos, _) in enumerate(hits):
+        seen = {st for p, st in hits[i:] if p < pos + size}
+        if len(seen) > best_score:               # earliest window wins a tie
+            best_start, best_score = pos, len(seen)
+    # lead in with a little context, then snap to a word start
+    start = max(0, min(best_start - size // 5, len(content) - size))
+    if start:
+        sp = content.find(" ", start, best_start)
+        start = sp + 1 if sp != -1 else best_start
+    piece = content[start:start + size]
+    return ("..." if start else "") + piece + ("..." if start + size < len(content) else "")

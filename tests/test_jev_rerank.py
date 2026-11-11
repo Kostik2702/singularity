@@ -105,6 +105,7 @@ def test_any_failure_leaves_the_original_order(env, script):
 
 
 def test_a_personal_note_is_never_sent_and_keeps_its_slot(env):
+    env.cfg.data["jev_min_relevance"] = 0     # this test is about slots/order, not the floor
     srv = env.serve(reply(200, judge({"A": 0.1, "B": 0.9, "Roots": 0.0})))
     env.cfg.data["personal_roots"] = ["diary"]
     hits = [hit("A"), hit("Secret", content="my private thought"),
@@ -212,6 +213,7 @@ def test_search_survives_a_dead_jev(env, search, capsys):
 
 
 def test_a_top_beyond_30_reranks_the_first_30_and_keeps_the_rest(env):
+    env.cfg.data["jev_min_relevance"] = 0     # this test is about slots/order, not the floor
     names = [f"N{i:02d}" for i in range(40)]
     env.serve(reply(200, judge({n: (1.0 if n == "N29" else 0.1) for n in names})))
     out = rerank.apply(env.cfg, {"results": [hit(n) for n in names]}, "q", 40, excerpt=None)
@@ -253,3 +255,54 @@ def test_a_garbled_http_answer_does_not_crash_the_search(env, monkeypatch):
         srv.close()
     assert titles(out) == ["A", "B"] and out["reranked"] is False
     assert log.read(env.cfg)[0]["error"] == "network:null"
+
+
+# --- a hit Jev rejects is not shown (jev_min_relevance) ---------------------------
+
+def test_a_hit_rated_below_the_floor_is_dropped(env):
+    env.serve(reply(200, judge({"A": 0.05, "B": 0.9, "C": 0.19, "D": 0.21})))
+    out = rerank.apply(env.cfg, {"results": [hit("A"), hit("B"), hit("C"), hit("D")]},
+                       "q", 5, excerpt=None)
+    assert titles(out) == ["B", "D"]
+    assert out["rejected"] == 2 and out["rejected_below"] == 0.20
+
+
+def test_a_query_nothing_answers_returns_nothing(env):
+    env.serve(reply(200, judge({"A": 0.02, "B": 0.15})))
+    out = rerank.apply(env.cfg, {"results": [hit("A"), hit("B")]}, "q", 5, excerpt=None)
+    assert out["results"] == [] and out["rejected"] == 2
+
+
+def test_a_zero_floor_keeps_every_hit(env):
+    env.cfg.data["jev_min_relevance"] = 0
+    env.serve(reply(200, judge({"A": 0.01, "B": 0.9})))
+    out = rerank.apply(env.cfg, {"results": [hit("A"), hit("B")]}, "q", 5, excerpt=None)
+    assert titles(out) == ["B", "A"] and "rejected" not in out
+
+
+def test_a_hit_jev_never_read_is_never_dropped(env):
+    env.serve(reply(200, judge({"A": 0.01})))
+    resp = {"results": [hit("A"), hit("P", project="personal")]}
+    out = rerank.apply(env.cfg, resp, "q", 5, excerpt=None)
+    assert titles(out) == ["P"]
+
+
+def test_a_dead_jev_drops_nothing(env):
+    env.serve(reply(401, {"detail": "no"}))
+    out = rerank.apply(env.cfg, {"results": [hit("A"), hit("B")]}, "q", 5, excerpt=None)
+    assert titles(out) == ["A", "B"] and "rejected" not in out
+
+
+def test_the_cli_says_why_the_answer_is_short(env, search, capsys):
+    env.serve(reply(200, judge({"A": 0.01, "B": 0.02, "C": 0.03, "D": 0.04})))
+    assert cli.main(["search", "q"]) == 0
+    out = capsys.readouterr().out
+    assert "(no results)" in out and "4 candidate(s) read and rejected" in out
+
+
+def test_filter_only_keeps_the_engines_order(env):
+    env.cfg.data["jev_reorder"] = False
+    env.serve(reply(200, judge({"A": 0.5, "B": 0.05, "C": 0.9, "D": 0.6})))
+    out = rerank.apply(env.cfg, {"results": [hit("A"), hit("B"), hit("C"), hit("D")]},
+                       "q", 5, excerpt=None)
+    assert titles(out) == ["A", "C", "D"] and out["rejected"] == 1

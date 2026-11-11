@@ -24,7 +24,7 @@ MIN_CHUNK_CHARS = 50
 WINDOW_CHARS = 1000
 WINDOW_OVERLAP = 150
 # Bumped whenever the chunk shape changes so an old-format index auto-rebuilds.
-CHUNK_SCHEMA_VERSION = 3
+CHUNK_SCHEMA_VERSION = 4
 
 _H1_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 _SENT_END_RE = re.compile(r"[.!?…](?:\s|$)")
@@ -178,8 +178,31 @@ def _window_text(content: str,
             windows.append(piece)
         if end >= n:
             break
-        start = max(end - overlap, start + 1)
+        start = max(_overlap_start(content, end, overlap), start + 1)
     return windows
+
+
+def _overlap_start(content: str, end: int, overlap: int) -> int:
+    """Where the next window begins: a sentence start near `end - overlap`,
+    else a word start, and never past `end` (so no text falls between two
+    windows).
+
+    The cut used to be the bare offset `end - overlap`, which lands inside a
+    word: measured on the live index 2026-11-11, 79% of continuation windows
+    opened mid-sentence, often mid-word. The search excerpt is
+    the HEAD of a window, so that is what the reader of a result was shown --
+    and a fragment starting mid-word also embeds worse than a sentence.
+    """
+    target = end - overlap
+    lo, hi = max(end - 2 * overlap, 0), end - overlap // 3
+    best = -1
+    for m in _SENT_END_RE.finditer(content, lo, hi):
+        if best == -1 or abs(m.end() - target) < abs(best - target):
+            best = m.end()
+    if best != -1:
+        return best
+    sp = content.find(" ", target, end)
+    return sp + 1 if sp != -1 else target
 
 
 def extract_chunks(path: Path, rel_path: str,

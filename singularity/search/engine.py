@@ -19,6 +19,7 @@ from . import lexical
 from .encoder import shared_encoder
 
 _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n", re.DOTALL)
+_POOL_MIN_TOP = 10
 
 
 class SearchEngine:
@@ -161,7 +162,15 @@ class SearchEngine:
         has_filters = any(req.get(k) for k in
                           ("filter_type", "filter_tags", "path_prefix",
                            "filter_wikilinks", "repos", "filter_project"))
-        pool = top_k * (20 if has_filters else 3)   # candidate pool
+        # The pool is sized from at least 10 results, not from `top_k` alone:
+        # fusion ranks WITHIN the pool, so a pool that grew with `top_k` made
+        # `--top 5` and `--top 10` rank different candidates and disagree on
+        # their first five (measured 2026-11-11: equal for 10 of 29 queries).
+        # The code corpus keeps the old sizing and the old loop: its answers
+        # are pinned byte-for-byte (tests/test_code_chunk_default_golden.py)
+        # and are re-measured by their own gate, not by this change.
+        notes = source != "code"
+        pool = (max(top_k, _POOL_MIN_TOP) if notes else top_k) * (20 if has_filters else 3)
         scores = embs @ q_emb                        # cosine (normalized)
         order = np.argsort(scores)[::-1][:pool]
         lexical_hits: set[int] = set()
@@ -170,6 +179,8 @@ class SearchEngine:
             order, lexical_hits, fused_score = self._fuse_with_lexical(
                 order, chunks, source, req, pool)
         results = []
+        max_per_file = int(req.get("max_per_file", 2)) if notes else 0
+        per_file: dict[str, int] = {}
         for idx in order:
             score = float(scores[idx])
             if score < self.cfg.min_score:
@@ -185,6 +196,15 @@ class SearchEngine:
             meta = chunks[idx]
             if not self._match_filters(meta, req):
                 continue
+            # The per-file cap is applied HERE as well as in `search()`. Applied
+            # only there, this loop stopped at `top_k` hits and the cap then
+            # removed some, so `--top 5` returned 4.2 results on average while
+            # more candidates sat unread in the pool.
+            if max_per_file > 0:
+                name = str(meta.get("file", ""))
+                if per_file.get(name, 0) >= max_per_file:
+                    continue
+                per_file[name] = per_file.get(name, 0) + 1
             item = {"meta": meta, "score": score, "source": source}
             if fused_score is not None:
                 item["fused"] = fused_score.get(int(idx), 0.0)
@@ -223,7 +243,15 @@ class SearchEngine:
         cache = self.__dict__.setdefault("_bm25", {})
         index = cache.get(source)
         if index is None or index[0] != len(chunks):
-            index = (len(chunks), lexical.BM25(lexical.document_text(c) for c in chunks))
+            # Notes are prose: fold inflection and weight the head. Code is
+            # identifiers, and its ranking has its own measured baseline
+            # (`docs/search-eval-code-*.json`) -- it keeps the exact tokenizer.
+            if source == "code":
+                bm = lexical.BM25(lexical.document_text(c) for c in chunks)
+            else:
+                bm = lexical.BM25((lexical.prose_document_text(c) for c in chunks),
+                                  tokenizer=lexical.tokenize_prose)
+            index = (len(chunks), bm)
             cache[source] = index
         return index[1]
 
@@ -241,7 +269,11 @@ class SearchEngine:
         if not query:
             return order, set(), None
         bm = self._lexical_for(source, chunks)
-        lex_rank = lexical.rank_by_score(bm.scores(query), limit=pool)
+        lex_rank = lexical.rank_by_score(bm.scores(query))
+        if source != "code":
+            lex_rank = lexical.covered(bm, query, lex_rank,
+                                       float(self.cfg.get("lexical_min_coverage", 0.0) or 0.0))
+        lex_rank = lex_rank[:pool]
         if not lex_rank:
             return order, set(), None
         vec_rank = [int(i) for i in order]
@@ -266,7 +298,13 @@ class SearchEngine:
             if key == "content":
                 val = _FRONTMATTER_RE.sub("", str(val))
                 if not full and len(val) > excerpt:
-                    val = val[:excerpt] + "..."
+                    # A note is cut around the query words. Code keeps its head:
+                    # that is the signature, and the code answers are pinned
+                    # byte-for-byte (tests/test_code_chunk_default_golden.py).
+                    if meta.get("repo") is not None or meta.get("kind"):
+                        val = val[:excerpt] + "..."
+                    else:
+                        val = lexical.focus_excerpt(val, str(req.get("query") or ""), excerpt)
             out[key] = val
         if out.get("title") and out.get("title") == out.get("section"):
             out.pop("section")   # dedupe title==section (~10% savings)

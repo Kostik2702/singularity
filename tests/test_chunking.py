@@ -243,3 +243,37 @@ def test_line_offsets_map_into_file(tmp_path):
     assert rus["line_start"] <= total_lines
     src_line = SAMPLE.splitlines().index("## Секция не на латинице") + 1
     assert rus["line_start"] <= src_line <= rus["line_end"]
+
+
+# --- continuation windows open on a boundary ---------------------------------
+
+def _prose(n: int = 60) -> str:
+    return " ".join(f"Предложение номер {i} рассказывает про индексатор и демон." for i in range(n))
+
+
+def test_continuation_windows_open_on_a_sentence_start():
+    from singularity.search.chunking import _window_text
+    windows = _window_text(_prose())
+    assert len(windows) > 2
+    for w in windows[1:]:
+        assert w.startswith("Предложение"), w[:40]
+
+
+def test_no_text_is_lost_between_windows():
+    from singularity.search.chunking import _window_text
+    content = _prose()
+    windows = _window_text(content)
+    pos = 0
+    for w in windows:
+        at = content.find(w[:60], max(pos - 400, 0))
+        assert at != -1 and at <= pos, "a gap opened between two windows"
+        pos = at + len(w)
+    assert pos == len(content)
+
+
+def test_unbroken_text_still_advances_and_covers_everything():
+    from singularity.search.chunking import _window_text
+    content = "x" * 3500                       # no sentence, no space
+    windows = _window_text(content)
+    assert sum(len(w) for w in windows) >= len(content)
+    assert len(windows) < 10

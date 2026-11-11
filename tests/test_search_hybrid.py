@@ -236,3 +236,124 @@ def test_an_explicit_no_still_beats_the_code_override(engine):
     engine.cfg.data["hybrid_search"] = True
     assert engine._hybrid_wanted({"hybrid": False}, "code") is False
     assert engine._hybrid_wanted({"hybrid": False}, "memory") is False
+
+
+# --- prose tokens: inflection and the weighted head ---------------------------
+
+def test_stemming_folds_russian_and_english_inflection():
+    assert len({lexical.stem(t) for t in ("хуков", "хуками", "хуком")}) == 1
+    assert lexical.stem("fixtures") == lexical.stem("fixture") or \
+        lexical.stem("windows") == lexical.stem("window")
+
+
+def test_stemming_never_touches_an_identifier_or_a_version():
+    for token in ("atomic_write_json", "utf8sig", "v2beta", "bm25"):
+        assert lexical.stem(token) == token
+
+
+def test_a_stemmed_index_answers_a_query_in_another_case():
+    docs = ["читать stdin хуков как utf-8-sig", "демон перечитывает конфиг"]
+    exact = lexical.BM25(docs)
+    prose = lexical.BM25(docs, tokenizer=lexical.tokenize_prose)
+    assert exact.scores("хуками")[0] == 0.0        # the gap this closes
+    assert prose.scores("хуками")[0] > 0.0
+
+
+def test_the_head_outweighs_a_passing_mention_in_a_body():
+    about = {"file": "rules/lock.md", "title": "Writer lock", "section": "Rule",
+             "text": "Writer lock - Rule: never clean up the winner's file."}
+    mention = {"file": "daily/x.md", "title": "Daily", "section": "Notes",
+               "text": "Daily - Notes: looked at the lock briefly, then deploys, "
+                       "reviews and a release."}
+    bm = lexical.BM25([lexical.prose_document_text(c) for c in (about, mention)],
+                      tokenizer=lexical.tokenize_prose)
+    scores = bm.scores("lock")
+    assert scores[0] > scores[1]
+
+
+def test_the_code_corpus_keeps_the_exact_tokenizer(engine):
+    engine.code_chunks = [{"file": "a.py", "text": "def windows(): pass"}]
+    assert engine._lexical_for("code", engine.code_chunks).tokenize is lexical.tokenize
+    assert engine._lexical_for("memory", engine.mem_chunks).tokenize is lexical.tokenize_prose
+
+
+# --- the excerpt shows the match, not the head --------------------------------
+
+def test_the_excerpt_is_cut_around_the_query_words():
+    from singularity.search.lexical import focus_excerpt
+    content = ("Вводная часть про что-то постороннее. " * 12
+               + "Демон перечитывает конфиг после сигнала reload. "
+               + "Хвост про другое. " * 12)
+    out = focus_excerpt(content, "демон перечитывает конфиг", 150)
+    assert "перечитывает конфиг" in out
+    assert out.startswith("...") and len(out) <= 150 + 6
+
+
+def test_the_excerpt_matches_across_inflection():
+    from singularity.search.lexical import focus_excerpt
+    content = "Заполнитель текста. " * 20 + "Читать stdin хуков как utf-8-sig." + " Ещё текст." * 20
+    assert "хуков" in focus_excerpt(content, "хуки stdin", 120)
+
+
+def test_the_excerpt_falls_back_to_the_head_without_a_match():
+    from singularity.search.lexical import focus_excerpt
+    content = "Начало заметки. " + "текст " * 100
+    assert focus_excerpt(content, "completely unrelated words", 50) == content[:50] + "..."
+    assert focus_excerpt("короткий", "что угодно", 50) == "короткий"
+
+
+# --- the answer does not depend on how many lines were asked for ----------------
+
+def _many(engine):
+    """A long note that floods the head of the ranking, and others behind it."""
+    chunks = [{"file": "long.md", "section": f"s{i}", "content": f"daemon reload config {i}",
+               "text": f"long - s{i}: daemon reload config {i}", "type": "howto",
+               "chunk_id": f"long.md#{i}.0"} for i in range(6)]
+    chunks += [{"file": f"n{i}.md", "section": "s", "content": f"daemon reload note {i}",
+                "text": f"n{i} - s: daemon reload note {i}", "type": "howto",
+                "chunk_id": f"n{i}.md#0.0"} for i in range(12)]
+    engine.mem_chunks = chunks
+    engine.mem_embs = engine.encoder.encode([c["text"] for c in chunks])
+    engine.reload = lambda: None
+    engine._bm25 = {}
+
+
+@pytest.mark.parametrize("hybrid", [False, True])
+def test_a_flooding_note_does_not_shorten_the_answer(engine, hybrid):
+    _many(engine)
+    out = engine.search({"query": "daemon reload config", "top_k": 5, "hybrid": hybrid,
+                         "memory_only": True, "format": "json"})
+    assert len(out["results"]) == 5
+
+
+@pytest.mark.parametrize("hybrid", [False, True])
+def test_the_first_five_are_the_same_whatever_top_was_asked(engine, hybrid):
+    _many(engine)
+    def ask(k):
+        return [r["meta"]["chunk_id"] for r in engine.search(
+            {"query": "daemon reload config", "top_k": k, "hybrid": hybrid,
+             "memory_only": True, "format": "json"})["results"]]
+    assert ask(5) == ask(10)[:5]
+
+
+# --- a lexical hit must have matched the query, not one word of it ----------------
+
+def test_coverage_drops_a_document_sharing_one_common_word():
+    docs = ["writer lock contention on the index", "the index of the book", "unrelated text"]
+    bm = lexical.BM25(docs)
+    ranked = lexical.rank_by_score(bm.scores("writer lock contention index"))
+    assert set(ranked) == {0, 1}
+    assert lexical.covered(bm, "writer lock contention index", ranked, 0.34) == [0]
+
+
+def test_a_lone_rare_identifier_clears_the_bar_by_itself():
+    docs = ["IndexLockedError is raised when the lock is held", "how the note is written",
+            "how the index is read", "how the daemon is started"]
+    bm = lexical.BM25(docs)
+    q = "how is IndexLockedError raised"
+    assert 0 in lexical.covered(bm, q, lexical.rank_by_score(bm.scores(q)), 0.34)
+
+
+def test_a_zero_share_is_no_gate():
+    bm = lexical.BM25(["a b", "b c"])
+    assert lexical.covered(bm, "b", [0, 1], 0.0) == [0, 1]

@@ -29,7 +29,7 @@ Compact output: `file | score | [type] | title/section | excerpt(150)`. A score 
 
 ## Jev rerank (optional)
 
-When the owner has turned Jev on (`mb jev status` says enabled) and `jev_search` is not false, `mb search` asks Jev whether each candidate excerpt answers the query and reorders by that. It fetches up to 30 candidates, sends title, section and a short redacted excerpt (never a note classified personal, never code), and cuts back to `--top` (only the first 30 are reranked; a larger `--top` keeps the rest after them unchanged). `--explain` adds `jev=<p>`; `--json` adds `"reranked": true|false` and a `"jev"` value per reranked hit. Any Jev failure leaves the semantic order as it was. `--no-jev` skips it for one query.
+When the owner has turned Jev on (`mb jev status` says enabled) and `jev_search` is not false, `mb search` asks Jev whether each candidate excerpt answers the query and reorders by that. It fetches up to 30 candidates, sends title, section and a short redacted excerpt (never a note classified personal, never code), and cuts back to `--top` (only the first 30 are reranked; a larger `--top` keeps the rest after them unchanged). `--explain` adds `jev=<p>`; `--json` adds `"reranked": true|false` and a `"jev"` value per reranked hit. A candidate Jev rates below `jev_min_relevance` (default 0.20) is dropped, so a query the vault cannot answer returns few or no lines plus a note saying how many were rejected: that means "not in memory", not "search is broken". Any Jev failure leaves the semantic order as it was. `--no-jev` skips it for one query.
 
 ## Maintenance (when search behaves oddly)
 

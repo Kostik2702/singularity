@@ -23,6 +23,8 @@ The key is read from stdin only, stored in the OS keyring under the fixed name `
 | `jev_enabled` | absent (off) | master switch; `mb jev off` removes it |
 | `jev_budget_usd` | null | what was topped up |
 | `jev_search` | true | rerank `mb search` when Jev is on |
+| `jev_min_relevance` | 0.20 | drop a reranked hit Jev rates below this; 0 keeps every hit |
+| `jev_reorder` | true | false = Jev only drops hits below the floor, the engine's order stands (use with a strong embedder such as bge-m3) |
 
 ## Guarantees
 

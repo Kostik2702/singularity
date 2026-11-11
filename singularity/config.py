@@ -127,6 +127,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # not hold for a sparse config either. Flipping a default is therefore a
     # behaviour change for everyone, and this one is made on a measurement.
     "hybrid_search": True,
+    # A lexical hit joins the fusion only if it holds this share of the
+    # query's idf mass (`lexical.covered`). Measured 2026-11-11, 346 queries:
+    # bge-m3 recall@1 0.711 -> 0.752, cross-lingual 0.576 -> 0.671; MiniLM
+    # neutral (recall@5 0.899 -> 0.903). 0.5 was worse on both. 0 = no gate.
+    "lexical_min_coverage": 0.34,
     # The one feature that stores conversation text. OFF by default and it
     # stays that way: everything else here is derived from files you wrote, and
     # this is not. See the vault decision TRANSCRIPTS D1 (transcript privacy)
@@ -155,6 +160,22 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "board_wip_limit": 4,              # `mb board move`: max non-epic tickets in-progress per project
     "jev_budget_usd": None,            # what the owner topped up; balance = this - logged cost
     "jev_search": True,                # rerank `mb search` with Jev, when jev_enabled
+    # A reranked hit Jev rates below this is dropped, so a query the vault
+    # cannot answer returns nothing instead of five confident-looking lines.
+    # Cosine cannot make this call: on 45 unanswerable queries its best hit
+    # averaged 0.51 and reached 0.71. Measured 2026-11-11 on the 346-query set
+    # (298 answerable, 45 not), same snapshot, floor -> recall@5 / share of
+    # unanswerable queries that still return something:
+    #   0 -> .923 / 100%   0.1 -> .916 / 38%   0.2 -> .913 / 18%   0.3 -> .906 / 13%
+    # 0.2 is the knee: one point of recall for 82% of the empty answers. 0 = off.
+    "jev_min_relevance": 0.20,
+    # False = Jev only FILTERS (the floor above) and the engine's order stands.
+    # Its probabilities saturate near 0.9 for every on-topic note, so as an
+    # ORDER they are noise among good hits: with a strong embedder (bge-m3)
+    # reordering by them cost recall@1 0.711 -> 0.658 on the 346-query set,
+    # while filter-only gave 0.775. With the default MiniLM the reorder still
+    # buys recall@5 (0.899 -> 0.923), which is why the default stays True.
+    "jev_reorder": True,
     # T08: PreToolUse guard. On by default since 2026-08-04 (owner decision) —
     # `audit` only annotates a write, and the failure it catches is silent by
     # construction: a new note written with a client's Write tool skips the
@@ -399,6 +420,8 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     if "model" in data and (not isinstance(data["model"], str) or not data["model"].strip()):
         errors.append("model: must be a non-empty string")
     _num("min_score", 0.0, 1.0)
+    _num("jev_min_relevance", 0.0, 1.0)
+    _num("lexical_min_coverage", 0.0, 1.0)
     _int("daemon_port", 0, 65535)
     _int("excerpt_chars", 1, 1_000_000)
     _int("batch_size", 1, 1_000_000)
@@ -461,7 +484,7 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
         errors.append("auto_capture: must be a boolean")
     if "module_context_enabled" in data and not isinstance(data["module_context_enabled"], bool):
         errors.append("module_context_enabled: must be a boolean")
-    for key in ("jev_enabled", "jev_search"):
+    for key in ("jev_enabled", "jev_search", "jev_reorder"):
         if key in data and not isinstance(data[key], bool):
             errors.append(f"{key}: must be a boolean")
     if "jev_budget_usd" in data and data["jev_budget_usd"] is not None and (

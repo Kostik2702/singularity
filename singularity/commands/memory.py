@@ -143,6 +143,12 @@ def cmd_search(cfg, args) -> int:
         lines = [_compact_line(h) for h in hits] if graph else resp.get("lines", [])
         if not lines:
             print("(no results)")
+        if resp.get("rejected") and len(lines) < args.top:
+            # Say WHY the answer is short: an empty list that looks like "the
+            # index is broken" sends the reader to grep instead of rephrasing.
+            print(f"[mb] {resp['rejected']} candidate(s) read and rejected as not answering "
+                  f"the query (jev < {resp['rejected_below']:.2f}); rephrase, or "
+                  "`--no-jev` for the raw ranking")
         for idx, line in enumerate(lines, 1):
             print(f"{idx}. {line}")
             if graph and "graph" in hits[idx - 1]:

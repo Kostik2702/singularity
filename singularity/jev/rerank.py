@@ -1,8 +1,15 @@
 """Search rerank: Jev reads each candidate excerpt and says whether it answers.
 
 Imitates `search/graph_boost.py`: it reorders what the engine returned and
-never adds or removes a hit beyond the cut back to `top`. With Jev off, keyless,
-failing or timing out, the answer is the engine's answer untouched.
+never adds a hit. With Jev off, keyless, failing or timing out, the answer is
+the engine's answer untouched.
+
+It does REMOVE one kind of hit (since 2026-11-11, `jev_min_relevance`): a note
+Jev read and rated below the threshold. Until then the rerank only reordered,
+so a query the vault has no answer to still came back as `top` lines, and the
+score shown beside them (cosine, up to 0.63 on such queries) gave no way to
+tell. A hit that was never sent -- personal, code, a raw source -- has no
+rating and is never dropped; neither is anything when Jev did not answer.
 
 Only wiki notes are sent. A note classified personal (frontmatter project, or a
 path under `personal_roots`) is never sent and keeps its slot; code and raw
@@ -17,6 +24,7 @@ import time
 
 from ..knowledge.redact import redact
 from ..search.chunking import infer_project
+from ..search.lexical import focus_excerpt
 from . import client, enabled, log, noul_confidence
 
 JEV_TIMEOUT = 3.5
@@ -133,6 +141,17 @@ def apply(cfg, resp: dict, query: str, top: int, *, excerpt: int | None,
         log.append(cfg, "search", text=query, error="internal:null")
         reordered = None
     resp["reranked"] = reordered is not None
+    if reordered is not None:
+        floor = float(cfg.get("jev_min_relevance", 0.0) or 0.0)
+        kept = [h for h in reordered if "jev" not in h or h["jev"] >= floor]
+        if len(kept) != len(reordered):
+            resp["rejected"] = len(reordered) - len(kept)
+            resp["rejected_below"] = floor
+        if cfg.get("jev_reorder", True) is not True:
+            # filter-only: what Jev kept, in the order the engine ranked it
+            place = {id(h): i for i, h in enumerate(hits)}
+            kept.sort(key=lambda h: place[id(h)])
+        reordered = kept
     hits = (reordered if reordered is not None else hits) + tail
     hits = hits[:top]
     if excerpt is not None:
@@ -140,6 +159,8 @@ def apply(cfg, resp: dict, query: str, top: int, *, excerpt: int | None,
             meta = hit.get("meta") or {}
             content = meta.get("content")
             if isinstance(content, str) and len(content) > excerpt:
-                meta["content"] = content[:excerpt] + "..."
+                # the same cut the engine makes: around the query words, not
+                # the head of what was fetched longer for Jev to read
+                meta["content"] = focus_excerpt(content.strip("."), query, excerpt)
     resp["results"] = hits
     return resp
