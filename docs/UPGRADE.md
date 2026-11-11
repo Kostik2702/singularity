@@ -34,8 +34,9 @@ mb model migrate             # install bge-m3, re-embed notes/sources/code, rest
 
 Cost: about 2.3 GB of weights and one full re-embedding. On an Apple-silicon
 CPU that is ~20 chunks/s, 12 minutes per 15k chunks; a query then takes ~50 ms
-instead of ~20. Search keeps answering from the old index until each corpus
-is replaced. If the run stops, run it again: finished corpora are skipped. A
+instead of ~20. `mb search` does not answer while the run lasts (the daemon is
+busy re-embedding, and the old index is in another vector space), so pick a
+moment when no session needs the memory. If the run stops, run it again: finished corpora are skipped. A
 failure before the notes index is rebuilt puts the old model back in the
 config. To stay on the old model, do nothing; the warning is the only effect.
 
