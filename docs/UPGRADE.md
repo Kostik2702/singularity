@@ -224,6 +224,21 @@ and the copy in `.mb/sources/` is the only one. Consequences you should act on:
   rewritten, on any code path. Re-ingesting a changed document creates a new
   record linked by `supersedes`/`superseded_by` instead.
 
+## Fenced code blocks are now searchable (chunk schema 4 → 5)
+
+Text inside ``` blocks of a note used to be dropped before indexing, so an exact
+error string or command in one could not be found. It is now indexed (the fence
+lines are dropped, the code stays). On the author's vault the exact line from a
+code block reached the top 5 in 0.90 of probes, up from 0.49.
+
+- **Nothing to run.** `CHUNK_SCHEMA_VERSION` moves to 5, and
+  `singularity/search/indexer.py:762` rebuilds a corpus whose stored
+  `chunk_schema` differs, so the next `mb index update` re-embeds the vault by
+  itself. Expect a full rebuild's time and roughly 1 % more chunks.
+- **The sources corpus is affected too** (it shares the chunker and the number,
+  `indexer.py:161-168`); its next `mb ingest index` update rebuilds it the same
+  way. The code corpus has its own schema and is untouched.
+
 ## CODE-INDEX: the code corpus (no migration required)
 
 The code epic (`C00`–`C07`) adds a third search corpus. **Nothing on your
@@ -276,6 +291,23 @@ nightly `code_index` step will start building that corpus on its next run.
 That is the feature working as intended, but it is the one way this upgrade
 does something you did not explicitly ask for after the fact. To opt back out:
 `mb config set code_repos_dir null`.
+
+## Note search: a weak keyword match no longer takes rank 1 (no migration required)
+
+Hybrid search fused the BM25 ranking with the vector ranking at equal weight, so a
+note sharing a couple of query words could outrank the semantically right note at
+rank 1, worst when query and note are in different languages. A new guard
+(`lexical_top1_coverage`, default 0.5) lets a fused winner that is not the
+vector's first hit keep rank 1 only if it holds at least half of the query's idf
+mass; otherwise the vector's first hit leads and everything else keeps its fused
+order. Measured on 346 queries (298 answerable): R@1 0.752 -> 0.799, cross-lingual
+R@1 0.671 -> 0.824, R@5 unchanged (0.936).
+
+- **No index rebuild.** It is a ranking rule applied at query time; notes only,
+  the code corpus ranks exactly as before.
+- **Back out:** `mb config set lexical_top1_coverage 0` restores the previous ranking.
+- **More aggressive:** 0.67 measured R@1 0.805 but cost 0.012 identifier R@1; 0.5
+  was chosen because it regressed nothing.
 
 ## Machine-specific paths are gone from the source (v0.9.0)
 

@@ -265,7 +265,9 @@ mb inbox approve inbox/config-not-re-read.md incident
 
 ### Exact tokens: hybrid search
 
-Embeddings answer "what is this about", which is why they miss `IndexLockedError` or `--per-signal` — an identifier carries almost no semantic mass. `mb search --hybrid "IndexLockedError"` blends BM25 with the vector ranking (Reciprocal Rank Fusion, so the two incomparable scales are never summed), and `mb config set hybrid_search true` makes it the default. Off until you ask, because it changes result ORDER.
+Embeddings answer "what is this about", which is why they miss `IndexLockedError` or `--per-signal` — an identifier carries almost no semantic mass. Search therefore blends BM25 with the vector ranking (Reciprocal Rank Fusion, so the two incomparable scales are never summed). It is on by default (`hybrid_search`); `mb config set hybrid_search false` returns to the pure vector ranking, and `--hybrid` asks for the blend on a machine that turned it off. Text inside fenced code blocks of a note is indexed, so an exact error string or command can be found.
+
+The lexical half cannot take first place with a weak match: when the fused winner is not the vector ranking's first hit, it keeps rank 1 only if it holds at least `lexical_top1_coverage` (default 0.5) of the query's idf mass, otherwise the vector's first hit leads and the lexical evidence still orders the rest. Measured on 346 queries: recall@1 0.752 -> 0.799, cross-lingual 0.671 -> 0.824, recall@5 unchanged. `mb config set lexical_top1_coverage 0` restores the plain fusion.
 
 ### Capture knowledge
 

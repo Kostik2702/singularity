@@ -121,6 +121,16 @@ class BM25:
         return out
 
 
+def coverage(bm: BM25, query: str, doc_id: int) -> float:
+    """The share of the query's idf mass (terms the index knows) that document
+    `doc_id` contains: 1.0 holds every query term, 0.0 none or no known term."""
+    terms = {t for t in bm.tokenize(query) if t in bm.idf}
+    total = sum(bm.idf[t] for t in terms)
+    if not total:
+        return 0.0
+    return sum(bm.idf[t] for t in terms if t in bm.freqs[doc_id]) / total
+
+
 def covered(bm: BM25, query: str, doc_ids: list[int], share: float) -> list[int]:
     """`doc_ids` narrowed to those holding at least `share` of the query's idf
     mass -- the documents BM25 actually MATCHED, as opposed to those that
@@ -135,12 +145,7 @@ def covered(bm: BM25, query: str, doc_ids: list[int], share: float) -> list[int]
     """
     if share <= 0:
         return doc_ids
-    terms = {t for t in bm.tokenize(query) if t in bm.idf}
-    total = sum(bm.idf[t] for t in terms)
-    if not total:
-        return []
-    return [i for i in doc_ids
-            if sum(bm.idf[t] for t in terms if t in bm.freqs[i]) / total >= share]
+    return [i for i in doc_ids if coverage(bm, query, i) >= share]
 
 
 def rrf(rankings: list[list[int]], k: int = 60) -> dict[int, float]:

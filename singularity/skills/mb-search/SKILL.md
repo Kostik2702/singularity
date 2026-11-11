@@ -27,6 +27,8 @@ mb search "..." --full                    # no excerpt truncation
 
 Compact output: `file | score | [type] | title/section | excerpt(150)`. A score below ~0.3 is a weak match; rephrase the query. The embedding model is multilingual, so the query does not have to be in the language the note was written in, and languages may be mixed within one query.
 
+The BM25 half cannot take rank 1 with a weak match: a lexical winner the vector ranking did not put first keeps rank 1 only if it holds `lexical_top1_coverage` (default 0.5) of the query's words by idf weight; `mb config set lexical_top1_coverage 0` turns the guard off.
+
 ## Jev rerank (optional)
 
 When the owner has turned Jev on (`mb jev status` says enabled) and `jev_search` is not false, `mb search` asks Jev whether each candidate excerpt answers the query and reorders by that. It fetches up to 30 candidates, sends title, section and a short redacted excerpt (never a note classified personal, never code), and cuts back to `--top` (only the first 30 are reranked; a larger `--top` keeps the rest after them unchanged). `--explain` adds `jev=<p>`; `--json` adds `"reranked": true|false` and a `"jev"` value per reranked hit. A candidate Jev rates below `jev_min_relevance` (default 0.20) is dropped, so a query the vault cannot answer returns few or no lines plus a note saying how many were rejected: that means "not in memory", not "search is broken". Any Jev failure leaves the semantic order as it was. `--no-jev` skips it for one query.

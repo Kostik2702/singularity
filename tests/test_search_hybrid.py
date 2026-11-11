@@ -357,3 +357,150 @@ def test_a_lone_rare_identifier_clears_the_bar_by_itself():
 def test_a_zero_share_is_no_gate():
     bm = lexical.BM25(["a b", "b c"])
     assert lexical.covered(bm, "b", [0, 1], 0.0) == [0, 1]
+
+
+# --- the top-1 guard: lexical evidence cannot take rank 1 with a weak match ------
+
+_Q = "alpha bravo charlie delta"
+
+
+class _FixedEncoder:
+    """Returns one hand-made query vector, so the vector ranking is exact."""
+
+    def __init__(self, qvec):
+        self.qvec = qvec
+
+    def encode(self, texts, **_kw):
+        return np.array([self.qvec] * len(texts), dtype=np.float32)
+
+
+def _guard_corpus(b_text: str):
+    """Chunks in index order with their cosine to the query (e0).
+
+    Vector order: a, x1, x2, b, d, e, f. `b` is far down it and holds the
+    lexical evidence under test; `d`, `e`, `f` each hold one other query word,
+    so they follow `b` in the lexical list and ahead of `a` after fusion.
+    """
+    return [("b.md", b_text, 0.30), ("a.md", "filler words", 1.0),
+            ("d.md", "alpha filler", 0.25), ("e.md", "bravo filler", 0.20),
+            ("f.md", "charlie filler", 0.15), ("x1.md", "other words", 0.90),
+            ("x2.md", "more words", 0.80)]
+
+
+def _guard_engine(tmp_path, monkeypatch, b_text, source="memory", **cfg):
+    data = {"model": "fake", "min_score": 0.0, "lexical_min_coverage": 0.0, **cfg}
+    qvec = np.zeros(8)
+    qvec[0] = 1.0
+    monkeypatch.setattr("singularity.search.engine.shared_encoder",
+                        lambda *a, **kw: _FixedEncoder(qvec))
+    eng = SearchEngine(Config(vault=tmp_path, data=data))
+    rows = _guard_corpus(b_text)
+    chunks, vecs = [], []
+    for i, (f, content, cos) in enumerate(rows):
+        v = np.zeros(8)
+        v[0], v[i + 1] = cos, (1 - cos * cos) ** 0.5
+        vecs.append(v)
+        chunk = {"file": f, "section": "s", "content": content, "text": content,
+                 "chunk_id": f"{f}#0.0"}
+        if source == "code":
+            chunk["kind"] = "function"
+        chunks.append(chunk)
+    embs = np.array(vecs, dtype=np.float32)
+    if source == "code":
+        eng.code_chunks, eng.code_embs = chunks, embs
+    else:
+        eng.mem_chunks, eng.mem_embs = chunks, embs
+    return eng
+
+
+def _guard_files(eng, **req):
+    out = eng.search({"query": _Q, "top_k": 7, "hybrid": True, "format": "json",
+                      **req})
+    return [r["meta"]["file"] for r in out["results"]]
+
+
+def _fused_order(eng):
+    scores = eng.mem_embs @ eng.encoder.encode([_Q])[0]
+    order = np.argsort(scores)[::-1]
+    ranked, _hits, _fused = eng._fuse_with_lexical(order, eng.mem_chunks, "memory",
+                                                   {"query": _Q}, 7)
+    return [eng.mem_chunks[i]["file"] for i in ranked]
+
+
+def test_the_guard_default_is_half():
+    from singularity.config import DEFAULT_CONFIG
+    assert DEFAULT_CONFIG["lexical_top1_coverage"] == 0.5
+
+
+def test_a_weak_lexical_winner_does_not_take_rank_one(tmp_path, monkeypatch):
+    eng = _guard_engine(tmp_path, monkeypatch, "delta", lexical_top1_coverage=0.5)
+    order = _fused_order(eng)
+    assert order[0] == "a.md"
+    assert "b.md" in order, "lexical evidence was dropped, not just demoted"
+
+    off = _guard_engine(tmp_path, monkeypatch, "delta", lexical_top1_coverage=0)
+    assert _fused_order(off)[0] == "b.md"      # the control: the previous behaviour
+
+
+def test_a_strong_lexical_match_still_wins(tmp_path, monkeypatch):
+    eng = _guard_engine(tmp_path, monkeypatch, "alpha bravo charlie delta",
+                        lexical_top1_coverage=0.5)
+    assert _fused_order(eng)[0] == "b.md"
+
+
+def test_below_rank_one_the_fused_order_is_kept(tmp_path, monkeypatch):
+    on = _fused_order(_guard_engine(tmp_path, monkeypatch, "delta",
+                                    lexical_top1_coverage=0.5))
+    off = _fused_order(_guard_engine(tmp_path, monkeypatch, "delta",
+                                     lexical_top1_coverage=0))
+    assert len(off) >= 4 and on[0] == "a.md"
+    assert on[1:] == [f for f in off if f != "a.md"]
+
+
+def test_the_promoted_chunk_survives_the_final_sort(tmp_path, monkeypatch):
+    eng = _guard_engine(tmp_path, monkeypatch, "delta", lexical_top1_coverage=0.5)
+    files = _guard_files(eng, memory_only=True)
+    assert files[0] == "a.md" and "b.md" in files
+    off = _guard_engine(tmp_path, monkeypatch, "delta", lexical_top1_coverage=0)
+    assert _guard_files(off, memory_only=True)[0] == "b.md"
+
+
+def test_the_code_corpus_ignores_the_guard(tmp_path, monkeypatch):
+    on = _guard_files(_guard_engine(tmp_path, monkeypatch, "delta", source="code",
+                                    lexical_top1_coverage=0.5), code_only=True)
+    off = _guard_files(_guard_engine(tmp_path, monkeypatch, "delta", source="code",
+                                     lexical_top1_coverage=0), code_only=True)
+    assert on == off
+    assert on[0] == "b.md", "the guard acted on code"
+
+
+def test_coverage_is_the_share_of_the_querys_idf_mass_a_document_holds():
+    bm = lexical.BM25(["alpha bravo", "alpha", "bravo", "other words"])
+    assert lexical.coverage(bm, "alpha bravo", 0) == 1.0
+    assert lexical.coverage(bm, "alpha bravo", 3) == 0.0
+    assert 0.0 < lexical.coverage(bm, "alpha bravo", 1) < 1.0
+    assert lexical.coverage(bm, "unseen terms", 0) == 0.0
+
+
+def test_covered_agrees_with_coverage():
+    bm = lexical.BM25(["alpha bravo", "alpha", "bravo", "other words"])
+    ids = [0, 1, 2, 3]
+    for share in (0.1, 0.5, 1.0):
+        assert lexical.covered(bm, "alpha bravo", ids, share) == [
+            i for i in ids if lexical.coverage(bm, "alpha bravo", i) >= share]
+
+
+@pytest.mark.parametrize("bad", [1.5, -0.1])
+def test_an_out_of_range_top1_coverage_is_rejected(bad):
+    from singularity.config import validate_config
+    res = validate_config({"lexical_top1_coverage": bad})
+    assert any("lexical_top1_coverage" in e for e in res["errors"])
+
+
+def test_a_winner_exactly_at_the_threshold_keeps_rank_one(tmp_path, monkeypatch):
+    probe = _guard_engine(tmp_path, monkeypatch, "delta")
+    bm = probe._lexical_for("memory", probe.mem_chunks)
+    at = lexical.coverage(bm, _Q, 0)
+    assert 0.0 < at < 1.0
+    eng = _guard_engine(tmp_path, monkeypatch, "delta", lexical_top1_coverage=at)
+    assert _fused_order(eng)[0] == "b.md"

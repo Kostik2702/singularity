@@ -132,6 +132,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # bge-m3 recall@1 0.711 -> 0.752, cross-lingual 0.576 -> 0.671; MiniLM
     # neutral (recall@5 0.899 -> 0.903). 0.5 was worse on both. 0 = no gate.
     "lexical_min_coverage": 0.34,
+    # After fusion, a chunk the vector ranking did not put first keeps rank 1
+    # only if it holds this share of the query's idf mass; otherwise the vector's
+    # first chunk leads. Measured 2026-11-11, 346 queries, bge-m3: recall@1
+    # 0.752 -> 0.799, cross-lingual 0.671 -> 0.824, recall@5 unchanged; 0.67 gave
+    # 0.805 but lost 0.012 identifier recall@1. 0 = no guard.
+    "lexical_top1_coverage": 0.5,
     # The one feature that stores conversation text. OFF by default and it
     # stays that way: everything else here is derived from files you wrote, and
     # this is not. See the vault decision TRANSCRIPTS D1 (transcript privacy)
@@ -425,6 +431,7 @@ def validate_config(data: dict[str, Any]) -> dict[str, list[str]]:
     _num("min_score", 0.0, 1.0)
     _num("jev_min_relevance", 0.0, 1.0)
     _num("lexical_min_coverage", 0.0, 1.0)
+    _num("lexical_top1_coverage", 0.0, 1.0)
     _int("daemon_port", 0, 65535)
     _int("excerpt_chars", 1, 1_000_000)
     _int("batch_size", 1, 1_000_000)
