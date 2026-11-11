@@ -33,13 +33,15 @@ Everything lives in **plain Markdown inside your Obsidian vault** — no proprie
 graph TB
     subgraph CC["Claude Code / Codex / Gemini / Grok"]
         MAIN["session"]
-        SK["30 manifest-managed skills<br/>13 portable, 17 Claude-only"]
-        AG["8 agents + 3 councils<br/>(Claude-only)"]
+        SK["33 manifest-managed skills<br/>15 portable, 18 Claude-only"]
+        AG["10 agents + 3 councils<br/>(Claude-only)"]
     end
     subgraph HOOKS["Hooks (deterministic)"]
         H1["SessionStart → project brain,<br/>digest nag, doctor warnings"]
         H2["Stop → auto-capture gate"]
         H3["PreToolUse → module context (opt-in),<br/>vault guard (audit by default)"]
+        H4["UserPromptSubmit → workflow chain,<br/>Jev size hint (opt-in)"]
+        H5["SubagentStop → agent contract check"]
     end
     subgraph ENGINE["Engine (python)"]
         D["search daemon<br/>warm multilingual model<br/>TCP 127.0.0.1, ~15-70ms"]
@@ -113,7 +115,7 @@ The wrappers are ~20 lines each; all logic lives in `install/install.py`, which 
 1. **Python env** — creates `.venv` and installs dependencies.
 2. **Vault** — asks for your vault path, creates the memory folder tree (`learnings/`, `decisions/`, `howto/`, `incidents/`, `rules/`, `reference/`, `changelog/`, `templates/`, `_moc/`), binds it via `~/.singularity.json`.
 3. **Local model + first index + daemon** — explicitly adopts or downloads the embedding snapshot once (~470 MB) into the configured `hf_cache`, writes a pinned local manifest, starts the daemon, and builds the first index inside that warm process. Search/index runtime opens only that local snapshot (`local_files_only`); it never silently falls back to Hugging Face.
-4. **Client wiring** — registers four managed hook entries in `~/.claude/settings.json`: SessionStart, Stop, and two PreToolUse checks (module context, opt-in; vault guard, audit by default). Your existing settings are backed up and preserved; every entry we own is marked `"_mb": true` for clean uninstall. Then, **if they are installed**, the installer wires OpenAI Codex, Google Gemini and xAI Grok Build to the same memory (see [Other CLI clients](#other-cli-clients--codex-gemini--grok)).
+4. **Client wiring** — registers seven managed hook entries in `~/.claude/settings.json`: SessionStart; two UserPromptSubmit (the workflow-chain router and the Jev size hint, a no-op until `mb jev on`); Stop (auto-capture); two PreToolUse checks (module context, opt-in; vault guard, audit by default); and SubagentStop (the agent contract check). Your existing settings are backed up and preserved; every entry we own is marked `"_mb": true` for clean uninstall. Then, **if they are installed**, the installer wires OpenAI Codex, Google Gemini and xAI Grok Build to the same memory (see [Other CLI clients](#other-cli-clients--codex-gemini--grok)).
 5. **CLIs on PATH** — makes `mb`, `imgqa` and the other console scripts callable by name. macOS/Linux: symlinks them into `~/.local/bin` (and prints the exact `export PATH=…` line if that directory is not on your `PATH` — it never edits your shell rc for you). Windows: appends the venv `Scripts` directory to your **user** `PATH`, so open a new terminal afterwards. Only links that resolve back into this engine are ever created or removed, and `mb doctor`'s `D7-cli-on-path` reports the end state.
 6. **Scheduler + verify** — registers the nightly index rebuild and the on-save watcher with your OS scheduler (Task Scheduler / launchd / systemd — all with missed-run catch-up), then finishes with `mb doctor`.
 
@@ -143,7 +145,7 @@ Singularity is native to Claude Code, but the installer also wires **OpenAI Code
 **What the installer does for Gemini** (idempotent; re-running refreshes):
 
 - A managed block in `~/.gemini/GEMINI.md` (engine + vault paths, SEM-FIRST, capture rule, shortcuts) — delimited by `SINGULARITY:BEGIN/END`; your own text outside it is never touched.
-- The 13 portable skills (of 16 total — the three council skills stay Claude-only, see `install/skill_manifest.py`) junctioned into `~/.gemini/skills/`. Foreign skills you added are left alone.
+- The 15 portable skills (of 33 total — the rest, including the three council skills, stay Claude-only, see `install/skill_manifest.py`) junctioned into `~/.gemini/skills/`. Foreign skills you added are left alone.
 - Two named hooks in `~/.gemini/settings.json` (backed up as `settings.json.bak-<ts>` before every change; foreign hooks/keys preserved): `singularity-session-start` injects the same live memory context Claude gets, and `singularity-after-agent` nudges you once per substantial session to capture insights — a passive `systemMessage`, so it never disturbs `--output-format json` automation.
 
 An absent client is a clean skip; an old version keeps the profile but warns that skills/hooks may be ignored.
@@ -165,11 +167,11 @@ gemini -p "summarise the vault" --output-format json   # headless: clean JSON, h
 **Grok Build CLI (xAI)** — supported at the capability tier its contract actually proves (grok **0.2.111**, pinned by `tests/fixtures/grok/`):
 
 - **Prerequisites (you install these yourself):** the official CLI — `curl -fsSL https://x.ai/cli/install.sh | bash` (macOS/Linux/Git Bash) or `irm https://x.ai/cli/install.ps1 | iex` (Windows PowerShell); auth is Grok's own (`grok login` / `XAI_API_KEY`, see [x.ai docs](https://docs.x.ai)). Singularity never installs, updates or authenticates Grok.
-- **What the installer does** (idempotent; config root is `$GROK_HOME` when set, else `~/.grok` — the CLI's own resolution order): a managed `SINGULARITY:BEGIN/END` block in `<grok-home>/AGENTS.md` (identity, vault path, SEM-FIRST, capture rule, shortcuts — Grok loads it into every session); the same 13 portable skills junctioned into `<grok-home>/skills/` (a native skill wins name-dedup over any `~/.claude` compat copy, so this is the one effective source); and one Singularity-owned hook file `<grok-home>/hooks/singularity.json` with the **Stop capture nudge** — registered only when the probed version is ≥ 0.2.111, where the stop-gate contract is proven.
+- **What the installer does** (idempotent; config root is `$GROK_HOME` when set, else `~/.grok` — the CLI's own resolution order): a managed `SINGULARITY:BEGIN/END` block in `<grok-home>/AGENTS.md` (identity, vault path, SEM-FIRST, capture rule, shortcuts — Grok loads it into every session); the same 15 portable skills junctioned into `<grok-home>/skills/` (a native skill wins name-dedup over any `~/.claude` compat copy, so this is the one effective source); and one Singularity-owned hook file `<grok-home>/hooks/singularity.json` with the **Stop capture nudge** — registered only when the probed version is ≥ 0.2.111, where the stop-gate contract is proven.
 - **Capability truth** (each observed on the real CLI, not promised): **capture nudge — yes**, block-mode like Claude, at most once per substantial session, honors `auto_capture`; when it fires it costs one extra model round (`num_turns` +1 in headless JSON — schema otherwise identical, stderr clean). **Dynamic session-start recall — no**: Grok ignores hook stdout and `additionalContext` on SessionStart/UserPromptSubmit, so recall is a *static instruction* in the managed AGENTS.md block (the agent runs `mb search` itself) rather than injected live context. **`mb reflect` analytics — yes**: top-level Grok sessions are counted (subagent children excluded via their `session_kind` marker); skill invocations are not measurable in Grok transcripts and honestly stay 0.
 
 ```bash
-grok inspect          # verify: managed AGENTS.md block + 12 skills discovered
+grok inspect          # verify: managed AGENTS.md block + 15 skills discovered
 grok                  # interactive session — AGENTS.md instructions loaded
 grok -p "summarise the vault" --output-format json   # headless: clean JSON
 mb hooks status       # grok: mode=block, installed/effective state
@@ -244,6 +246,8 @@ mb search "..." --json --full                          # machine-readable / untr
 ```
 
 Output is compact by design: `file | score | [type] | title/section | excerpt`. Scores ≥ 0.5 are strong matches; below ~0.3 rephrase the query.
+
+When Jev is enabled, search reads the candidates and drops those that do not answer the query (`jev_min_relevance`, default 0.20), so an empty result is a legitimate answer and the CLI says how many candidates were rejected; `--no-jev` shows the raw ranking. How retrieval quality is measured is described in [docs/rag-eval.md](docs/rag-eval.md).
 
 ### The inbox — capture now, classify later (opt-in)
 
@@ -570,6 +574,24 @@ mb --vault "D:/path/to/my vault" init
 
 This binds the selected vault in `~/.singularity.json`, creates the standard folders, and writes config (defaults if none exists). It does not install hooks, background jobs, or dependencies; use the platform installer for a complete installation. Run `mb <command> --help` whenever you need the full flag reference.
 
+### The ticket board
+
+Work is tracked as tickets on a kanban board that the lead session runs and executors work from:
+
+```bash
+mb note new ticket "<title>" --project X --kind task --owns <path> --goal "..." --criteria "..."
+mb board                         # columns
+mb board next                    # ready tickets with closed blockers
+mb board start ID [ID ...]       # backlog/ready -> in-progress in one call (rules enforced)
+mb board assign ID --assignee "coder · sonnet · medium" --agent <agent id>
+mb board note ID "text" --by <agent id>      # executors write to the feed
+mb board accept ID --verdict "<what was run, the numbers>"   # verdict + review -> done
+mb board move ID STATUS          # any other move (back to in-progress, blocked)
+mb board check                   # invariants of the whole board
+```
+
+Tickets live in `tickets/<project>/` in the vault. The lead session writes tickets and accepts the result; executors do the work (the `team-lead` skill carries the rubric).
+
 ### Skills — say the trigger word in any session
 
 | Skill | Say… | What happens |
@@ -591,7 +613,7 @@ This binds the selected vault in `~/.singularity.json`, creates the standard fol
 
 ### Agents — spawned for heavy lifting
 
-Six specialists share one canonical rulebook (`rules/AGENT_SHARED_PREAMBLE.md` in the vault — lazy-loaded by section):
+The agents share one canonical rulebook (`singularity/agents/AGENT_SHARED_PREAMBLE.md`, shipped with the engine and deployed next to them — lazy-loaded by section):
 
 - **investigator** — 8-phase deep research, root-cause ×3, gap analysis
 - **critic** — devil's advocate: risk taxonomy, "Argument → How to Disprove" tables, never auto-approves
@@ -599,6 +621,8 @@ Six specialists share one canonical rulebook (`rules/AGENT_SHARED_PREAMBLE.md` i
 - **reviewer** — three-pass code review (correctness → patterns → edge cases) with severity grading
 - **historian** — "have we done this before?": prior art from vault + git history, stale-flags on findings
 - **coder** — executes a fully-specified plan, verifies its own edits (`git diff --stat`), refuses to freelance
+
+Every engine agent carries its own defaults in its frontmatter: `model`, `effort`, and for coder, reviewer and investigator a tool allowlist and a turn limit (`maxTurns`); the allowlist cut coder's first request from ~35k to ~19k tokens. A return check (the SubagentStop hook) reads the agent's transcript and sends it back once when a step its profile requires is missing; each run is logged to `<vault>/.mb/agent-contract.jsonl`. `mb config set agent_contract_enforce false` keeps the log and stops the blocking.
 
 Councils orchestrate them in parallel rounds with a machine-parseable contract (`HAVE SOMETHING TO ADD / NOTHING TO ADD / NEED DATA:`), anti-sycophancy rules (agreement without a new argument counts as nothing), and calibrated confidence thresholds before any verdict.
 
@@ -907,6 +931,9 @@ singularity/
 ├── hooks/
 │   ├── session_start.py       # inject memory context into every session (Claude + Gemini share this)
 │   ├── stop_capture.py        # auto-capture gate (blocks stop once, BOM-proof)
+│   ├── user_prompt_submit.py  # UserPromptSubmit workflow-chain router (classifies the task, injects the chain)
+│   ├── jev_router.py          # UserPromptSubmit Jev size hint (own process and budget; no-op until `mb jev on`)
+│   ├── subagent_stop.py       # SubagentStop contract check: sends a subagent back once if a required step is missing (preamble read, memory searched, confidence calibrated, diff checked)
 │   ├── gemini_session_start.py / gemini_after_agent.py   # Gemini adapters over the shared cores
 │   ├── grok_stop_capture.py   # Grok Stop-gate capture adapter (camelCase wire, GRK-04)
 │   ├── module_context.py      # PreToolUse module-context adapter (Claude)
@@ -936,10 +963,10 @@ install/                   # install.py + thin ps1/sh wrappers + hook/skill regi
 │                           #   skill_manifest.py (single source of client -> skill support)
 tests/                     # contract tests (no ML deps needed): pip install -e ".[dev]" && pytest -q
 bin/                       # `mb` shims added to PATH
-docs/                      # UPGRADE.md, ROLLBACK.md, incoming-fork-baseline.md
+docs/                      # UPGRADE.md, ROLLBACK.md, rag-eval.md, incoming-fork-baseline.md
 ```
 
-Plus, in your **`~/.claude/`**: 29 skills (`skills/*/SKILL.md`) and 8 agents (`agents/*.md`).
+Plus, in your **`~/.claude/`**: 33 skills (`skills/*/SKILL.md`) and 10 agents (`agents/*.md`).
 And in your **vault**: `rules/` (core discipline + agent preamble), `workflow/` (router + 10 phases), `templates/`, `_moc/` dashboards.
 
 ---
