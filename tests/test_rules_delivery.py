@@ -196,7 +196,8 @@ def test_the_fragments_have_an_aggregate_ceiling_too():
     reality without this failing."""
     total = sum(len(f) for f in ALL_FRAGMENTS.values())
     # 4150 -> 4700 (owner, 2026-10-18): the delegation fragment, where spawns are decided.
-    assert total <= 4700, (
+    # 4700 -> 4850 (owner, 2026-11-20): plain-language context when asking the person (THINK_FIRST).
+    assert total <= 4850, (
         f"fragments total {total} chars; raise the ceiling here AND the figure "
         f"in docs/rules-delivery.md in the same change, or cut text")
 

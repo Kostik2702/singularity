@@ -121,7 +121,10 @@ THINK_FIRST_FRAGMENT = """## Name the fork before working, not after
 - The boundary is WHEN, not who. `No mid-flight stops` — preamble §2 and the
   council skills — governs work already in flight: once agents are spawned, take
   a marked default and never pause a round. This governs the moment before that,
-  while there is still someone to ask."""
+  while there is still someone to ask.
+- Asking the person, or handing them a decision: first say in plain words what
+  the thing is, why it matters and what is wrong. A ticket ID, a check name or a
+  file path is not context. Can you check it yourself? Check, then ask."""
 
 
 MEASURED_AXIS_FRAGMENT = """## Measure the axis you were ASKED about

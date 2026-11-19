@@ -38,8 +38,9 @@ SessionStart is paid for in every session. The figure is not kept in prose: it
 went 18% out of date in two weeks and nobody noticed. The aggregate ceiling on
 the fragments is an executable gate, `test_the_fragments_have_an_aggregate_ceiling_too`
 (`tests/test_rules_delivery.py`); raising it takes a change that raises this line
-too. As of 2026-10-18 the fragments the gate counts occupy ~4.6k characters,
-ceiling 4700 (raised from 4150 by the owner for the delegation fragment). The gate
+too. As of 2026-11-20 the fragments the gate counts occupy ~4.8k characters,
+ceiling 4850 (raised from 4150 by the owner for the delegation fragment, then from
+4700 for plain-language context when asking the person). The gate
 does not count `MEASURED_AXIS_FRAGMENT` (~0.7k): every session actually pays ~5.3k.
 Counting it needs the owner's decision on a new ceiling or a cut.
 `CAPTURE_HOOKS_FRAGMENT` is the size unit: the test requires a new fragment to be

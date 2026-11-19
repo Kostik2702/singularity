@@ -49,6 +49,12 @@ DELIVERIES: list[tuple[str, str, Path, str]] = [
     ("check a found inconsistency against the recorded decision", "SessionStart",
      ENGINE / "singularity" / "machine" / "hooks_state.py",
      "look for a RECORDED decision"),
+    # 2026-11-20, drone-detection DD-344: the lead handed the owner "within_async_budget
+    # compares two constants — for you at epic close". The owner could not tell what it
+    # was about and asked "can't you check it yourself?"; it was checkable in one grep.
+    ("a question to the person carries plain-language context", "SessionStart",
+     ENGINE / "singularity" / "machine" / "hooks_state.py",
+     "is not context. Can you check it yourself?"),
     # 2026-08-21, vibe24 T-166: the transport of a migration was built and reported as
     # "the new flow works", with four green loops behind it. The owner answered "old
     # flow" five times running. Both were right and the word meant two things: the
